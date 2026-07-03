@@ -1,0 +1,354 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Core Brand Colors - Professional Navy & Teal */
+    --background: 220 20% 97%;
+    --foreground: 222 47% 11%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+
+    /* Deep Navy Primary */
+    --primary: 222 47% 20%;
+    --primary-foreground: 210 40% 98%;
+
+    /* Teal Secondary */
+    --secondary: 172 66% 40%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 9% 46%;
+
+    /* Teal Accent */
+    --accent: 172 66% 50%;
+    --accent-foreground: 0 0% 100%;
+
+    /* Amber Success */
+    --success: 142 71% 45%;
+    --success-foreground: 0 0% 100%;
+
+    /* Warm Amber Warning */
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 172 66% 50%;
+
+    --radius: 0.75rem;
+
+    /* Sidebar - Dark Navy */
+    --sidebar-background: 222 47% 11%;
+    --sidebar-foreground: 220 14% 96%;
+    --sidebar-primary: 172 66% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 222 47% 18%;
+    --sidebar-accent-foreground: 220 14% 96%;
+    --sidebar-border: 222 47% 18%;
+    --sidebar-ring: 172 66% 50%;
+    --sidebar-muted: 220 9% 46%;
+
+    /* Custom Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(222 47% 20%) 0%, hsl(222 47% 11%) 100%);
+    --gradient-accent: linear-gradient(135deg, hsl(172 66% 50%) 0%, hsl(172 66% 40%) 100%);
+    --gradient-success: linear-gradient(135deg, hsl(142 71% 45%) 0%, hsl(142 71% 35%) 100%);
+    --gradient-warning: linear-gradient(135deg, hsl(38 92% 50%) 0%, hsl(38 92% 40%) 100%);
+    --gradient-card: linear-gradient(180deg, hsl(0 0% 100%) 0%, hsl(220 20% 98%) 100%);
+    --gradient-hero: linear-gradient(135deg, hsl(222 47% 11%) 0%, hsl(222 47% 20%) 50%, hsl(172 66% 30%) 100%);
+
+    /* Shadows */
+    --shadow-sm: 0 1px 2px 0 hsl(222 47% 11% / 0.05);
+    --shadow-md: 0 4px 6px -1px hsl(222 47% 11% / 0.1), 0 2px 4px -2px hsl(222 47% 11% / 0.1);
+    --shadow-lg: 0 10px 15px -3px hsl(222 47% 11% / 0.1), 0 4px 6px -4px hsl(222 47% 11% / 0.1);
+    --shadow-xl: 0 20px 25px -5px hsl(222 47% 11% / 0.1), 0 8px 10px -6px hsl(222 47% 11% / 0.1);
+    --shadow-glow: 0 0 20px hsl(172 66% 50% / 0.3);
+
+    /* Chart Colors */
+    --chart-1: 172 66% 50%;
+    --chart-2: 222 47% 40%;
+    --chart-3: 38 92% 50%;
+    --chart-4: 142 71% 45%;
+    --chart-5: 280 65% 60%;
+
+    /* Communication Hub Colors */
+    --hub-messages: 142 71% 45%;
+    --hub-contacts: 217 91% 60%;
+    --hub-voice: 45 93% 54%;
+    --hub-branding: 189 94% 43%;
+    --hub-messages-bg: 142 76% 95%;
+    --hub-contacts-bg: 214 95% 95%;
+    --hub-voice-bg: 48 96% 95%;
+    --hub-branding-bg: 187 85% 95%;
+  }
+
+  .dark {
+    --background: 222 47% 6%;
+    --foreground: 210 40% 98%;
+
+    --card: 222 47% 9%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222 47% 9%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 172 66% 50%;
+    --primary-foreground: 222 47% 11%;
+
+    --secondary: 222 47% 20%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 222 47% 15%;
+    --muted-foreground: 220 9% 65%;
+
+    --accent: 172 66% 40%;
+    --accent-foreground: 210 40% 98%;
+
+    /* Success - Green */
+    --success: 142 71% 45%;
+    --success-foreground: 0 0% 100%;
+
+    /* Warning - Amber */
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+
+    --destructive: 0 62% 50%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 222 47% 18%;
+    --input: 222 47% 18%;
+    --ring: 172 66% 50%;
+
+    --sidebar-background: 222 47% 6%;
+    --sidebar-foreground: 220 14% 96%;
+    --sidebar-primary: 172 66% 50%;
+    --sidebar-primary-foreground: 222 47% 11%;
+    --sidebar-accent: 222 47% 12%;
+    --sidebar-accent-foreground: 220 14% 96%;
+    --sidebar-border: 222 47% 15%;
+    --sidebar-ring: 172 66% 50%;
+    --sidebar-muted: 220 9% 55%;
+
+    /* Communication Hub Colors - Dark Mode */
+    --hub-messages: 142 71% 45%;
+    --hub-contacts: 217 91% 60%;
+    --hub-voice: 45 93% 54%;
+    --hub-branding: 189 94% 43%;
+    --hub-messages-bg: 142 50% 15%;
+    --hub-contacts-bg: 217 50% 15%;
+    --hub-voice-bg: 45 50% 15%;
+    --hub-branding-bg: 189 50% 15%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-semibold tracking-tight;
+  }
+}
+
+@layer components {
+  .glass-card {
+    @apply bg-card/80 backdrop-blur-sm border border-border/50 shadow-lg;
+  }
+
+  .stat-card {
+    @apply bg-card rounded-xl border border-border p-6 shadow-sm hover:shadow-md transition-shadow duration-200;
+  }
+
+  .nav-item {
+    @apply flex items-center gap-3 px-3 py-2.5 rounded-lg text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-all duration-200;
+  }
+
+  .nav-item-active {
+    @apply bg-sidebar-accent text-sidebar-primary font-medium;
+  }
+
+  .data-table {
+    @apply w-full text-sm;
+  }
+
+  .data-table th {
+    @apply text-left font-medium text-muted-foreground px-4 py-3 border-b;
+  }
+
+  .data-table td {
+    @apply px-4 py-3 border-b border-border/50;
+  }
+
+  .data-table tr:hover {
+    @apply bg-muted/50;
+  }
+
+  .gradient-text {
+    @apply bg-clip-text text-transparent;
+    background-image: var(--gradient-accent);
+  }
+
+  .metric-value {
+    @apply text-3xl font-bold tracking-tight;
+  }
+
+  .metric-label {
+    @apply text-sm text-muted-foreground font-medium;
+  }
+
+  .account-tree-item {
+    @apply flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-muted/50 cursor-pointer transition-colors;
+  }
+
+  .account-tree-item-active {
+    @apply bg-accent/10 text-accent;
+  }
+
+  /* Communication Hub Tab Styles */
+  .hub-tab {
+    @apply flex items-center gap-2 rounded-full px-4 py-2 font-medium transition-all duration-200;
+  }
+
+  .hub-tab:focus-visible {
+    @apply outline-none ring-2 ring-offset-2 ring-foreground;
+  }
+
+  .hub-tab-messages {
+    @apply bg-[hsl(var(--hub-messages-bg))] text-[hsl(var(--hub-messages))] hover:bg-[hsl(var(--hub-messages))]/20;
+  }
+
+  .hub-tab-messages[data-state="active"] {
+    @apply bg-[hsl(var(--hub-messages))] text-white shadow-md;
+  }
+
+  .hub-tab-contacts {
+    @apply bg-[hsl(var(--hub-contacts-bg))] text-[hsl(var(--hub-contacts))] hover:bg-[hsl(var(--hub-contacts))]/20;
+  }
+
+  .hub-tab-contacts[data-state="active"] {
+    @apply bg-[hsl(var(--hub-contacts))] text-white shadow-md;
+  }
+
+  .hub-tab-voice {
+    @apply bg-[hsl(var(--hub-voice-bg))] text-[hsl(var(--hub-voice))] hover:bg-[hsl(var(--hub-voice))]/20;
+  }
+
+  .hub-tab-voice[data-state="active"] {
+    @apply bg-[hsl(var(--hub-voice))] text-slate-900 shadow-md;
+  }
+
+  .hub-tab-branding {
+    @apply bg-[hsl(var(--hub-branding-bg))] text-[hsl(var(--hub-branding))] hover:bg-[hsl(var(--hub-branding))]/20;
+  }
+
+  .hub-tab-branding[data-state="active"] {
+    @apply bg-[hsl(var(--hub-branding))] text-white shadow-md;
+  }
+}
+
+@layer utilities {
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease-out;
+  }
+
+  .animate-slide-in {
+    animation: slideIn 0.3s ease-out;
+  }
+
+  .animate-scale-in {
+    animation: scaleIn 0.2s ease-out;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes scaleIn {
+    from { opacity: 0; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1); }
+  }
+
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border)) transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--border));
+    border-radius: 3px;
+  }
+
+  /* Safe area insets for mobile devices with notches */
+  .safe-area-inset-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .safe-area-inset-top {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  /* Touch-friendly tap targets */
+  @media (pointer: coarse) {
+    button, a, input, select, textarea {
+      min-height: 44px;
+    }
+  }
+
+  /* Prevent text selection on mobile nav */
+  .no-select {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+
+  /* Smooth scrolling for mobile */
+  html {
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Stock market ticker animation */
+  @keyframes ticker-scroll {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+  }
+
+  .animate-ticker {
+    animation: ticker-scroll 30s linear infinite;
+  }
+
+  .animate-ticker:hover {
+    animation-play-state: paused;
+  }
+}

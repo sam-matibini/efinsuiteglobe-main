@@ -1,0 +1,1 @@
+ALTER TABLE public.accounts ADD COLUMN t3010_category character varying(50) DEFAULT NULL;

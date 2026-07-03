@@ -1,0 +1,1 @@
+UPDATE public.organizations SET invoice_logo_url = NULL WHERE invoice_logo_url LIKE '%/object/public/documents/invoice-logos/%';

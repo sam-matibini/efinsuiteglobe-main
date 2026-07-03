@@ -1,0 +1,186 @@
+project_id = "boskmqywofwekszhgryb"
+
+[functions.analyze-je-attachments]
+verify_jwt = false
+
+
+[functions.flatten-pdf]
+verify_jwt = false
+
+[functions.sendgrid-integration]
+verify_jwt = false
+
+[functions.resend-integration]
+verify_jwt = false
+
+[functions.resend-inbound-webhook]
+verify_jwt = false
+
+[functions.pdf-to-spreadsheet]
+verify_jwt = false
+
+[functions.file-convert]
+verify_jwt = false
+
+[functions.accounting-assistant]
+verify_jwt = false
+
+[functions.ai-asset-classify]
+verify_jwt = false
+
+[functions.mailchimp-transactional]
+verify_jwt = false
+
+[functions.twilio-webhook]
+verify_jwt = false
+
+[functions.twilio-send-message]
+verify_jwt = false
+
+[functions.twilio-voice]
+verify_jwt = false
+
+[functions.twilio-voice-token]
+verify_jwt = false
+
+[functions.whatsapp-audio]
+verify_jwt = false
+
+[functions.voice-transcribe]
+verify_jwt = false
+
+[functions.twilio-inbound-voice]
+verify_jwt = false
+
+[functions.twilio-twiml-app]
+verify_jwt = false
+
+[functions.compose-ai-assistant]
+verify_jwt = false
+
+[functions.voice-orchestrator]
+verify_jwt = false
+
+[functions.docsign-signer-portal]
+verify_jwt = false
+
+[functions.embed-pdf-signatures]
+verify_jwt = false
+
+[functions.finalize-document]
+verify_jwt = false
+
+[functions.log-auth-event]
+verify_jwt = false
+
+[functions.stripe-integration]
+verify_jwt = false
+
+[functions.stripe-webhook]
+verify_jwt = false
+
+[functions.alice-sheets-assistant]
+verify_jwt = false
+
+[functions.collect-invoice-payment]
+verify_jwt = false
+
+[functions.send-invitation]
+verify_jwt = false
+
+[functions.accept-invitation]
+verify_jwt = false
+
+[functions.treasury-payment-webhook]
+verify_jwt = false
+
+[functions.treasury-pay-payroll-batch]
+verify_jwt = false
+
+[functions.paysafe-webhook]
+verify_jwt = false
+
+[functions.paysafe-create-etransfer]
+verify_jwt = false
+
+[functions.paysafe-eft-debit]
+verify_jwt = false
+
+[functions.cra-bank-feed-reconciler]
+verify_jwt = false
+
+[functions.treasury-forecast-engine]
+verify_jwt = false
+
+[functions.treasury-anomaly-scan]
+verify_jwt = false
+
+[functions.auditor-portal-access]
+verify_jwt = false
+
+[functions.treasury-close-rollup]
+verify_jwt = false
+
+[functions.vendor-slip-generate]
+verify_jwt = false
+
+[functions.vendor-slip-efile]
+verify_jwt = false
+
+[functions.vendor-tin-match]
+verify_jwt = false
+
+[functions.irs-941-generate]
+verify_jwt = false
+
+[functions.sales-tax-nexus-check]
+verify_jwt = false
+
+[functions.treasury-copilot]
+verify_jwt = false
+
+[functions.us-ach-eftps]
+verify_jwt = false
+
+[functions.tin-match-batch]
+verify_jwt = false
+
+[functions.signed-filing-workflow]
+verify_jwt = false
+
+[functions.consolidation-engine]
+verify_jwt = false
+
+[functions.treasury-alert-dispatch]
+verify_jwt = false
+
+[functions.treasury-health-monitor]
+verify_jwt = false
+
+[functions.auditor-export-bundle]
+verify_jwt = false
+
+[functions.firm-portal-summary]
+verify_jwt = false
+
+[functions.hmrc-mtd-vat-submit]
+verify_jwt = false
+
+[functions.eu-oss-vat-submit]
+verify_jwt = false
+
+[functions.sepa-credit-transfer]
+verify_jwt = false
+
+[functions.marketplace-webhook-dispatch]
+verify_jwt = false
+
+[functions.marketplace-public-api]
+verify_jwt = false
+
+[functions.cra-batch-paysafe-submit]
+verify_jwt = false
+
+
+
+

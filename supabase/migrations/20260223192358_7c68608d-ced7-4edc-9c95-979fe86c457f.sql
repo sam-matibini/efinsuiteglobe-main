@@ -1,0 +1,1 @@
+ALTER TABLE public.organizations ADD COLUMN invoice_cc_payment_url text;

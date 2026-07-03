@@ -1,0 +1,1 @@
+ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS invoice_auto_payment_link boolean NOT NULL DEFAULT true;

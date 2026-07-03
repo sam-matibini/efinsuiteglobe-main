@@ -1,0 +1,1 @@
+SELECT * FROM recalculate_all_account_balances('71e20394-1180-4f26-a0a9-59f00ec9d5ca');

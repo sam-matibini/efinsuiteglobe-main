@@ -1,0 +1,453 @@
+import { useState, useEffect, useMemo } from 'react';
+import { Link, useLocation } from 'react-router-dom';
+import { 
+  LayoutDashboard, 
+  BookOpen, 
+  FileText, 
+  BarChart3, 
+  ShoppingCart, 
+  Package, 
+  Landmark, 
+  Receipt, 
+  Users, 
+  Settings, 
+  ChevronDown,
+  Building2,
+  List,
+  Calculator,
+  FileSpreadsheet,
+  CreditCard,
+  PiggyBank,
+  ArrowLeftRight,
+  ClipboardList,
+  UserCheck,
+  Clock,
+  DollarSign,
+  TrendingUp,
+  Shield,
+  UserPlus,
+  ShieldCheck,
+  Sparkles,
+  FileSignature,
+  MessageSquare,
+  Layers,
+  Wallet,
+  Factory,
+  Heart,
+  Briefcase,
+  CalendarDays,
+  AlertTriangle,
+  History,
+  Send,
+  MapPin,
+  Globe,
+  Scale,
+  Link2,
+} from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { useOrganizationContext } from '@/hooks/useOrganizationContext';
+import { useAuth } from '@/hooks/useAuth';
+import { usePayrollLocalization } from '@/hooks/usePayrollLocalization';
+import { useEnabledModules, ModuleCode } from '@/hooks/useEnabledModules';
+
+import { CreateOrganizationDialog } from '@/components/accounts/CreateOrganizationDialog';
+import { SearchableOrgSwitcher } from '@/components/layout/SearchableOrgSwitcher';
+import logo from '@/assets/efinsuite-logo.png';
+
+interface NavItem {
+  label: string;
+  icon: React.ElementType;
+  href?: string;
+  children?: { label: string; href: string; icon: React.ElementType; hideForReadOnly?: boolean }[];
+  /** Module codes required for this nav item to be visible */
+  requiredModules?: ModuleCode[];
+  /** Hide this nav item when user is in read-only (auditor) mode */
+  hideForReadOnly?: boolean;
+  /** Restrict this nav item to specific roles only */
+  allowedRoles?: string[];
+}
+
+// Navigation items with module requirements
+const getNavigation = (payrollLabels: { taxSlips: string; separationDoc: string; remittances: string }): NavItem[] => [
+  { label: 'Dashboard', icon: LayoutDashboard, href: '/' },
+  { 
+    label: 'Sales', 
+    icon: ShoppingCart,
+    requiredModules: ['accounts_receivable'],
+    children: [
+      { label: 'Products & Services', href: '/sales/products', icon: Package },
+      { label: 'Customers', href: '/sales/customers', icon: Users },
+      { label: 'Quotes', href: '/sales/quotes', icon: FileText },
+      { label: 'Invoices', href: '/sales/invoices', icon: Receipt },
+      { label: 'Recurring Invoices', href: '/sales/recurring', icon: ArrowLeftRight },
+      { label: 'Credit Notes', href: '/sales/credit-notes', icon: FileSpreadsheet },
+      { label: 'Payments', href: '/sales/payments', icon: CreditCard },
+    ]
+  },
+  { 
+    label: 'Purchases', 
+    icon: Package,
+    requiredModules: ['accounts_payable'],
+    children: [
+      { label: 'Vendors', href: '/purchases/vendors', icon: Building2 },
+      { label: 'Purchase Orders', href: '/purchases/orders', icon: ClipboardList },
+      { label: 'Bills', href: '/purchases/bills', icon: ClipboardList },
+      { label: 'Recurring Bills', href: '/purchases/recurring', icon: ArrowLeftRight },
+      { label: 'Vendor Credits', href: '/purchases/credits', icon: FileSpreadsheet },
+      { label: 'Expense Claims', href: '/purchases/expense-claims', icon: Receipt },
+      { label: 'Direct Expenses', href: '/purchases/expenses', icon: DollarSign },
+      { label: 'Payments', href: '/purchases/payments', icon: CreditCard },
+    ]
+  },
+  { 
+    label: 'Inventory', 
+    icon: Package, 
+    href: '/inventory',
+    requiredModules: ['inventory'],
+  },
+  { 
+    label: 'Banking', 
+    icon: Landmark,
+    requiredModules: ['banking'],
+    children: [
+      { label: 'Accounts', href: '/banking/accounts', icon: PiggyBank },
+      { label: 'Credit Cards', href: '/banking/credit-cards', icon: CreditCard },
+      { label: 'Transactions', href: '/banking/transactions', icon: ArrowLeftRight },
+      { label: 'AI Rules', href: '/banking/rules', icon: Sparkles, hideForReadOnly: true },
+      { label: 'Bank Reconciliation', href: '/banking/reconciliation', icon: Shield },
+      { label: 'CC Reconciliation', href: '/banking/credit-cards/reconcile', icon: CreditCard },
+      { label: 'Reconciliation History', href: '/banking/reconciliation-history', icon: FileSpreadsheet },
+      { label: 'Settlement Reconciliation', href: '/banking/settlements', icon: Wallet },
+      { label: 'Sales Tax Audit', href: '/banking/tax-audit', icon: AlertTriangle },
+    ]
+  },
+  {
+    label: 'Treasury Management',
+    icon: Landmark,
+    requiredModules: ['treasury'],
+    children: [
+      { label: 'Dashboard', href: '/banking-payments', icon: LayoutDashboard },
+      { label: 'CRA Payments', href: '/banking-payments/cra-payments', icon: Receipt },
+      { label: 'AP Payments', href: '/treasury/ap-payments', icon: CreditCard },
+      { label: 'Payroll Payments', href: '/treasury/payroll-payments', icon: Users },
+      { label: 'Scheduled', href: '/banking-payments/scheduled', icon: Receipt },
+      { label: 'Payment History', href: '/banking-payments/history', icon: Receipt },
+      { label: 'Payment Links', href: '/banking-payments/payment-links', icon: Receipt },
+      { label: 'Stripe Connect', href: '/banking-payments/stripe-connect', icon: Link2 },
+      { label: 'Payout Routing', href: '/banking-payments/stripe-connect/routing', icon: Link2 },
+      { label: 'Stripe Compliance', href: '/banking-payments/stripe-connect/compliance', icon: Link2 },
+      { label: 'Approvals', href: '/treasury/approvals', icon: UserCheck },
+      { label: 'CRA Accounts', href: '/banking-payments/cra-accounts', icon: Settings, hideForReadOnly: true },
+      { label: 'Settings', href: '/treasury/settings', icon: Settings, hideForReadOnly: true },
+    ],
+  },
+  { 
+    label: 'Accounting', 
+    icon: BookOpen,
+    requiredModules: ['general_ledger'],
+    children: [
+      { label: 'Chart of Accounts', href: '/accounts', icon: FileSpreadsheet },
+      { label: 'Journal Entries', href: '/journal-entries', icon: FileText },
+      { label: 'General Ledger', href: '/ledger', icon: BookOpen },
+      { label: 'Detailed Ledger', href: '/detailed-ledger', icon: List },
+      { label: 'Trial Balance', href: '/trial-balance', icon: BarChart3 },
+      { label: 'Exchange Rates', href: '/exchange-rates', icon: BarChart3 },
+      { label: 'FX Revaluation', href: '/finance/revaluation', icon: BarChart3 },
+      { label: 'Divisions', href: '/divisions', icon: Layers },
+      { label: 'Cost Allocations', href: '/divisions/allocations', icon: BarChart3 },
+      { label: 'Division Access', href: '/divisions/access', icon: Layers },
+    ]
+  },
+  { 
+    label: 'Financial Reports', 
+    icon: TrendingUp,
+    requiredModules: ['reporting'],
+    children: [
+      { label: 'Balance Sheet', href: '/reports/balance-sheet', icon: FileSpreadsheet },
+      { label: 'Income Statement', href: '/reports/income-statement', icon: BarChart3 },
+      { label: 'Cash Flow', href: '/reports/cash-flow', icon: DollarSign },
+      { label: 'Changes in Equity', href: '/reports/changes-in-equity', icon: BarChart3 },
+      { label: 'Consolidated Statements', href: '/reports/consolidated', icon: Layers },
+      { label: 'Management Report', href: '/reports/management', icon: TrendingUp },
+      { label: 'FX Gain / Loss', href: '/reports/fx-gain-loss', icon: ArrowLeftRight },
+      { label: 'Multi-Currency TB', href: '/reports/multi-currency-trial-balance', icon: BarChart3 },
+      { label: 'Reports Centre', href: '/reports', icon: FileText },
+    ]
+  },
+  { 
+    label: 'Fixed Assets', 
+    icon: Building2, 
+    href: '/fixed-assets',
+    requiredModules: ['fixed_assets'],
+  },
+  { 
+    label: 'Leases', 
+    icon: Landmark, 
+    href: '/leases',
+    requiredModules: ['leases'],
+  },
+  { 
+    label: 'Sales Tax', 
+    icon: Receipt, 
+    requiredModules: ['general_ledger'],
+    children: [
+      { label: 'Tax Center', href: '/tax', icon: Receipt },
+      { label: 'Setup Wizard', href: '/tax/setup', icon: Sparkles },
+      { label: 'Filing Periods', href: '/tax/filing-periods', icon: CalendarDays },
+      { label: 'Exceptions', href: '/tax/exceptions', icon: AlertTriangle },
+      { label: 'Audit Trail', href: '/tax/audit-trail', icon: History },
+      { label: 'Advanced Reports', href: '/tax/reports', icon: BarChart3 },
+      { label: 'E-File Returns', href: '/tax/e-file', icon: Send, hideForReadOnly: true },
+      { label: 'Address Tax (US)', href: '/tax/address-tax', icon: MapPin },
+      { label: 'EU VAT (OSS)', href: '/tax/eu-vat', icon: Globe },
+      { label: 'Tax Provisioning', href: '/tax/provision', icon: Scale },
+      { label: 'Withholding Tax', href: '/tax/withholding', icon: Receipt },
+    ],
+  },
+  { 
+    label: 'Budgets', 
+    icon: Wallet,
+    requiredModules: ['budgeting'],
+    children: [
+      { label: 'Budget Management', href: '/budgets', icon: Wallet },
+      { label: 'Production Budgets', href: '/budgets/production', icon: Factory },
+      { label: 'Variance Analysis', href: '/budgets/variance', icon: BarChart3 },
+      { label: 'AI Forecasting', href: '/budgets/ai-forecast', icon: Sparkles },
+    ]
+  },
+  { 
+    label: 'Payroll', 
+    icon: Users,
+    requiredModules: ['payroll'],
+    children: [
+      { label: 'Employees', href: '/payroll/employees', icon: UserCheck },
+      { label: 'Onboarding', href: '/payroll/employees/onboarding', icon: UserPlus, hideForReadOnly: true },
+      { label: 'Timesheets', href: '/payroll/timesheets', icon: Clock },
+      { label: 'Self-Service', href: '/payroll/self-service', icon: Users, hideForReadOnly: true },
+      { label: 'Pay Runs', href: '/payroll/runs', icon: DollarSign },
+      { label: payrollLabels.remittances, href: '/payroll/remittances', icon: Receipt },
+      { label: payrollLabels.taxSlips, href: '/payroll/tax-slips', icon: FileText },
+      { label: payrollLabels.separationDoc, href: '/payroll/roe', icon: ClipboardList },
+      { label: 'Reports', href: '/payroll/reports', icon: FileSpreadsheet },
+    ]
+  },
+  { 
+    label: 'Donations', 
+    icon: Heart, 
+    href: '/donations',
+    requiredModules: ['donations'],
+  },
+  { 
+    label: 'Accountant Dashboard', 
+    icon: Calculator, 
+    requiredModules: ['accountant_dashboard'],
+    children: [
+      { label: 'Dashboard', href: '/reports/accountant', icon: Calculator },
+      { label: 'Practice Management', href: '/reports/practice-management', icon: Briefcase },
+    ]
+  },
+  { 
+    label: 'DocSign', 
+    icon: FileSignature, 
+    href: '/docsign',
+    requiredModules: ['docsign'],
+  },
+  { 
+    label: 'Communication', 
+    icon: MessageSquare, 
+    href: '/communication',
+    requiredModules: ['communication'],
+  },
+  { label: 'Settings', icon: Settings, href: '/settings', allowedRoles: ['owner', 'admin'] },
+];
+
+interface SidebarProps {
+  collapsed?: boolean;
+}
+
+export function Sidebar({ collapsed = false }: SidebarProps) {
+  const location = useLocation();
+  const { isAdmin } = useAuth();
+  const [expandedItems, setExpandedItems] = useState<string[]>([]);
+  const { 
+    currentOrganization: currentOrg, 
+    organizations, 
+    isLoading: orgsLoading, 
+    switchOrganization 
+  } = useOrganizationContext();
+  const [createOrgOpen, setCreateOrgOpen] = useState(false);
+  const { sidebarLabels } = usePayrollLocalization();
+  const { isModuleEnabled, isLoading: modulesLoading, isReadOnly, userRole } = useEnabledModules();
+
+  // Generate navigation with localized payroll labels
+  const baseNavigation = useMemo(() => getNavigation(sidebarLabels), [sidebarLabels]);
+
+  // Filter navigation based on enabled modules and read-only status
+  const navigation = useMemo(() => {
+    return baseNavigation
+      .filter(item => {
+        // Always enforce role restrictions, even during loading
+        if (item.allowedRoles && !item.allowedRoles.includes(userRole)) return false;
+        // Hide items marked as hideForReadOnly when user is auditor
+        if (isReadOnly && item.hideForReadOnly) return false;
+        // During module loading, show all module-based items (graceful fallback)
+        if (modulesLoading) return true;
+        // Items without module requirements are always shown
+        if (!item.requiredModules || item.requiredModules.length === 0) return true;
+        // Check if any of the required modules are enabled
+        return item.requiredModules.some(code => isModuleEnabled(code));
+      })
+      .map(item => {
+        // Filter children for read-only users
+        if (isReadOnly && item.children) {
+          return {
+            ...item,
+            children: item.children.filter(child => !child.hideForReadOnly),
+          };
+        }
+        return item;
+      });
+  }, [baseNavigation, isModuleEnabled, modulesLoading, isReadOnly, userRole]);
+
+  // Auto-expand parent groups when navigating to child routes
+  useEffect(() => {
+    const activeParents = navigation
+      .filter(item => item.children?.some(child => location.pathname === child.href))
+      .map(item => item.label);
+    
+    if (activeParents.length > 0) {
+      setExpandedItems(prev => {
+        const newExpanded = [...prev];
+        activeParents.forEach(parent => {
+          if (!newExpanded.includes(parent)) {
+            newExpanded.push(parent);
+          }
+        });
+        return newExpanded;
+      });
+    }
+  }, [location.pathname, navigation]);
+
+  const toggleExpand = (label: string) => {
+    setExpandedItems(prev => 
+      prev.includes(label) 
+        ? prev.filter(item => item !== label)
+        : [...prev, label]
+    );
+  };
+
+  const isActive = (href?: string, children?: NavItem['children']) => {
+    if (href) return location.pathname === href;
+    if (children) return children.some(child => location.pathname === child.href);
+    return false;
+  };
+
+  return (
+    <aside className={cn(
+      "fixed left-0 top-0 z-40 h-screen bg-sidebar border-r border-sidebar-border transition-all duration-300",
+      collapsed ? "w-16" : "w-64"
+    )}>
+      {/* Logo & Org Switcher */}
+      <div className="flex flex-col h-full">
+        <div className="p-4 border-b border-sidebar-border">
+          <div className="flex items-center gap-3 mb-4">
+            <img src={logo} alt="efinsuite Globe" className="w-9 h-9 object-contain" />
+            {!collapsed && (
+              <div>
+                <h1 className="text-lg font-bold text-sidebar-foreground">efinsuite Globe</h1>
+                <p className="text-xs text-sidebar-muted">Accounting Platform</p>
+              </div>
+            )}
+          </div>
+          
+          {!collapsed && (
+            <SearchableOrgSwitcher
+              currentOrg={currentOrg}
+              organizations={organizations}
+              isLoading={orgsLoading}
+              onSwitch={switchOrganization}
+              onCreateNew={() => setCreateOrgOpen(true)}
+            />
+          )}
+          
+          <CreateOrganizationDialog open={createOrgOpen} onOpenChange={setCreateOrgOpen} />
+        </div>
+
+        {/* Navigation */}
+        <nav className="flex-1 overflow-y-auto scrollbar-thin p-3 space-y-1">
+          {navigation.map((item) => (
+            <div key={item.label}>
+              {item.href ? (
+                <Link
+                  to={item.href}
+                  className={cn(
+                    "nav-item",
+                    isActive(item.href) && "nav-item-active"
+                  )}
+                >
+                  <item.icon className="w-5 h-5 flex-shrink-0" />
+                  {!collapsed && <span>{item.label}</span>}
+                </Link>
+              ) : (
+                <>
+                  <button
+                    onClick={() => toggleExpand(item.label)}
+                    className={cn(
+                      "nav-item w-full justify-between",
+                      isActive(undefined, item.children) && "text-sidebar-primary"
+                    )}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <item.icon className="w-5 h-5 flex-shrink-0" />
+                      {!collapsed && <span className="whitespace-nowrap">{item.label}</span>}
+                    </div>
+                    {!collapsed && (
+                      <ChevronDown className={cn(
+                        "w-4 h-4 transition-transform",
+                        expandedItems.includes(item.label) && "rotate-180"
+                      )} />
+                    )}
+                  </button>
+                  {!collapsed && expandedItems.includes(item.label) && item.children && (
+                    <div className="ml-4 mt-1 space-y-1 border-l border-sidebar-border pl-3">
+                      {item.children.map(child => (
+                        <Link
+                          key={child.href}
+                          to={child.href}
+                          className={cn(
+                            "nav-item text-sm",
+                            location.pathname === child.href && "nav-item-active"
+                          )}
+                        >
+                          <child.icon className="w-4 h-4" />
+                          <span>{child.label}</span>
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          ))}
+          
+          {/* Admin Section - Only visible for admins */}
+          {isAdmin && (
+            <>
+              <div className="my-3 border-t border-sidebar-border" />
+              <Link
+                to="/admin"
+                className={cn(
+                  "nav-item bg-warning/10 hover:bg-warning/20 text-warning",
+                  location.pathname.startsWith('/admin') && "nav-item-active bg-warning/20"
+                )}
+              >
+                <ShieldCheck className="w-5 h-5 flex-shrink-0" />
+                {!collapsed && <span>Admin Panel</span>}
+              </Link>
+            </>
+          )}
+        </nav>
+      </div>
+    </aside>
+  );
+}

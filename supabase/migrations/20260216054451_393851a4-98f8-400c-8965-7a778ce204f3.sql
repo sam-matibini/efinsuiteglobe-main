@@ -1,0 +1,1 @@
+ALTER TABLE public.donation_receipts ALTER COLUMN charity_bn TYPE character varying(20);

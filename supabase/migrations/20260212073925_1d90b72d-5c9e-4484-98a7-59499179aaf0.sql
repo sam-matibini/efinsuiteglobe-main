@@ -1,0 +1,2 @@
+ALTER TABLE public.leases DROP CONSTRAINT IF EXISTS leases_payment_frequency_check;
+ALTER TABLE public.leases ADD CONSTRAINT leases_payment_frequency_check CHECK (payment_frequency IN ('monthly', 'quarterly', 'semi_annual', 'annual', 'bi_weekly'));

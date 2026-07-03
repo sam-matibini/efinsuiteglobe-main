@@ -1,0 +1,493 @@
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+// Safe base64 encoder
+function bytesToBase64(bytes: Uint8Array): string {
+  const CHUNK = 8192;
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+  }
+  return btoa(binary);
+}
+
+type Cell = string | number | null;
+interface ExtractedRow { [key: string]: Cell }
+interface Sheet { name: string; columns: string[]; rows: ExtractedRow[] }
+
+const MAX_PDF_SIZE_MB = 8;
+const MAX_PDF_SIZE_BYTES = MAX_PDF_SIZE_MB * 1024 * 1024;
+const EDGE_RESPONSE_BUDGET_MS = 125_000;
+const AI_REQUEST_TIMEOUT_MS = 75_000;
+const RESPONSE_BUFFER_MS = 15_000;
+const FALLBACK_CUTOFF_MS = 35_000;
+const MIN_AI_CALL_MS = 10_000;
+
+type AiCallResult =
+  | { ok: true; args: any; raw: string }
+  | { ok: false; reason: 'timeout' | 'failed' | 'empty'; message?: string };
+
+// Regex for summary rows that must never appear as transactions
+const SUMMARY_ROW_PATTERNS = [
+  /^\s*opening\s+balance/i,
+  /^\s*closing\s+balance/i,
+  /^\s*previous\s+balance/i,
+  /^\s*new\s+balance/i,
+  /^\s*beginning\s+balance/i,
+  /^\s*ending\s+balance/i,
+  /^\s*statement\s+(total|summary)/i,
+  /^\s*period\s+total/i,
+  /^\s*total\s+(deposits?|credits?|cheques?|debits?|withdrawals?|fees?|charges?|payments?|interest)/i,
+  /^\s*(sub)?total\s+(for|of)\b/i,
+  /^\s*account\s+summary/i,
+];
+
+function isSummaryRow(desc: unknown): boolean {
+  if (typeof desc !== 'string') return false;
+  return SUMMARY_ROW_PATTERNS.some((re) => re.test(desc));
+}
+
+function parseNum(v: unknown): number {
+  if (typeof v === 'number' && isFinite(v)) return v;
+  if (typeof v !== 'string') return 0;
+  let s = v.trim();
+  if (!s) return 0;
+  // (123.45) -> -123.45
+  let neg = false;
+  if (/^\(.*\)$/.test(s)) { neg = true; s = s.slice(1, -1); }
+  s = s.replace(/[$£€¥,\s]/g, '');
+  if (s.startsWith('-')) { neg = !neg; s = s.slice(1); }
+  const n = parseFloat(s);
+  if (!isFinite(n)) return 0;
+  return neg ? -n : n;
+}
+
+const STATEMENT_TOOL = {
+  type: 'function',
+  function: {
+    name: 'submit_bank_statement_extraction',
+    description: 'Submit fully validated bank or credit-card statement data extracted from the PDF.',
+    parameters: {
+      type: 'object',
+      properties: {
+        documentType: {
+          type: 'string',
+          enum: ['bank_statement', 'credit_card_statement'],
+        },
+        statementPeriodStart: { type: 'string', description: 'YYYY-MM-DD, period start as printed on the statement.' },
+        statementPeriodEnd:   { type: 'string', description: 'YYYY-MM-DD, period end as printed on the statement.' },
+        openingBalance:       { type: 'number' },
+        closingBalance:       { type: 'number' },
+        totalDebits:          { type: 'number', description: 'Printed "Total cheques & debits" / "Total withdrawals" — positive number.' },
+        totalCredits:         { type: 'number', description: 'Printed "Total deposits & credits" — positive number.' },
+        transactions: {
+          type: 'array',
+          description: 'ONE entry per posted transaction line. EXCLUDE opening balance, closing balance, and any "Total ..." summary row.',
+          items: {
+            type: 'object',
+            properties: {
+              date:        { type: 'string', description: 'YYYY-MM-DD' },
+              description: { type: 'string' },
+              reference:   { type: 'string' },
+              debit:       { type: 'number', description: 'Money OUT (cheques, debits, withdrawals, fees, CC charges). Always positive. 0 if not a debit.' },
+              credit:      { type: 'number', description: 'Money IN (deposits, credits, CC payments). Always positive. 0 if not a credit.' },
+              balance:     { type: 'number', description: 'Running balance as printed (omit/0 if blank).' },
+            },
+            required: ['date', 'description', 'debit', 'credit'],
+            additionalProperties: false,
+          },
+        },
+      },
+      required: ['documentType', 'transactions'],
+      additionalProperties: false,
+    },
+  },
+} as const;
+
+const GENERIC_TOOL = {
+  type: 'function',
+  function: {
+    name: 'submit_generic_table_extraction',
+    description: 'Submit extracted tables that are not bank/credit-card statements.',
+    parameters: {
+      type: 'object',
+      properties: {
+        sheets: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              name:    { type: 'string' },
+              columns: { type: 'array', items: { type: 'string' } },
+              rows:    { type: 'array', items: { type: 'object', additionalProperties: true } },
+            },
+            required: ['name', 'columns', 'rows'],
+          },
+        },
+      },
+      required: ['sheets'],
+    },
+  },
+} as const;
+
+const STATEMENT_PROMPT = `You are extracting transactions from a BANK or CREDIT CARD statement PDF.
+
+Call the tool \`submit_bank_statement_extraction\` exactly once with the full result.
+
+HARD RULES — read carefully:
+
+1. Look at the column headers on the statement to identify which column is "Cheques & Debits / Withdrawals / Debit" and which is "Deposits & Credits / Deposit / Credit". The position of a number under those headers is the ONLY truth — never infer the side from sign, description, or guessing.
+2. Each transaction line maps to EXACTLY ONE of \`debit\` or \`credit\`. The other side MUST be 0. Both values must be POSITIVE numbers (no negatives, no parentheses).
+3. EXCLUDE every summary line: "Opening balance", "Closing balance", "Previous balance", "New balance", "Total deposits & credits", "Total cheques & debits", "Total fees", "Period total", "Statement total". Put those values into the top-level \`openingBalance\`, \`closingBalance\`, \`totalDebits\`, \`totalCredits\` fields instead. They must NOT appear inside \`transactions\`.
+4. Multi-line descriptions belong to the SAME transaction — concatenate them with a single space.
+5. Dates: use YYYY-MM-DD. Year comes from the statement period if the line omits it.
+6. Do not invent transactions. Do not skip transactions. Every row in the "Account Activity Details" table that has an amount in the Debit or Credit column must appear.
+7. Self-check before returning: sum of all \`debit\` values must equal printed \`totalDebits\` within 1 cent; sum of all \`credit\` values must equal printed \`totalCredits\` within 1 cent. If they don't match, re-read the columns — you have swapped a row.
+
+Return the tool call only. No prose.`;
+
+const GENERIC_PROMPT = `Extract every table from this PDF and submit via \`submit_generic_table_extraction\`. Numbers must be numeric (no $, commas), brackets mean negative. One sheet per logical table. Include every row.`;
+
+async function callGemini(
+  apiKey: string,
+  pdfBase64: string,
+  prompt: string,
+  tool: typeof STATEMENT_TOOL | typeof GENERIC_TOOL,
+  model: string,
+  timeoutMs = AI_REQUEST_TIMEOUT_MS,
+): Promise<AiCallResult> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  let res: Response;
+  try {
+    res = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      method: 'POST',
+      signal: ctrl.signal,
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model,
+        temperature: 0,
+        max_tokens: 18000,
+        tools: [tool],
+        tool_choice: { type: 'function', function: { name: tool.function.name } },
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'text', text: prompt },
+            { type: 'image_url', image_url: { url: `data:application/pdf;base64,${pdfBase64}` } },
+          ],
+        }],
+      }),
+    });
+  } catch (e) {
+    clearTimeout(timer);
+    console.error(`AI ${model} request aborted/failed:`, (e as Error).message);
+    return {
+      ok: false,
+      reason: ctrl.signal.aborted ? 'timeout' : 'failed',
+      message: ctrl.signal.aborted ? `AI extraction exceeded ${Math.round(timeoutMs / 1000)}s` : (e as Error).message,
+    };
+  }
+  clearTimeout(timer);
+
+  if (!res.ok) {
+    const text = await res.text();
+    console.error(`AI ${model} failed (${res.status}):`, text.slice(0, 500));
+    if (res.status === 429 || res.status === 402) throw new Response(text, { status: res.status });
+    return { ok: false, reason: 'failed', message: `AI extraction failed with status ${res.status}` };
+  }
+
+  const data = await res.json();
+  const msg = data.choices?.[0]?.message;
+  const call = msg?.tool_calls?.[0];
+  if (call?.function?.arguments) {
+    try { return { ok: true, args: JSON.parse(call.function.arguments), raw: call.function.arguments }; }
+    catch (e) { console.error('Tool args JSON parse failed:', e); }
+  }
+  // Fallback: try parsing message content if model returned JSON inline
+  const content = msg?.content || '';
+  if (content) {
+    const m = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/) || [null, content];
+    try { return { ok: true, args: JSON.parse(m[1].trim()), raw: m[1] }; } catch { /* ignore */ }
+  }
+  return { ok: false, reason: 'empty', message: 'AI returned no structured tool result' };
+}
+
+// Lightweight bank-statement detector based on filename + first request
+function looksLikeStatement(name: string): boolean {
+  return /statement|bank|rbc|td|bmo|cibc|scotia|amex|visa|mastercard|account.*activity/i.test(name);
+}
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+
+  const startTime = Date.now();
+
+  try {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+
+    if (!LOVABLE_API_KEY) {
+      return new Response(JSON.stringify({ success: false, error: 'AI service not configured.' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    const contentType = req.headers.get('content-type') || '';
+    let fileData: Uint8Array;
+    let fileName: string;
+
+    if (contentType.includes('multipart/form-data')) {
+      const formData = await req.formData();
+      const file = formData.get('file') as File;
+      if (!file) return new Response(JSON.stringify({ success: false, error: 'No file provided' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      fileName = file.name;
+      fileData = new Uint8Array(await file.arrayBuffer());
+    } else {
+      const body = await req.json();
+      if (body.fileUrl) {
+        const response = await fetch(body.fileUrl);
+        fileData = new Uint8Array(await response.arrayBuffer());
+        fileName = body.fileName || 'document.pdf';
+      } else if (body.base64) {
+        fileData = Uint8Array.from(atob(body.base64), (c) => c.charCodeAt(0));
+        fileName = body.fileName || 'document.pdf';
+      } else {
+        return new Response(JSON.stringify({ success: false, error: 'No file data provided' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+    }
+
+    if (fileName.split('.').pop()?.toLowerCase() !== 'pdf') {
+      return new Response(JSON.stringify({ success: false, error: 'Only PDF files are supported' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+    if (fileData.length > MAX_PDF_SIZE_BYTES) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: `PDF is too large (${(fileData.length / 1024 / 1024).toFixed(1)} MB). Maximum is ${MAX_PDF_SIZE_MB} MB.`,
+      }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    console.log(`Processing PDF: ${fileName}, size: ${(fileData.length / 1024).toFixed(0)}KB`);
+    const pdfBase64 = bytesToBase64(fileData);
+
+    // ---- Try bank-statement extraction first when filename hints at it,
+    //      otherwise generic, and fall back if the wrong path was chosen.
+    const validationWarnings: string[] = [];
+    let columns: string[] = [];
+    let rows: ExtractedRow[] = [];
+    let extractedSheets: Sheet[] = [];
+    let documentType: string | undefined;
+    let reconciled: boolean | undefined;
+    let summary: Record<string, number | string | undefined> | undefined;
+
+    let extractionTimedOut = false;
+    const remainingAiBudget = () => Math.max(
+      MIN_AI_CALL_MS,
+      Math.min(AI_REQUEST_TIMEOUT_MS, EDGE_RESPONSE_BUDGET_MS - (Date.now() - startTime) - RESPONSE_BUFFER_MS),
+    );
+    const hasFallbackBudget = () => Date.now() - startTime < FALLBACK_CUTOFF_MS;
+
+    const tryStatement = async () => {
+      const result = await callGemini(LOVABLE_API_KEY, pdfBase64, STATEMENT_PROMPT, STATEMENT_TOOL, 'google/gemini-2.5-flash', remainingAiBudget());
+      if (!result.ok) {
+        extractionTimedOut ||= result.reason === 'timeout';
+        validationWarnings.push(result.message || 'Statement extraction did not return structured data.');
+        return false;
+      }
+      const args = result.args || {};
+      if (!Array.isArray(args.transactions)) return false;
+
+      documentType = args.documentType || 'bank_statement';
+      const isCC = documentType === 'credit_card_statement';
+
+      // Sanitize: filter summary rows, normalize sign, single side per row
+      const cleaned: ExtractedRow[] = [];
+      for (const t of args.transactions) {
+        const desc = String(t.description ?? '').trim();
+        if (!desc || isSummaryRow(desc)) {
+          if (desc) validationWarnings.push(`Dropped summary row: "${desc}"`);
+          continue;
+        }
+        let debit = Math.abs(parseNum(t.debit));
+        let credit = Math.abs(parseNum(t.credit));
+        if (debit > 0 && credit > 0) {
+          // Both populated — keep larger side
+          validationWarnings.push(`Row "${desc.slice(0, 40)}" had both debit & credit; kept larger.`);
+          if (debit >= credit) credit = 0; else debit = 0;
+        }
+        if (debit === 0 && credit === 0) continue;
+        cleaned.push({
+          Date: String(t.date ?? ''),
+          Description: desc,
+          Reference: t.reference ? String(t.reference) : '',
+          Debit: debit || 0,
+          Credit: credit || 0,
+          Balance: parseNum(t.balance) || null,
+        });
+      }
+
+      // Reconcile against printed totals
+      const sumDebit = cleaned.reduce((s, r) => s + (r.Debit as number), 0);
+      const sumCredit = cleaned.reduce((s, r) => s + (r.Credit as number), 0);
+      const printedDebit = parseNum(args.totalDebits);
+      const printedCredit = parseNum(args.totalCredits);
+      const tol = 0.01;
+
+      let needsSwap = false;
+      if (printedDebit > 0 && printedCredit > 0) {
+        const matchDirect = Math.abs(sumDebit - printedDebit) <= tol && Math.abs(sumCredit - printedCredit) <= tol;
+        const matchSwapped = Math.abs(sumDebit - printedCredit) <= tol && Math.abs(sumCredit - printedDebit) <= tol;
+        if (!matchDirect && matchSwapped) {
+          needsSwap = true;
+          validationWarnings.push('Debit/Credit columns appear swapped — auto-corrected.');
+        }
+        reconciled = matchDirect || matchSwapped;
+        if (!reconciled) {
+          validationWarnings.push(
+            `Totals don't reconcile: extracted debits ${sumDebit.toFixed(2)} vs printed ${printedDebit.toFixed(2)}; ` +
+            `credits ${sumCredit.toFixed(2)} vs printed ${printedCredit.toFixed(2)}.`,
+          );
+        }
+      }
+
+      if (needsSwap) {
+        for (const r of cleaned) {
+          const d = r.Debit; r.Debit = r.Credit; r.Credit = d;
+        }
+      }
+
+      summary = {
+        openingBalance: parseNum(args.openingBalance) || undefined,
+        closingBalance: parseNum(args.closingBalance) || undefined,
+        totalDebits: printedDebit || undefined,
+        totalCredits: printedCredit || undefined,
+        periodStart: args.statementPeriodStart,
+        periodEnd: args.statementPeriodEnd,
+      };
+
+      // For bank statements use Withdrawal/Deposit naming used downstream; for CC use Charge/Payment-friendly columns.
+      columns = isCC
+        ? ['Date', 'Description', 'Reference', 'Charge', 'Payment', 'Balance']
+        : ['Date', 'Description', 'Reference', 'Debit', 'Credit', 'Balance'];
+
+      // If CC, rename Debit/Credit -> Charge/Payment in rows
+      rows = isCC
+        ? cleaned.map((r) => ({
+            Date: r.Date, Description: r.Description, Reference: r.Reference,
+            Charge: r.Debit, Payment: r.Credit, Balance: r.Balance,
+          }))
+        : cleaned;
+
+      extractedSheets = [{ name: isCC ? 'CC Transactions' : 'Bank Transactions', columns, rows }];
+      return true;
+    };
+
+    const tryGeneric = async () => {
+      const result = await callGemini(LOVABLE_API_KEY, pdfBase64, GENERIC_PROMPT, GENERIC_TOOL, 'google/gemini-2.5-flash', remainingAiBudget());
+      if (!result.ok) {
+        extractionTimedOut ||= result.reason === 'timeout';
+        validationWarnings.push(result.message || 'Generic table extraction did not return structured data.');
+        return false;
+      }
+      const sheets = (result.args?.sheets as Sheet[]) || [];
+      if (!sheets.length) return false;
+      extractedSheets = sheets;
+      columns = sheets[0].columns || [];
+      rows = sheets.flatMap((s) => s.rows || []);
+      documentType = 'generic_table';
+      return true;
+    };
+
+    try {
+      if (looksLikeStatement(fileName)) {
+        if (!(await tryStatement()) && !extractionTimedOut && hasFallbackBudget()) await tryGeneric();
+      } else {
+        // Still try statement first if generic returns nothing meaningful — but cheaper to try generic first.
+        if (!(await tryGeneric()) && !extractionTimedOut && hasFallbackBudget()) await tryStatement();
+      }
+    } catch (e) {
+      if (e instanceof Response) {
+        const status = e.status;
+        const errMsg = status === 429
+          ? 'Rate limit reached. Please try again in a moment.'
+          : 'AI credits exhausted. Please add credits to your workspace.';
+        return new Response(JSON.stringify({ success: false, error: errMsg }),
+          { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      throw e;
+    }
+
+    if (extractionTimedOut && columns.length === 0) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: 'PDF extraction took too long. Try a smaller statement, fewer pages, or upload CSV/XLSX exported from the bank.',
+        message: 'PDF extraction timed out before the backend idle limit.',
+        validationWarnings: validationWarnings.length ? validationWarnings : undefined,
+        processingTimeMs: Date.now() - startTime,
+      }), { status: 408, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    if (columns.length === 0) {
+      columns = ['Content'];
+      rows = [{ Content: 'No structured data could be extracted from this PDF.' }];
+      extractedSheets = [{ name: 'Extracted Data', columns, rows }];
+    }
+
+    // Build workbook
+    const timestamp = Date.now();
+    const baseName = fileName.replace(/\.[^/.]+$/, '');
+    const XLSX = await import('https://esm.sh/xlsx@0.18.5');
+    const wb = XLSX.utils.book_new();
+    for (const sheet of extractedSheets) {
+      const ws = XLSX.utils.json_to_sheet(sheet.rows);
+      const safe = (sheet.name || 'Sheet').slice(0, 31).replace(/[\\/*?[\]]/g, '');
+      XLSX.utils.book_append_sheet(wb, ws, safe);
+    }
+    const xlsxBuffer = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
+    const xlsxPath = `ai-sheets/${timestamp}-${baseName}.xlsx`;
+    await supabase.storage.from('docsign-documents').upload(xlsxPath, xlsxBuffer, {
+      contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      upsert: true,
+    });
+    const { data: urlData } = supabase.storage.from('docsign-documents').getPublicUrl(xlsxPath);
+
+    const result = {
+      success: true,
+      fileName,
+      totalPages: 0,
+      processedPages: 0,
+      columns,
+      rows,
+      sheets: extractedSheets.length > 1 ? extractedSheets : undefined,
+      documentType,
+      summary,
+      reconciled,
+      validationWarnings: validationWarnings.length ? validationWarnings : undefined,
+      downloadUrl: urlData.publicUrl,
+      message: `Extracted ${rows.length} rows`,
+      processingTimeMs: Date.now() - startTime,
+    };
+
+    console.log(`Completed: ${rows.length} rows, type=${documentType}, reconciled=${reconciled}, warnings=${validationWarnings.length}`);
+
+    return new Response(JSON.stringify(result),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+  } catch (error) {
+    console.error('PDF to spreadsheet error:', error);
+    return new Response(JSON.stringify({
+      success: false,
+      error: error instanceof Error ? error.message : 'Processing failed',
+      processingTimeMs: Date.now() - startTime,
+    }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+  }
+});

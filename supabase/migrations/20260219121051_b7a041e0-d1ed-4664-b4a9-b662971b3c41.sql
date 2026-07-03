@@ -1,0 +1,1 @@
+ALTER TABLE public.invoice_lines ADD COLUMN notes text;
