@@ -65,7 +65,7 @@ export function CopilotPanel({ trigger }: { trigger?: React.ReactNode }) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJvc2ttcXl3b2Z3ZWtzemhncnliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI4NTQ5NDYsImV4cCI6MjA5ODQzMDk0Nn0.6wATXwVNUsIPvNyqllvZAQWXQMTlLXGCSQIzi-jmlaE',
+          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJvc2ttcXl3b2Z3ZWtzemhncnliIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4Mjg1NDk0NiwiZXhwIjoyMDk4NDMwOTQ2fQ.a8XRlOigPcu3k3BMTQSkIHqeUpqW9IdZe7Okc9BJ43g',
           ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
         },
         body: JSON.stringify({

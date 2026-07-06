@@ -142,7 +142,7 @@ export function AddLeaseDialog({ open, onOpenChange, editLease }: AddLeaseDialog
           initialDirectCosts: 'Initial Direct Costs',
           leaseIncentives: 'Lease Incentives Received',
           residualValue: 'Residual Value Guarantee',
-          glMapping: 'GL Account Mapping (Optional)',
+          glMapping: 'GL Account Mapping',
           previewSchedule: 'Preview Amortization Schedule',
           hidePreview: 'Hide Preview',
           cancel: 'Cancel',
@@ -189,8 +189,16 @@ export function AddLeaseDialog({ open, onOpenChange, editLease }: AddLeaseDialog
     lease_incentives_received: 0,
     residual_value_guarantee: 0,
     grace_period_months: 0,
+    rou_asset_account_id: undefined,
+    lease_liability_account_id: undefined,
+    interest_expense_account_id: undefined,
+    depreciation_expense_account_id: undefined,
+    accumulated_depreciation_account_id: undefined,
+    rent_expense_account_id: undefined,
+    payment_account_id: undefined,
     notes: ''
   };
+
 
   const [formData, setFormData] = useState<LeaseInput>(defaultFormData);
 
@@ -221,8 +229,11 @@ export function AddLeaseDialog({ open, onOpenChange, editLease }: AddLeaseDialog
         interest_expense_account_id: editLease.interest_expense_account_id || undefined,
         depreciation_expense_account_id: editLease.depreciation_expense_account_id || undefined,
         accumulated_depreciation_account_id: editLease.accumulated_depreciation_account_id || undefined,
+        rent_expense_account_id: (editLease as any).rent_expense_account_id || undefined,
+        payment_account_id: editLease.payment_account_id || undefined,
         notes: editLease.notes || ''
       });
+
     } else if (!editLease && open) {
       setFormData(defaultFormData);
     }
@@ -309,6 +320,46 @@ export function AddLeaseDialog({ open, onOpenChange, editLease }: AddLeaseDialog
 
   const isPending = isEditMode ? editLeaseMutation.isPending : createLease.isPending;
 
+  // Required-field check varies by lease type. Finance-specific accounts (interest,
+  // depreciation, accumulated depreciation) are only rendered for finance leases,
+  // so requiring them for every type would permanently disable the submit button.
+  const missingRequired = useMemo(() => {
+    const commonMissing =
+      !formData.lease_number ||
+      !formData.name ||
+      !formData.lessor_name ||
+      formData.payment_amount <= 0 ||
+      !formData.payment_account_id;
+
+    if (commonMissing) return true;
+
+    switch (formData.lease_type) {
+      case 'finance':
+        return (
+          !formData.rou_asset_account_id ||
+          !formData.lease_liability_account_id ||
+          !formData.interest_expense_account_id ||
+          !formData.depreciation_expense_account_id ||
+          !formData.accumulated_depreciation_account_id
+        );
+      case 'operating':
+        return (
+          !formData.rou_asset_account_id ||
+          !formData.lease_liability_account_id ||
+          !formData.rent_expense_account_id ||
+          !formData.accumulated_depreciation_account_id
+        );
+      case 'short_term':
+      case 'low_value':
+        return !formData.rent_expense_account_id;
+      default:
+        return false;
+    }
+  }, [formData]);
+
+  const isCapitalized =
+    formData.lease_type === 'finance' || formData.lease_type === 'operating';
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
@@ -385,7 +436,22 @@ export function AddLeaseDialog({ open, onOpenChange, editLease }: AddLeaseDialog
                     <SelectItem value="low_value">{labels.lowValueLeaseType}</SelectItem>
                   </SelectContent>
                 </Select>
+                <p className="text-xs text-muted-foreground leading-snug">
+                  {formData.lease_type === 'finance' && (
+                    <>Two IS lines: <b>Interest on Lease</b> + <b>Depreciation of ROU</b>. BS shows ROU asset and lease liability (current + long-term).</>
+                  )}
+                  {formData.lease_type === 'operating' && (
+                    <>One IS line: <b>Lease Expense</b> (straight-line). BS shows ROU asset and lease liability (current + long-term).</>
+                  )}
+                  {formData.lease_type === 'short_term' && (
+                    <>One IS line: <b>Rent Expense</b> per payment. Nothing on the BS.</>
+                  )}
+                  {formData.lease_type === 'low_value' && (
+                    <>One IS line: <b>Rent Expense</b> per payment. Nothing on the BS.</>
+                  )}
+                </p>
               </div>
+
               <div className="space-y-2">
                 <Label>{labels.assetType} *</Label>
                 <Select 
@@ -613,60 +679,138 @@ export function AddLeaseDialog({ open, onOpenChange, editLease }: AddLeaseDialog
 
           <Separator />
 
-          {/* GL Account Mapping */}
+          {/* GL Account Mapping — required accounts vary by lease type */}
           <div className="space-y-4">
             <h4 className="font-semibold text-sm flex items-center gap-2">
               <Calculator className="w-4 h-4" />
               {labels.glMapping}
             </h4>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>ROU Asset Account</Label>
-                <SearchableGLAccountSelect
-                  value={formData.rou_asset_account_id || ''}
-                  onValueChange={(id) => setFormData(prev => ({ ...prev, rou_asset_account_id: id || undefined }))}
-                  placeholder="Select account..."
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Lease Liability Account</Label>
-                <SearchableGLAccountSelect
-                  value={formData.lease_liability_account_id || ''}
-                  onValueChange={(id) => setFormData(prev => ({ ...prev, lease_liability_account_id: id || undefined }))}
-                  placeholder="Select account..."
-                />
-              </div>
-            </div>
+            <p className="text-xs text-muted-foreground">
+              Required accounts depend on the selected lease type. Fields shown here are the ones
+              needed for postings to reach the Trial Balance, Balance Sheet and Income Statement.
+            </p>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Interest Expense Account</Label>
-                <SearchableGLAccountSelect
-                  value={formData.interest_expense_account_id || ''}
-                  onValueChange={(id) => setFormData(prev => ({ ...prev, interest_expense_account_id: id || undefined }))}
-                  placeholder="Select account..."
-                />
+            {/* Capitalized leases (finance & operating): ROU + Liability */}
+            {(formData.lease_type === 'finance' || formData.lease_type === 'operating') && (
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>ROU Asset Account *</Label>
+                  <SearchableGLAccountSelect
+                    value={formData.rou_asset_account_id || ''}
+                    onValueChange={(id) => setFormData(prev => ({ ...prev, rou_asset_account_id: id || undefined }))}
+                    placeholder="Select account..."
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Lease Liability Account *</Label>
+                  <SearchableGLAccountSelect
+                    value={formData.lease_liability_account_id || ''}
+                    onValueChange={(id) => setFormData(prev => ({ ...prev, lease_liability_account_id: id || undefined }))}
+                    placeholder="Select account..."
+                  />
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label>Depreciation Expense Account</Label>
-                <SearchableGLAccountSelect
-                  value={formData.depreciation_expense_account_id || ''}
-                  onValueChange={(id) => setFormData(prev => ({ ...prev, depreciation_expense_account_id: id || undefined }))}
-                  placeholder="Select account..."
-                />
-              </div>
-            </div>
+            )}
 
-            <div className="space-y-2">
-              <Label>Accumulated Depreciation Account</Label>
-              <SearchableGLAccountSelect
-                value={formData.accumulated_depreciation_account_id || ''}
-                onValueChange={(id) => setFormData(prev => ({ ...prev, accumulated_depreciation_account_id: id || undefined }))}
-                placeholder="Select account..."
-              />
-            </div>
+            {/* Finance-only: Interest + Depreciation split */}
+            {formData.lease_type === 'finance' && (
+              <>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Interest Expense Account *</Label>
+                    <SearchableGLAccountSelect
+                      value={formData.interest_expense_account_id || ''}
+                      onValueChange={(id) => setFormData(prev => ({ ...prev, interest_expense_account_id: id || undefined }))}
+                      placeholder="Select account..."
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Depreciation Expense Account *</Label>
+                    <SearchableGLAccountSelect
+                      value={formData.depreciation_expense_account_id || ''}
+                      onValueChange={(id) => setFormData(prev => ({ ...prev, depreciation_expense_account_id: id || undefined }))}
+                      placeholder="Select account..."
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Accumulated Depreciation Account *</Label>
+                    <SearchableGLAccountSelect
+                      value={formData.accumulated_depreciation_account_id || ''}
+                      onValueChange={(id) => setFormData(prev => ({ ...prev, accumulated_depreciation_account_id: id || undefined }))}
+                      placeholder="Select account..."
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Payment From (Cash / Bank) *</Label>
+                    <SearchableGLAccountSelect
+                      value={formData.payment_account_id || ''}
+                      onValueChange={(id) => setFormData(prev => ({ ...prev, payment_account_id: id || undefined }))}
+                      placeholder="Select account..."
+                    />
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Operating-only: single Lease Expense + Accumulated Amortization + Payment From */}
+            {formData.lease_type === 'operating' && (
+              <>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Lease Expense Account (straight-line) *</Label>
+                    <SearchableGLAccountSelect
+                      value={formData.rent_expense_account_id || ''}
+                      onValueChange={(id) => setFormData(prev => ({ ...prev, rent_expense_account_id: id || undefined }))}
+                      placeholder="Select account..."
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Accumulated Amortization (on ROU) *</Label>
+                    <SearchableGLAccountSelect
+                      value={formData.accumulated_depreciation_account_id || ''}
+                      onValueChange={(id) => setFormData(prev => ({ ...prev, accumulated_depreciation_account_id: id || undefined }))}
+                      placeholder="Select account..."
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Payment From (Cash / Bank) *</Label>
+                    <SearchableGLAccountSelect
+                      value={formData.payment_account_id || ''}
+                      onValueChange={(id) => setFormData(prev => ({ ...prev, payment_account_id: id || undefined }))}
+                      placeholder="Select account..."
+                    />
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Short-term / low-value: expense to Rent + Cash */}
+            {(formData.lease_type === 'short_term' || formData.lease_type === 'low_value') && (
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Rent Expense Account *</Label>
+                  <SearchableGLAccountSelect
+                    value={formData.rent_expense_account_id || ''}
+                    onValueChange={(id) => setFormData(prev => ({ ...prev, rent_expense_account_id: id || undefined }))}
+                    placeholder="Select account..."
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Payment From (Cash / Bank) *</Label>
+                  <SearchableGLAccountSelect
+                    value={formData.payment_account_id || ''}
+                    onValueChange={(id) => setFormData(prev => ({ ...prev, payment_account_id: id || undefined }))}
+                    placeholder="Select account..."
+                  />
+                </div>
+              </div>
+            )}
           </div>
+
 
           <Separator />
 
@@ -681,8 +825,19 @@ export function AddLeaseDialog({ open, onOpenChange, editLease }: AddLeaseDialog
             />
           </div>
 
-          {/* Calculated Values Preview */}
-          {formData.payment_amount > 0 && (
+          {/* Calculated Values Preview — only meaningful for capitalized leases */}
+          {formData.payment_amount > 0 && !isCapitalized && (
+            <Card className="bg-muted/50">
+              <CardContent className="pt-4">
+                <p className="text-xs text-muted-foreground">
+                  {formData.lease_type === 'short_term' ? 'Short-term' : 'Low-value'} leases
+                  are expensed as <b>Rent Expense</b> per payment — no ROU asset, no lease
+                  liability, and no amortization schedule.
+                </p>
+              </CardContent>
+            </Card>
+          )}
+          {formData.payment_amount > 0 && isCapitalized && (
             <Card className="bg-muted/50">
               <CardContent className="pt-4">
                 <h4 className="font-semibold text-sm mb-3">
@@ -788,16 +943,20 @@ export function AddLeaseDialog({ open, onOpenChange, editLease }: AddLeaseDialog
           )}
         </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            {labels.cancel}
-          </Button>
-          <Button 
-            onClick={handleSubmit} 
-            disabled={isPending || !formData.lease_number || !formData.name || !formData.lessor_name || formData.payment_amount <= 0}
-          >
-            {isPending ? labels.creating : labels.createLease}
-          </Button>
+        <DialogFooter className="flex-col sm:flex-row items-stretch sm:items-center gap-2">
+          {missingRequired && !isPending && (
+            <p className="text-xs text-muted-foreground sm:mr-auto">
+              Fill required fields and GL accounts for this lease type.
+            </p>
+          )}
+          <div className="flex gap-2 sm:ml-auto">
+            <Button variant="outline" onClick={() => onOpenChange(false)}>
+              {labels.cancel}
+            </Button>
+            <Button onClick={handleSubmit} disabled={isPending || missingRequired}>
+              {isPending ? labels.creating : labels.createLease}
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

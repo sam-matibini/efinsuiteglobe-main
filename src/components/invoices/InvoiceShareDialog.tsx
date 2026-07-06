@@ -114,6 +114,24 @@ export function InvoiceShareDialog({ open, onOpenChange, invoice, defaultTab }: 
     }
   }, [open, invoice, defaultSignature, extendedInvoice?.seller_signature_id]);
 
+  // Prefill recipient email/phone from invoice buyer or customer record.
+  useEffect(() => {
+    if (!open || !invoice) return;
+    const buyerEmail = (invoice as Invoice & { buyer_email?: string }).buyer_email || '';
+    const buyerPhone = (invoice as Invoice & { buyer_phone?: string }).buyer_phone || '';
+    setRecipientEmail((prev) => prev || buyerEmail || customer?.email || '');
+    setRecipientPhone((prev) => prev || buyerPhone || customer?.phone || '');
+  }, [open, invoice?.id, customer?.email, customer?.phone]);
+
+  // Reset transient fields when the dialog closes so a new invoice picks up fresh defaults.
+  useEffect(() => {
+    if (!open) {
+      setRecipientEmail('');
+      setRecipientPhone('');
+      setCustomMessage('');
+    }
+  }, [open]);
+
   // Default the "Include Pay Now" checkbox from the org setting.
   useEffect(() => {
     const orgFlag = (organization as unknown as { invoice_auto_payment_link?: boolean } | null)

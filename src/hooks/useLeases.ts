@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrganization } from './useOrganization';
 import { toast } from 'sonner';
 import { addMonths, format } from 'date-fns';
+import { createJournalEntry } from './useJournalEntryCreation';
 
 export interface Lease {
   id: string;
@@ -40,6 +41,8 @@ export interface Lease {
   interest_expense_account_id: string | null;
   depreciation_expense_account_id: string | null;
   accumulated_depreciation_account_id: string | null;
+  rent_expense_account_id: string | null;
+  payment_account_id: string | null;
   status: 'draft' | 'active' | 'modified' | 'terminated' | 'expired';
   commencement_journal_id: string | null;
   currency: string;
@@ -47,6 +50,7 @@ export interface Lease {
   created_at: string;
   updated_at: string;
 }
+
 
 export interface LeasePaymentSchedule {
   id: string;
@@ -95,9 +99,12 @@ export interface LeaseInput {
   interest_expense_account_id?: string;
   depreciation_expense_account_id?: string;
   accumulated_depreciation_account_id?: string;
+  rent_expense_account_id?: string;
+  payment_account_id?: string;
   grace_period_months?: number;
   notes?: string;
 }
+
 
 // Calculate present value of lease payments
 export function calculatePresentValue(
@@ -303,11 +310,101 @@ export function useCreateLease() {
         .insert(scheduleWithLeaseId);
       
       if (scheduleError) throw scheduleError;
-      
+
+      // Post the commencement journal entry so ROU asset and Lease Liability
+      // hit the Trial Balance / Balance Sheet from day one. If IDC or incentives
+      // are present, add additional cash lines so the entry balances.
+      if (
+        input.rou_asset_account_id &&
+        input.lease_liability_account_id &&
+        rouAssetInitial > 0 &&
+        presentValue > 0
+      ) {
+        try {
+          const idc = Number(input.initial_direct_costs || 0);
+          const incentive = Number(input.lease_incentives_received || 0);
+
+          const lines: Array<{
+            account_id: string;
+            debit: number;
+            credit: number;
+            memo: string;
+            source_document_type: string;
+            source_document_id: string;
+          }> = [
+            {
+              account_id: input.rou_asset_account_id,
+              debit: rouAssetInitial,
+              credit: 0,
+              memo: `ROU Asset recognition - ${input.name}`,
+              source_document_type: 'lease_commencement',
+              source_document_id: lease.id,
+            },
+            {
+              account_id: input.lease_liability_account_id,
+              debit: 0,
+              credit: presentValue,
+              memo: `Lease liability recognition - ${input.name}`,
+              source_document_type: 'lease_commencement',
+              source_document_id: lease.id,
+            },
+          ];
+
+          if ((idc > 0 || incentive > 0)) {
+            if (!input.payment_account_id) {
+              throw new Error(
+                'A Payment From (Cash/Bank) account is required when Initial Direct Costs or Incentives are non-zero, so the commencement entry balances.'
+              );
+            }
+            if (idc > 0) {
+              lines.push({
+                account_id: input.payment_account_id,
+                debit: 0,
+                credit: idc,
+                memo: `Initial direct costs paid - ${input.name}`,
+                source_document_type: 'lease_commencement',
+                source_document_id: lease.id,
+              });
+            }
+            if (incentive > 0) {
+              lines.push({
+                account_id: input.payment_account_id,
+                debit: incentive,
+                credit: 0,
+                memo: `Lease incentive received - ${input.name}`,
+                source_document_type: 'lease_commencement',
+                source_document_id: lease.id,
+              });
+            }
+          }
+
+          const jeId = await createJournalEntry({
+            organizationId: organization.id,
+            date: input.commencement_date,
+            description: `Lease Commencement - ${input.name} (${input.lease_number})`,
+            reference: `LEASE-COMM-${input.lease_number}`,
+            journalType: 'adjustment',
+            status: 'posted',
+            lines,
+          });
+
+          await supabase
+            .from('leases')
+            .update({ commencement_journal_id: jeId })
+            .eq('id', lease.id);
+        } catch (jeErr: any) {
+          toast.error(
+            `Lease saved, but GL commencement posting failed: ${jeErr?.message || 'unknown error'}. Post it later from the lease actions.`
+          );
+        }
+      }
+
       return lease;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['leases'] });
+      queryClient.invalidateQueries({ queryKey: ['journal-entries'] });
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
       toast.success('Lease created successfully');
     },
     onError: (error) => {
@@ -487,3 +584,189 @@ export function useDeleteLease() {
     }
   });
 }
+
+/**
+ * Posts (or re-posts) the commencement JE for an existing lease. Used by the
+ * "Post Commencement to GL" per-lease action when auto-post was skipped or failed.
+ */
+export function usePostLeaseCommencement() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (lease: Lease) => {
+      // Short-term and low-value leases are expensed as incurred; no capitalization.
+      if (lease.lease_type === 'short_term' || lease.lease_type === 'low_value') {
+        throw new Error(
+          `${lease.lease_type === 'short_term' ? 'Short-term' : 'Low-value'} leases are expensed to the Rent Expense account each period — no commencement entry is required.`
+        );
+      }
+      if (!lease.rou_asset_account_id || !lease.lease_liability_account_id) {
+        throw new Error('Set the ROU Asset and Lease Liability accounts on this lease first.');
+      }
+
+      const rouAssetInitial = Number(lease.rou_asset_initial || 0);
+      const presentValue = Number(lease.lease_liability_initial || lease.present_value_payments || 0);
+      const idc = Number(lease.initial_direct_costs || 0);
+      const incentive = Number(lease.lease_incentives_received || 0);
+
+      if (rouAssetInitial <= 0 || presentValue <= 0) {
+        throw new Error('ROU Asset and Lease Liability must be greater than zero.');
+      }
+
+      const lines: any[] = [
+        {
+          account_id: lease.rou_asset_account_id,
+          debit: rouAssetInitial,
+          credit: 0,
+          memo: `ROU Asset recognition - ${lease.name}`,
+          source_document_type: 'lease_commencement',
+          source_document_id: lease.id,
+        },
+        {
+          account_id: lease.lease_liability_account_id,
+          debit: 0,
+          credit: presentValue,
+          memo: `Lease liability recognition - ${lease.name}`,
+          source_document_type: 'lease_commencement',
+          source_document_id: lease.id,
+        },
+      ];
+
+      if (idc > 0 || incentive > 0) {
+        if (!lease.payment_account_id) {
+          throw new Error(
+            'A Payment From (Cash/Bank) account is required on the lease to balance IDCs / incentives.'
+          );
+        }
+        if (idc > 0) {
+          lines.push({
+            account_id: lease.payment_account_id,
+            debit: 0,
+            credit: idc,
+            memo: `Initial direct costs paid - ${lease.name}`,
+            source_document_type: 'lease_commencement',
+            source_document_id: lease.id,
+          });
+        }
+        if (incentive > 0) {
+          lines.push({
+            account_id: lease.payment_account_id,
+            debit: incentive,
+            credit: 0,
+            memo: `Lease incentive received - ${lease.name}`,
+            source_document_type: 'lease_commencement',
+            source_document_id: lease.id,
+          });
+        }
+      }
+
+      const jeId = await createJournalEntry({
+        organizationId: lease.organization_id,
+        date: lease.commencement_date,
+        description: `Lease Commencement - ${lease.name} (${lease.lease_number})`,
+        reference: `LEASE-COMM-${lease.lease_number}`,
+        journalType: 'adjustment',
+        status: 'posted',
+        lines,
+      });
+
+      await supabase
+        .from('leases')
+        .update({ commencement_journal_id: jeId })
+        .eq('id', lease.id);
+
+      return jeId;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['leases'] });
+      queryClient.invalidateQueries({ queryKey: ['journal-entries'] });
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      toast.success('Commencement entry posted to GL');
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to post commencement: ${error.message}`);
+    },
+  });
+}
+
+/**
+ * Rebuild the amortization schedule for a lease using the effective-interest method.
+ * Only rewrites rows that have NOT been posted to the GL.
+ */
+export function useRebuildLeaseSchedule() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (leaseId: string) => {
+      const { data, error } = await supabase.rpc('rebuild_lease_amortization_schedule' as any, {
+        p_lease_id: leaseId,
+      });
+      if (error) throw error;
+      return data as { rows_written: number; periodic_rate: number; apr_estimate: number };
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['lease-payment-schedule'] });
+      queryClient.invalidateQueries({ queryKey: ['leases'] });
+      const apr = result?.apr_estimate ? (result.apr_estimate * 100).toFixed(2) : '0.00';
+      toast.success(`Schedule rebuilt: ${result?.rows_written ?? 0} rows, implied APR ${apr}%`);
+    },
+    onError: (e: Error) => toast.error(`Failed to rebuild schedule: ${e.message}`),
+  });
+}
+
+/**
+ * Reverse bank-feed postings that debited the lease liability directly and
+ * move them onto a nominated clearing account so the liability can be rebuilt cleanly.
+ */
+export function useReclassifyLeaseBankPostings() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { leaseId: string; clearingAccountId: string }) => {
+      const { data, error } = await supabase.rpc('reclassify_lease_bank_postings' as any, {
+        p_lease_id: args.leaseId,
+        p_clearing_account_id: args.clearingAccountId,
+      });
+      if (error) throw error;
+      return data as { reclassified_count: number };
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['journal-entries'] });
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      toast.success(`Reclassified ${result?.reclassified_count ?? 0} bank posting(s) to clearing`);
+    },
+    onError: (e: Error) => toast.error(`Reclassify failed: ${e.message}`),
+  });
+}
+
+export interface LeaseLiabilityCurrentPortion {
+  lease_id: string;
+  organization_id: string;
+  account_id: string;
+  lease_name: string;
+  lease_number: string;
+  lease_type: 'finance' | 'operating' | 'short_term' | 'low_value';
+  current_portion: number;
+  long_term_portion: number;
+  total_remaining: number;
+}
+
+/**
+ * Read the derived current-portion / long-term split per active lease.
+ * Feeds the Balance Sheet callout and the Leases page columns.
+ */
+export function useLeaseLiabilityCurrentPortion() {
+  const { organization } = useCurrentOrganization();
+  return useQuery({
+    queryKey: ['lease-liability-current-portion', organization?.id],
+    enabled: !!organization?.id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('v_lease_liability_current_portion' as any)
+        .select('*')
+        .eq('organization_id', organization!.id);
+      if (error) throw error;
+      return (data ?? []) as unknown as LeaseLiabilityCurrentPortion[];
+    },
+  });
+}
+
+

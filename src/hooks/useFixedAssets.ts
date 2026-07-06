@@ -4,6 +4,7 @@ import { useToast } from '@/hooks/use-toast';
 import { addMonths, format, startOfMonth, endOfMonth } from 'date-fns';
 import { getFiscalYearForDate, getFiscalYearStart, getFiscalYearEnd, isInFiscalYear } from '@/lib/fiscalYearUtils';
 import { parseLocalDate } from '@/lib/utils';
+import { createJournalEntry } from './useJournalEntryCreation';
 
 // Types
 export interface FixedAssetCategory {
@@ -51,6 +52,7 @@ export interface FixedAsset {
   disposal_amount: number | null;
   disposal_method: string | null;
   disposal_journal_entry_id: string | null;
+  acquisition_journal_id: string | null;
   half_year_convention: boolean;
   notes: string | null;
   created_at: string;
@@ -169,15 +171,17 @@ export function useCreateFixedAsset(organizationId?: string) {
       asset_account_id?: string | null;
       depreciation_account_id?: string | null;
       accumulated_depreciation_account_id?: string | null;
+      offset_account_id?: string | null;
       notes?: string | null;
     }) => {
       if (!organizationId) throw new Error('Organization ID required');
+      const { offset_account_id, ...assetPayload } = asset;
       const bookValue = asset.acquisition_cost - 0;
-      
+
       const { data, error } = await supabase
         .from('fixed_assets')
-        .insert({ 
-          ...asset, 
+        .insert({
+          ...assetPayload,
           organization_id: organizationId,
           book_value: bookValue,
           accumulated_depreciation: 0,
@@ -185,12 +189,66 @@ export function useCreateFixedAsset(organizationId?: string) {
         })
         .select()
         .single();
-      
+
       if (error) throw error;
+
+      // Post the acquisition journal entry (DR Asset / CR Offset) when both
+      // accounts are provided and the asset has a non-zero cost. This is what
+      // makes the asset visible on the Trial Balance and Balance Sheet.
+      if (
+        asset.asset_account_id &&
+        offset_account_id &&
+        Number(asset.acquisition_cost) > 0
+      ) {
+        try {
+          const jeId = await createJournalEntry({
+            organizationId,
+            date: asset.acquisition_date,
+            description: `Fixed Asset Acquisition - ${asset.name} (${asset.asset_number})`,
+            reference: `FA-ACQ-${asset.asset_number}`,
+            journalType: 'purchase',
+            status: 'posted',
+            lines: [
+              {
+                account_id: asset.asset_account_id,
+                debit: Number(asset.acquisition_cost),
+                credit: 0,
+                memo: `Acquisition of ${asset.name}`,
+                source_document_type: 'fixed_asset_acquisition',
+                source_document_id: data.id,
+              },
+              {
+                account_id: offset_account_id,
+                debit: 0,
+                credit: Number(asset.acquisition_cost),
+                memo: `Acquisition of ${asset.name}`,
+                source_document_type: 'fixed_asset_acquisition',
+                source_document_id: data.id,
+              },
+            ],
+          });
+
+          await supabase
+            .from('fixed_assets')
+            .update({ acquisition_journal_id: jeId })
+            .eq('id', data.id);
+        } catch (jeErr: any) {
+          // Don't abort the asset creation — the user can post to GL later
+          // via the "Post Acquisition to GL" action.
+          toast({
+            title: 'Asset saved, GL posting failed',
+            description: jeErr?.message || 'Post the acquisition to GL manually.',
+            variant: 'destructive',
+          });
+        }
+      }
+
       return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['fixed-assets'] });
+      queryClient.invalidateQueries({ queryKey: ['journal-entries'] });
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
       toast({ title: 'Asset created successfully' });
     },
     onError: (error: Error) => {

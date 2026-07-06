@@ -31,10 +31,136 @@ export interface PostBatchLeasePaymentsParams {
  */
 export async function postLeasePaymentToGL(params: PostLeasePaymentParams): Promise<string> {
   const { organizationId, lease, payment, paymentDate, paymentAmount } = params;
-  
+
+  // Resolve Payment From (Cash/Bank). Required for every path except finance grace-period.
+  const resolvePaymentAccount = async (): Promise<string> => {
+    if (lease.payment_account_id) return lease.payment_account_id;
+    const { data: cashAccounts } = await supabase
+      .from('accounts')
+      .select('id')
+      .eq('organization_id', organizationId)
+      .eq('account_type', 'asset')
+      .eq('is_header', false)
+      .or('name.ilike.%cash%,name.ilike.%bank%')
+      .order('code')
+      .limit(1);
+    const id = cashAccounts?.[0]?.id;
+    if (!id) {
+      throw new Error('No Payment From (Cash/Bank) account configured on this lease. Edit the lease and set the Payment From account.');
+    }
+    return id;
+  };
+
+  // ==========================================================================
+  // SHORT-TERM / LOW-VALUE leases: expense the payment directly, no BS impact.
+  // ==========================================================================
+  if (lease.lease_type === 'short_term' || lease.lease_type === 'low_value') {
+    if (!lease.rent_expense_account_id) {
+      throw new Error('Rent / Lease Expense account not mapped. Edit the lease and set the Rent Expense account.');
+    }
+    const cashAccountId = await resolvePaymentAccount();
+    const lines: JournalEntryLine[] = [
+      {
+        account_id: lease.rent_expense_account_id,
+        debit: paymentAmount,
+        credit: 0,
+        memo: `Rent expense - ${lease.name} #${payment.payment_number}`,
+        source_document_type: 'lease_payment',
+        source_document_id: payment.id,
+      },
+      {
+        account_id: cashAccountId,
+        debit: 0,
+        credit: paymentAmount,
+        memo: `Lease payment (rent) - ${lease.name} #${payment.payment_number}`,
+        source_document_type: 'lease_payment',
+        source_document_id: payment.id,
+      },
+    ];
+    const journalEntryId = await createJournalEntry({
+      organizationId,
+      date: paymentDate,
+      description: `Rent Payment #${payment.payment_number} - ${lease.name} (${lease.lease_number})`,
+      reference: `LEASE-RENT-${lease.lease_number}-${String(payment.payment_number).padStart(3, '0')}`,
+      journalType: 'adjustment',
+      lines,
+      status: 'posted',
+    });
+    await supabase
+      .from('lease_payment_schedule')
+      .update({
+        status: 'paid',
+        actual_payment_date: paymentDate,
+        actual_payment_amount: paymentAmount,
+        journal_entry_id: journalEntryId,
+      })
+      .eq('id', payment.id);
+    return journalEntryId;
+  }
+
+  // ==========================================================================
+  // OPERATING (capitalized): single straight-line lease expense per period.
+  //   DR Lease Expense   (straight-line = payment amount)
+  //   CR Cash            (actual cash payment)
+  // ROU asset + lease liability tracking is maintained on the lease record
+  // (memo/schedule) but is not posted to GL — for an operating lease under
+  // ASC 842 / IFRS 16 the single Lease Expense line captures the full period
+  // cost. Depreciating the ROU asset separately would double-count expense.
+  // ==========================================================================
+  if (lease.lease_type === 'operating') {
+    if (!lease.rent_expense_account_id) {
+      throw new Error('Rent / Lease Expense account not mapped. Edit the lease and set the Rent Expense account.');
+    }
+    const cashAccountId = await resolvePaymentAccount();
+    const straightLine = Number(
+      (payment as any).straight_line_expense || (payment.principal_amount + payment.interest_amount)
+    );
+    const interest = Number(payment.interest_amount || 0);
+    const rouPlug = Math.max(0, Math.round((straightLine - interest) * 100) / 100);
+
+    const lines: JournalEntryLine[] = [
+      { account_id: lease.rent_expense_account_id, debit: paymentAmount, credit: 0,
+        memo: `Lease expense (straight-line) - ${lease.name} #${payment.payment_number}`,
+        source_document_type: 'lease_payment', source_document_id: payment.id },
+      { account_id: cashAccountId, debit: 0, credit: paymentAmount,
+        memo: `Operating-lease payment - ${lease.name} #${payment.payment_number}`,
+        source_document_type: 'lease_payment', source_document_id: payment.id },
+    ];
+
+    const journalEntryId = await createJournalEntry({
+      organizationId,
+      date: paymentDate,
+      description: `Operating Lease Payment #${payment.payment_number} - ${lease.name} (${lease.lease_number})`,
+      reference: `LEASE-OP-${lease.lease_number}-${String(payment.payment_number).padStart(3, '0')}`,
+      journalType: 'adjustment',
+      lines,
+      status: 'posted',
+    });
+
+    await supabase.from('lease_payment_schedule').update({
+      status: 'paid', actual_payment_date: paymentDate, actual_payment_amount: paymentAmount,
+      journal_entry_id: journalEntryId,
+    }).eq('id', payment.id);
+
+    await supabase.from('leases').update({
+      lease_liability_current: payment.closing_liability,
+      rou_asset_current: payment.rou_asset_closing,
+      accumulated_depreciation: (lease.accumulated_depreciation || 0) + rouPlug,
+      accumulated_interest: (lease.accumulated_interest || 0) + interest,
+    }).eq('id', lease.id);
+
+    return journalEntryId;
+  }
+
+
+
+  // ==========================================================================
+  // FINANCE lease (default): interest + principal + cash (two-line IS treatment)
+  // ==========================================================================
+
   // Grace period entry: interest accrues but no cash payment
   const isGracePeriod = payment.payment_amount === 0 && payment.interest_amount > 0;
-  
+
   // Validate required accounts are mapped
   if (!lease.lease_liability_account_id) {
     throw new Error('Lease Liability account not mapped. Please configure GL accounts for this lease.');
@@ -42,6 +168,8 @@ export async function postLeasePaymentToGL(params: PostLeasePaymentParams): Prom
   if (!lease.interest_expense_account_id) {
     throw new Error('Interest Expense account not mapped. Please configure GL accounts for this lease.');
   }
+
+
   
   const lines: JournalEntryLine[] = [];
   
@@ -64,21 +192,23 @@ export async function postLeasePaymentToGL(params: PostLeasePaymentParams): Prom
       source_document_id: payment.id,
     });
   } else {
-    // Normal payment period
-    // Get cash/bank account
-    const { data: cashAccounts } = await supabase
-      .from('accounts')
-      .select('id, name, code')
-      .eq('organization_id', organizationId)
-      .eq('account_type', 'asset')
-      .eq('is_header', false)
-      .or('name.ilike.%cash%,name.ilike.%bank%,code.like.1-%')
-      .order('code')
-      .limit(1);
-    
-    const cashAccountId = cashAccounts?.[0]?.id;
+    // Normal payment period — use the explicit "Payment From" account on the lease.
+    // Falls back to the first cash/bank account only if the lease has none configured.
+    let cashAccountId = lease.payment_account_id;
     if (!cashAccountId) {
-      throw new Error('No Cash/Bank account found. Please ensure you have a cash or bank account in your chart of accounts.');
+      const { data: cashAccounts } = await supabase
+        .from('accounts')
+        .select('id')
+        .eq('organization_id', organizationId)
+        .eq('account_type', 'asset')
+        .eq('is_header', false)
+        .or('name.ilike.%cash%,name.ilike.%bank%')
+        .order('code')
+        .limit(1);
+      cashAccountId = cashAccounts?.[0]?.id;
+    }
+    if (!cashAccountId) {
+      throw new Error('No Payment From (Cash/Bank) account configured on this lease. Edit the lease and set the Payment From account.');
     }
     
     // DR Lease Liability (principal portion)
@@ -246,25 +376,44 @@ export function useBatchLeasePaymentPosting() {
       
       for (const { lease, payment } of payments) {
         try {
-          // Post the payment (principal + interest)
+          // Post the payment (principal + interest, or straight-line rent for operating,
+          // or rent-only for short_term/low_value)
           await postLeasePaymentToGL({
             organizationId,
             lease,
             payment,
-            paymentDate: format(periodDate, 'yyyy-MM-dd'),
+            paymentDate: payment.payment_date,
             paymentAmount: payment.payment_amount,
           });
-          
-          // Also post depreciation for the period
-          if (payment.depreciation_amount > 0 && lease.depreciation_expense_account_id && lease.accumulated_depreciation_account_id) {
-            await postLeaseDepreciationToGL({
-              organizationId,
-              lease,
-              payment,
-              depreciationDate: format(periodDate, 'yyyy-MM-dd'),
-            });
+
+          // Post ROU depreciation as a separate JE ONLY for finance leases.
+          // Operating leases embed ROU amortization inside the payment JE (via the
+          // "ROU amortization (operating-lease plug)" line). Short-term / low-value
+          // leases don't capitalize at all. Calling postLeaseDepreciationToGL for
+          // those double-books and/or fails on missing depreciation accounts.
+          if (lease.lease_type === 'finance' && payment.depreciation_amount > 0) {
+            if (!lease.depreciation_expense_account_id || !lease.accumulated_depreciation_account_id) {
+              results.failed.push({
+                lease: `${lease.name} (depreciation)`,
+                error: 'Depreciation Expense / Accumulated Depreciation account not mapped on the lease.',
+              });
+            } else {
+              try {
+                await postLeaseDepreciationToGL({
+                  organizationId,
+                  lease,
+                  payment,
+                  depreciationDate: payment.payment_date,
+                });
+              } catch (depErr) {
+                results.failed.push({
+                  lease: `${lease.name} (depreciation)`,
+                  error: depErr instanceof Error ? depErr.message : 'Unknown error',
+                });
+              }
+            }
           }
-          
+
           results.success.push(lease.name);
         } catch (error) {
           results.failed.push({
@@ -273,7 +422,7 @@ export function useBatchLeasePaymentPosting() {
           });
         }
       }
-      
+
       return results;
     },
     onSuccess: (results) => {
@@ -281,12 +430,20 @@ export function useBatchLeasePaymentPosting() {
       queryClient.invalidateQueries({ queryKey: ['leases'] });
       queryClient.invalidateQueries({ queryKey: ['journal-entries'] });
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
-      
+
       if (results.success.length > 0) {
         toast.success(`Posted ${results.success.length} lease payment(s) to GL`);
       }
       if (results.failed.length > 0) {
-        toast.error(`Failed to post ${results.failed.length} payment(s)`);
+        console.error('Lease batch posting failures:', results.failed);
+        const preview = results.failed
+          .slice(0, 3)
+          .map(f => `${f.lease}: ${f.error}`)
+          .join('\n');
+        const more = results.failed.length > 3 ? `\n…and ${results.failed.length - 3} more` : '';
+        toast.error(`Failed to post ${results.failed.length} payment(s)`, {
+          description: preview + more,
+        });
       }
     },
     onError: (error) => {

@@ -1,0 +1,2 @@
+ALTER TABLE public.leases ADD COLUMN IF NOT EXISTS payment_account_id uuid REFERENCES public.accounts(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_leases_payment_account_id ON public.leases(payment_account_id);

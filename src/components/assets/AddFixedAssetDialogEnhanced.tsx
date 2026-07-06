@@ -14,6 +14,8 @@ import { format } from 'date-fns';
 import { Plus, Sparkles } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { SearchableGLAccountSelect } from '@/components/banking/SearchableGLAccountSelect';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface AddFixedAssetDialogEnhancedProps {
   open: boolean;
@@ -109,6 +111,11 @@ export function AddFixedAssetDialogEnhanced({ open, onOpenChange }: AddFixedAsse
     ownership_status: 'owned',
     funding_source: '',
     notes: '',
+    // GL Accounts
+    asset_account_id: '',
+    depreciation_account_id: '',
+    accumulated_depreciation_account_id: '',
+    offset_account_id: '',
   });
 
   // Apply category defaults once per category selection
@@ -192,6 +199,25 @@ export function AddFixedAssetDialogEnhanced({ open, onOpenChange }: AddFixedAsse
       return;
     }
 
+    if (!formData.asset_account_id) {
+      setActiveTab('gl');
+      toast({
+        title: 'Asset GL Account required',
+        description: 'Select the Balance Sheet asset account so the acquisition can post to the GL.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    if (formData.acquisition_cost > 0 && !formData.offset_account_id) {
+      setActiveTab('gl');
+      toast({
+        title: 'Offset (Credit) account required',
+        description: 'Select the account paying for the asset (e.g. Cash / Bank / Opening Balance Equity).',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     const usefulLifeMonths = Math.max(1, parseInt(formData.useful_life_months || '60', 10) || 60);
     const decliningRate = Math.max(1, Math.min(100, parseFloat(formData.declining_rate || '20') || 20));
     
@@ -212,9 +238,10 @@ export function AddFixedAssetDialogEnhanced({ open, onOpenChange }: AddFixedAsse
       serial_number: formData.serial_number || null,
       location: formData.location || null,
       notes: formData.notes || null,
-      asset_account_id: null,
-      depreciation_account_id: null,
-      accumulated_depreciation_account_id: null,
+      asset_account_id: formData.asset_account_id || null,
+      depreciation_account_id: formData.depreciation_account_id || null,
+      accumulated_depreciation_account_id: formData.accumulated_depreciation_account_id || null,
+      offset_account_id: formData.offset_account_id || null,
     });
     
     onOpenChange(false);
@@ -239,10 +266,11 @@ export function AddFixedAssetDialogEnhanced({ open, onOpenChange }: AddFixedAsse
         
         <form onSubmit={handleSubmit}>
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-4">
+            <TabsList className="grid w-full grid-cols-5">
               <TabsTrigger value="basic">Basic Info</TabsTrigger>
               <TabsTrigger value="depreciation">Depreciation</TabsTrigger>
               <TabsTrigger value="tax">Tax (CCA)</TabsTrigger>
+              <TabsTrigger value="gl">GL Accounts</TabsTrigger>
               <TabsTrigger value="compliance">Compliance</TabsTrigger>
             </TabsList>
 
@@ -434,6 +462,58 @@ export function AddFixedAssetDialogEnhanced({ open, onOpenChange }: AddFixedAsse
                   <p>✓ Declining balance method for tax purposes</p>
                 </div>
               )}
+            </TabsContent>
+
+            <TabsContent value="gl" className="space-y-4 mt-4">
+              <Alert>
+                <AlertDescription className="text-sm">
+                  These accounts drive posting to the General Ledger. The acquisition posts
+                  <strong> DR Asset Account</strong> / <strong>CR Offset (Credit) Account</strong> on save,
+                  making the asset appear on the Trial Balance and Balance Sheet. Depreciation accounts
+                  are used when the periodic depreciation is run.
+                </AlertDescription>
+              </Alert>
+
+              <div className="space-y-2">
+                <Label>Asset Account (Balance Sheet) *</Label>
+                <SearchableGLAccountSelect
+                  value={formData.asset_account_id}
+                  onValueChange={(id) => setFormData({ ...formData, asset_account_id: id })}
+                  placeholder="e.g. Property, Plant & Equipment"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Offset / Credit Account *</Label>
+                <SearchableGLAccountSelect
+                  value={formData.offset_account_id}
+                  onValueChange={(id) => setFormData({ ...formData, offset_account_id: id })}
+                  placeholder="e.g. Cash, Bank, Accounts Payable, Opening Balance Equity"
+                />
+                <p className="text-xs text-muted-foreground">
+                  The account that funded the purchase — Cash/Bank for a paid purchase, AP for a vendor bill,
+                  or Opening Balance Equity when loading historical assets.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Depreciation Expense Account</Label>
+                  <SearchableGLAccountSelect
+                    value={formData.depreciation_account_id}
+                    onValueChange={(id) => setFormData({ ...formData, depreciation_account_id: id })}
+                    placeholder="Expense account"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Accumulated Depreciation Account</Label>
+                  <SearchableGLAccountSelect
+                    value={formData.accumulated_depreciation_account_id}
+                    onValueChange={(id) => setFormData({ ...formData, accumulated_depreciation_account_id: id })}
+                    placeholder="Contra-asset account"
+                  />
+                </div>
+              </div>
             </TabsContent>
 
             <TabsContent value="compliance" className="space-y-4 mt-4">

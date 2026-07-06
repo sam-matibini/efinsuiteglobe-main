@@ -332,6 +332,7 @@ export default function CashFlow() {
     operatingActivities: [],
     investingActivities: [],
     financingActivities: [],
+    nonCashActivities: [],
     netOperating: 0,
     netInvesting: 0,
     netFinancing: 0,
@@ -342,6 +343,7 @@ export default function CashFlow() {
     isReconciled: true,
     reconciliationDifference: 0,
   };
+
   
   // Helper to calculate cash flow data for a comparative period
   // Uses the same methodology as useFinancialReports.ts getCashFlowData() for consistency
@@ -392,10 +394,13 @@ export default function CashFlow() {
     const netIncomeCents = toCents(periodData.netIncome || 0);
     let operatingTotalCents = netIncomeCents;
     
-    // Add back depreciation/amortization (non-cash expenses)
+    // Add back depreciation/amortization (non-cash expenses).
+    // Defensive: exclude any expense account misnamed "accumulated ..." to avoid
+    // double-counting a contra-asset accidentally posted as an expense.
     const depreciationAccounts = periodData.balances.filter((a: any) => 
       a.account_type === 'expense' && !a.is_header &&
-      nameContains(a.name, ['depreciation', 'amortization'])
+      nameContains(a.name, ['depreciation', 'amortization']) &&
+      !nameContains(a.name, ['accumulated', 'accum'])
     );
     const depreciationCents = depreciationAccounts.reduce((sum: number, a: any) => 
       sum + toCents(a.calculated_balance || 0), 0);
@@ -432,11 +437,24 @@ export default function CashFlow() {
     
     // Changes in Accounts Payable (liability - increase provides cash)
     // Exclude tax-related accounts as they're handled separately
+    // Lease liability detection (ASPE §3065 / IFRS 16 / ASC 842)
+    // Only classify as a lease liability when the account name explicitly names a
+    // lease obligation. A code prefix alone (2-01/2-02) is NOT sufficient — bank
+    // loans often live under the same prefix even when their name references a
+    // leased asset (e.g. "Long-Term Bank Loan – Truck Lease").
+    const isLeaseLiability = (a: any) =>
+      a.account_type === 'liability' && !a.is_header && (
+        nameContains(a.name, ['lease liab', 'lease obligation', 'lease payable', 'capital lease', 'finance lease']) ||
+        nameContains(a.name, ['current portion of lease'])
+      );
+    
     const apAccounts = periodData.balances.filter((a: any) => 
       a.account_type === 'liability' && !a.is_header &&
+      !isLeaseLiability(a) &&
       (nameContains(a.name, ['payable', 'a/p', 'accrued', 'wages']) || codeStartsWith(a.code, ['20', '200', '21', '210', '23'])) &&
       !nameContains(a.name, ['tax', 'gst', 'hst', 'pst', 'qst', 'cpp', 'ei', 'income tax'])
     );
+
     const apChangeCents = apAccounts.reduce((sum: number, a: any) => {
       const change = toCents((a.calculated_balance || 0) - (a.opening_balance || 0));
       const sign = a.normal_balance === 'credit' ? 1 : -1;
@@ -518,17 +536,48 @@ export default function CashFlow() {
     
     const loanAccounts = periodData.balances.filter((a: any) =>
       a.account_type === 'liability' && !a.is_header &&
+      !isLeaseLiability(a) &&
       (nameContains(a.name, ['loan', 'note', 'mortgage', 'debt', 'credit line', 'line of credit', 'shareholder', 'related party', 'due to']) || 
        isLoanByCode(a.code)) &&
-      // Exclude credit card accounts (operational, not financing)
       !nameContains(a.name, ['credit card'])
     );
     let financingTotalCents = 0;
     loanAccounts.forEach((a: any) => {
       const change = toCents((a.calculated_balance || 0) - (a.opening_balance || 0));
-      // For credit-normal: positive change = borrowed more = cash inflow
       financingTotalCents += change;
     });
+    
+    // Lease liabilities → Financing (with non-cash inception pairing)
+    const leaseLiabilityAccounts = periodData.balances.filter((a: any) => isLeaseLiability(a));
+    const nonCashItems: Array<{ name: string; amount: number }> = [];
+    const removedInvestingAssetIds = new Set<string>();
+    leaseLiabilityAccounts.forEach((acc: any) => {
+      const change = toCents((acc.calculated_balance || 0) - (acc.opening_balance || 0));
+      if (Math.abs(change) <= 0) return;
+      let nonCashPortion = 0;
+      if (change > 0) {
+        const matchingAsset = fixedAssetAccounts.find((fa: any) => {
+          const faChange = toCents((fa.calculated_balance || 0) - (fa.opening_balance || 0));
+          return Math.abs(faChange - change) < 100;
+        });
+        if (matchingAsset) {
+          nonCashPortion = change;
+          nonCashItems.push({
+            name: `Right-of-use assets acquired through lease obligations (${matchingAsset.name.trim()})`,
+            amount: fromCents(change),
+          });
+          removedInvestingAssetIds.add(matchingAsset.id);
+          // Adjust investing total to remove the paired asset entry
+          const faChange = toCents((matchingAsset.calculated_balance || 0) - (matchingAsset.opening_balance || 0));
+          investingTotalCents -= -faChange; // remove the -change we added earlier
+        }
+      }
+      const cashChange = change - nonCashPortion;
+      if (Math.abs(cashChange) > 0) {
+        financingTotalCents += cashChange;
+      }
+    });
+
     
     // Equity changes (contributions, dividends, distributions, drawings)
     // MUST match useFinancialReports.ts logic for share capital detection
@@ -549,12 +598,27 @@ export default function CashFlow() {
       const isDistribution = nameContains(a.name, ['dividend', 'distribution', 'drawing', 'treasury']);
       financingTotalCents += isDistribution ? -change : change;
     });
+
+    // Owner distributions posted directly to Retained Earnings / Accumulated Surplus.
+    // ΔRE from current-period Net Income alone = +netIncome (credit-normal equity).
+    // Any residual movement is a real cash transaction (owner draw / dividend /
+    // prior-period adjustment) and MUST appear in Financing so the CF ties to cash.
+    const retainedEarningsAccounts = periodData.balances.filter((a: any) =>
+      a.account_type === 'equity' && !a.is_header &&
+      nameContains(a.name, ['retained earnings', 'accumulated surplus', 'net assets', 'accumulated deficit'])
+    );
+    const reMovementCents = retainedEarningsAccounts.reduce((sum: number, a: any) =>
+      sum + toCents((a.calculated_balance || 0) - (a.opening_balance || 0)), 0);
+    const reDirectMovementCents = reMovementCents - netIncomeCents;
+    if (Math.abs(reDirectMovementCents) > 0) {
+      financingTotalCents += reDirectMovementCents;
+    }
     
     // ========== VERIFICATION: Cash Flow Identity ==========
     // Net Change = Operating + Investing + Financing
     // Use ACTUAL cash change from GL (like useFinancialReports.ts) to ensure balance sheet tie-out
     const actualCashChangeCents = endingCashCents - beginningCashCents;
-    const calculatedChangeCents = operatingTotalCents + investingTotalCents + financingTotalCents;
+    // (finalCalculatedChangeCents is computed below after building financingItems.)
     
     // Build individual line item arrays for comparative display
     const depreciationItems = depreciationAccounts.map((a: any) => ({
@@ -564,6 +628,7 @@ export default function CashFlow() {
 
     const investingItems: Array<{ name: string; amount: number }> = [];
     fixedAssetAccounts.forEach((a: any) => {
+      if (removedInvestingAssetIds.has(a.id)) return;
       const change = toCents((a.calculated_balance || 0) - (a.opening_balance || 0));
       if (Math.abs(change) > 0) {
         investingItems.push({ name: a.name, amount: fromCents(-change) });
@@ -580,7 +645,26 @@ export default function CashFlow() {
     loanAccounts.forEach((a: any) => {
       const change = toCents((a.calculated_balance || 0) - (a.opening_balance || 0));
       if (Math.abs(change) > 0) {
-        financingItems.push({ name: a.name, amount: fromCents(change) });
+        financingItems.push({
+          name: change > 0 ? `Proceeds from ${a.name}` : `Repayment of ${a.name}`,
+          amount: fromCents(change),
+        });
+      }
+    });
+    leaseLiabilityAccounts.forEach((acc: any) => {
+      const change = toCents((acc.calculated_balance || 0) - (acc.opening_balance || 0));
+      if (Math.abs(change) <= 0) return;
+      const matchingAsset = fixedAssetAccounts.find((fa: any) => {
+        const faChange = toCents((fa.calculated_balance || 0) - (fa.opening_balance || 0));
+        return Math.abs(faChange - change) < 100;
+      });
+      const nonCashPortion = change > 0 && matchingAsset ? change : 0;
+      const cashChange = change - nonCashPortion;
+      if (Math.abs(cashChange) > 0) {
+        financingItems.push({
+          name: cashChange < 0 ? 'Principal payments on lease obligations' : 'Proceeds from new lease obligations',
+          amount: fromCents(cashChange),
+        });
       }
     });
     equityChangeAccounts.forEach((a: any) => {
@@ -590,6 +674,18 @@ export default function CashFlow() {
         financingItems.push({ name: a.name, amount: fromCents(isDistribution ? -change : change) });
       }
     });
+    if (Math.abs(reDirectMovementCents) > 0) {
+      financingItems.push({
+        name: reDirectMovementCents < 0
+          ? 'Owner distributions / dividends (posted to Retained Earnings)'
+          : 'Owner contributions (posted to Retained Earnings)',
+        amount: fromCents(reDirectMovementCents),
+      });
+    }
+
+    // Recompute after RE reclassification changed financingTotalCents
+    const finalCalculatedChangeCents = operatingTotalCents + investingTotalCents + financingTotalCents;
+
 
     return {
       beginningCash: fromCents(beginningCashCents),
@@ -602,13 +698,15 @@ export default function CashFlow() {
       taxLiabChange: fromCents(taxLiabChangeCents),
       netInvesting: fromCents(investingTotalCents),
       netFinancing: fromCents(financingTotalCents),
-      calculatedChange: fromCents(calculatedChangeCents),
-      isReconciled: Math.abs(actualCashChangeCents - calculatedChangeCents) < 1,
+      calculatedChange: fromCents(finalCalculatedChangeCents),
+      isReconciled: Math.abs(actualCashChangeCents - finalCalculatedChangeCents) < 1,
       // Individual line items for comparative display
       depreciation: fromCents(depreciationCents),
       depreciationItems,
       investingItems,
       financingItems,
+      nonCashItems,
+
       inventoryChange: fromCents(-inventoryChangeCents),
       prepaidChange: fromCents(-prepaidChangeCents),
     };
@@ -966,6 +1064,40 @@ export default function CashFlow() {
       comparisonAmounts: comparisonAmounts.map(c => c?.endingCash || 0),
       isGrandTotal: true,
     });
+    
+    // ===== Supplemental Disclosure of Non-Cash Investing and Financing Activities =====
+    // Required under ASPE §1540.46 / IAS 7.43 / ASC 230-10-50-3
+    const currentNonCash = cashFlowData.nonCashActivities || [];
+    const hasCurrentNonCash = currentNonCash.length > 0;
+    const hasCompNonCash = comparisonAmounts.some(c => (c?.nonCashItems?.length ?? 0) > 0);
+    
+    if (hasCurrentNonCash || hasCompNonCash) {
+      items.push({
+        id: 'noncash-header',
+        name: 'Supplemental Disclosure of Non-Cash Investing and Financing Activities',
+        amount: 0,
+        isSection: true,
+      });
+      
+      // Union of names across current + comparative
+      const nonCashNames = new Set<string>();
+      currentNonCash.forEach(i => nonCashNames.add(i.name));
+      comparisonAmounts.forEach(c => c?.nonCashItems?.forEach((i: any) => nonCashNames.add(i.name)));
+      
+      nonCashNames.forEach(name => {
+        const currentAmt = currentNonCash.find(i => i.name === name)?.amount || 0;
+        const compAmts = comparisonAmounts.map(c => c?.nonCashItems?.find((i: any) => i.name === name)?.amount || 0);
+        items.push({
+          id: `noncash-${name}`,
+          name,
+          amount: currentAmt,
+          comparisonAmounts: compAmts,
+          indent: 1,
+        });
+      });
+    }
+    
+
     
     return items;
   }, [cashFlowData, comparativeData]);

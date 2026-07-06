@@ -21,7 +21,8 @@ import {
   Mail,
   MessageSquare,
   Play,
-  RefreshCw
+  RefreshCw,
+  BookOpen
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -30,10 +31,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useLeases, useLeasePaymentSchedule, Lease, LeasePaymentSchedule } from '@/hooks/useLeases';
+import { useLeases, useLeasePaymentSchedule, usePostLeaseCommencement, useLeaseLiabilityCurrentPortion, Lease, LeasePaymentSchedule } from '@/hooks/useLeases';
 import { AddLeaseDialog } from '@/components/leases/AddLeaseDialog';
 import { RunLeaseAmortizationDialog } from '@/components/leases/RunLeaseAmortizationDialog';
+import { RepairLeaseGLDialog } from '@/components/leases/RepairLeaseGLDialog';
 import { toast } from 'sonner';
+
 import jsPDF from 'jspdf';
 import * as XLSX from 'xlsx';
 import { useCurrentOrganization } from '@/hooks/useOrganization';
@@ -49,13 +52,18 @@ const WhatsAppIcon = () => (
 
 export default function Leases() {
   const { data: leases = [], isLoading, refetch } = useLeases();
+  const { data: liabilityParts = [] } = useLeaseLiabilityCurrentPortion();
   const { organization } = useCurrentOrganization();
   const isReadOnly = useIsReadOnly();
+
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [editingLease, setEditingLease] = useState<Lease | null>(null);
   const [runAmortizationOpen, setRunAmortizationOpen] = useState(false);
   const [selectedLease, setSelectedLease] = useState<Lease | null>(null);
   const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
+  const postCommencement = usePostLeaseCommencement();
+  const [repairLease, setRepairLease] = useState<Lease | null>(null);
+
 
   // Determine country code from organization
   const countryCode = useMemo(() => {
@@ -401,9 +409,11 @@ export default function Leases() {
                   <TableHead className="text-right">{leaseTerminology.payment}</TableHead>
                   <TableHead className="text-right">{leaseTerminology.rouAsset}</TableHead>
                   <TableHead className="text-right">{countryCode === 'BI' ? 'Passif' : 'Liability'}</TableHead>
+                  <TableHead className="text-right">Current / Long-term</TableHead>
                   <TableHead>{leaseTerminology.status}</TableHead>
                   <TableHead className="w-10"></TableHead>
                 </TableRow>
+
               </TableHeader>
               <TableBody>
                 {leases.map(lease => {
@@ -443,8 +453,26 @@ export default function Leases() {
                       <TableCell className="text-right font-medium">
                         {formatCurrency(lease.lease_liability_current)}
                       </TableCell>
+                      <TableCell className="text-right">
+                        {(() => {
+                          const part = liabilityParts.find(p => p.lease_id === lease.id);
+                          if (!part) {
+                            if (lease.lease_type === 'short_term' || lease.lease_type === 'low_value') {
+                              return <span className="text-xs text-muted-foreground">Expensed — n/a</span>;
+                            }
+                            return <span className="text-xs text-muted-foreground">—</span>;
+                          }
+                          return (
+                            <div className="text-xs leading-tight">
+                              <div><span className="text-muted-foreground">Current:</span> <span className="font-mono">{formatCurrency(part.current_portion)}</span></div>
+                              <div><span className="text-muted-foreground">Long-term:</span> <span className="font-mono">{formatCurrency(part.long_term_portion)}</span></div>
+                            </div>
+                          );
+                        })()}
+                      </TableCell>
                       <TableCell>{getStatusBadge(lease.status)}</TableCell>
                       <TableCell>
+
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="ghost" size="icon">
@@ -462,16 +490,47 @@ export default function Leases() {
                               <Eye className="w-4 h-4" />
                               {leaseTerminology.viewSchedule}
                             </DropdownMenuItem>
-                            <DropdownMenuItem 
-                              className="gap-2"
-                              onClick={() => {
-                                setEditingLease(lease);
-                              }}
-                            >
-                              <Edit className="w-4 h-4" />
-                              {leaseTerminology.editLease}
-                            </DropdownMenuItem>
+                            {!isReadOnly && (
+                              <DropdownMenuItem 
+                                className="gap-2"
+                                onClick={() => {
+                                  setEditingLease(lease);
+                                }}
+                              >
+                                <Edit className="w-4 h-4" />
+                                {leaseTerminology.editLease}
+                              </DropdownMenuItem>
+                            )}
+                            {!isReadOnly && !lease.commencement_journal_id && (
+                              <DropdownMenuItem
+                                className="gap-2"
+                                disabled={postCommencement.isPending}
+                                onClick={() => postCommencement.mutate(lease)}
+                              >
+                                <BookOpen className="w-4 h-4" />
+                                Post Commencement to GL
+                              </DropdownMenuItem>
+                            )}
+                            {!isReadOnly && (
+                              <DropdownMenuItem
+                                className="gap-2"
+                                onClick={() => setRunAmortizationOpen(true)}
+                              >
+                                <Play className="w-4 h-4" />
+                                Post Payments to GL
+                              </DropdownMenuItem>
+                            )}
+                            {!isReadOnly && (
+                              <DropdownMenuItem
+                                className="gap-2"
+                                onClick={() => setRepairLease(lease)}
+                              >
+                                <RefreshCw className="w-4 h-4" />
+                                Repair GL…
+                              </DropdownMenuItem>
+                            )}
                             <DropdownMenuSeparator />
+
                             <DropdownMenuItem className="gap-2 text-destructive">
                               <Trash2 className="w-4 h-4" />
                               {leaseTerminology.delete}
@@ -503,6 +562,15 @@ export default function Leases() {
         open={runAmortizationOpen} 
         onOpenChange={setRunAmortizationOpen} 
       />
+
+      {/* Repair GL Dialog */}
+      <RepairLeaseGLDialog
+        lease={repairLease}
+        open={!!repairLease}
+        onOpenChange={(open) => { if (!open) setRepairLease(null); }}
+      />
+
+
 
       {/* Payment Schedule Dialog */}
       {selectedLease && (

@@ -137,6 +137,12 @@ interface CashFlowData {
   operatingActivities: { name: string; amount: number }[];
   investingActivities: { name: string; amount: number }[];
   financingActivities: { name: string; amount: number }[];
+  /**
+   * Supplemental Disclosure of Non-Cash Investing and Financing Activities.
+   * Required under ASPE §1540.46 / IAS 7.43 / ASC 230-10-50-3.
+   * Includes items like ROU assets acquired through lease obligations.
+   */
+  nonCashActivities: { name: string; amount: number }[];
   netOperating: number;
   netInvesting: number;
   netFinancing: number;
@@ -163,6 +169,7 @@ interface CashFlowData {
   isReconciled: boolean;
   reconciliationDifference: number;
 }
+
 
 export interface DateRangeFilter {
   startDate?: Date;
@@ -979,10 +986,13 @@ export function useFinancialReports(dateFilter?: DateRangeFilter) {
     const operatingActivities: { name: string; amount: number }[] = [];
     operatingActivities.push({ name: 'Net Income', amount: incomeData.netIncome });
     
-    // Add back non-cash expenses (depreciation/amortization)
+    // Add back non-cash expenses (depreciation/amortization).
+    // Defensive: exclude any expense account misnamed "accumulated ..." to avoid
+    // double-counting a contra-asset accidentally created as an expense.
     const depreciationAccounts = accounts.filter(a => 
       a.account_type === 'expense' && 
-      nameContains(a.name, ['depreciation', 'amortization'])
+      nameContains(a.name, ['depreciation', 'amortization']) &&
+      !nameContains(a.name, ['accumulated', 'accum'])
     );
     depreciationAccounts.forEach(acc => {
       if (acc.calculated_balance !== 0) {
@@ -1045,25 +1055,38 @@ export function useFinancialReports(dateFilter?: DateRangeFilter) {
     // An INCREASE in AP means we've incurred expenses but not paid yet (provides cash)
     // A DECREASE in AP means we paid off prior obligations (uses cash)
     // Note: Exclude tax-related accounts as they're handled separately
+    // Lease liability detection (ASPE §3065 / IFRS 16 / ASC 842).
+    // Principal payments on lease obligations are FINANCING, not Operating,
+    // and must be shown separately from bank loans.
+    // Only classify as a lease liability when the account name explicitly names a
+    // lease obligation. A code prefix alone (2-01/2-02) is NOT sufficient — regular
+    // bank loans often live under the same prefix even when their name happens to
+    // reference a leased asset (e.g. "Long-Term Bank Loan – Truck Lease").
+    const isLeaseLiability = (a: any) =>
+      a.account_type === 'liability' && !a.is_header && (
+        nameContains(a.name, ['lease liab', 'lease obligation', 'lease payable', 'capital lease', 'finance lease']) ||
+        nameContains(a.name, ['current portion of lease'])
+      );
+
     const apAccounts = accounts.filter(a => 
       a.account_type === 'liability' && 
       !a.is_header &&
+      !isLeaseLiability(a) &&
       (nameContains(a.name, ['payable', 'a/p', 'accrued', 'wages']) || codeStartsWith(a.code, ['20', '200', '21', '210', '23'])) &&
       !nameContains(a.name, ['tax', 'gst', 'hst', 'pst', 'qst', 'cpp', 'ei', 'income tax'])
     );
     const apChange = apAccounts.reduce((sum, a) => {
       const change = a.calculated_balance - a.opening_balance;
-      // For credit-normal liabilities: positive change = liability increased = cash saved
-      // For debit-normal (contra): positive change = contra increased = liability effectively decreased = cash used
       const sign = a.normal_balance === 'credit' ? 1 : -1;
       return sum + (change * sign);
     }, 0);
     if (Math.abs(apChange) > 0.01) {
       operatingActivities.push({ 
         name: 'Change in Accounts Payable', 
-        amount: apChange // Increase in AP provides cash (positive)
+        amount: apChange
       });
     }
+
     
     // Changes in tax liabilities
     // Same logic as AP: increase in liability = cash provided
@@ -1148,7 +1171,7 @@ export function useFinancialReports(dateFilter?: DateRangeFilter) {
       }
     });
     
-    const netInvesting = investingActivities.reduce((sum, item) => sum + item.amount, 0);
+    // netInvesting is recomputed below after lease non-cash reclassification.
 
     // Financing activities - loans, notes, equity
     const financingActivities: { name: string; amount: number }[] = [];
@@ -1178,6 +1201,7 @@ export function useFinancialReports(dateFilter?: DateRangeFilter) {
     const loanAccounts = accounts.filter(a => 
       a.account_type === 'liability' && 
       !a.is_header &&
+      !isLeaseLiability(a) &&
       (nameContains(a.name, ['loan', 'note', 'mortgage', 'debt', 'credit line', 'line of credit', 'shareholder', 'related party', 'due to']) || 
        isLoanByCode(a.code)) &&
       // Exclude credit card accounts (operational, not financing)
@@ -1186,14 +1210,50 @@ export function useFinancialReports(dateFilter?: DateRangeFilter) {
     loanAccounts.forEach(acc => {
       const change = acc.calculated_balance - acc.opening_balance;
       if (Math.abs(change) > 0.01) {
-        // For credit-normal liabilities: positive change = borrowed more = cash inflow
-        // negative change = paid down = cash outflow
         financingActivities.push({ 
           name: change > 0 ? `Proceeds from ${acc.name}` : `Repayment of ${acc.name}`, 
           amount: change
         });
       }
     });
+    
+    // Lease liabilities — separate financing line per ASPE §3065 / IFRS 16 / ASC 842.
+    // If the change on inception equals a paired fixed-asset increase, treat as non-cash.
+    const leaseLiabilityAccounts = accounts.filter(a => isLeaseLiability(a));
+    const nonCashActivities: { name: string; amount: number }[] = [];
+    
+    leaseLiabilityAccounts.forEach(acc => {
+      const change = acc.calculated_balance - acc.opening_balance;
+      if (Math.abs(change) <= 0.01) return;
+      
+      // Detect non-cash lease inception: liability increase paired with equal fixed-asset increase
+      let nonCashPortion = 0;
+      if (change > 0) {
+        const matchingAsset = fixedAssetAccounts.find(fa => {
+          const faChange = fa.calculated_balance - fa.opening_balance;
+          return Math.abs(faChange - change) < 1.00;
+        });
+        if (matchingAsset) {
+          nonCashPortion = change;
+          nonCashActivities.push({
+            name: `Right-of-use assets acquired through lease obligations (${matchingAsset.name.trim()})`,
+            amount: change,
+          });
+          // Remove the paired asset entry from investing (was pushed above)
+          const idx = investingActivities.findIndex(i => i.name.includes(matchingAsset.name.trim()));
+          if (idx >= 0) investingActivities.splice(idx, 1);
+        }
+      }
+      
+      const cashChange = change - nonCashPortion;
+      if (Math.abs(cashChange) > 0.01) {
+        financingActivities.push({
+          name: cashChange < 0 ? 'Principal payments on lease obligations' : 'Proceeds from new lease obligations',
+          amount: cashChange,
+        });
+      }
+    });
+
     
     /**
      * EQUITY CHANGES (Financing Activities)
@@ -1236,8 +1296,42 @@ export function useFinancialReports(dateFilter?: DateRangeFilter) {
         });
       }
     });
-    
+
+    /**
+     * OWNER DISTRIBUTIONS POSTED DIRECTLY TO RETAINED EARNINGS
+     * =========================================================
+     * Retained Earnings / Accumulated Surplus / Net Assets normally move only via
+     * current-period Net Income. Any residual movement (ΔRE − NI) is a direct
+     * debit/credit posted by the bookkeeper (owner dividends, prior-period
+     * adjustments, distributions). This is a real cash transaction and belongs
+     * in Financing Activities — otherwise the Cash Flow will not tie to the
+     * change in cash on the Balance Sheet.
+     */
+    const retainedEarningsAccounts = accounts.filter(a =>
+      a.account_type === 'equity' &&
+      !a.is_header &&
+      nameContains(a.name, ['retained earnings', 'accumulated surplus', 'net assets', 'accumulated deficit'])
+    );
+    const reMovement = retainedEarningsAccounts.reduce(
+      (sum, a) => sum + (a.calculated_balance - a.opening_balance),
+      0
+    );
+    // ΔRE from NI alone = +netIncome (credit-normal equity increases with profit).
+    // Anything left over is a direct owner posting.
+    const reDirectMovement = reMovement - incomeData.netIncome;
+    if (Math.abs(reDirectMovement) > 0.01) {
+      financingActivities.push({
+        name: reDirectMovement < 0
+          ? 'Owner distributions / dividends (posted to Retained Earnings)'
+          : 'Owner contributions (posted to Retained Earnings)',
+        amount: reDirectMovement,
+      });
+    }
+
+    // Recompute after lease reclassification may have added/removed items
+    const netInvesting = investingActivities.reduce((sum, item) => sum + item.amount, 0);
     const netFinancing = financingActivities.reduce((sum, item) => sum + item.amount, 0);
+
 
     /**
      * CASH ACCOUNT DETECTION PATTERNS:
@@ -1289,18 +1383,19 @@ export function useFinancialReports(dateFilter?: DateRangeFilter) {
       operatingActivities,
       investingActivities,
       financingActivities,
+      nonCashActivities,
       netOperating,
       netInvesting,
       netFinancing,
       netChange,
       beginningCash,
       endingCash,
-      // Reconciliation info
       actualCashChange,
       isReconciled,
       reconciliationDifference,
     };
   };
+
 
   return {
     accountBalances: accountBalancesQuery.data ?? [],

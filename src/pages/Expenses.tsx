@@ -26,6 +26,8 @@ import {
 import { useExpenses } from '@/hooks/useExpenses';
 import { useCurrentOrganization } from '@/hooks/useOrganization';
 import { RecordExpenseDialog } from '@/components/expenses/RecordExpenseDialog';
+import { ExpenseDetailsDialog } from '@/components/expenses/ExpenseDetailsDialog';
+import { EditExpenseDialog } from '@/components/expenses/EditExpenseDialog';
 import { CreateOrganizationDialog } from '@/components/accounts/CreateOrganizationDialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getCountryLocalization } from '@/data/countryLocalizations';
@@ -48,6 +50,8 @@ export default function Expenses() {
   const [showRecordDialog, setShowRecordDialog] = useState(false);
   const [showOrgDialog, setShowOrgDialog] = useState(false);
   const [docsExpense, setDocsExpense] = useState<any | null>(null);
+  const [viewExpense, setViewExpense] = useState<any | null>(null);
+  const [editExpense, setEditExpense] = useState<any | null>(null);
   
   // Feature toggles
   const [showMileageOnly, setShowMileageOnly] = useState(false);
@@ -296,8 +300,10 @@ export default function Expenses() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem>View Details</DropdownMenuItem>
-                        <DropdownMenuItem>Edit</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setViewExpense(expense)}>View Details</DropdownMenuItem>
+                        {!isReadOnly && (
+                          <DropdownMenuItem onClick={() => setEditExpense(expense)}>Edit</DropdownMenuItem>
+                        )}
                         <DropdownMenuItem onClick={() => setDocsExpense(expense)}>
                           <Paperclip className="w-4 h-4 mr-2" /> Attach / Analyze Documents
                         </DropdownMenuItem>
@@ -329,6 +335,16 @@ export default function Expenses() {
         title={docsExpense ? `Expense ${docsExpense.reference || docsExpense.id.slice(0,8)} — Documents` : undefined}
         currentNotes={docsExpense?.notes}
         invalidateKeys={["expenses"]}
+      />
+      <ExpenseDetailsDialog
+        expense={viewExpense}
+        open={viewExpense !== null}
+        onOpenChange={(o) => !o && setViewExpense(null)}
+      />
+      <EditExpenseDialog
+        expense={editExpense}
+        open={editExpense !== null}
+        onOpenChange={(o) => !o && setEditExpense(null)}
       />
     </div>
   );

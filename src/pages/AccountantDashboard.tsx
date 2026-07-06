@@ -123,13 +123,23 @@ export default function AccountantDashboard() {
     
     const fetchShareCapitalData = async (orgId: string) => {
       try {
-        // Fetch ALL Common Stock accounts and aggregate
-        const { data: scAccounts } = await supabase
+        // Fetch ALL share-capital-like accounts (Common Stock/Shares, Share Capital, APIC)
+        // Some accounts have equity_category NULL — match by equity_type or name too.
+        const { data: scAccountsRaw } = await supabase
           .from('accounts')
-          .select('id, opening_balance')
+          .select('id, opening_balance, name, equity_category, equity_type')
           .eq('organization_id', orgId)
-          .eq('equity_category', 'COMMON_STOCK')
-          .eq('is_header', false);
+          .eq('account_type', 'equity')
+          .eq('is_header', false)
+          .or('equity_category.eq.COMMON_STOCK,equity_type.eq.share_capital,name.ilike.%common share%,name.ilike.%common stock%,name.ilike.%share capital%');
+        
+        // Deduplicate by id
+        const seen = new Set<string>();
+        const scAccounts = (scAccountsRaw || []).filter(a => {
+          if (seen.has(a.id)) return false;
+          seen.add(a.id);
+          return true;
+        });
         
         if (!scAccounts || scAccounts.length === 0) {
           setShareCapitalOpening(0);
@@ -138,6 +148,7 @@ export default function AccountantDashboard() {
           setPriorShareCapitalContributions(0);
           return;
         }
+
         
         const calcSC = async (year: number) => {
           const fiscalStart = `${year}-01-01`;
@@ -575,6 +586,8 @@ export default function AccountantDashboard() {
           operatingActivities: cashFlow.operatingActivities,
           investingActivities: cashFlow.investingActivities,
           financingActivities: cashFlow.financingActivities,
+          nonCashActivities: cashFlow.nonCashActivities,
+
           netOperating: cashFlow.netOperating,
           netInvesting: cashFlow.netInvesting,
           netFinancing: cashFlow.netFinancing,
@@ -612,6 +625,8 @@ export default function AccountantDashboard() {
           operatingActivities: priorCashFlow.operatingActivities,
           investingActivities: priorCashFlow.investingActivities,
           financingActivities: priorCashFlow.financingActivities,
+          nonCashActivities: priorCashFlow.nonCashActivities,
+
           netOperating: priorCashFlow.netOperating,
           netInvesting: priorCashFlow.netInvesting,
           netFinancing: priorCashFlow.netFinancing,

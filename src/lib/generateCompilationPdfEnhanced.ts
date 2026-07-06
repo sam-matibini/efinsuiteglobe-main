@@ -85,6 +85,7 @@ export interface CashFlowStatementData {
   operatingActivities: Array<{ name: string; amount: number }>;
   investingActivities: Array<{ name: string; amount: number }>;
   financingActivities: Array<{ name: string; amount: number }>;
+  nonCashActivities?: Array<{ name: string; amount: number }>;
   netOperating: number;
   netInvesting: number;
   netFinancing: number;
@@ -92,6 +93,7 @@ export interface CashFlowStatementData {
   beginningCash: number;
   endingCash: number;
 }
+
 
 export interface FixedAssetNoteData {
   assetClass: string;
@@ -1321,9 +1323,18 @@ Readers are cautioned that these statements may not be appropriate for their pur
   // Use RPC-provided opening RE (accurate rollforward), fallback to RE account balance
   const openingRECurrent = financialData.retainedEarningsOpening ?? (retainedEarnings?.calculated_balance || 0);
   
-  // Share capital: use proper opening/contributions if provided, else fallback to BS balance
-  const scOpeningCurrent = financialData.shareCapitalOpening ?? (commonShares?.calculated_balance || 0);
-  const scContributionsCurrent = financialData.shareCapitalContributions ?? 0;
+  // Share capital: use proper opening/contributions if provided, else fallback to BS balance.
+  // If the fetched share-capital totals are zero but the BS shows a non-zero Common Shares
+  // balance (org tagging incomplete), treat BS balance as opening so SoCE matches BS.
+  const bsCommonSharesCurrent = commonShares?.calculated_balance || 0;
+  const fetchedScOpeningCurrent = financialData.shareCapitalOpening ?? 0;
+  const fetchedScContribCurrent = financialData.shareCapitalContributions ?? 0;
+  const scOpeningCurrent = (fetchedScOpeningCurrent + fetchedScContribCurrent === 0 && bsCommonSharesCurrent !== 0)
+    ? bsCommonSharesCurrent
+    : fetchedScOpeningCurrent;
+  const scContributionsCurrent = (fetchedScOpeningCurrent + fetchedScContribCurrent === 0 && bsCommonSharesCurrent !== 0)
+    ? 0
+    : fetchedScContribCurrent;
   const scClosingCurrent = scOpeningCurrent + scContributionsCurrent;
   
   // Prior year equity components for comparative SOCE — skip share capital for ASNPO
@@ -1338,15 +1349,26 @@ Readers are cautioned that these statements may not be appropriate for their pur
       : n.includes('retained earnings');
   });
   const openingREPrior = financialData.priorRetainedEarningsOpening ?? (priorRetainedEarnings?.calculated_balance || 0);
-  const scOpeningPrior = financialData.priorShareCapitalOpening ?? (priorCommonShares?.calculated_balance || 0);
-  const scContributionsPrior = financialData.priorShareCapitalContributions ?? 0;
+  const bsCommonSharesPrior = priorCommonShares?.calculated_balance || 0;
+  const fetchedScOpeningPrior = financialData.priorShareCapitalOpening ?? 0;
+  const fetchedScContribPrior = financialData.priorShareCapitalContributions ?? 0;
+  const scOpeningPrior = (fetchedScOpeningPrior + fetchedScContribPrior === 0 && bsCommonSharesPrior !== 0)
+    ? bsCommonSharesPrior
+    : fetchedScOpeningPrior;
+  const scContributionsPrior = (fetchedScOpeningPrior + fetchedScContribPrior === 0 && bsCommonSharesPrior !== 0)
+    ? 0
+    : fetchedScContribPrior;
   const scClosingPrior = scOpeningPrior + scContributionsPrior;
+
   
   // Helper to render a single year's SOCE block
+  // actualClosingRE: if provided, any delta between (reOpening + netIncome) and actualClosingRE
+  // is disclosed as a "Prior period adjustment" line (ASPE 1506 / IAS 8)
   const renderSOCEYear = (
     yearLabel: string,
     scOpening: number, scContrib: number, scClosing: number,
-    reOpening: number, netIncome: number
+    reOpening: number, netIncome: number,
+    actualClosingRE?: number
   ) => {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(9);
@@ -1383,6 +1405,24 @@ Readers are cautioned that these statements may not be appropriate for their pur
     }
     doc.text(formatCurrency(netIncome), retainedCol, yPos, { align: 'right' });
     doc.text(formatCurrency(netIncome), totalEquityCol, yPos, { align: 'right' });
+    yPos += 6;
+    
+    // Prior-period adjustment (if actual closing RE differs from opening + net income)
+    // Discloses direct-to-Retained-Earnings activity per ASPE 1506 / IAS 8
+    let priorPeriodAdj = 0;
+    if (actualClosingRE !== undefined) {
+      priorPeriodAdj = actualClosingRE - (reOpening + netIncome);
+      if (Math.abs(priorPeriodAdj) > 0.5) {
+        doc.text('Prior period adjustment', descCol + 8, yPos);
+        if (!isASNPO) {
+          doc.text('–', shareCapitalCol, yPos, { align: 'right' });
+        }
+        doc.text(formatCurrency(priorPeriodAdj), retainedCol, yPos, { align: 'right' });
+        doc.text(formatCurrency(priorPeriodAdj), totalEquityCol, yPos, { align: 'right' });
+        yPos += 6;
+      }
+    }
+    
     yPos += 2;
     if (!isASNPO) {
       drawSingleLine(yPos, shareCapitalCol - 25, shareCapitalCol);
@@ -1392,7 +1432,7 @@ Readers are cautioned that these statements may not be appropriate for their pur
     yPos += 6;
     
     // Closing balance
-    const reClosing = reOpening + netIncome;
+    const reClosing = actualClosingRE !== undefined ? actualClosingRE : (reOpening + netIncome);
     doc.setFont('helvetica', 'bold');
     doc.text('Balance, end of year', descCol, yPos);
     if (!isASNPO) {
@@ -1409,12 +1449,19 @@ Readers are cautioned that these statements may not be appropriate for their pur
     yPos += 12;
   };
   
+  // Actual RE closing balances (from ledger) for prior-period adjustment disclosure
+  // Prior year closing RE = opening RE of current year (year N closing = year N+1 opening)
+  const priorActualClosingRE = openingRECurrent;
+  // Current year closing RE = RE account balance at report date
+  const currentActualClosingRE = retainedEarnings?.calculated_balance;
+  
   // Render comparative SOCE: prior year first (if available), then current year
   if (hasComparative && priorBS) {
     renderSOCEYear(
       format(subYears(parseISO(compilation.fiscal_year_end), 1), 'MMMM d, yyyy'),
       scOpeningPrior, scContributionsPrior, scClosingPrior,
-      openingREPrior, priorBS.netIncome
+      openingREPrior, priorBS.netIncome,
+      priorActualClosingRE
     );
   }
   
@@ -1422,7 +1469,8 @@ Readers are cautioned that these statements may not be appropriate for their pur
   renderSOCEYear(
     format(parseISO(compilation.fiscal_year_end), 'MMMM d, yyyy'),
     scOpeningCurrent, scContributionsCurrent, scClosingCurrent,
-    openingRECurrent, currentIS.netIncome
+    openingRECurrent, currentIS.netIncome,
+    currentActualClosingRE
   );
   
   addPageFooter();
@@ -1628,8 +1676,30 @@ Readers are cautioned that these statements may not be appropriate for their pur
     // ENDING CASH (with double line)
     renderGrandTotal('CASH AT END OF PERIOD', currentCashFlow.endingCash, priorCashFlow?.endingCash);
     
+    // ===== Supplemental Disclosure of Non-Cash Investing and Financing Activities =====
+    // Required under ASPE §1540.46 / IAS 7.43 / ASC 230-10-50-3
+    const currentNonCash = currentCashFlow.nonCashActivities || [];
+    const priorNonCash = priorCashFlow?.nonCashActivities || [];
+    if (currentNonCash.length > 0 || priorNonCash.length > 0) {
+      yPos += 8;
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      const disclosureTitle = doc.splitTextToSize('Supplemental Disclosure of Non-Cash Investing and Financing Activities', pageWidth - margin * 2);
+      disclosureTitle.forEach((line: string) => {
+        doc.text(line, margin, yPos);
+        yPos += 5;
+      });
+      yPos += 1;
+      doc.setFont('helvetica', 'normal');
+      const nonCashRows = mergeCashFlowRows(currentNonCash, priorNonCash, 'financing');
+      nonCashRows.forEach(row => {
+        renderCashFlowItem(row.label, row.currentAmount, row.priorAmount, 5);
+      });
+    }
+    
     addPageFooter();
   }
+
 
   // ===== NOTES TO FINANCIAL STATEMENTS =====
   doc.addPage();

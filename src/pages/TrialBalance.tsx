@@ -14,6 +14,7 @@ import { ReportActions, ReportData } from '@/components/reports/ReportActions';
 import { format, subMonths, subYears } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { parseLocalDate } from '@/lib/utils';
+import { getFiscalYearStart, getFiscalYearForDate } from '@/lib/fiscalYearUtils';
 import { useQuery } from '@tanstack/react-query';
 import { useCurrencyFormatter } from '@/hooks/useCurrencyFormatter';
 import { useReportFilters } from '@/hooks/useReportFilters';
@@ -261,8 +262,20 @@ export default function TrialBalance() {
     const toCents = (n: number) => Math.round(n * 100);
     const fromCents = (n: number) => n / 100;
 
+    // Temporary accounts (income/expense) close to Retained Earnings each fiscal
+    // year, so on the TB they must show only current-fiscal-year activity.
+    // Activity before the fiscal-year start is folded into Retained Earnings.
+    const TEMP_TYPES = new Set(['income', 'expense', 'other_income', 'other_expense', 'cost_of_goods_sold']);
+    const fyOfPeriod = getFiscalYearForDate(periodStart, fiscalYearEndMonth || 12);
+    const fiscalYearStart = getFiscalYearStart(fyOfPeriod, fiscalYearEndMonth || 12);
+
+    // Accumulate prior-fiscal-year net income (credit − debit on temp accounts,
+    // before fiscalYearStart) to add to Retained Earnings.
+    let priorYearsNetIncomeCents = 0;
+
     for (const account of accounts ?? []) {
       const accountLines = journalLines.filter(l => l.account_id === account.id);
+      const isTemp = TEMP_TYPES.has(account.account_type);
       
       // Opening balance only applies if the period END is >= earliest transaction date
       // For historical comparison periods with no transactions, balances should be zero
@@ -270,8 +283,9 @@ export default function TrialBalance() {
         ? periodEnd >= earliestTransactionDate 
         : false;
       // Static account.opening_balance is org-wide and not division-tagged, so
-      // exclude it when filtering to specific divisions.
-      let openingBalanceCents = (shouldIncludeOpeningBalance && divisionIds.length === 0)
+      // exclude it when filtering to specific divisions. Also skip for temp
+      // accounts — they don't carry a permanent opening.
+      let openingBalanceCents = (shouldIncludeOpeningBalance && divisionIds.length === 0 && !isTemp)
         ? toCents(Number(account.opening_balance) || 0) 
         : 0;
       let periodDebitCents = 0;
@@ -286,11 +300,25 @@ export default function TrialBalance() {
         const creditCents = toCents(Number(line.base_currency_credit ?? line.credit) || 0);
         
         if (lineDate < periodStart) {
-          // Transactions before period start contribute to opening balance
-          if (account.normal_balance === 'debit') {
-            openingBalanceCents += debitCents - creditCents;
+          if (isTemp) {
+            // Pre-fiscal-year temp activity rolls into Retained Earnings.
+            // Within-fiscal-year but pre-period activity contributes to opening.
+            if (lineDate < fiscalYearStart) {
+              priorYearsNetIncomeCents += creditCents - debitCents;
+            } else {
+              if (account.normal_balance === 'debit') {
+                openingBalanceCents += debitCents - creditCents;
+              } else {
+                openingBalanceCents += creditCents - debitCents;
+              }
+            }
           } else {
-            openingBalanceCents += creditCents - debitCents;
+            // Permanent accounts: accumulate all pre-period activity into opening.
+            if (account.normal_balance === 'debit') {
+              openingBalanceCents += debitCents - creditCents;
+            } else {
+              openingBalanceCents += creditCents - debitCents;
+            }
           }
         } else if (lineDate <= periodEnd) {
           // Transactions within period
@@ -327,6 +355,41 @@ export default function TrialBalance() {
           closingBalance,
           normalBalance: account.normal_balance,
         });
+      }
+    }
+
+    // Fold prior-fiscal-year net income into Retained Earnings so the TB stays
+    // in balance after suppressing temp-account history.
+    if (priorYearsNetIncomeCents !== 0) {
+      const reAccount = (accounts ?? []).find(a =>
+        a.account_type === 'equity' && (
+          (a as any).equity_type === 'retained_earnings' ||
+          /retained\s*earnings/i.test(a.name)
+        )
+      );
+      if (reAccount) {
+        let reRow = rows.find(r => r.accountId === reAccount.id);
+        if (!reRow) {
+          reRow = {
+            accountId: reAccount.id,
+            accountCode: reAccount.code,
+            accountName: reAccount.name,
+            accountType: reAccount.account_type,
+            openingBalance: 0,
+            periodDebit: 0,
+            periodCredit: 0,
+            closingBalance: 0,
+            normalBalance: reAccount.normal_balance,
+          };
+          rows.push(reRow);
+        }
+        const delta = fromCents(priorYearsNetIncomeCents);
+        // Credit-normal: positive prior-year net income increases the credit balance.
+        // We store the balance in "normal direction" sign, so add the delta directly
+        // for credit-normal RE (which is the standard case).
+        const signed = reRow.normalBalance === 'credit' ? delta : -delta;
+        reRow.openingBalance += signed;
+        reRow.closingBalance += signed;
       }
     }
 

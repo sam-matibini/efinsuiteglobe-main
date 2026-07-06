@@ -33,6 +33,8 @@ import { AmountDrilldownDialog } from '@/components/reports/AmountDrilldownDialo
 import { DivisionFilter } from '@/components/reports/DivisionFilter';
 import { ExecutiveSignatureBlock } from '@/components/reports/ExecutiveSignatureBlock';
 
+
+
 /**
  * ============================================================================
  * BALANCE SHEET (STATEMENT OF FINANCIAL POSITION) - GAAP/ASPE COMPLIANT
@@ -856,6 +858,8 @@ export default function BalanceSheet() {
     return buildHierarchicalRows('liability');
   }, [allAccounts, showZeroBalances, collapseSubAccounts, comparativeData, comparisonPeriods]);
 
+
+
   // Build all rows for Equity section
   // Current Year Earnings is now shown within the Statement of Retained Earnings section,
   // NOT as a separate line in Shareholders' Equity. The Retained Earnings account balance
@@ -1544,6 +1548,7 @@ export default function BalanceSheet() {
 
               {/* Spacer */}
               <tr><td colSpan={2 + comparisonPeriods.length} className="py-2"></td></tr>
+
 
               {/* Equities Sub-section - Collapsible */}
               <tr 

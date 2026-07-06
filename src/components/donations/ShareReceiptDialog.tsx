@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Mail, MessageSquare, Phone, Loader2, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -35,6 +35,14 @@ export function ShareReceiptDialog({ open, onOpenChange, receipt }: ShareReceipt
   const defaultMessage = `Your official donation receipt (${receipt.receipt_number}) for tax year ${taxYear} — Eligible amount: $${receipt.eligible_amount.toFixed(2)} CAD.`;
 
   const [message, setMessage] = useState(defaultMessage);
+
+  // Prefill recipient email/phone from the donor record on the receipt.
+  useEffect(() => {
+    if (!open) return;
+    const donor = receipt as unknown as { donor_email?: string; donor_phone?: string };
+    setEmail((prev) => prev || donor.donor_email || '');
+    setPhone((prev) => prev || donor.donor_phone || '');
+  }, [open, receipt]);
 
   const handleSendEmail = async () => {
     if (!email) { toast.error('Please enter an email address'); return; }

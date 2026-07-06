@@ -395,6 +395,30 @@ export function useExpenses() {
     },
   });
 
+  const updateExpense = useMutation({
+    mutationFn: async ({ id, updates }: { id: string; updates: Partial<CreateExpenseInput> }) => {
+      const payload: Record<string, any> = { ...updates };
+      ['expense_account_id', 'paid_through_account_id', 'vendor_id', 'customer_id', 'tax_code_id', 'department_id'].forEach((k) => {
+        if (payload[k] === '') payload[k] = null;
+      });
+      const { data, error } = await supabase
+        .from('expenses')
+        .update(payload)
+        .eq('id', id)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['expenses'] });
+      toast.success('Expense updated');
+    },
+    onError: (error) => {
+      toast.error(`Failed to update expense: ${error.message}`);
+    },
+  });
+
   const deleteExpense = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase
@@ -429,6 +453,7 @@ export function useExpenses() {
     createExpense,
     createMileage,
     createBulkExpenses,
+    updateExpense,
     deleteExpense,
     totalExpenses,
     totalMileage,

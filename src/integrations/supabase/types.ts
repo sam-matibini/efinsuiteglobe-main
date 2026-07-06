@@ -10177,6 +10177,7 @@ export type Database = {
           accumulated_depreciation_account_id: string | null
           acquisition_cost: number
           acquisition_date: string
+          acquisition_journal_id: string | null
           acquisition_method: string
           ai_classification_confidence: number | null
           ai_suggested_class: string | null
@@ -10239,6 +10240,7 @@ export type Database = {
           accumulated_depreciation_account_id?: string | null
           acquisition_cost: number
           acquisition_date: string
+          acquisition_journal_id?: string | null
           acquisition_method?: string
           ai_classification_confidence?: number | null
           ai_suggested_class?: string | null
@@ -10301,6 +10303,7 @@ export type Database = {
           accumulated_depreciation_account_id?: string | null
           acquisition_cost?: number
           acquisition_date?: string
+          acquisition_journal_id?: string | null
           acquisition_method?: string
           ai_classification_confidence?: number | null
           ai_suggested_class?: string | null
@@ -10364,6 +10367,20 @@ export type Database = {
             columns: ["accumulated_depreciation_account_id"]
             isOneToOne: false
             referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fixed_assets_acquisition_journal_id_fkey"
+            columns: ["acquisition_journal_id"]
+            isOneToOne: false
+            referencedRelation: "detailed_ledger_view"
+            referencedColumns: ["journal_entry_id"]
+          },
+          {
+            foreignKeyName: "fixed_assets_acquisition_journal_id_fkey"
+            columns: ["acquisition_journal_id"]
+            isOneToOne: false
+            referencedRelation: "journal_entries"
             referencedColumns: ["id"]
           },
           {
@@ -12908,6 +12925,13 @@ export type Database = {
             referencedRelation: "leases"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "lease_modifications_lease_id_fkey"
+            columns: ["lease_id"]
+            isOneToOne: false
+            referencedRelation: "v_lease_liability_current_portion"
+            referencedColumns: ["lease_id"]
+          },
         ]
       }
       lease_payment_schedule: {
@@ -12926,9 +12950,11 @@ export type Database = {
           payment_date: string
           payment_number: number
           principal_amount: number
+          rou_amortization_plug: number | null
           rou_asset_closing: number
           rou_asset_opening: number
           status: string
+          straight_line_expense: number | null
         }
         Insert: {
           actual_payment_amount?: number | null
@@ -12945,9 +12971,11 @@ export type Database = {
           payment_date: string
           payment_number: number
           principal_amount: number
+          rou_amortization_plug?: number | null
           rou_asset_closing: number
           rou_asset_opening: number
           status?: string
+          straight_line_expense?: number | null
         }
         Update: {
           actual_payment_amount?: number | null
@@ -12964,9 +12992,11 @@ export type Database = {
           payment_date?: string
           payment_number?: number
           principal_amount?: number
+          rou_amortization_plug?: number | null
           rou_asset_closing?: number
           rou_asset_opening?: number
           status?: string
+          straight_line_expense?: number | null
         }
         Relationships: [
           {
@@ -12989,6 +13019,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "leases"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lease_payment_schedule_lease_id_fkey"
+            columns: ["lease_id"]
+            isOneToOne: false
+            referencedRelation: "v_lease_liability_current_portion"
+            referencedColumns: ["lease_id"]
           },
         ]
       }
@@ -13023,12 +13060,14 @@ export type Database = {
           name: string
           notes: string | null
           organization_id: string | null
+          payment_account_id: string | null
           payment_amount: number
           payment_frequency: string
           payment_timing: string
           present_value_payments: number
           purchase_option_price: number | null
           purchase_option_reasonably_certain: boolean | null
+          rent_expense_account_id: string | null
           residual_value_guarantee: number | null
           rou_asset_account_id: string | null
           rou_asset_current: number
@@ -13067,12 +13106,14 @@ export type Database = {
           name: string
           notes?: string | null
           organization_id?: string | null
+          payment_account_id?: string | null
           payment_amount: number
           payment_frequency?: string
           payment_timing?: string
           present_value_payments: number
           purchase_option_price?: number | null
           purchase_option_reasonably_certain?: boolean | null
+          rent_expense_account_id?: string | null
           residual_value_guarantee?: number | null
           rou_asset_account_id?: string | null
           rou_asset_current: number
@@ -13111,12 +13152,14 @@ export type Database = {
           name?: string
           notes?: string | null
           organization_id?: string | null
+          payment_account_id?: string | null
           payment_amount?: number
           payment_frequency?: string
           payment_timing?: string
           present_value_payments?: number
           purchase_option_price?: number | null
           purchase_option_reasonably_certain?: boolean | null
+          rent_expense_account_id?: string | null
           residual_value_guarantee?: number | null
           rou_asset_account_id?: string | null
           rou_asset_current?: number
@@ -13180,6 +13223,20 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leases_payment_account_id_fkey"
+            columns: ["payment_account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leases_rent_expense_account_id_fkey"
+            columns: ["rent_expense_account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
             referencedColumns: ["id"]
           },
           {
@@ -26596,6 +26653,35 @@ export type Database = {
           },
         ]
       }
+      v_lease_liability_current_portion: {
+        Row: {
+          account_id: string | null
+          current_portion: number | null
+          lease_id: string | null
+          lease_name: string | null
+          lease_number: string | null
+          lease_type: string | null
+          long_term_portion: number | null
+          organization_id: string | null
+          total_remaining: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "leases_lease_liability_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leases_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vw_net_income_by_year: {
         Row: {
           fiscal_year: number | null
@@ -27092,6 +27178,10 @@ export type Database = {
         Args: { p_fiscal_year: number; p_organization_id: string }
         Returns: undefined
       }
+      rebuild_lease_amortization_schedule: {
+        Args: { p_lease_id: string }
+        Returns: Json
+      }
       recalculate_account_balance: {
         Args: { p_account_id: string }
         Returns: number
@@ -27106,6 +27196,10 @@ export type Database = {
           new_balance: number
           old_balance: number
         }[]
+      }
+      reclassify_lease_bank_postings: {
+        Args: { p_clearing_account_id: string; p_lease_id: string }
+        Returns: Json
       }
       recompute_pay_stub_ytd: { Args: { p_org_id: string }; Returns: number }
       record_payment_decision: {
