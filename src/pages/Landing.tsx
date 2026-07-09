@@ -1,4 +1,6 @@
 import { Link } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
+
 import { LandingChatWidget } from '@/components/landing/LandingChatWidget';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
