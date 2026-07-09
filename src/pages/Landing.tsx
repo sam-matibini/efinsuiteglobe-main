@@ -1,4 +1,6 @@
 import { Link } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
+
 import { LandingChatWidget } from '@/components/landing/LandingChatWidget';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -251,6 +253,34 @@ const testimonials = [
 export default function Landing() {
   return (
     <div className="min-h-screen bg-background">
+      <Helmet>
+        <title>efinsuite Globe – Global AI-Powered Accounting, Payroll & Financial Management</title>
+        <meta
+          name="description"
+          content="efinsuite Globe is an AI-powered accounting, payroll, tax and treasury platform built for multi-country organizations. Secure, compliant, enterprise-ready."
+        />
+        <link rel="canonical" href="https://www.efinsuite.com/landing" />
+        <meta property="og:title" content="efinsuite Globe – Global AI-Powered Financial Management" />
+        <meta property="og:url" content="https://www.efinsuite.com/landing" />
+        <meta property="og:type" content="website" />
+        <meta name="robots" content="index, follow" />
+        <script type="application/ld+json">{JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "WebPage",
+          "name": "efinsuite Globe – Global AI-Powered Financial Management",
+          "url": "https://www.efinsuite.com/landing",
+          "description": "AI-powered Accounting, Payroll, Tax and Treasury platform for multi-country organizations.",
+          "isPartOf": { "@type": "WebSite", "name": "efinsuite Globe", "url": "https://www.efinsuite.com/" }
+        })}</script>
+        <script type="application/ld+json">{JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "BreadcrumbList",
+          "itemListElement": [
+            { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://www.efinsuite.com/" }
+          ]
+        })}</script>
+      </Helmet>
+
       {/* Stock Market Ticker */}
       <div className="sticky top-0 z-50">
         <StockMarketTicker />
