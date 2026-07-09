@@ -1,7 +1,9 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
+import { HelmetProvider } from "react-helmet-async";
 import App from "./App.tsx";
 import "./index.css";
+
 
 // ── Version-based update detection (user-initiated only) ───────────────────
 const APP_BUILD_VERSION = '__BUILD_TS__' + import.meta.env.MODE;
@@ -100,6 +102,9 @@ document.addEventListener('visibilitychange', () => {
 // ── Render ──────────────────────────────────────────────────────────────────
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <App />
+    <HelmetProvider>
+      <App />
+    </HelmetProvider>
   </React.StrictMode>
 );
+

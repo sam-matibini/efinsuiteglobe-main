@@ -1,8 +1,26 @@
 User-agent: Googlebot
 Allow: /
+Disallow: /admin
+Disallow: /login
+Disallow: /signup
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /accept-invite
+Disallow: /clear-cache
+Disallow: /install
+Disallow: /subscription/
 
 User-agent: Bingbot
 Allow: /
+Disallow: /admin
+Disallow: /login
+Disallow: /signup
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /accept-invite
+Disallow: /clear-cache
+Disallow: /install
+Disallow: /subscription/
 
 User-agent: Twitterbot
 Allow: /
@@ -12,3 +30,14 @@ Allow: /
 
 User-agent: *
 Allow: /
+Disallow: /admin
+Disallow: /login
+Disallow: /signup
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /accept-invite
+Disallow: /clear-cache
+Disallow: /install
+Disallow: /subscription/
+
+Sitemap: https://www.efinsuite.com/sitemap.xml
