@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.1"
+    PostgrestVersion: "14.5"
   }
   public: {
     Tables: {
@@ -220,40 +220,40 @@ export type Database = {
       }
       ai_financial_tools: {
         Row: {
-          ai_insights: string | null
-          created_at: string
+          ai_insights: Json | null
+          created_at: string | null
           created_by: string
           id: string
           inputs: Json
-          name: string | null
+          name: string
           organization_id: string
           results: Json
           tool_type: string
-          updated_at: string
+          updated_at: string | null
         }
         Insert: {
-          ai_insights?: string | null
-          created_at?: string
+          ai_insights?: Json | null
+          created_at?: string | null
           created_by: string
           id?: string
-          inputs?: Json
-          name?: string | null
+          inputs: Json
+          name: string
           organization_id: string
-          results?: Json
+          results: Json
           tool_type: string
-          updated_at?: string
+          updated_at?: string | null
         }
         Update: {
-          ai_insights?: string | null
-          created_at?: string
+          ai_insights?: Json | null
+          created_at?: string | null
           created_by?: string
           id?: string
           inputs?: Json
-          name?: string | null
+          name?: string
           organization_id?: string
           results?: Json
           tool_type?: string
-          updated_at?: string
+          updated_at?: string | null
         }
         Relationships: [
           {
@@ -2862,11 +2862,11 @@ export type Database = {
           created_by: string
           end_date: string
           forecast_data?: Json
-          forecast_name?: string
+          forecast_name: string
           id?: string
           opening_balance?: number
           organization_id: string
-          period_type?: string
+          period_type: string
           risk_alerts?: Json | null
           start_date: string
           updated_at?: string
@@ -2886,15 +2886,7 @@ export type Database = {
           start_date?: string
           updated_at?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "cashflow_forecasts_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       cca_classes: {
         Row: {
@@ -12506,29 +12498,7 @@ export type Database = {
           updated_at?: string
           uploaded_by?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "journal_entry_attachments_journal_entry_id_fkey"
-            columns: ["journal_entry_id"]
-            isOneToOne: false
-            referencedRelation: "detailed_ledger_view"
-            referencedColumns: ["journal_entry_id"]
-          },
-          {
-            foreignKeyName: "journal_entry_attachments_journal_entry_id_fkey"
-            columns: ["journal_entry_id"]
-            isOneToOne: false
-            referencedRelation: "journal_entries"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "journal_entry_attachments_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       journal_entry_lines: {
         Row: {
@@ -17919,15 +17889,7 @@ export type Database = {
           updated_at?: string
           uploaded_by?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "purchase_attachments_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       purchase_order_lines: {
         Row: {
