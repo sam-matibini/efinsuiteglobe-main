@@ -30,7 +30,11 @@ import {
   Building2,
   Sparkles,
   Brain,
-  LineChart
+  LineChart,
+  Star,
+  Quote,
+  Lock,
+  Layers
 } from 'lucide-react';
 import landingLogo from '@/assets/landing-logo.png';
 import aliceAvatar from '@/assets/alice-avatar.png';
