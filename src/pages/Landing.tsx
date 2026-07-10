@@ -3,6 +3,8 @@ import { Helmet } from 'react-helmet-async';
 
 import { LandingChatWidget } from '@/components/landing/LandingChatWidget';
 import { LandingNav } from '@/components/landing/LandingNav';
+import { TwoWayFlow } from '@/components/landing/TwoWayFlow';
+import { useInViewOnce } from '@/hooks/useInViewOnce';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -34,7 +36,8 @@ import {
   Star,
   Quote,
   Lock,
-  Layers
+  Layers,
+  ArrowLeftRight
 } from 'lucide-react';
 import landingLogo from '@/assets/landing-logo.png';
 import aliceAvatar from '@/assets/alice-avatar.png';
@@ -319,9 +322,9 @@ export default function Landing() {
           }}
         />
         <div className="relative container mx-auto px-6 py-24 md:py-32">
-          <div className="max-w-4xl mx-auto text-center">
+          <div className="hero-stagger max-w-4xl mx-auto text-center">
             <Badge variant="secondary" className="mb-6 bg-accent/15 text-accent border-accent/30 backdrop-blur-sm">
-              🤖 AI-Powered • ☁️ Cloud-Based • 🏢 Multi-Organization • 🌍 15+ Countries
+              Collect payments · Pay vendors · Run payroll · One ledger
             </Badge>
             <h1 className="text-4xl md:text-6xl font-bold text-white mb-6 leading-[1.05] tracking-tight">
               <span className="gradient-text">AI-Powered</span> Cloud-Based<br />
@@ -335,7 +338,7 @@ export default function Landing() {
               <Link to="/signup">
                 <Button
                   size="lg"
-                  className="w-full sm:w-auto bg-accent hover:bg-accent/90 text-accent-foreground shadow-glow transition-transform duration-150 ease-out active:scale-[0.97]"
+                  className="group w-full sm:w-auto bg-accent hover:bg-accent/90 text-accent-foreground shadow-glow transition-transform duration-150 ease-out active:scale-[0.97]"
                 >
                   Start Free Trial <ArrowRight className="ml-2 w-5 h-5 transition-transform duration-200 group-hover:translate-x-0.5" />
                 </Button>
@@ -373,72 +376,17 @@ export default function Landing() {
               </div>
             </div>
           </div>
+
         </div>
       </section>
 
       {/* Differentiators Section — what makes efinsuite different */}
-      <section className="relative py-24 bg-background">
-        <div className="container mx-auto px-6">
-          <div className="max-w-3xl mx-auto text-center mb-14">
-            <Badge variant="outline" className="mb-4 border-accent/30 text-accent bg-accent/5">
-              Why efinsuite Globe
-            </Badge>
-            <h2 className="text-3xl md:text-5xl font-bold text-foreground mb-5 tracking-tight leading-[1.1]">
-              Built for finance teams that outgrew their spreadsheets
-            </h2>
-            <p className="text-lg text-muted-foreground leading-relaxed">
-              Four pillars that separate us from generic accounting tools — each one requested by real finance leaders operating across borders.
-            </p>
-          </div>
+      <DifferentiatorsSection />
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl mx-auto">
-            {[
-              {
-                icon: Sparkles,
-                title: 'Alice AI, on your ledger',
-                body: 'A domain-trained assistant that reads your books — answers tax, close, and reporting questions in seconds, not weeks.',
-                proof: 'Saves teams 12–15 hrs/week',
-              },
-              {
-                icon: Globe,
-                title: '15+ countries, one platform',
-                body: 'ASPE, IFRS, GAAP, VAT, GST/HST, T4, P11D — localized filings and payroll built in, not bolted on.',
-                proof: 'CA · US · UK · EU · MEA · APAC',
-              },
-              {
-                icon: Layers,
-                title: 'Multi-org from day one',
-                body: 'Consolidate entities, switch orgs in one click, and enforce role-based access — without duplicating your ledger.',
-                proof: 'Unlimited entities on Enterprise',
-              },
-              {
-                icon: Lock,
-                title: 'Enterprise-grade security',
-                body: 'MFA, encrypted-at-rest data, audit trails, and RBAC by default. Compliance you can present to your board.',
-                proof: 'SOC 2-grade controls',
-              },
-            ].map((d) => (
-              <div
-                key={d.title}
-                className="group relative rounded-2xl border border-border/60 bg-card p-6 hover:border-accent/40 hover:shadow-lg transition-all duration-200"
-              >
-                <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-accent/10 text-accent mb-5 group-hover:bg-accent/15 transition-colors">
-                  <d.icon className="w-6 h-6" />
-                </div>
-                <h3 className="text-lg font-semibold text-foreground mb-2 tracking-tight">
-                  {d.title}
-                </h3>
-                <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-                  {d.body}
-                </p>
-                <div className="pt-4 border-t border-border/60 text-xs font-medium text-accent uppercase tracking-wider">
-                  {d.proof}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+      {/* Two-way money flow — bidirectional payments story */}
+      <TwoWayFlow />
+
+
 
 
 
@@ -887,5 +835,84 @@ export default function Landing() {
       {/* Alice Chat Widget */}
       <LandingChatWidget />
     </div>
+  );
+}
+
+function DifferentiatorsSection() {
+  const [ref, inView] = useInViewOnce<HTMLDivElement>();
+  const differentiators = [
+    {
+      icon: ArrowLeftRight,
+      title: 'Two-way money movement',
+      body: 'Collect from customers and pay vendors, payroll, and taxes from the same ledger — most tools only do one side.',
+      proof: 'AR + AP + payroll in one ledger',
+    },
+    {
+      icon: Sparkles,
+      title: 'Alice AI, on your ledger',
+      body: 'A domain-trained assistant that reads your books — answers tax, close, and reporting questions in seconds, not weeks.',
+      proof: 'Saves teams 12–15 hrs/week',
+    },
+    {
+      icon: Globe,
+      title: '15+ countries, one platform',
+      body: 'ASPE, IFRS, GAAP, VAT, GST/HST, T4, P11D — localized filings and payroll built in, not bolted on.',
+      proof: 'CA · US · UK · EU · MEA · APAC',
+    },
+    {
+      icon: Lock,
+      title: 'Enterprise-grade security',
+      body: 'MFA, encrypted-at-rest data, audit trails, and RBAC by default. Compliance you can present to your board.',
+      proof: 'SOC 2-grade controls',
+    },
+  ];
+
+  return (
+    <section ref={ref} className="relative py-24 bg-background">
+      <div className="container mx-auto px-6">
+        <div className="max-w-3xl mx-auto text-center mb-14">
+          <div className={`reveal-child ${inView ? 'is-in' : ''}`} style={{ transitionDelay: '0ms' }}>
+            <Badge variant="outline" className="mb-4 border-accent/30 text-accent bg-accent/5">
+              Why efinsuite Globe
+            </Badge>
+          </div>
+          <h2
+            className={`reveal-child ${inView ? 'is-in' : ''} text-3xl md:text-5xl font-bold text-foreground mb-5 tracking-tight leading-[1.1]`}
+            style={{ transitionDelay: '80ms' }}
+          >
+            Built for finance teams that outgrew their spreadsheets
+          </h2>
+          <p
+            className={`reveal-child ${inView ? 'is-in' : ''} text-lg text-muted-foreground leading-relaxed`}
+            style={{ transitionDelay: '160ms' }}
+          >
+            Four pillars that separate us from generic accounting tools — each one requested by real finance leaders operating across borders.
+          </p>
+        </div>
+
+        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl mx-auto">
+          {differentiators.map((d, i) => (
+            <div
+              key={d.title}
+              className={`diff-card reveal-child ${inView ? 'is-in' : ''} group relative rounded-2xl border border-border/60 bg-card p-6 hover:border-accent/40 hover:shadow-lg`}
+              style={{ transitionDelay: `${220 + i * 70}ms` }}
+            >
+              <div className="diff-icon flex items-center justify-center w-12 h-12 rounded-xl bg-accent/10 text-accent mb-5">
+                <d.icon className="w-6 h-6" />
+              </div>
+              <h3 className="text-lg font-semibold text-foreground mb-2 tracking-tight">
+                {d.title}
+              </h3>
+              <p className="text-sm text-muted-foreground leading-relaxed mb-4">
+                {d.body}
+              </p>
+              <div className="pt-4 border-t border-border/60 text-xs font-medium text-accent uppercase tracking-wider">
+                {d.proof}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
   );
 }
