@@ -558,34 +558,70 @@ export default function Landing() {
       </section>
 
       {/* Testimonials Section */}
-      <section id="testimonials" className="py-24 bg-muted/30">
+      <section id="testimonials" className="py-24 bg-gradient-to-b from-muted/30 via-background to-background">
         <div className="container mx-auto px-6">
-          <div className="text-center mb-16">
-            <Badge variant="outline" className="mb-4">Testimonials</Badge>
-            <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
-              Trusted by businesses worldwide
+          <div className="text-center mb-14">
+            <Badge variant="outline" className="mb-4 border-accent/30 text-accent bg-accent/5">Customer stories</Badge>
+            <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4 tracking-tight">
+              Trusted by finance leaders worldwide
             </h2>
+            <div className="flex items-center justify-center gap-3 text-sm text-muted-foreground">
+              <div className="flex items-center gap-0.5" aria-label="Average rating 4.9 out of 5">
+                {[0,1,2,3,4].map((i) => (
+                  <Star key={i} className="w-4 h-4 fill-warning text-warning" />
+                ))}
+              </div>
+              <span className="font-medium text-foreground">4.9 / 5</span>
+              <span aria-hidden="true">·</span>
+              <span>from 800+ verified reviews</span>
+            </div>
           </div>
-          <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl mx-auto">
             {testimonials.map((testimonial, index) => (
-              <Card key={index} className="border-border/50">
-                <CardContent className="pt-6">
-                  <p className="text-muted-foreground mb-6 italic">"{testimonial.quote}"</p>
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-accent/30 shadow-sm">
-                      <img src={testimonial.image} alt={testimonial.author} className="w-full h-full object-cover" />
+              <Card
+                key={index}
+                className="relative overflow-hidden rounded-2xl border border-border/60 bg-card hover:border-accent/40 hover:shadow-lg transition-all duration-200"
+              >
+                <Quote
+                  className="absolute -top-2 -right-2 w-20 h-20 text-accent/10 pointer-events-none"
+                  aria-hidden="true"
+                />
+                <CardContent className="relative pt-6 pb-6 flex flex-col h-full">
+                  <div className="flex items-center gap-0.5 mb-4" aria-label="5 star rating">
+                    {[0,1,2,3,4].map((i) => (
+                      <Star key={i} className="w-4 h-4 fill-warning text-warning" />
+                    ))}
+                  </div>
+                  <p className="text-[15px] text-foreground/85 leading-relaxed mb-6 flex-1">
+                    "{testimonial.quote}"
+                  </p>
+                  <div className="flex items-center gap-3 pt-4 border-t border-border/60">
+                    <div className="w-11 h-11 rounded-full overflow-hidden ring-2 ring-accent/20 shrink-0">
+                      <img src={testimonial.image} alt={testimonial.author} className="w-full h-full object-cover" loading="lazy" />
                     </div>
-                    <div>
-                      <div className="font-medium text-foreground">{testimonial.author}</div>
-                      <div className="text-sm text-muted-foreground">{testimonial.role}</div>
+                    <div className="min-w-0">
+                      <div className="font-semibold text-sm text-foreground truncate">{testimonial.author}</div>
+                      <div className="text-xs text-muted-foreground truncate">{testimonial.role}</div>
                     </div>
                   </div>
                 </CardContent>
               </Card>
             ))}
           </div>
+          {/* Trust strip */}
+          <div className="mt-16 max-w-4xl mx-auto">
+            <p className="text-center text-xs uppercase tracking-[0.2em] text-muted-foreground mb-6">
+              Powering finance teams across
+            </p>
+            <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-sm font-medium text-muted-foreground/80">
+              {['Canada', 'United States', 'United Kingdom', 'Germany', 'France', 'UAE', 'South Africa', 'Nigeria', 'India', 'Australia'].map((country) => (
+                <span key={country} className="whitespace-nowrap">{country}</span>
+              ))}
+            </div>
+          </div>
         </div>
       </section>
+
 
       {/* Why Efinsuite Globe Section */}
       <section className="py-24">
