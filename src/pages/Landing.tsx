@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 
 import { LandingChatWidget } from '@/components/landing/LandingChatWidget';
+import { LandingNav } from '@/components/landing/LandingNav';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -284,28 +285,7 @@ export default function Landing() {
       {/* Stock Market Ticker */}
       <div className="sticky top-0 z-50">
         <StockMarketTicker />
-        {/* Navigation */}
-        <nav className="bg-background/80 backdrop-blur-sm border-b border-border">
-        <div className="container mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <img src={landingLogo} alt="efinsuite Globe" className="w-10 h-10 object-contain" />
-            <span className="text-xl font-bold text-foreground">efinsuite Globe</span>
-          </div>
-          <div className="hidden md:flex items-center gap-8">
-            <a href="#features" className="text-muted-foreground hover:text-foreground transition-colors">Features</a>
-            <a href="#pricing" className="text-muted-foreground hover:text-foreground transition-colors">Pricing</a>
-            <a href="#testimonials" className="text-muted-foreground hover:text-foreground transition-colors">Testimonials</a>
-          </div>
-          <div className="flex items-center gap-4">
-            <Link to="/login">
-              <Button variant="ghost">Sign In</Button>
-            </Link>
-            <Link to="/signup">
-              <Button>Get Started</Button>
-            </Link>
-          </div>
-        </div>
-      </nav>
+        <LandingNav />
       </div>
 
       {/* Hero Section */}
@@ -314,30 +294,60 @@ export default function Landing() {
           className="absolute inset-0 w-full h-full bg-cover bg-center"
           style={{ backgroundImage: `url(${heroBackground})` }}
         />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/40 to-black/70" />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/50 to-black/80" />
+        {/* Radial teal glow */}
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            background:
+              'radial-gradient(60% 45% at 50% 35%, hsl(172 66% 40% / 0.35), transparent 70%)',
+          }}
+        />
+        {/* Subtle grid texture */}
+        <div
+          className="absolute inset-0 pointer-events-none opacity-[0.08]"
+          style={{
+            backgroundImage:
+              'linear-gradient(hsl(0 0% 100%) 1px, transparent 1px), linear-gradient(90deg, hsl(0 0% 100%) 1px, transparent 1px)',
+            backgroundSize: '48px 48px',
+            maskImage: 'radial-gradient(ellipse at center, black 40%, transparent 75%)',
+            WebkitMaskImage: 'radial-gradient(ellipse at center, black 40%, transparent 75%)',
+          }}
+        />
         <div className="relative container mx-auto px-6 py-24 md:py-32">
           <div className="max-w-4xl mx-auto text-center">
-            <Badge variant="secondary" className="mb-6 bg-accent/20 text-accent-foreground border-accent/30">
+            <Badge variant="secondary" className="mb-6 bg-accent/15 text-accent border-accent/30 backdrop-blur-sm">
               🤖 AI-Powered • ☁️ Cloud-Based • 🏢 Multi-Organization • 🌍 15+ Countries
             </Badge>
-            <h1 className="text-4xl md:text-6xl font-bold text-white mb-6 leading-tight">
-              <span className="text-accent">AI-Powered</span> Cloud-Based<br />
-              Multi-Organization <span className="text-accent">Business Suite</span>
+            <h1 className="text-4xl md:text-6xl font-bold text-white mb-6 leading-[1.05] tracking-tight">
+              <span className="gradient-text">AI-Powered</span> Cloud-Based<br />
+              Multi-Organization <span className="gradient-text">Business Suite</span>
             </h1>
-            <p className="text-lg md:text-xl text-white/80 mb-8 max-w-3xl mx-auto">
-              Efinsuite Globe is an AI-powered, cloud-based, multi-organization, and multi-country accounting and business management solution 
-              designed to simplify financial operations and reporting for modern businesses.
+            <p className="text-lg md:text-xl text-white/75 mb-10 max-w-3xl mx-auto leading-relaxed">
+              An AI-powered, cloud-based, multi-organization, multi-country accounting and business
+              management platform — built to simplify financial operations for modern teams.
             </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <Link to="/signup">
-                <Button size="lg" className="w-full sm:w-auto bg-accent hover:bg-accent/90 text-accent-foreground">
-                  Start Free Trial <ArrowRight className="ml-2 w-5 h-5" />
+                <Button
+                  size="lg"
+                  className="w-full sm:w-auto bg-accent hover:bg-accent/90 text-accent-foreground shadow-glow transition-transform duration-150 ease-out active:scale-[0.97]"
+                >
+                  Start Free Trial <ArrowRight className="ml-2 w-5 h-5 transition-transform duration-200 group-hover:translate-x-0.5" />
                 </Button>
               </Link>
-              <Button size="lg" variant="outline" className="w-full sm:w-auto border-accent bg-accent/20 text-accent hover:bg-accent/30 font-semibold">
+              <Button
+                size="lg"
+                variant="outline"
+                className="group w-full sm:w-auto border-white/20 bg-white/5 text-white hover:bg-white/10 hover:border-white/40 font-medium backdrop-blur-sm transition-transform duration-150 ease-out active:scale-[0.97]"
+              >
                 Book a Demo
+                <ArrowRight className="ml-2 w-4 h-4 transition-transform duration-200 group-hover:translate-x-0.5" />
               </Button>
             </div>
+            <p className="mt-6 text-xs uppercase tracking-[0.2em] text-white/50">
+              Trusted by finance teams in 15+ countries
+            </p>
             <div className="mt-12 flex flex-wrap items-center justify-center gap-6 md:gap-10 text-white text-sm">
               <div className="flex flex-col items-center gap-2">
                 <div className="w-14 h-14 rounded-full overflow-hidden border-2 border-accent/40 shadow-lg">
