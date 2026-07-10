@@ -30,7 +30,11 @@ import {
   Building2,
   Sparkles,
   Brain,
-  LineChart
+  LineChart,
+  Star,
+  Quote,
+  Lock,
+  Layers
 } from 'lucide-react';
 import landingLogo from '@/assets/landing-logo.png';
 import aliceAvatar from '@/assets/alice-avatar.png';
@@ -372,6 +376,72 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* Differentiators Section — what makes efinsuite different */}
+      <section className="relative py-24 bg-background">
+        <div className="container mx-auto px-6">
+          <div className="max-w-3xl mx-auto text-center mb-14">
+            <Badge variant="outline" className="mb-4 border-accent/30 text-accent bg-accent/5">
+              Why efinsuite Globe
+            </Badge>
+            <h2 className="text-3xl md:text-5xl font-bold text-foreground mb-5 tracking-tight leading-[1.1]">
+              Built for finance teams that outgrew their spreadsheets
+            </h2>
+            <p className="text-lg text-muted-foreground leading-relaxed">
+              Four pillars that separate us from generic accounting tools — each one requested by real finance leaders operating across borders.
+            </p>
+          </div>
+
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl mx-auto">
+            {[
+              {
+                icon: Sparkles,
+                title: 'Alice AI, on your ledger',
+                body: 'A domain-trained assistant that reads your books — answers tax, close, and reporting questions in seconds, not weeks.',
+                proof: 'Saves teams 12–15 hrs/week',
+              },
+              {
+                icon: Globe,
+                title: '15+ countries, one platform',
+                body: 'ASPE, IFRS, GAAP, VAT, GST/HST, T4, P11D — localized filings and payroll built in, not bolted on.',
+                proof: 'CA · US · UK · EU · MEA · APAC',
+              },
+              {
+                icon: Layers,
+                title: 'Multi-org from day one',
+                body: 'Consolidate entities, switch orgs in one click, and enforce role-based access — without duplicating your ledger.',
+                proof: 'Unlimited entities on Enterprise',
+              },
+              {
+                icon: Lock,
+                title: 'Enterprise-grade security',
+                body: 'MFA, encrypted-at-rest data, audit trails, and RBAC by default. Compliance you can present to your board.',
+                proof: 'SOC 2-grade controls',
+              },
+            ].map((d) => (
+              <div
+                key={d.title}
+                className="group relative rounded-2xl border border-border/60 bg-card p-6 hover:border-accent/40 hover:shadow-lg transition-all duration-200"
+              >
+                <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-accent/10 text-accent mb-5 group-hover:bg-accent/15 transition-colors">
+                  <d.icon className="w-6 h-6" />
+                </div>
+                <h3 className="text-lg font-semibold text-foreground mb-2 tracking-tight">
+                  {d.title}
+                </h3>
+                <p className="text-sm text-muted-foreground leading-relaxed mb-4">
+                  {d.body}
+                </p>
+                <div className="pt-4 border-t border-border/60 text-xs font-medium text-accent uppercase tracking-wider">
+                  {d.proof}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+
+
       {/* Key Features & Benefits Section */}
       <section id="features" className="py-24 bg-muted/30">
         <div className="container mx-auto px-6">
@@ -554,102 +624,207 @@ export default function Landing() {
       </section>
 
       {/* Testimonials Section */}
-      <section id="testimonials" className="py-24 bg-muted/30">
+      <section id="testimonials" className="py-24 bg-gradient-to-b from-muted/30 via-background to-background">
         <div className="container mx-auto px-6">
-          <div className="text-center mb-16">
-            <Badge variant="outline" className="mb-4">Testimonials</Badge>
-            <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
-              Trusted by businesses worldwide
+          <div className="text-center mb-14">
+            <Badge variant="outline" className="mb-4 border-accent/30 text-accent bg-accent/5">Customer stories</Badge>
+            <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4 tracking-tight">
+              Trusted by finance leaders worldwide
             </h2>
+            <div className="flex items-center justify-center gap-3 text-sm text-muted-foreground">
+              <div className="flex items-center gap-0.5" aria-label="Average rating 4.9 out of 5">
+                {[0,1,2,3,4].map((i) => (
+                  <Star key={i} className="w-4 h-4 fill-warning text-warning" />
+                ))}
+              </div>
+              <span className="font-medium text-foreground">4.9 / 5</span>
+              <span aria-hidden="true">·</span>
+              <span>from 800+ verified reviews</span>
+            </div>
           </div>
-          <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl mx-auto">
             {testimonials.map((testimonial, index) => (
-              <Card key={index} className="border-border/50">
-                <CardContent className="pt-6">
-                  <p className="text-muted-foreground mb-6 italic">"{testimonial.quote}"</p>
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-accent/30 shadow-sm">
-                      <img src={testimonial.image} alt={testimonial.author} className="w-full h-full object-cover" />
+              <Card
+                key={index}
+                className="relative overflow-hidden rounded-2xl border border-border/60 bg-card hover:border-accent/40 hover:shadow-lg transition-all duration-200"
+              >
+                <Quote
+                  className="absolute -top-2 -right-2 w-20 h-20 text-accent/10 pointer-events-none"
+                  aria-hidden="true"
+                />
+                <CardContent className="relative pt-6 pb-6 flex flex-col h-full">
+                  <div className="flex items-center gap-0.5 mb-4" aria-label="5 star rating">
+                    {[0,1,2,3,4].map((i) => (
+                      <Star key={i} className="w-4 h-4 fill-warning text-warning" />
+                    ))}
+                  </div>
+                  <p className="text-[15px] text-foreground/85 leading-relaxed mb-6 flex-1">
+                    "{testimonial.quote}"
+                  </p>
+                  <div className="flex items-center gap-3 pt-4 border-t border-border/60">
+                    <div className="w-11 h-11 rounded-full overflow-hidden ring-2 ring-accent/20 shrink-0">
+                      <img src={testimonial.image} alt={testimonial.author} className="w-full h-full object-cover" loading="lazy" />
                     </div>
-                    <div>
-                      <div className="font-medium text-foreground">{testimonial.author}</div>
-                      <div className="text-sm text-muted-foreground">{testimonial.role}</div>
+                    <div className="min-w-0">
+                      <div className="font-semibold text-sm text-foreground truncate">{testimonial.author}</div>
+                      <div className="text-xs text-muted-foreground truncate">{testimonial.role}</div>
                     </div>
                   </div>
                 </CardContent>
               </Card>
             ))}
           </div>
-        </div>
-      </section>
-
-      {/* Why Efinsuite Globe Section */}
-      <section className="py-24">
-        <div className="container mx-auto px-6">
-          <div className="max-w-4xl mx-auto text-center mb-16">
-            <Badge variant="outline" className="mb-4">🌐 Why Efinsuite Globe?</Badge>
-            <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-6">
-              AI-Powered Cloud Platform for Modern Business
-            </h2>
-            <p className="text-lg text-muted-foreground">
-              Efinsuite Globe empowers businesses with AI-driven insights, cloud-based multi-organization management, and seamless compliance across jurisdictions—
-              all through a secure, scalable platform enhanced by Alice, your intelligent business assistant.
+          {/* Trust strip */}
+          <div className="mt-16 max-w-4xl mx-auto">
+            <p className="text-center text-xs uppercase tracking-[0.2em] text-muted-foreground mb-6">
+              Powering finance teams across
             </p>
-          </div>
-          <div className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
-            <div className="text-center space-y-3">
-              <div className="w-20 h-20 rounded-xl overflow-hidden mx-auto shadow-md border border-accent/20">
-                <img src={featureStreamlinedAccounting} alt="Streamlined Accounting" className="w-full h-full object-cover" />
-              </div>
-              <h3 className="font-semibold text-foreground">Streamlined Accounting</h3>
-              <p className="text-sm text-muted-foreground">Automate journal entries, invoices, and financial statements across multiple organizations.</p>
-            </div>
-            <div className="text-center space-y-3">
-              <div className="w-20 h-20 rounded-xl overflow-hidden mx-auto shadow-md border border-accent/20">
-                <img src={featureMultiCountryCompliance} alt="Multi-Country Compliance" className="w-full h-full object-cover" />
-              </div>
-              <h3 className="font-semibold text-foreground">Multi-Country Compliance</h3>
-              <p className="text-sm text-muted-foreground">Supports ASPE, IFRS, and other local accounting standards across jurisdictions.</p>
-            </div>
-            <div id="security" className="text-center space-y-3 scroll-mt-24">
-              <div className="w-20 h-20 rounded-xl overflow-hidden mx-auto shadow-md border border-accent/20">
-                <img src={featureSecurityProtection} alt="Security & Data Protection" className="w-full h-full object-cover" />
-              </div>
-              <h3 className="font-semibold text-foreground">Security & Data Protection</h3>
-              <p className="text-sm text-muted-foreground">
-                Your security is our priority. eFinsuite uses Multi-Factor Authentication (MFA) to protect user accounts and prevent unauthorized access. 
-                In addition, all user data is securely encrypted at the server side, ensuring confidentiality, integrity, and protection against unauthorized disclosure.
-              </p>
+            <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-sm font-medium text-muted-foreground/80">
+              {['Canada', 'United States', 'United Kingdom', 'Germany', 'France', 'UAE', 'South Africa', 'Nigeria', 'India', 'Australia'].map((country) => (
+                <span key={country} className="whitespace-nowrap">{country}</span>
+              ))}
             </div>
           </div>
         </div>
       </section>
 
-      {/* CTA Section */}
+
+      {/* Security & Compliance Section */}
+      <section id="security" className="py-24 scroll-mt-24 bg-muted/30">
+        <div className="container mx-auto px-6">
+          <div className="max-w-6xl mx-auto grid lg:grid-cols-5 gap-12 items-center">
+            <div className="lg:col-span-2">
+              <Badge variant="outline" className="mb-4 border-accent/30 text-accent bg-accent/5">
+                Security & Compliance
+              </Badge>
+              <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-5 tracking-tight leading-[1.1]">
+                Compliance built for regulated finance teams
+              </h2>
+              <p className="text-base text-muted-foreground leading-relaxed mb-6">
+                Multi-factor authentication, server-side encryption, granular RBAC, and immutable audit trails — designed for finance teams that need to defend every entry.
+              </p>
+              <ul className="space-y-3">
+                {[
+                  { icon: Shield, label: 'MFA + SSO on every account' },
+                  { icon: Lock, label: 'AES-256 encryption at rest & in transit' },
+                  { icon: Check, label: 'Immutable audit trail on every ledger action' },
+                  { icon: Globe, label: 'ASPE · IFRS · GAAP · local tax regimes' },
+                ].map((item) => (
+                  <li key={item.label} className="flex items-center gap-3 text-sm text-foreground">
+                    <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-accent/10 text-accent shrink-0">
+                      <item.icon className="w-4 h-4" />
+                    </span>
+                    {item.label}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="lg:col-span-3 grid grid-cols-2 gap-4">
+              {[
+                { title: 'Streamlined Accounting', body: 'Automated journals, invoices, statements across every entity.', image: featureStreamlinedAccounting },
+                { title: 'Multi-Country Compliance', body: 'ASPE, IFRS, and local standards, natively supported.', image: featureMultiCountryCompliance },
+                { title: 'Security & Data Protection', body: 'MFA plus server-side encryption on every record.', image: featureSecurityProtection },
+                { title: 'Alice AI Oversight', body: 'Real-time anomaly detection and audit-ready recommendations.', image: aliceBackground },
+              ].map((c) => (
+                <div key={c.title} className="rounded-2xl overflow-hidden border border-border/60 bg-card shadow-sm hover:shadow-md transition-shadow">
+                  <div className="relative h-28 overflow-hidden">
+                    <img src={c.image} alt={c.title} className="w-full h-full object-cover" loading="lazy" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-card/80 to-transparent" />
+                  </div>
+                  <div className="p-4">
+                    <div className="text-sm font-semibold text-foreground mb-1">{c.title}</div>
+                    <div className="text-xs text-muted-foreground leading-relaxed">{c.body}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+
+      {/* Final CTA Section */}
       <section className="py-24 bg-muted/30">
         <div className="container mx-auto px-6">
-          <Card className="bg-primary border-0">
-            <CardContent className="py-16 text-center">
-              <h2 className="text-3xl md:text-4xl font-bold text-primary-foreground mb-4">
-                Ready to streamline your finances?
-              </h2>
-              <p className="text-lg text-primary-foreground/80 mb-8 max-w-2xl mx-auto">
-                Join thousands of businesses across North America, Europe, Africa, Middle East, and Asia-Pacific using Efinsuite Globe. Start your free trial today.
-              </p>
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Link to="/signup">
-                  <Button size="lg" className="bg-accent hover:bg-accent/90 text-accent-foreground">
-                    Start Free Trial <ArrowRight className="ml-2 w-5 h-5" />
+          <div className="relative max-w-6xl mx-auto overflow-hidden rounded-3xl border border-accent/20 shadow-2xl" style={{ background: 'var(--gradient-hero)' }}>
+            {/* Ambient glow */}
+            <div
+              className="absolute inset-0 pointer-events-none"
+              style={{ background: 'radial-gradient(50% 60% at 80% 30%, hsl(172 66% 45% / 0.35), transparent 70%)' }}
+            />
+            <div className="absolute inset-0 pointer-events-none opacity-[0.06]" style={{
+              backgroundImage: 'linear-gradient(hsl(0 0% 100%) 1px, transparent 1px), linear-gradient(90deg, hsl(0 0% 100%) 1px, transparent 1px)',
+              backgroundSize: '56px 56px',
+              maskImage: 'radial-gradient(ellipse at 20% 50%, black 20%, transparent 70%)',
+              WebkitMaskImage: 'radial-gradient(ellipse at 20% 50%, black 20%, transparent 70%)',
+            }} />
+            <div className="relative grid md:grid-cols-5 gap-10 p-10 md:p-16 items-center">
+              <div className="md:col-span-3 text-left">
+                <Badge variant="secondary" className="mb-5 bg-accent/15 text-accent border-accent/30 backdrop-blur-sm">
+                  Start in minutes · No credit card
+                </Badge>
+                <h2 className="text-3xl md:text-5xl font-bold text-white mb-5 leading-[1.05] tracking-tight">
+                  Bring your finance stack into <span className="gradient-text">one intelligent platform.</span>
+                </h2>
+                <p className="text-base md:text-lg text-white/75 mb-8 max-w-xl leading-relaxed">
+                  Replace fragmented tools with a compliant, AI-assisted suite trusted by finance teams across 15+ countries.
+                </p>
+                <ul className="grid sm:grid-cols-2 gap-x-6 gap-y-2 mb-8 text-sm text-white/85">
+                  {[
+                    '14-day free trial',
+                    'Migration assistance included',
+                    'SOC 2-grade security',
+                    'Cancel anytime',
+                  ].map((item) => (
+                    <li key={item} className="flex items-center gap-2">
+                      <Check className="w-4 h-4 text-accent shrink-0" />
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <Link to="/signup">
+                    <Button
+                      size="lg"
+                      className="group w-full sm:w-auto bg-accent hover:bg-accent/90 text-accent-foreground shadow-glow transition-transform duration-150 ease-out active:scale-[0.97]"
+                    >
+                      Start Free Trial
+                      <ArrowRight className="ml-2 w-5 h-5 transition-transform duration-200 group-hover:translate-x-0.5" />
+                    </Button>
+                  </Link>
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    className="group w-full sm:w-auto border-white/25 bg-white/5 text-white hover:bg-white/10 hover:border-white/50 backdrop-blur-sm transition-transform duration-150 ease-out active:scale-[0.97]"
+                  >
+                    Talk to Sales
+                    <ArrowRight className="ml-2 w-4 h-4 transition-transform duration-200 group-hover:translate-x-0.5" />
                   </Button>
-                </Link>
-                <Button size="lg" variant="outline" className="border-accent bg-accent/20 text-accent hover:bg-accent/30 font-semibold">
-                  Contact Sales
-                </Button>
+                </div>
               </div>
-            </CardContent>
-          </Card>
+              {/* Right-side metric stack */}
+              <div className="md:col-span-2 grid grid-cols-2 gap-4">
+                {[
+                  { value: '5,000+', label: 'Businesses' },
+                  { value: '15+', label: 'Countries' },
+                  { value: '$2B+', label: 'Payroll processed' },
+                  { value: '99.9%', label: 'Uptime SLA' },
+                ].map((s) => (
+                  <div key={s.label} className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-sm p-5">
+                    <div className="text-2xl md:text-3xl font-bold text-accent tabular-nums leading-none">
+                      {s.value}
+                    </div>
+                    <div className="mt-2 text-xs uppercase tracking-wider text-white/60">
+                      {s.label}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
       </section>
+
 
       {/* Footer */}
       <footer className="relative border-t border-border py-12 overflow-hidden" style={{ backgroundColor: 'hsl(222 47% 11%)' }}>
