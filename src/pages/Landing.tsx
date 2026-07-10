@@ -629,31 +629,88 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* CTA Section */}
+      {/* Final CTA Section */}
       <section className="py-24 bg-muted/30">
         <div className="container mx-auto px-6">
-          <Card className="bg-primary border-0">
-            <CardContent className="py-16 text-center">
-              <h2 className="text-3xl md:text-4xl font-bold text-primary-foreground mb-4">
-                Ready to streamline your finances?
-              </h2>
-              <p className="text-lg text-primary-foreground/80 mb-8 max-w-2xl mx-auto">
-                Join thousands of businesses across North America, Europe, Africa, Middle East, and Asia-Pacific using Efinsuite Globe. Start your free trial today.
-              </p>
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Link to="/signup">
-                  <Button size="lg" className="bg-accent hover:bg-accent/90 text-accent-foreground">
-                    Start Free Trial <ArrowRight className="ml-2 w-5 h-5" />
+          <div className="relative max-w-6xl mx-auto overflow-hidden rounded-3xl border border-accent/20 shadow-2xl" style={{ background: 'var(--gradient-hero)' }}>
+            {/* Ambient glow */}
+            <div
+              className="absolute inset-0 pointer-events-none"
+              style={{ background: 'radial-gradient(50% 60% at 80% 30%, hsl(172 66% 45% / 0.35), transparent 70%)' }}
+            />
+            <div className="absolute inset-0 pointer-events-none opacity-[0.06]" style={{
+              backgroundImage: 'linear-gradient(hsl(0 0% 100%) 1px, transparent 1px), linear-gradient(90deg, hsl(0 0% 100%) 1px, transparent 1px)',
+              backgroundSize: '56px 56px',
+              maskImage: 'radial-gradient(ellipse at 20% 50%, black 20%, transparent 70%)',
+              WebkitMaskImage: 'radial-gradient(ellipse at 20% 50%, black 20%, transparent 70%)',
+            }} />
+            <div className="relative grid md:grid-cols-5 gap-10 p-10 md:p-16 items-center">
+              <div className="md:col-span-3 text-left">
+                <Badge variant="secondary" className="mb-5 bg-accent/15 text-accent border-accent/30 backdrop-blur-sm">
+                  Start in minutes · No credit card
+                </Badge>
+                <h2 className="text-3xl md:text-5xl font-bold text-white mb-5 leading-[1.05] tracking-tight">
+                  Bring your finance stack into <span className="gradient-text">one intelligent platform.</span>
+                </h2>
+                <p className="text-base md:text-lg text-white/75 mb-8 max-w-xl leading-relaxed">
+                  Replace fragmented tools with a compliant, AI-assisted suite trusted by finance teams across 15+ countries.
+                </p>
+                <ul className="grid sm:grid-cols-2 gap-x-6 gap-y-2 mb-8 text-sm text-white/85">
+                  {[
+                    '14-day free trial',
+                    'Migration assistance included',
+                    'SOC 2-grade security',
+                    'Cancel anytime',
+                  ].map((item) => (
+                    <li key={item} className="flex items-center gap-2">
+                      <Check className="w-4 h-4 text-accent shrink-0" />
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <Link to="/signup">
+                    <Button
+                      size="lg"
+                      className="group w-full sm:w-auto bg-accent hover:bg-accent/90 text-accent-foreground shadow-glow transition-transform duration-150 ease-out active:scale-[0.97]"
+                    >
+                      Start Free Trial
+                      <ArrowRight className="ml-2 w-5 h-5 transition-transform duration-200 group-hover:translate-x-0.5" />
+                    </Button>
+                  </Link>
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    className="group w-full sm:w-auto border-white/25 bg-white/5 text-white hover:bg-white/10 hover:border-white/50 backdrop-blur-sm transition-transform duration-150 ease-out active:scale-[0.97]"
+                  >
+                    Talk to Sales
+                    <ArrowRight className="ml-2 w-4 h-4 transition-transform duration-200 group-hover:translate-x-0.5" />
                   </Button>
-                </Link>
-                <Button size="lg" variant="outline" className="border-accent bg-accent/20 text-accent hover:bg-accent/30 font-semibold">
-                  Contact Sales
-                </Button>
+                </div>
               </div>
-            </CardContent>
-          </Card>
+              {/* Right-side metric stack */}
+              <div className="md:col-span-2 grid grid-cols-2 gap-4">
+                {[
+                  { value: '5,000+', label: 'Businesses' },
+                  { value: '15+', label: 'Countries' },
+                  { value: '$2B+', label: 'Payroll processed' },
+                  { value: '99.9%', label: 'Uptime SLA' },
+                ].map((s) => (
+                  <div key={s.label} className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-sm p-5">
+                    <div className="text-2xl md:text-3xl font-bold text-accent tabular-nums leading-none">
+                      {s.value}
+                    </div>
+                    <div className="mt-2 text-xs uppercase tracking-wider text-white/60">
+                      {s.label}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
       </section>
+
 
       {/* Footer */}
       <footer className="relative border-t border-border py-12 overflow-hidden" style={{ backgroundColor: 'hsl(222 47% 11%)' }}>
