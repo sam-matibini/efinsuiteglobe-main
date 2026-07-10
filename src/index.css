@@ -375,3 +375,116 @@
     animation-play-state: paused;
   }
 }
+
+/* ============================================================
+   Motion system (Emil design-eng)
+   Purposeful, ease-out, off main thread, reduced-motion safe
+   ============================================================ */
+:root {
+  --ease-out-emil: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out-emil: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* Scroll-reveal: element fades + rises when .is-in is added */
+.reveal {
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 260ms var(--ease-out-emil), transform 260ms var(--ease-out-emil);
+  will-change: opacity, transform;
+}
+.reveal.is-in {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Reveal children with stagger via inline transitionDelay */
+.reveal-child {
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 320ms var(--ease-out-emil), transform 320ms var(--ease-out-emil);
+}
+.reveal-child.is-in,
+.reveal.is-in .reveal-child {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Hero on-load stagger (fires at mount, no observer needed) */
+.hero-stagger > * {
+  opacity: 0;
+  transform: translateY(12px);
+  animation: hero-in 500ms var(--ease-out-emil) forwards;
+}
+.hero-stagger > *:nth-child(1) { animation-delay: 60ms; }
+.hero-stagger > *:nth-child(2) { animation-delay: 140ms; }
+.hero-stagger > *:nth-child(3) { animation-delay: 220ms; }
+.hero-stagger > *:nth-child(4) { animation-delay: 300ms; }
+.hero-stagger > *:nth-child(5) { animation-delay: 380ms; }
+.hero-stagger > *:nth-child(6) { animation-delay: 460ms; }
+
+@keyframes hero-in {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Two-way flow diagram: ledger pulse + arrow drift */
+.ledger-pulse {
+  animation: ledger-pulse 2.6s var(--ease-in-out-emil) infinite;
+  box-shadow: 0 0 40px hsl(172 66% 50% / 0.25);
+}
+@keyframes ledger-pulse {
+  0%, 100% {
+    box-shadow: 0 0 40px hsl(172 66% 50% / 0.22);
+  }
+  50% {
+    box-shadow: 0 0 68px hsl(172 66% 50% / 0.45);
+  }
+}
+
+.flow-arrow {
+  animation: flow-dash 1.6s linear infinite;
+}
+@keyframes flow-dash {
+  to { stroke-dashoffset: -24; }
+}
+
+/* Differentiator card lift */
+.diff-card {
+  transition: transform 220ms var(--ease-out-emil), border-color 220ms var(--ease-out-emil), box-shadow 220ms var(--ease-out-emil);
+}
+@media (hover: hover) and (pointer: fine) {
+  .diff-card:hover {
+    transform: translateY(-3px);
+  }
+  .diff-card:hover .diff-icon {
+    transform: rotate(6deg);
+    background-color: hsl(var(--accent) / 0.18);
+  }
+}
+.diff-icon {
+  transition: transform 220ms var(--ease-out-emil), background-color 220ms var(--ease-out-emil);
+}
+
+/* Reduced-motion: strip all transforms and infinite animations */
+@media (prefers-reduced-motion: reduce) {
+  .reveal,
+  .reveal-child,
+  .hero-stagger > * {
+    opacity: 1 !important;
+    transform: none !important;
+    animation: none !important;
+    transition: none !important;
+  }
+  .ledger-pulse,
+  .flow-arrow,
+  .animate-ticker,
+  .diff-card,
+  .diff-icon {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
