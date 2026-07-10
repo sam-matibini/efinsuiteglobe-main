@@ -322,9 +322,9 @@ export default function Landing() {
           }}
         />
         <div className="relative container mx-auto px-6 py-24 md:py-32">
-          <div className="max-w-4xl mx-auto text-center">
+          <div className="hero-stagger max-w-4xl mx-auto text-center">
             <Badge variant="secondary" className="mb-6 bg-accent/15 text-accent border-accent/30 backdrop-blur-sm">
-              🤖 AI-Powered • ☁️ Cloud-Based • 🏢 Multi-Organization • 🌍 15+ Countries
+              Collect payments · Pay vendors · Run payroll · One ledger
             </Badge>
             <h1 className="text-4xl md:text-6xl font-bold text-white mb-6 leading-[1.05] tracking-tight">
               <span className="gradient-text">AI-Powered</span> Cloud-Based<br />
@@ -338,7 +338,7 @@ export default function Landing() {
               <Link to="/signup">
                 <Button
                   size="lg"
-                  className="w-full sm:w-auto bg-accent hover:bg-accent/90 text-accent-foreground shadow-glow transition-transform duration-150 ease-out active:scale-[0.97]"
+                  className="group w-full sm:w-auto bg-accent hover:bg-accent/90 text-accent-foreground shadow-glow transition-transform duration-150 ease-out active:scale-[0.97]"
                 >
                   Start Free Trial <ArrowRight className="ml-2 w-5 h-5 transition-transform duration-200 group-hover:translate-x-0.5" />
                 </Button>
@@ -376,6 +376,7 @@ export default function Landing() {
               </div>
             </div>
           </div>
+
         </div>
       </section>
 
