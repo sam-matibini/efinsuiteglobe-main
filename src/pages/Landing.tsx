@@ -36,7 +36,8 @@ import {
   Star,
   Quote,
   Lock,
-  Layers
+  Layers,
+  ArrowLeftRight
 } from 'lucide-react';
 import landingLogo from '@/assets/landing-logo.png';
 import aliceAvatar from '@/assets/alice-avatar.png';
