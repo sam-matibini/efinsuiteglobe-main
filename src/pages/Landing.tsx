@@ -689,47 +689,59 @@ export default function Landing() {
       </section>
 
 
-      {/* Why Efinsuite Globe Section */}
-      <section className="py-24">
+      {/* Security & Compliance Section */}
+      <section id="security" className="py-24 scroll-mt-24 bg-muted/30">
         <div className="container mx-auto px-6">
-          <div className="max-w-4xl mx-auto text-center mb-16">
-            <Badge variant="outline" className="mb-4">🌐 Why Efinsuite Globe?</Badge>
-            <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-6">
-              AI-Powered Cloud Platform for Modern Business
-            </h2>
-            <p className="text-lg text-muted-foreground">
-              Efinsuite Globe empowers businesses with AI-driven insights, cloud-based multi-organization management, and seamless compliance across jurisdictions—
-              all through a secure, scalable platform enhanced by Alice, your intelligent business assistant.
-            </p>
-          </div>
-          <div className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
-            <div className="text-center space-y-3">
-              <div className="w-20 h-20 rounded-xl overflow-hidden mx-auto shadow-md border border-accent/20">
-                <img src={featureStreamlinedAccounting} alt="Streamlined Accounting" className="w-full h-full object-cover" />
-              </div>
-              <h3 className="font-semibold text-foreground">Streamlined Accounting</h3>
-              <p className="text-sm text-muted-foreground">Automate journal entries, invoices, and financial statements across multiple organizations.</p>
-            </div>
-            <div className="text-center space-y-3">
-              <div className="w-20 h-20 rounded-xl overflow-hidden mx-auto shadow-md border border-accent/20">
-                <img src={featureMultiCountryCompliance} alt="Multi-Country Compliance" className="w-full h-full object-cover" />
-              </div>
-              <h3 className="font-semibold text-foreground">Multi-Country Compliance</h3>
-              <p className="text-sm text-muted-foreground">Supports ASPE, IFRS, and other local accounting standards across jurisdictions.</p>
-            </div>
-            <div id="security" className="text-center space-y-3 scroll-mt-24">
-              <div className="w-20 h-20 rounded-xl overflow-hidden mx-auto shadow-md border border-accent/20">
-                <img src={featureSecurityProtection} alt="Security & Data Protection" className="w-full h-full object-cover" />
-              </div>
-              <h3 className="font-semibold text-foreground">Security & Data Protection</h3>
-              <p className="text-sm text-muted-foreground">
-                Your security is our priority. eFinsuite uses Multi-Factor Authentication (MFA) to protect user accounts and prevent unauthorized access. 
-                In addition, all user data is securely encrypted at the server side, ensuring confidentiality, integrity, and protection against unauthorized disclosure.
+          <div className="max-w-6xl mx-auto grid lg:grid-cols-5 gap-12 items-center">
+            <div className="lg:col-span-2">
+              <Badge variant="outline" className="mb-4 border-accent/30 text-accent bg-accent/5">
+                Security & Compliance
+              </Badge>
+              <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-5 tracking-tight leading-[1.1]">
+                Compliance built for regulated finance teams
+              </h2>
+              <p className="text-base text-muted-foreground leading-relaxed mb-6">
+                Multi-factor authentication, server-side encryption, granular RBAC, and immutable audit trails — designed for finance teams that need to defend every entry.
               </p>
+              <ul className="space-y-3">
+                {[
+                  { icon: Shield, label: 'MFA + SSO on every account' },
+                  { icon: Lock, label: 'AES-256 encryption at rest & in transit' },
+                  { icon: Check, label: 'Immutable audit trail on every ledger action' },
+                  { icon: Globe, label: 'ASPE · IFRS · GAAP · local tax regimes' },
+                ].map((item) => (
+                  <li key={item.label} className="flex items-center gap-3 text-sm text-foreground">
+                    <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-accent/10 text-accent shrink-0">
+                      <item.icon className="w-4 h-4" />
+                    </span>
+                    {item.label}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="lg:col-span-3 grid grid-cols-2 gap-4">
+              {[
+                { title: 'Streamlined Accounting', body: 'Automated journals, invoices, statements across every entity.', image: featureStreamlinedAccounting },
+                { title: 'Multi-Country Compliance', body: 'ASPE, IFRS, and local standards, natively supported.', image: featureMultiCountryCompliance },
+                { title: 'Security & Data Protection', body: 'MFA plus server-side encryption on every record.', image: featureSecurityProtection },
+                { title: 'Alice AI Oversight', body: 'Real-time anomaly detection and audit-ready recommendations.', image: aliceBackground },
+              ].map((c) => (
+                <div key={c.title} className="rounded-2xl overflow-hidden border border-border/60 bg-card shadow-sm hover:shadow-md transition-shadow">
+                  <div className="relative h-28 overflow-hidden">
+                    <img src={c.image} alt={c.title} className="w-full h-full object-cover" loading="lazy" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-card/80 to-transparent" />
+                  </div>
+                  <div className="p-4">
+                    <div className="text-sm font-semibold text-foreground mb-1">{c.title}</div>
+                    <div className="text-xs text-muted-foreground leading-relaxed">{c.body}</div>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </div>
       </section>
+
 
       {/* Final CTA Section */}
       <section className="py-24 bg-muted/30">
