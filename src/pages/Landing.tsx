@@ -529,7 +529,7 @@ export default function Landing() {
                 className={`relative ${plan.popular ? 'border-accent shadow-lg scale-105' : 'border-border/50'}`}
               >
                 {plan.popular && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-10">
                     <Badge className="bg-accent text-accent-foreground">Most Popular</Badge>
                   </div>
                 )}

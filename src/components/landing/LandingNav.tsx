@@ -14,6 +14,9 @@ import {
   Sparkles, FileSignature, MessageSquare, Heart, Globe,
 } from 'lucide-react';
 import landingLogo from '@/assets/landing-logo.png';
+import testimonialSarah from '@/assets/features/testimonial-sarah.jpg';
+import testimonialMichael from '@/assets/features/testimonial-michael.jpg';
+import testimonialJennifer from '@/assets/features/testimonial-jennifer.jpg';
 
 const featureGroups = [
   {
@@ -49,14 +52,14 @@ const featureGroups = [
 
 const pricingPeek = [
   { name: 'Starter', price: '$49', tag: 'Small teams & freelancers' },
-  { name: 'Professional', price: '$149', tag: 'Growing businesses', popular: true },
-  { name: 'Enterprise', price: 'Custom', tag: 'Multi-entity & advanced' },
+  { name: 'Professional', price: '$129', tag: 'Growing businesses', popular: true },
+  { name: 'Enterprise', price: '$299', tag: 'Multi-entity & advanced' },
 ];
 
 const testimonialPeek = [
-  { name: 'Sarah Chen', role: 'CFO, Northwind Retail' },
-  { name: 'Michael Adeyemi', role: 'Managing Partner, MA & Co.' },
-  { name: 'Jennifer Park', role: 'Controller, Cedar Health NPO' },
+  { name: 'Sarah Chen', role: 'CFO, TechStart Inc.', image: testimonialSarah },
+  { name: 'Michael Roberts', role: 'Partner, Roberts Global Consulting', image: testimonialMichael },
+  { name: 'Jennifer Walsh', role: 'Managing Partner, Walsh CPA', image: testimonialJennifer },
 ];
 
 const panelClass =
@@ -162,9 +165,7 @@ export function LandingNav() {
                         href="#testimonials"
                         className="flex items-start gap-3 rounded-lg p-3 hover:bg-accent/10 transition-colors"
                       >
-                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent/10 text-accent text-xs font-semibold">
-                          {t.name.split(' ').map((n) => n[0]).slice(0, 2).join('')}
-                        </span>
+                        <img src={t.image} alt={t.name} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full" loading="lazy" />
                         <span>
                           <span className="block text-sm font-medium text-foreground leading-tight">
                             {t.name}

@@ -91,14 +91,16 @@ export function TwoWayFlow() {
 
             {/* Ledger core */}
             <div className="relative flex flex-col items-center">
-              {/* Left connecting flow line */}
-              <FlowLine side="left" active={inView} />
-              {/* Right connecting flow line */}
-              <FlowLine side="right" active={inView} />
-
+              <div className="mb-3 text-[11px] uppercase tracking-[0.22em] opacity-0" aria-hidden="true">
+                spacer
+              </div>
               <div
                 className={`relative z-10 flex flex-col items-center justify-center w-32 h-32 md:w-40 md:h-40 rounded-3xl border border-accent/40 bg-gradient-to-br from-accent/25 to-accent/5 backdrop-blur-md ${inView ? 'ledger-pulse' : ''}`}
               >
+                {/* Left connecting flow line */}
+                <FlowLine side="left" active={inView} />
+                {/* Right connecting flow line */}
+                <FlowLine side="right" active={inView} />
                 <div className="text-[10px] uppercase tracking-[0.2em] text-accent/80 mb-1">
                   efinsuite
                 </div>
@@ -169,7 +171,7 @@ function FlowLine({ side, active }: { side: 'left' | 'right'; active: boolean })
   return (
     <svg
       className={`absolute top-1/2 -translate-y-1/2 pointer-events-none hidden md:block ${isLeft ? 'right-full mr-2' : 'left-full ml-2'}`}
-      width="80"
+      width="50"
       height="40"
       viewBox="0 0 80 40"
       fill="none"
