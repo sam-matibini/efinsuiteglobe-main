@@ -84,4 +84,22 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  build: {
+    chunkSizeWarningLimit: 800,
+    rollupOptions: {
+      output: {
+        // Vendor chunk splitting — keep cache stable and prevent one giant
+        // bundle. Heavy libs (pdf, charts, docs) load only on routes that use them.
+        manualChunks: (id) => {
+          if (!id.includes("node_modules")) return;
+          if (/[\\/](react|react-dom|react-router|react-router-dom|scheduler)[\\/]/.test(id)) return "react";
+          if (id.includes("@radix-ui")) return "radix";
+          if (id.includes("recharts") || /[\\/]d3-/.test(id)) return "charts";
+          if (/(pdf-lib|pdfjs-dist|jspdf)/.test(id)) return "pdf";
+          if (id.includes("docx") || id.includes("jszip")) return "docs";
+          if (id.includes("@supabase") || id.includes("@tanstack")) return "data";
+        },
+      },
+    },
+  },
 }));
