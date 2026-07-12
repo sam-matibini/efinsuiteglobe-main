@@ -9,7 +9,7 @@ export interface EconomicRates {
 interface CurrencyApiResponse {
   result: string;
   base_code: string;
-  conversion_rates: Record<string, number>;
+  rates: Record<string, number>;
 }
 
 // Currency codes by country (15 supported countries)
@@ -108,11 +108,11 @@ export function useEconomicRates(countryCode: string): EconomicRates {
         
         const data: CurrencyApiResponse = await response.json();
         
-        if (data.result !== 'success' || !data.conversion_rates) {
+        if (data.result !== 'success' || !data.rates) {
           throw new Error('Invalid response from exchange rate API');
         }
         
-        const rate = data.conversion_rates[currency];
+        const rate = data.rates[currency];
         
         if (rate === undefined) {
           throw new Error(`Currency ${currency} not found`);

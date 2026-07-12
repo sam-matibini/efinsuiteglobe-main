@@ -323,7 +323,7 @@ export default function Landing() {
         />
         <div className="relative container mx-auto px-6 py-24 md:py-32">
           <div className="hero-stagger max-w-4xl mx-auto text-center">
-            <Badge variant="secondary" className="mb-6 bg-accent/15 text-accent border-accent/30 backdrop-blur-sm">
+            <Badge variant="secondary" className="mb-6 bg-accent/15 text-white border-accent/30 backdrop-blur-sm">
               Collect payments · Pay vendors · Run payroll · One ledger
             </Badge>
             <h1 className="text-4xl md:text-6xl font-bold text-white mb-6 leading-[1.05] tracking-tight">
