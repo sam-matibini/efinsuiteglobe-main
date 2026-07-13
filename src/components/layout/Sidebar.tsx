@@ -43,7 +43,11 @@ import {
   Globe,
   Scale,
   Link2,
+  Lock,
 } from 'lucide-react';
+import { SubscriptionUpgradeModal } from '@/components/SubscriptionUpgradeModal';
+import type { PlanTier } from '@/config/planModuleAccess';
+
 import { cn } from '@/lib/utils';
 import { useOrganizationContext } from '@/hooks/useOrganizationContext';
 import { useAuth } from '@/hooks/useAuth';
@@ -277,7 +281,8 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
   } = useOrganizationContext();
   const [createOrgOpen, setCreateOrgOpen] = useState(false);
   const { sidebarLabels } = usePayrollLocalization();
-  const { isModuleEnabled, isLoading: modulesLoading, isReadOnly, userRole } = useEnabledModules();
+  const { isModuleEnabled, isModuleInCurrentPlan, isLoading: modulesLoading, isReadOnly, userRole, planTier } = useEnabledModules();
+  const [upgradeModal, setUpgradeModal] = useState<{ open: boolean; module?: ModuleCode; label?: string }>({ open: false });
 
   // Generate navigation with localized payroll labels
   const baseNavigation = useMemo(() => getNavigation(sidebarLabels), [sidebarLabels]);
