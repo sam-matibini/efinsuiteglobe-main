@@ -488,6 +488,15 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
           )}
         </nav>
       </div>
+
+      <SubscriptionUpgradeModal
+        open={upgradeModal.open}
+        onOpenChange={(open) => setUpgradeModal((s) => ({ ...s, open }))}
+        requiredModule={upgradeModal.module}
+        featureLabel={upgradeModal.label}
+        currentPlanTier={planTier as PlanTier}
+      />
     </aside>
   );
 }
+
