@@ -1,7 +1,7 @@
 # EfinSuite Globe — Project Report
 
 **Generated:** 2026-02-10  
-**Published URL:** https://efinsuiteglobe.lovable.app  
+**Published URL:** https://efinsuite.com  
 **Stack:** React 18 · TypeScript · Vite · Tailwind CSS · shadcn/ui · Lovable Cloud (Supabase)
 
 ---

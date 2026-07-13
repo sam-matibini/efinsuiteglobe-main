@@ -632,7 +632,7 @@ const response = await fetch("https://api.openai.com/v1/chat/completions", {
 // This code detects Lovable preview URLs and falls back to the published URL.
 // REPLACE with your actual production domain:
 const isPreviewOrigin = currentOrigin.includes('.lovableproject.com');
-const publishedBaseUrl = 'https://efinsuiteglobe.lovable.app';
+const publishedBaseUrl = 'https://efinsuite.com';
 ```
 
 **Action:** Replace with your production domain:
