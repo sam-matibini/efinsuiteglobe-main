@@ -1,12 +1,16 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrganization } from '@/hooks/useOrganization';
+import { useAuth } from '@/hooks/useAuth';
+import { deriveTierFromName } from '@/config/planModuleAccess';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Check, CreditCard, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+
 
 interface PricingPlan {
   id: string;
@@ -21,12 +25,18 @@ interface PricingPlan {
   sort_order: number;
   stripe_price_id_monthly: string | null;
   stripe_price_id_yearly: string | null;
+  tier?: string | null;
 }
+
 
 export default function SubscriptionCheckout() {
   const { organization } = useCurrentOrganization();
+  const { isAdmin } = useAuth();
+  const [searchParams] = useSearchParams();
+  const highlightTier = searchParams.get('plan');
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
   const [loadingPlanId, setLoadingPlanId] = useState<string | null>(null);
+
 
   const { data: plans, isLoading } = useQuery({
     queryKey: ['active-pricing-plans'],
@@ -129,18 +139,33 @@ export default function SubscriptionCheckout() {
       </div>
 
       <div className="grid md:grid-cols-3 gap-6">
-        {plans?.map((plan) => {
+        {plans
+          ?.filter((plan) => {
+            const tier = (plan.tier || deriveTierFromName(plan.name)) as string;
+            // Office Use is admin-only demo tier
+            if (tier === 'office_use' && !isAdmin) return false;
+            return true;
+          })
+          .map((plan) => {
           const price = billingCycle === 'monthly' ? plan.price_monthly : plan.price_yearly;
           const isCurrentPlan = currentSub?.plan_id === plan.id;
           const priceReady = billingCycle === 'monthly' ? !!plan.stripe_price_id_monthly : !!plan.stripe_price_id_yearly;
+          const planTier = (plan.tier || deriveTierFromName(plan.name)) as string;
+          const isHighlighted = highlightTier && planTier === highlightTier;
 
           return (
-            <Card key={plan.id} className={`relative flex flex-col ${isCurrentPlan ? 'border-primary ring-2 ring-primary/20' : ''}`}>
+            <Card key={plan.id} className={`relative flex flex-col ${isCurrentPlan ? 'border-primary ring-2 ring-primary/20' : ''} ${isHighlighted ? 'border-primary ring-2 ring-primary/40' : ''}`}>
               {isCurrentPlan && (
                 <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground">
                   Current Plan
                 </Badge>
               )}
+              {isHighlighted && !isCurrentPlan && (
+                <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground">
+                  Recommended
+                </Badge>
+              )}
+
               <CardHeader className="pb-2">
                 <CardTitle className="text-xl">{plan.name}</CardTitle>
                 <CardDescription>{plan.description}</CardDescription>
