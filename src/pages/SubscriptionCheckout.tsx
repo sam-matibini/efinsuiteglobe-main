@@ -25,12 +25,18 @@ interface PricingPlan {
   sort_order: number;
   stripe_price_id_monthly: string | null;
   stripe_price_id_yearly: string | null;
+  tier?: string | null;
 }
+
 
 export default function SubscriptionCheckout() {
   const { organization } = useCurrentOrganization();
+  const { isAdmin } = useAuth();
+  const [searchParams] = useSearchParams();
+  const highlightTier = searchParams.get('plan');
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
   const [loadingPlanId, setLoadingPlanId] = useState<string | null>(null);
+
 
   const { data: plans, isLoading } = useQuery({
     queryKey: ['active-pricing-plans'],
