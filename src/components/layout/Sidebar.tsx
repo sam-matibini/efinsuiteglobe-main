@@ -383,40 +383,70 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
 
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto scrollbar-thin p-3 space-y-1">
-          {navigation.map((item) => (
+          {navigation.map((item) => {
+            const locked = item.locked;
+            const lockedModule = locked ? item.requiredModules?.[0] : undefined;
+            const openUpgrade = (e: React.MouseEvent) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setUpgradeModal({ open: true, module: lockedModule, label: item.label });
+            };
+            return (
             <div key={item.label}>
               {item.href ? (
-                <Link
-                  to={item.href}
-                  className={cn(
-                    "nav-item",
-                    isActive(item.href) && "nav-item-active"
-                  )}
-                >
-                  <item.icon className="w-5 h-5 flex-shrink-0" />
-                  {!collapsed && <span>{item.label}</span>}
-                </Link>
+                locked ? (
+                  <button
+                    onClick={openUpgrade}
+                    className={cn("nav-item w-full opacity-70 hover:opacity-100")}
+                    title={`Upgrade to unlock ${item.label}`}
+                  >
+                    <item.icon className="w-5 h-5 flex-shrink-0" />
+                    {!collapsed && (
+                      <>
+                        <span className="flex-1 text-left">{item.label}</span>
+                        <Lock className="w-3.5 h-3.5 text-muted-foreground" />
+                      </>
+                    )}
+                  </button>
+                ) : (
+                  <Link
+                    to={item.href}
+                    className={cn(
+                      "nav-item",
+                      isActive(item.href) && "nav-item-active"
+                    )}
+                  >
+                    <item.icon className="w-5 h-5 flex-shrink-0" />
+                    {!collapsed && <span>{item.label}</span>}
+                  </Link>
+                )
               ) : (
                 <>
                   <button
-                    onClick={() => toggleExpand(item.label)}
+                    onClick={locked ? openUpgrade : () => toggleExpand(item.label)}
                     className={cn(
                       "nav-item w-full justify-between",
-                      isActive(undefined, item.children) && "text-sidebar-primary"
+                      isActive(undefined, item.children) && "text-sidebar-primary",
+                      locked && "opacity-70 hover:opacity-100"
                     )}
+                    title={locked ? `Upgrade to unlock ${item.label}` : undefined}
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <item.icon className="w-5 h-5 flex-shrink-0" />
                       {!collapsed && <span className="whitespace-nowrap">{item.label}</span>}
                     </div>
                     {!collapsed && (
-                      <ChevronDown className={cn(
-                        "w-4 h-4 transition-transform",
-                        expandedItems.includes(item.label) && "rotate-180"
-                      )} />
+                      locked ? (
+                        <Lock className="w-3.5 h-3.5 text-muted-foreground" />
+                      ) : (
+                        <ChevronDown className={cn(
+                          "w-4 h-4 transition-transform",
+                          expandedItems.includes(item.label) && "rotate-180"
+                        )} />
+                      )
                     )}
                   </button>
-                  {!collapsed && expandedItems.includes(item.label) && item.children && (
+                  {!locked && !collapsed && expandedItems.includes(item.label) && item.children && (
                     <div className="ml-4 mt-1 space-y-1 border-l border-sidebar-border pl-3">
                       {item.children.map(child => (
                         <Link
@@ -436,7 +466,9 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
                 </>
               )}
             </div>
-          ))}
+            );
+          })}
+
           
           {/* Admin Section - Only visible for admins */}
           {isAdmin && (
