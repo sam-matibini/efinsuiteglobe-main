@@ -32,6 +32,8 @@ export function useEnabledModules() {
   const { currentOrganization } = useOrganizationContext();
   const { user, isAdmin } = useAuth();
   const { data: orgModules, isLoading: modulesLoading } = useOrganizationModules(currentOrganization?.id);
+  const { planTier, isLoading: subLoading } = useSubscription();
+
 
   // Fetch the user's role in the current organization
   const { data: userRole, isLoading: roleLoading } = useQuery({
@@ -51,7 +53,7 @@ export function useEnabledModules() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const isLoading = modulesLoading || roleLoading;
+  const isLoading = modulesLoading || roleLoading || subLoading;
 
   // Effective role: use org-level role when available; only fall back to global admin as owner
   const effectiveRole = userRole || (isAdmin ? 'owner' : 'member');
@@ -106,15 +108,24 @@ export function useEnabledModules() {
     return codes.some(code => isModuleEnabled(code));
   }, [isModuleEnabled]);
 
+  // Plan-based gating (separate from role/org gating so sidebar can show locked items)
+  const isModuleInCurrentPlan = useCallback((code: ModuleCode): boolean => {
+    if (isAdmin) return true;
+    return isModuleInPlan(code, planTier);
+  }, [isAdmin, planTier]);
+
   // Auditor role is read-only across all modules
   const isReadOnly = effectiveRole === 'auditor';
 
   return {
     enabledModules,
     isModuleEnabled,
+    isModuleInCurrentPlan,
     hasAnyModule,
     isLoading,
     userRole: effectiveRole,
     isReadOnly,
+    planTier,
   };
 }
+
