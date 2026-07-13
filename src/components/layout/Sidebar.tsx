@@ -287,23 +287,25 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
   // Generate navigation with localized payroll labels
   const baseNavigation = useMemo(() => getNavigation(sidebarLabels), [sidebarLabels]);
 
-  // Filter navigation based on enabled modules and read-only status
+  // Filter navigation based on enabled modules and read-only status.
+  // Items whose module is enabled by role/org but NOT included in the current plan
+  // stay visible with `locked: true` so users see everything and get an upgrade prompt.
   const navigation = useMemo(() => {
     return baseNavigation
-      .filter(item => {
-        // Always enforce role restrictions, even during loading
-        if (item.allowedRoles && !item.allowedRoles.includes(userRole)) return false;
-        // Hide items marked as hideForReadOnly when user is auditor
-        if (isReadOnly && item.hideForReadOnly) return false;
-        // During module loading, show all module-based items (graceful fallback)
-        if (modulesLoading) return true;
-        // Items without module requirements are always shown
-        if (!item.requiredModules || item.requiredModules.length === 0) return true;
-        // Check if any of the required modules are enabled
-        return item.requiredModules.some(code => isModuleEnabled(code));
-      })
       .map(item => {
-        // Filter children for read-only users
+        if (item.allowedRoles && !item.allowedRoles.includes(userRole)) return null;
+        if (isReadOnly && item.hideForReadOnly) return null;
+        if (modulesLoading) return { ...item, locked: false as boolean };
+        if (!item.requiredModules || item.requiredModules.length === 0) {
+          return { ...item, locked: false as boolean };
+        }
+        const enabled = item.requiredModules.some(code => isModuleEnabled(code));
+        if (!enabled) return null;
+        const inPlan = item.requiredModules.some(code => isModuleInCurrentPlan(code));
+        return { ...item, locked: !inPlan };
+      })
+      .filter((x): x is NavItem & { locked: boolean } => x !== null)
+      .map(item => {
         if (isReadOnly && item.children) {
           return {
             ...item,
@@ -312,7 +314,8 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
         }
         return item;
       });
-  }, [baseNavigation, isModuleEnabled, modulesLoading, isReadOnly, userRole]);
+  }, [baseNavigation, isModuleEnabled, isModuleInCurrentPlan, modulesLoading, isReadOnly, userRole]);
+
 
   // Auto-expand parent groups when navigating to child routes
   useEffect(() => {
