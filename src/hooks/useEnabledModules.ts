@@ -5,6 +5,10 @@ import { useOrganizationContext } from './useOrganizationContext';
 import { useAuth } from './useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { roleHasModuleAccess } from '@/config/roleModuleAccess';
+import { isModuleInPlan } from '@/config/planModuleAccess';
+import { useSubscription } from './useSubscription';
+
+
 
 export type ModuleCode =
   | 'general_ledger'
