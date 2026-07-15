@@ -57,13 +57,13 @@ export function useSubscription() {
   const subscription = query.data;
   const plan = subscription?.pricing_plans || null;
 
-  const planTier: PlanTier = (() => {
+  const planTier: PlanTier | null = (() => {
     const t = (plan as any)?.tier as string | undefined;
     if (t && ['office_use', 'starter', 'professional', 'enterprise'].includes(t)) {
       return t as PlanTier;
     }
     if (plan?.name) return deriveTierFromName(plan.name);
-    return 'office_use';
+    return null;
   })();
 
   const isActive = !!subscription && ['active', 'trialing'].includes(subscription.status);
@@ -71,10 +71,15 @@ export function useSubscription() {
 
   const hasFeature = useCallback(
     (code: ModuleCode): boolean => {
+      // Global admins bypass all subscription checks
       if (isAdmin) return true;
+      // office_use is an admin-only demo tier — non-admins never get access via it
+      if (!planTier || planTier === 'office_use') return false;
+      // Must have an active/trialing subscription
+      if (!isActive) return false;
       return isModuleInPlan(code, planTier);
     },
-    [isAdmin, planTier]
+    [isAdmin, planTier, isActive]
   );
 
   return {
