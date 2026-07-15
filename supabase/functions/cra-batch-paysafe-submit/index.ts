@@ -15,6 +15,13 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
+    const authHeader = req.headers.get('Authorization') ?? '';
+    if (!authHeader.startsWith('Bearer ')) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const { batch_id, rail } = await req.json().catch(() => ({})) as {
       batch_id?: string;
       rail?: 'eft' | 'card';
@@ -30,6 +37,16 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     );
 
+    // Verify caller JWT
+    const token = authHeader.replace('Bearer ', '');
+    const { data: claims, error: claimsErr } = await supabase.auth.getClaims(token);
+    if (claimsErr || !claims?.claims?.sub) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    const callerId = claims.claims.sub as string;
+
     const { data: batch, error: bErr } = await supabase
       .from('cra_payment_batches')
       .select('*')
@@ -38,6 +55,24 @@ Deno.serve(async (req) => {
     if (bErr || !batch) {
       return new Response(JSON.stringify({ error: 'Batch not found' }), {
         status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Caller must be a member of the batch's organization
+    const { data: isMember } = await supabase.rpc('is_org_member', {
+      _user_id: callerId,
+      _org_id: batch.organization_id,
+    });
+    if (isMember !== true) {
+      return new Response(JSON.stringify({ error: 'Forbidden' }), {
+        status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Batch must be approved before real payments can be submitted
+    if (batch.approval_state && batch.approval_state !== 'approved') {
+      return new Response(JSON.stringify({ error: 'Batch is not approved for submission' }), {
+        status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
