@@ -298,6 +298,10 @@ export default function Settings() {
             <CreditCard className="w-4 h-4" />
             <span className="hidden sm:inline">Payments</span>
           </TabsTrigger>
+          <TabsTrigger value="billing" className="gap-2">
+            <Wallet className="w-4 h-4" />
+            <span className="hidden sm:inline">Billing</span>
+          </TabsTrigger>
           <TabsTrigger value="sales-tax" className="gap-2">
             <Receipt className="w-4 h-4" />
             <span className="hidden sm:inline">Sales Tax</span>
