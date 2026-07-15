@@ -16444,6 +16444,7 @@ export type Database = {
           stripe_price_id_monthly: string | null
           stripe_price_id_yearly: string | null
           stripe_product_id: string | null
+          tier: string | null
           updated_at: string
         }
         Insert: {
@@ -16461,6 +16462,7 @@ export type Database = {
           stripe_price_id_monthly?: string | null
           stripe_price_id_yearly?: string | null
           stripe_product_id?: string | null
+          tier?: string | null
           updated_at?: string
         }
         Update: {
@@ -16478,6 +16480,7 @@ export type Database = {
           stripe_price_id_monthly?: string | null
           stripe_price_id_yearly?: string | null
           stripe_product_id?: string | null
+          tier?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -26838,6 +26841,10 @@ export type Database = {
         Returns: boolean
       }
       cra_required_approvals: { Args: { _amount: number }; Returns: number }
+      delete_organization_cascade: {
+        Args: { _actor: string; _org_id: string }
+        Returns: undefined
+      }
       finalize_voice_billing: {
         Args: { p_final_cost: number; p_session_id: string }
         Returns: undefined

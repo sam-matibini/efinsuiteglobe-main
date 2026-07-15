@@ -1,67 +1,37 @@
-# Feature Audit Document
+# Plan: Clean up prior-year data on Sunview Homes & Construction Inc.
 
-Deliver a detailed Markdown report at `/mnt/documents/feature-audit.md` classifying every feature in the project as:
+## What I found
 
-- **Completed & Functional** — code present, wired to routes, backed by real data/logic, verified via smoke check where reachable.
-- **Completed & Non-Functional** — UI/code shipped but broken, placeholder-backed, disconnected from data, or throws at runtime.
-- **Not Completed** — stubs, TODOs, `PlaceholderPage`, empty routes, or feature memory notes marked WIP.
+I checked every dated table for the Sunview organization (`a999d6ac-b2cd-44bc-9b8c-f5ded4f81cf6`).
 
-## Method
+**No records actually exist with 2023 dates** — journal entries, invoices, bills, expenses, bank transactions, and credit card transactions all have zero rows dated in 2023. Account `opening_balance` is also zero everywhere and there are no `fiscal_year_closes` rows.
 
-1. **Inventory** — enumerate all routes in `src/App.tsx`, all pages in `src/pages/**`, all edge functions in `supabase/functions/**`, and cross-reference `.lovable/memory/features/**` notes.
-2. **Static signals per feature**:
-   - Presence of real hook/query vs mock (`src/data/mock*`, hardcoded arrays)
-   - Uses `PlaceholderPage` component → Not Completed
-   - `TODO`/`FIXME`/`coming soon`/`not yet supported` markers → flag
-   - Backing table exists (grep migrations) and RLS/grants present
-   - Edge function deployed and referenced from UI
-3. **Live smoke checks (Playwright, authenticated)** on representative routes across each module:
-   - Dashboard, Chart of Accounts, Journal Entries, Invoices, Bills, Bank Reconciliation, Reports (Income Statement, Balance Sheet, Trial Balance, Cash Flow), Payroll (Employees, Pay Runs), Tax (Filings, Audit), DocSign, Communication Hub, Treasury (Copilot, Alerts), Marketplace, Firm/Practice, Fixed Assets, Leases, Donations, Consolidation, Currency Revaluation.
-   - Capture console errors, network failures, and screenshot each. Route counts as Non-Functional if it renders blank, crashes, or shows only skeleton after 5s.
-4. **Classification table per module** with columns: Feature | Status | Evidence (file:line / route / memory ref) | Notes.
+However, there is a clear block of prior-year data that does not match anything the user entered:
 
-## Document Structure
+| Source | Count | Dates | Amount |
+|---|---|---|---|
+| Credit card txns on card ending 2525 | 327 | Jan–Dec **2001** | $293,832.21 |
+| Journal entries generated from those charges | 826 posted JEs | Dec 2001 range | $292,871.15 Dr = $292,871.15 Cr |
 
-```text
-# Project Feature Audit
-## Executive Summary (counts + top risks)
-## Legend (status definitions)
-## 1. Accounting Core (COA, JE, GL, Trial Balance)
-## 2. Sales (Invoices, Quotes, Credit Notes, Recurring, Payments)
-## 3. Purchases (Bills, POs, Vendor Credits, Recurring Bills)
-## 4. Banking & Reconciliation (Bank, Credit Card, Rules, Plaid)
-## 5. Reports (Financial statements, comparatives, cash flow, FX)
-## 6. Tax (Sales tax, filings, provisions, EU VAT, UK MTD, US state, CRA)
-## 7. Payroll (Employees, Timesheets, Pay Runs, T4/ROE/PD7A, global)
-## 8. Fixed Assets & Leases
-## 9. DocSign
-## 10. Communication Hub (Voice/SMS/WhatsApp)
-## 11. Treasury & Settlements (Processors, Copilot, Alerts, Mobile)
-## 12. Donations & NPO (ASNPO, T3010)
-## 13. Consolidation & Multi-Currency
-## 14. Practice / Firm Management
-## 15. Marketplace & Integrations
-## 16. Admin, RBAC, Security, Auth
-## 17. Landing / Public / SEO
-## Appendix A — Route inventory (all 104 routes with status)
-## Appendix B — Edge functions inventory
-## Appendix C — Memory notes reviewed
-```
+All 327 charges were bulk‑inserted in a single burst at 2026‑07‑10 08:15:37 UTC. They are not tied to any `import_batches` row (the only user import is the trial‑balance CSV posted 2026‑07‑15). Card 4969 and all bank/JE activity for 2024–2026 look normal and consistent with what you entered.
 
-## Deliverable
+My read: the "2023" you referenced is this pre‑period block (the app records them as 2001 due to a bad date parse on that credit-card import). It is showing up as prior‑period activity in the Balance Sheet.
 
-- `/mnt/documents/feature-audit.md` surfaced via `<presentation-artifact>`.
-- Screenshots kept in `/tmp/browser/` (not shipped).
-- Followed by a 1-line summary of headline counts.
+## What I'll do
 
-## Out of Scope
+1. **Delete the 826 journal entries** created from card 2525's 2001 charges (and their `journal_entry_lines`) — identified by `reference LIKE 'CC-%'` and matching `journal_entry_id` on those credit-card transactions.
+2. **Delete the 327 credit_card_transactions** on card 2525 (`664423aa-373c-489f-b71d-38d6091d7b18`).
+3. **Leave card 2525 itself in place** (the card record is empty of history but keeps your setup); say so and let you delete it separately if you want.
+4. **Run the balance recalculation** (same logic as `useRecalculateBalances`) to reset every account's `current_balance` from the remaining posted journal entries so the Balance Sheet, Trial Balance, and Retained Earnings statement match the cleaned ledger.
+5. Verify: re-check that no rows in any table have `entry_date`/`transaction_date`/etc. before 2024 for this org, and print a short before/after summary.
 
-- No code changes.
-- No fixing of any Non-Functional item found — audit only.
-- No re-running of tests or builds.
+## What I'll NOT touch
 
-## Verification
+- Trial-balance import from 2026‑07‑15 (22 rows).
+- 2024–2026 journal entries, bank transactions, invoices, bills, expenses (all consistent with your activity).
+- Card 4969 and its 130 transactions.
+- Any other organization.
 
-- Confirm every route in `App.tsx` appears in Appendix A.
-- Confirm each module section has at least one evidence file reference per feature.
-- Confirm all Playwright screenshots inspected before finalizing statuses.
+## Confirm before I run
+
+You said "2023" but the actual bad data is dated 2001 on card 2525 — same block, wrong displayed year. If you meant something different (e.g. you want me to keep the 2001 charges and only wipe something else), tell me now; otherwise I'll proceed to delete the 2001 CC charges + their journal entries and resync balances.

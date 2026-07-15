@@ -43,7 +43,11 @@ import {
   Globe,
   Scale,
   Link2,
+  Lock,
 } from 'lucide-react';
+import { SubscriptionUpgradeModal } from '@/components/SubscriptionUpgradeModal';
+import type { PlanTier } from '@/config/planModuleAccess';
+
 import { cn } from '@/lib/utils';
 import { useOrganizationContext } from '@/hooks/useOrganizationContext';
 import { useAuth } from '@/hooks/useAuth';
@@ -277,28 +281,31 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
   } = useOrganizationContext();
   const [createOrgOpen, setCreateOrgOpen] = useState(false);
   const { sidebarLabels } = usePayrollLocalization();
-  const { isModuleEnabled, isLoading: modulesLoading, isReadOnly, userRole } = useEnabledModules();
+  const { isModuleEnabled, isModuleInCurrentPlan, isLoading: modulesLoading, isReadOnly, userRole, planTier } = useEnabledModules();
+  const [upgradeModal, setUpgradeModal] = useState<{ open: boolean; module?: ModuleCode; label?: string }>({ open: false });
 
   // Generate navigation with localized payroll labels
   const baseNavigation = useMemo(() => getNavigation(sidebarLabels), [sidebarLabels]);
 
-  // Filter navigation based on enabled modules and read-only status
+  // Filter navigation based on enabled modules and read-only status.
+  // Items whose module is enabled by role/org but NOT included in the current plan
+  // stay visible with `locked: true` so users see everything and get an upgrade prompt.
   const navigation = useMemo(() => {
     return baseNavigation
-      .filter(item => {
-        // Always enforce role restrictions, even during loading
-        if (item.allowedRoles && !item.allowedRoles.includes(userRole)) return false;
-        // Hide items marked as hideForReadOnly when user is auditor
-        if (isReadOnly && item.hideForReadOnly) return false;
-        // During module loading, show all module-based items (graceful fallback)
-        if (modulesLoading) return true;
-        // Items without module requirements are always shown
-        if (!item.requiredModules || item.requiredModules.length === 0) return true;
-        // Check if any of the required modules are enabled
-        return item.requiredModules.some(code => isModuleEnabled(code));
-      })
       .map(item => {
-        // Filter children for read-only users
+        if (item.allowedRoles && !item.allowedRoles.includes(userRole)) return null;
+        if (isReadOnly && item.hideForReadOnly) return null;
+        if (modulesLoading) return { ...item, locked: false as boolean };
+        if (!item.requiredModules || item.requiredModules.length === 0) {
+          return { ...item, locked: false as boolean };
+        }
+        const enabled = item.requiredModules.some(code => isModuleEnabled(code));
+        if (!enabled) return null;
+        const inPlan = item.requiredModules.some(code => isModuleInCurrentPlan(code));
+        return { ...item, locked: !inPlan };
+      })
+      .filter((x): x is NavItem & { locked: boolean } => x !== null)
+      .map(item => {
         if (isReadOnly && item.children) {
           return {
             ...item,
@@ -307,7 +314,8 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
         }
         return item;
       });
-  }, [baseNavigation, isModuleEnabled, modulesLoading, isReadOnly, userRole]);
+  }, [baseNavigation, isModuleEnabled, isModuleInCurrentPlan, modulesLoading, isReadOnly, userRole]);
+
 
   // Auto-expand parent groups when navigating to child routes
   useEffect(() => {
@@ -375,40 +383,70 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
 
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto scrollbar-thin p-3 space-y-1">
-          {navigation.map((item) => (
+          {navigation.map((item) => {
+            const locked = item.locked;
+            const lockedModule = locked ? item.requiredModules?.[0] : undefined;
+            const openUpgrade = (e: React.MouseEvent) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setUpgradeModal({ open: true, module: lockedModule, label: item.label });
+            };
+            return (
             <div key={item.label}>
               {item.href ? (
-                <Link
-                  to={item.href}
-                  className={cn(
-                    "nav-item",
-                    isActive(item.href) && "nav-item-active"
-                  )}
-                >
-                  <item.icon className="w-5 h-5 flex-shrink-0" />
-                  {!collapsed && <span>{item.label}</span>}
-                </Link>
+                locked ? (
+                  <button
+                    onClick={openUpgrade}
+                    className={cn("nav-item w-full opacity-70 hover:opacity-100")}
+                    title={`Upgrade to unlock ${item.label}`}
+                  >
+                    <item.icon className="w-5 h-5 flex-shrink-0" />
+                    {!collapsed && (
+                      <>
+                        <span className="flex-1 text-left">{item.label}</span>
+                        <Lock className="w-3.5 h-3.5 text-muted-foreground" />
+                      </>
+                    )}
+                  </button>
+                ) : (
+                  <Link
+                    to={item.href}
+                    className={cn(
+                      "nav-item",
+                      isActive(item.href) && "nav-item-active"
+                    )}
+                  >
+                    <item.icon className="w-5 h-5 flex-shrink-0" />
+                    {!collapsed && <span>{item.label}</span>}
+                  </Link>
+                )
               ) : (
                 <>
                   <button
-                    onClick={() => toggleExpand(item.label)}
+                    onClick={locked ? openUpgrade : () => toggleExpand(item.label)}
                     className={cn(
                       "nav-item w-full justify-between",
-                      isActive(undefined, item.children) && "text-sidebar-primary"
+                      isActive(undefined, item.children) && "text-sidebar-primary",
+                      locked && "opacity-70 hover:opacity-100"
                     )}
+                    title={locked ? `Upgrade to unlock ${item.label}` : undefined}
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <item.icon className="w-5 h-5 flex-shrink-0" />
                       {!collapsed && <span className="whitespace-nowrap">{item.label}</span>}
                     </div>
                     {!collapsed && (
-                      <ChevronDown className={cn(
-                        "w-4 h-4 transition-transform",
-                        expandedItems.includes(item.label) && "rotate-180"
-                      )} />
+                      locked ? (
+                        <Lock className="w-3.5 h-3.5 text-muted-foreground" />
+                      ) : (
+                        <ChevronDown className={cn(
+                          "w-4 h-4 transition-transform",
+                          expandedItems.includes(item.label) && "rotate-180"
+                        )} />
+                      )
                     )}
                   </button>
-                  {!collapsed && expandedItems.includes(item.label) && item.children && (
+                  {!locked && !collapsed && expandedItems.includes(item.label) && item.children && (
                     <div className="ml-4 mt-1 space-y-1 border-l border-sidebar-border pl-3">
                       {item.children.map(child => (
                         <Link
@@ -428,7 +466,9 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
                 </>
               )}
             </div>
-          ))}
+            );
+          })}
+
           
           {/* Admin Section - Only visible for admins */}
           {isAdmin && (
@@ -448,6 +488,15 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
           )}
         </nav>
       </div>
+
+      <SubscriptionUpgradeModal
+        open={upgradeModal.open}
+        onOpenChange={(open) => setUpgradeModal((s) => ({ ...s, open }))}
+        requiredModule={upgradeModal.module}
+        featureLabel={upgradeModal.label}
+        currentPlanTier={planTier as PlanTier}
+      />
     </aside>
   );
 }
+

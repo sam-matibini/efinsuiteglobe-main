@@ -16,14 +16,21 @@ Deno.serve(async (req) => {
   try {
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
     const authHeader = req.headers.get('Authorization') ?? '';
-    if (authHeader) {
-      const userClient = createClient(SUPABASE_URL, SERVICE_ROLE, { global: { headers: { Authorization: authHeader } } });
-      const { data: { user } } = await userClient.auth.getUser();
-      if (!user) return json({ error: 'Unauthenticated' }, 401);
+    if (!authHeader.startsWith('Bearer ')) {
+      return json({ error: 'Unauthorized' }, 401);
     }
+    const userClient = createClient(SUPABASE_URL, SERVICE_ROLE, { global: { headers: { Authorization: authHeader } } });
+    const { data: userData, error: userErr } = await userClient.auth.getUser();
+    if (userErr || !userData?.user) return json({ error: 'Unauthenticated' }, 401);
 
     const body = (await req.json()) as Payload;
     if (!body.organization_id) return json({ error: 'organization_id required' }, 400);
+
+    const { data: isMember } = await admin.rpc('is_org_member', {
+      _user_id: userData.user.id,
+      _org_id: body.organization_id,
+    });
+    if (isMember !== true) return json({ error: 'Forbidden' }, 403);
 
     let advanced = 0;
     if (body.tax_payment_id) {

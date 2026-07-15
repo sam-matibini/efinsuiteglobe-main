@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Building2, Users, Shield, Palette, Receipt, Plus, MapPin, Phone, Wand2, FileText, Globe, TrendingUp, Check, ChevronsUpDown, RotateCcw, AlertTriangle, CreditCard, Coins } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
+import { Building2, Users, Shield, Palette, Receipt, Plus, MapPin, Phone, Wand2, FileText, Globe, TrendingUp, Check, ChevronsUpDown, RotateCcw, AlertTriangle, CreditCard, Coins, Wallet } from 'lucide-react';
 import { MultiCurrencySettingsTab } from '@/components/settings/MultiCurrencySettingsTab';
 import { TroubleshootingTab } from '@/components/admin/TroubleshootingTab';
 import { Button } from '@/components/ui/button';
@@ -24,6 +25,9 @@ import { GlobalComplianceTab } from '@/components/settings/GlobalComplianceTab';
 import { AutoRateUpdatesTab } from '@/components/settings/AutoRateUpdatesTab';
 import { PaymentSettingsTab } from '@/components/settings/PaymentSettingsTab';
 import { ExecutiveSignerSettingsCard } from '@/components/settings/ExecutiveSignerSettingsCard';
+import { DeleteOrganizationDialog } from '@/components/settings/DeleteOrganizationDialog';
+import { BillingSettingsTab } from '@/components/settings/BillingSettingsTab';
+import { Trash2 } from 'lucide-react';
 
 import { useOrganizationContext } from '@/hooks/useOrganizationContext';
 import { useUserPreferences } from '@/hooks/useUserPreferences';
@@ -43,13 +47,21 @@ export default function Settings() {
   const [createOrgOpen, setCreateOrgOpen] = useState(false);
   const [countryPopoverOpen, setCountryPopoverOpen] = useState(false);
   const [industryPopoverOpen, setIndustryPopoverOpen] = useState(false);
+  const [deleteOrgOpen, setDeleteOrgOpen] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = searchParams.get('tab') || 'organization';
+  const handleTabChange = (value: string) => {
+    const next = new URLSearchParams(searchParams);
+    next.set('tab', value);
+    setSearchParams(next, { replace: true });
+  };
 
   // Use centralized industry list
   const industries = INDUSTRY_OPTIONS;
   const { currentOrganization: organization, isLoading: orgLoading } = useOrganizationContext();
   const { preferences, isLoading: prefsLoading, savePreferences } = useUserPreferences();
   const { data: countries = [], isLoading: countriesLoading } = useCountries();
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const queryClient = useQueryClient();
   const bulkReverseMutation = useBulkReverseJournalEntries();
   const npoModuleActivation = useNpoModuleActivation();
@@ -260,7 +272,7 @@ export default function Settings() {
         <p className="text-muted-foreground">Manage your organization and application settings</p>
       </div>
 
-      <Tabs defaultValue="organization" className="space-y-6">
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
         <TabsList className="flex flex-wrap gap-1 h-auto p-1">
           <TabsTrigger value="organization" className="gap-2">
             <Building2 className="w-4 h-4" />
@@ -285,6 +297,10 @@ export default function Settings() {
           <TabsTrigger value="payments" className="gap-2">
             <CreditCard className="w-4 h-4" />
             <span className="hidden sm:inline">Payments</span>
+          </TabsTrigger>
+          <TabsTrigger value="billing" className="gap-2">
+            <Wallet className="w-4 h-4" />
+            <span className="hidden sm:inline">Billing</span>
           </TabsTrigger>
           <TabsTrigger value="sales-tax" className="gap-2">
             <Receipt className="w-4 h-4" />
@@ -668,6 +684,38 @@ export default function Settings() {
           </div>
 
           <ExecutiveSignerSettingsCard />
+
+          {(isAdmin || organization.owner_id === user?.id) && (
+            <Card className="p-6 border-destructive/50">
+              <div className="flex items-start justify-between gap-4 flex-wrap">
+                <div className="space-y-1">
+                  <h2 className="text-lg font-semibold text-destructive flex items-center gap-2">
+                    <AlertTriangle className="w-5 h-5" />
+                    Danger Zone
+                  </h2>
+                  <p className="text-sm text-muted-foreground max-w-xl">
+                    Permanently delete this organization and all of its data. This action cannot be
+                    undone.
+                  </p>
+                </div>
+                <Button
+                  variant="destructive"
+                  onClick={() => setDeleteOrgOpen(true)}
+                  className="gap-2"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Delete organization
+                </Button>
+              </div>
+            </Card>
+          )}
+
+          <DeleteOrganizationDialog
+            open={deleteOrgOpen}
+            onOpenChange={setDeleteOrgOpen}
+            organizationId={organization.id}
+            organizationName={organization.name}
+          />
         </TabsContent>
 
         <TabsContent value="compliance" className="space-y-6">
@@ -689,6 +737,12 @@ export default function Settings() {
         <TabsContent value="payments" className="space-y-6">
           <PaymentSettingsTab />
         </TabsContent>
+
+        <TabsContent value="billing" className="space-y-6">
+          <BillingSettingsTab />
+        </TabsContent>
+
+
 
         <TabsContent value="sales-tax" className="space-y-6">
           <SalesTaxSettingsTab />
