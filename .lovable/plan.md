@@ -1,37 +1,42 @@
-# Plan: Clean up prior-year data on Sunview Homes & Construction Inc.
+## Problem
 
-## What I found
+Retained Earnings continuity is broken between fiscal years for Sunview Construction:
 
-I checked every dated table for the Sunview organization (`a999d6ac-b2cd-44bc-9b8c-f5ded4f81cf6`).
+- 2024 RE Statement: Opening 135,156.61 + Net Income 21,200.17 − Dividends 140,000.00 = **Closing 16,356.78**
+- 2025 RE Statement: **Opening 142,191.79** (should be 16,356.78)
 
-**No records actually exist with 2023 dates** — journal entries, invoices, bills, expenses, bank transactions, and credit card transactions all have zero rows dated in 2023. Account `opening_balance` is also zero everywhere and there are no `fiscal_year_closes` rows.
+The 2025 opening ignores prior-year dividends (140,000), so RE is overstated. This overstatement of equity is what drives the Balance Sheet "out of balance by 140,000.00" warning.
 
-However, there is a clear block of prior-year data that does not match anything the user entered:
+## Root Cause
 
-| Source | Count | Dates | Amount |
-|---|---|---|---|
-| Credit card txns on card ending 2525 | 327 | Jan–Dec **2001** | $293,832.21 |
-| Journal entries generated from those charges | 826 posted JEs | Dec 2001 range | $292,871.15 Dr = $292,871.15 Cr |
+`public.calculate_opening_retained_earnings(org, fiscal_year)` rolls forward prior *unclosed* years by summing only income + expense activity (`unclosed_prior_pnl`). It never subtracts dividends/owner-drawings posted to equity accounts in those prior unclosed years. So for orgs that haven't run a fiscal-year close, dividends stay in the current-period equity view but are dropped when computing next year's opening RE.
 
-All 327 charges were bulk‑inserted in a single burst at 2026‑07‑10 08:15:37 UTC. They are not tied to any `import_batches` row (the only user import is the trial‑balance CSV posted 2026‑07‑15). Card 4969 and all bank/JE activity for 2024–2026 look normal and consistent with what you entered.
+`calculate_retained_earnings_statement` correctly subtracts period dividends for the closing formula, which is why the intra-year statement is right but year-over-year continuity breaks.
 
-My read: the "2023" you referenced is this pre‑period block (the app records them as 2001 due to a bad date parse on that credit-card import). It is showing up as prior‑period activity in the Balance Sheet.
+## Fix
 
-## What I'll do
+Update `public.calculate_opening_retained_earnings` so the prior-year rollforward mirrors the RE statement formula:
 
-1. **Delete the 826 journal entries** created from card 2525's 2001 charges (and their `journal_entry_lines`) — identified by `reference LIKE 'CC-%'` and matching `journal_entry_id` on those credit-card transactions.
-2. **Delete the 327 credit_card_transactions** on card 2525 (`664423aa-373c-489f-b71d-38d6091d7b18`).
-3. **Leave card 2525 itself in place** (the card record is empty of history but keeps your setup); say so and let you delete it separately if you want.
-4. **Run the balance recalculation** (same logic as `useRecalculateBalances`) to reset every account's `current_balance` from the remaining posted journal entries so the Balance Sheet, Trial Balance, and Retained Earnings statement match the cleaned ledger.
-5. Verify: re-check that no rows in any table have `entry_date`/`transaction_date`/etc. before 2024 for this org, and print a short before/after summary.
+```
+opening = seed_opening_balance
+        + direct RE postings before FY start (excluding CLOSE-*)
+        + Σ prior unclosed years' Net Income
+        − Σ prior unclosed years' Dividends/Drawings
+```
 
-## What I'll NOT touch
+Add a `unclosed_prior_dividends` CTE that aggregates, per fiscal year, activity on equity accounts where `equity_type = 'dividends'` OR name matches `%dividend%`/`%drawing%` (same match rule already used in `calculate_retained_earnings_statement`), filtered to `status IN ('posted','reversed')`, `entry_date < v_current_fy_start`, `reference NOT LIKE 'CLOSE-%'`, and `fiscal_year NOT IN closed_years AND fiscal_year < p_fiscal_year`. Subtract that sum from the returned value.
 
-- Trial-balance import from 2026‑07‑15 (22 rows).
-- 2024–2026 journal entries, bank transactions, invoices, bills, expenses (all consistent with your activity).
-- Card 4969 and its 130 transactions.
-- Any other organization.
+No changes to closed-year handling (CLOSE-* entries already move dividends into RE via the closing journal, so those years must not be double-counted — the existing `closed_years` exclusion already covers this).
 
-## Confirm before I run
+## Expected Result After Fix
 
-You said "2023" but the actual bad data is dated 2001 on card 2525 — same block, wrong displayed year. If you meant something different (e.g. you want me to keep the 2001 charges and only wipe something else), tell me now; otherwise I'll proceed to delete the 2001 CC charges + their journal entries and resync balances.
+- 2025 Opening RE = 16,356.78 (matches 2024 Closing)
+- Balance Sheet equity totals reconcile; the 140,000 out-of-balance warning clears.
+- Other RPCs relying on this function (Balance Sheet RE line, comparative reports, rollforward audit) automatically benefit — no frontend changes needed.
+
+## Technical Details
+
+- File: single migration replacing `public.calculate_opening_retained_earnings` (SECURITY DEFINER, `search_path=public` preserved).
+- Continues to honor reversal-netting rule (`status IN ('posted','reversed')`).
+- No schema changes, no data mutations — pure function replacement.
+- Verified against `.lovable/memory/logic/financial-reporting-rollforward-logic-v4.md` continuity rule: `Opening RE(N) = Opening RE(N-1) + Net Income(N-1) − Dividends(N-1)`.
