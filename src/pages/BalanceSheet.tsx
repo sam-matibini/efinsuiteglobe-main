@@ -442,6 +442,8 @@ export default function BalanceSheet() {
       if (code === '3-00-202' || nameLower.includes('current year earnings') || nameLower.includes('current year excess') || nameLower.includes('current year surplus') || nameLower.includes('excess (deficiency)')) return false;
       // Exclude RE account (3-00-201) and ASNPO equivalents - we use Statement of RE closing balance instead
       if (code === '3-00-201' || nameLower === 'retained earnings' || nameLower.includes('accumulated deficit') || nameLower.includes('unrestricted net assets') || nameLower.includes('accumulated surplus') || nameLower.includes('unrestricted funds') || nameLower.includes('accumulated funds')) return false;
+      // Exclude Dividend / Owner Drawings accounts — already netted inside the Statement of RE closing balance
+      if (nameLower.includes('dividend') || nameLower.includes("owner's draw") || nameLower.includes('owner draw') || nameLower.includes('owners draw') || nameLower.includes('shareholder draw') || nameLower.includes('distributions to owners') || nameLower.includes('distributions to shareholders') || nameLower.includes('capital distributions')) return false;
       // Exclude equity accounts that have been reclassified to Assets (abnormal debit balance)
       if (reclassification.equityToAssetIds.has(a.id)) return false;
       return true;
@@ -557,6 +559,28 @@ export default function BalanceSheet() {
     );
   };
 
+  /**
+   * Identify Dividend / Owner Drawings / Distribution accounts.
+   * These reduce Retained Earnings and are already netted inside the
+   * Statement of Retained Earnings closing balance. Showing them as a
+   * separate equity line would double-count the dividend on the Balance Sheet.
+   */
+  const isDividendAccount = (account: AccountWithBalance): boolean => {
+    const nameLower = account.name?.toLowerCase() || '';
+    return (
+      nameLower.includes('dividend') ||
+      nameLower.includes("owner's draw") ||
+      nameLower.includes('owner draw') ||
+      nameLower.includes('owners draw') ||
+      nameLower.includes('shareholder draw') ||
+      nameLower.includes('distributions to owners') ||
+      nameLower.includes('distributions to shareholders') ||
+      nameLower.includes('capital distributions')
+    );
+  };
+
+
+
 
   /**
    * ============================================================================
@@ -599,7 +623,12 @@ export default function BalanceSheet() {
     // already included in the Retained Earnings closing balance from Statement of RE.
     let accounts = allAccounts.filter(a => a.account_type === accountType);
     if (accountType === 'equity') {
+      // Exclude CYE bucket (net income already in RE closing balance)
       accounts = accounts.filter(a => !isCurrentYearEarningsAccount(a));
+      // Exclude Dividend / Owner Drawings accounts — already netted inside
+      // the Statement of Retained Earnings closing balance. Showing them as a
+      // separate equity line would double-count the dividend on the Balance Sheet.
+      accounts = accounts.filter(a => !isDividendAccount(a));
     }
     // Suppress accounts that have been reclassified to the opposite section
     // (abnormal-balance presentation per ASPE 1521 / IFRS IAS 1).

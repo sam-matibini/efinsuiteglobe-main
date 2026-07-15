@@ -1,45 +1,31 @@
-# Billing & Subscription UI in Settings
+## Problem
 
-Add a new **Billing** tab to `src/pages/Settings.tsx` that lets org admins manage their subscription end-to-end.
+The Balance Sheet's Equity section shows both:
+- **Retained Earnings** `(255,939.67)` — from Statement of RE closing balance (already net of dividends)
+- **Dividends Paid** `(54,000.00)` — a separate equity line item
 
-## What the user sees
+The Statement of Retained Earnings below the balance sheet clearly shows dividends of $54,000 are already deducted inside the RE closing balance (Opening 214,478.55 + Net income 12,538.88 − Dividends 54,000 = Closing 255,939.67).
 
-New "Billing" tab renders `BillingSettingsTab` with three sections:
+So dividends are being counted twice, which is why the balance sheet is out of balance by exactly $54,000.
 
-1. **Current subscription card**
-   - Plan name, price, billing cycle (monthly/yearly), status badge (active / trialing / past_due / canceled), current period end, and "cancels on …" notice when `cancel_at_period_end` is true.
-   - Actions: **Change plan** (routes to existing `/subscription/checkout`), **Switch to yearly/monthly**, **Cancel subscription** (with confirm dialog → sets cancel_at_period_end), **Reactivate** (when scheduled to cancel).
-   - Empty state when no active sub: CTA button to `/subscription/checkout`.
+## Fix (frontend only, `src/pages/BalanceSheet.tsx`)
 
-2. **Payment method**
-   - Shows the default card brand + last4 + exp (fetched from Stripe via new action).
-   - **Update payment method** button → opens Stripe Customer Portal in a new tab, scoped to the payment-method-update flow.
+1. **Add helper** `isDividendAccount(account)` — matches by name (`dividends`, `dividends paid`, `dividends declared`, `owner's drawings`, `owner drawings`, `distributions to owners`) and code patterns commonly used for dividend/drawing accounts.
 
-3. **Billing history**
-   - Table of past invoices from Stripe: date, description, amount, status, and a "Download" link to Stripe's hosted invoice PDF.
-   - **Manage billing on Stripe** button opens the full Customer Portal (invoices + card + cancel).
+2. **Exclude dividend accounts from the equity total** in `equityAccountsExcludingREandCYE` (around lines 436–454): add a filter `!isDividendAccount(a)` alongside the existing CYE/RE exclusions. Dividend movement is already baked into `reClosingBalance`.
 
-All destructive actions are gated behind org admin role (reuse `useAuth().isAdmin` / org owner check already used elsewhere in Settings).
+3. **Hide dividend accounts from the equity display tree** in `buildHierarchicalRows('equity')` (around lines 600–611): filter out dividend accounts the same way CYE is filtered. Comparative-period subtotals reuse the same account list, so comparatives will match automatically.
 
-## Backend (extend `supabase/functions/stripe-integration/index.ts`)
+4. **Do NOT touch the Statement of Retained Earnings** (`useRetainedEarningsStatement` / RPC) — the RPC is already correct; it is the source of truth for the dividends line.
 
-Existing `manage-subscription` already handles `cancel`, `reactivate`, `change-plan` — reuse as is. Add three new actions:
+## Why this is the right fix
 
-- `create-billing-portal-session` — inputs `{ organizationId, returnUrl, flow? }`. Looks up `subscriptions.stripe_customer_id`, calls Stripe `/billing_portal/sessions` with optional `flow_data[type]=payment_method_update`, returns `{ url }`.
-- `get-payment-method` — returns default card `{ brand, last4, exp_month, exp_year }` by reading the customer's `invoice_settings.default_payment_method` (or first attached card).
-- `list-invoices` — returns up to 24 recent Stripe invoices for the customer: `{ id, number, created, amount_paid, currency, status, hosted_invoice_url, invoice_pdf }`.
+- ASPE/GAAP: dividends declared reduce Retained Earnings — they are not a separate equity component on the Balance Sheet. They belong in the Statement of Retained Earnings (which we already render) and inside the RE closing balance.
+- Same pattern already used in this file for `Current Year Earnings` (3-00-202) and `Retained Earnings` (3-00-201), which are excluded from the raw equity aggregate for the same double-counting reason.
 
-All three require an authenticated caller who belongs to the org (verify via JWT + `organization_members`), same pattern as existing actions.
+## Expected result
 
-## Frontend files
-
-- `src/pages/Settings.tsx` — add `<TabsTrigger value="billing">` with `CreditCard` icon and `<TabsContent value="billing">` rendering `<BillingSettingsTab />`.
-- `src/components/settings/BillingSettingsTab.tsx` — new. Uses `useSubscription()` for current plan, and three `useQuery` calls to the new edge actions for card + invoices. Mutations for cancel / reactivate / open-portal via `supabase.functions.invoke('stripe-integration', …)`. Confirmation dialog for cancel. Toasts via `sonner`.
-
-## Technical details
-
-- No DB migration required — `subscriptions` already stores `stripe_customer_id`, `stripe_subscription_id`, `cancel_at_period_end`, `current_period_end`.
-- Stripe Customer Portal must be configured once in the Stripe dashboard (test + live); mention this in the closing message but do not block on it — the "Manage on Stripe" button surfaces the Stripe error if not configured.
-- Return URL for portal sessions = `${origin}/settings?tab=billing`; update Settings to honor a `?tab=` query param so the user lands back on Billing.
-- Reuse existing plan-tier filtering: hide `office_use` from any plan-switch shortcut unless `isAdmin`.
-- No changes to `planModuleAccess.ts` or `useSubscription.ts`.
+- Equity section shows Share Capital + Retained Earnings only (no Dividends Paid line).
+- Total Equity decreases by $54,000 in the display, matching the RE closing balance already used.
+- "Balance Sheet is out of balance" banner disappears; `Total Assets = Total Liabilities + Equity` holds.
+- Statement of Retained Earnings block below the Balance Sheet is unchanged and continues to show the dividends line as a rollforward component.
