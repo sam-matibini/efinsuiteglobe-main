@@ -122,10 +122,6 @@ export default function SubscriptionCheckout() {
             Current plan: {(currentSub as any).pricing_plans?.name || 'Unknown'}
           </Badge>
         )}
-          <Badge variant="secondary" className="mt-2">
-            Current plan: {(currentSub as any).pricing_plans?.name || 'Unknown'}
-          </Badge>
-        )}
       </div>
 
       {/* Billing toggle */}
