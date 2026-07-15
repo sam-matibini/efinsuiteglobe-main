@@ -7,7 +7,9 @@ const corsHeaders = {
 };
 
 interface StripeRequest {
-  action: 'health-check' | 'test' | 'create-customer' | 'create-payment-intent' | 'create-wallet-payment' | 'sync-plans' | 'create-checkout-session' | 'manage-subscription';
+  action: 'health-check' | 'test' | 'create-customer' | 'create-payment-intent' | 'create-wallet-payment' | 'sync-plans' | 'create-checkout-session' | 'manage-subscription' | 'create-billing-portal-session' | 'get-payment-method' | 'list-invoices';
+  returnUrl?: string;
+  portalFlow?: 'payment_method_update' | 'subscription_cancel';
   customerId?: string;
   email?: string;
   amount?: number;
