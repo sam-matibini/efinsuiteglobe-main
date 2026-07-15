@@ -52,7 +52,7 @@ export default function Settings() {
   const { currentOrganization: organization, isLoading: orgLoading } = useOrganizationContext();
   const { preferences, isLoading: prefsLoading, savePreferences } = useUserPreferences();
   const { data: countries = [], isLoading: countriesLoading } = useCountries();
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const queryClient = useQueryClient();
   const bulkReverseMutation = useBulkReverseJournalEntries();
   const npoModuleActivation = useNpoModuleActivation();
