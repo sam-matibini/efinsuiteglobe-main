@@ -45,6 +45,7 @@ export default function Settings() {
   const [createOrgOpen, setCreateOrgOpen] = useState(false);
   const [countryPopoverOpen, setCountryPopoverOpen] = useState(false);
   const [industryPopoverOpen, setIndustryPopoverOpen] = useState(false);
+  const [deleteOrgOpen, setDeleteOrgOpen] = useState(false);
 
   // Use centralized industry list
   const industries = INDUSTRY_OPTIONS;
