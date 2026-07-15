@@ -738,6 +738,12 @@ export default function Settings() {
           <PaymentSettingsTab />
         </TabsContent>
 
+        <TabsContent value="billing" className="space-y-6">
+          <BillingSettingsTab />
+        </TabsContent>
+
+
+
         <TabsContent value="sales-tax" className="space-y-6">
           <SalesTaxSettingsTab />
         </TabsContent>
