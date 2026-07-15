@@ -97,7 +97,7 @@ Deno.serve(async (req) => {
       const resp = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/paysafe-create-payment`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+          'Authorization': authHeader,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
