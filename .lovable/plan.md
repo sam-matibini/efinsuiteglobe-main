@@ -1,58 +1,45 @@
-# Delete Organization Feature
+# Billing & Subscription UI in Settings
 
-Add a "Delete Organization" action in Settings that removes the org and its dependent records safely via a Supabase edge function with authorization checks.
+Add a new **Billing** tab to `src/pages/Settings.tsx` that lets org admins manage their subscription end-to-end.
 
-## 1. Edge function: `delete-organization`
+## What the user sees
 
-New file: `supabase/functions/delete-organization/index.ts`
+New "Billing" tab renders `BillingSettingsTab` with three sections:
 
-- Accepts `{ organization_id: string, confirm_name: string }`.
-- Validates JWT from `Authorization` header using anon client → resolves `user.id`.
-- Uses service-role client for privileged checks and deletes.
-- Authorization checks (all must pass):
-  - Caller is a member of the org with role `owner`, OR caller has global `admin` role in `user_roles`.
-  - `confirm_name` matches the organization's `name` exactly (typed-to-confirm safeguard).
-- Deletes the organization row. Relies on existing `ON DELETE CASCADE` FKs for dependent tables; for tables without cascade, explicitly delete in order:
-  - `organization_members`, `organization_invitations`, `organization_modules`, `subscriptions`, `audit_logs` (for this org), then `organizations`.
-  - Wrap in a Postgres function `public.delete_organization_cascade(org_id uuid)` (SECURITY DEFINER) called via `supabase.rpc` to keep the deletion atomic. The function re-verifies the caller passed in `_actor uuid` is owner/admin.
-- Writes a final `audit_logs` entry (action `organization.deleted`) before the row is removed.
-- Returns `{ success: true }` or a 4xx with error message. CORS enabled.
+1. **Current subscription card**
+   - Plan name, price, billing cycle (monthly/yearly), status badge (active / trialing / past_due / canceled), current period end, and "cancels on …" notice when `cancel_at_period_end` is true.
+   - Actions: **Change plan** (routes to existing `/subscription/checkout`), **Switch to yearly/monthly**, **Cancel subscription** (with confirm dialog → sets cancel_at_period_end), **Reactivate** (when scheduled to cancel).
+   - Empty state when no active sub: CTA button to `/subscription/checkout`.
 
-## 2. Database migration
+2. **Payment method**
+   - Shows the default card brand + last4 + exp (fetched from Stripe via new action).
+   - **Update payment method** button → opens Stripe Customer Portal in a new tab, scoped to the payment-method-update flow.
 
-New migration adds `public.delete_organization_cascade(_org_id uuid, _actor uuid)`:
-- `SECURITY DEFINER`, `search_path = public`.
-- Verifies `_actor` is owner via `organization_members` or admin via `has_role(_actor,'admin')`.
-- Performs ordered DELETE on child tables that lack cascade, then `DELETE FROM organizations WHERE id = _org_id`.
-- Grants EXECUTE to `authenticated`.
+3. **Billing history**
+   - Table of past invoices from Stripe: date, description, amount, status, and a "Download" link to Stripe's hosted invoice PDF.
+   - **Manage billing on Stripe** button opens the full Customer Portal (invoices + card + cancel).
 
-## 3. Frontend: Delete button + confirmation dialog
+All destructive actions are gated behind org admin role (reuse `useAuth().isAdmin` / org owner check already used elsewhere in Settings).
 
-Edit `src/pages/Settings.tsx` (General tab):
+## Backend (extend `supabase/functions/stripe-integration/index.ts`)
 
-- Add a "Danger Zone" card at the bottom of the General tab, only rendered when the current user's role in this org is `owner` (or `isAdmin`). Uses `organization_members` role fetched via existing hooks.
-- Card contains a red "Delete Organization" button that opens `DeleteOrganizationDialog`.
+Existing `manage-subscription` already handles `cancel`, `reactivate`, `change-plan` — reuse as is. Add three new actions:
 
-New component: `src/components/settings/DeleteOrganizationDialog.tsx`
+- `create-billing-portal-session` — inputs `{ organizationId, returnUrl, flow? }`. Looks up `subscriptions.stripe_customer_id`, calls Stripe `/billing_portal/sessions` with optional `flow_data[type]=payment_method_update`, returns `{ url }`.
+- `get-payment-method` — returns default card `{ brand, last4, exp_month, exp_year }` by reading the customer's `invoice_settings.default_payment_method` (or first attached card).
+- `list-invoices` — returns up to 24 recent Stripe invoices for the customer: `{ id, number, created, amount_paid, currency, status, hosted_invoice_url, invoice_pdf }`.
 
-- shadcn `AlertDialog` with:
-  - Warning text listing what will be deleted (members, invitations, subscription, modules, and all org data via cascade).
-  - Text input requiring the user to type the organization's exact name to enable the destructive button.
-  - "Delete permanently" button calls `supabase.functions.invoke('delete-organization', { body: { organization_id, confirm_name } })`.
-- On success:
-  - Clear `current_organization_id` from `localStorage`.
-  - `queryClient.clear()`.
-  - Toast success, then `window.location.href = '/'` (redirect to landing/dashboard; org context provider will pick the next available org or the create-org flow).
-- On error: toast the returned message.
+All three require an authenticated caller who belongs to the org (verify via JWT + `organization_members`), same pattern as existing actions.
 
-## Technical notes
+## Frontend files
 
-- Owner check on the client is UX-only; the edge function + RPC enforce authorization server-side.
-- No changes to existing RLS policies required — deletion is executed with service-role via the SECURITY DEFINER RPC.
-- Admins (global `user_roles.admin`) can also delete any org, matching the existing admin-bypass pattern used elsewhere in the app.
+- `src/pages/Settings.tsx` — add `<TabsTrigger value="billing">` with `CreditCard` icon and `<TabsContent value="billing">` rendering `<BillingSettingsTab />`.
+- `src/components/settings/BillingSettingsTab.tsx` — new. Uses `useSubscription()` for current plan, and three `useQuery` calls to the new edge actions for card + invoices. Mutations for cancel / reactivate / open-portal via `supabase.functions.invoke('stripe-integration', …)`. Confirmation dialog for cancel. Toasts via `sonner`.
 
-## Out of scope
+## Technical details
 
-- Soft-delete / 30-day recovery window (can be added later; matches Lovable account-deletion pattern if desired).
-- Bulk org deletion from the admin panel (already partly present via `ManageOrganizationsDialog` — unchanged here).
-- Stripe subscription cancellation side effects.
+- No DB migration required — `subscriptions` already stores `stripe_customer_id`, `stripe_subscription_id`, `cancel_at_period_end`, `current_period_end`.
+- Stripe Customer Portal must be configured once in the Stripe dashboard (test + live); mention this in the closing message but do not block on it — the "Manage on Stripe" button surfaces the Stripe error if not configured.
+- Return URL for portal sessions = `${origin}/settings?tab=billing`; update Settings to honor a `?tab=` query param so the user lands back on Billing.
+- Reuse existing plan-tier filtering: hide `office_use` from any plan-switch shortcut unless `isAdmin`.
+- No changes to `planModuleAccess.ts` or `useSubscription.ts`.

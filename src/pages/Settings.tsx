@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Building2, Users, Shield, Palette, Receipt, Plus, MapPin, Phone, Wand2, FileText, Globe, TrendingUp, Check, ChevronsUpDown, RotateCcw, AlertTriangle, CreditCard, Coins } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
+import { Building2, Users, Shield, Palette, Receipt, Plus, MapPin, Phone, Wand2, FileText, Globe, TrendingUp, Check, ChevronsUpDown, RotateCcw, AlertTriangle, CreditCard, Coins, Wallet } from 'lucide-react';
 import { MultiCurrencySettingsTab } from '@/components/settings/MultiCurrencySettingsTab';
 import { TroubleshootingTab } from '@/components/admin/TroubleshootingTab';
 import { Button } from '@/components/ui/button';
@@ -25,6 +26,7 @@ import { AutoRateUpdatesTab } from '@/components/settings/AutoRateUpdatesTab';
 import { PaymentSettingsTab } from '@/components/settings/PaymentSettingsTab';
 import { ExecutiveSignerSettingsCard } from '@/components/settings/ExecutiveSignerSettingsCard';
 import { DeleteOrganizationDialog } from '@/components/settings/DeleteOrganizationDialog';
+import { BillingSettingsTab } from '@/components/settings/BillingSettingsTab';
 import { Trash2 } from 'lucide-react';
 
 import { useOrganizationContext } from '@/hooks/useOrganizationContext';
@@ -46,6 +48,13 @@ export default function Settings() {
   const [countryPopoverOpen, setCountryPopoverOpen] = useState(false);
   const [industryPopoverOpen, setIndustryPopoverOpen] = useState(false);
   const [deleteOrgOpen, setDeleteOrgOpen] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = searchParams.get('tab') || 'organization';
+  const handleTabChange = (value: string) => {
+    const next = new URLSearchParams(searchParams);
+    next.set('tab', value);
+    setSearchParams(next, { replace: true });
+  };
 
   // Use centralized industry list
   const industries = INDUSTRY_OPTIONS;
@@ -263,7 +272,7 @@ export default function Settings() {
         <p className="text-muted-foreground">Manage your organization and application settings</p>
       </div>
 
-      <Tabs defaultValue="organization" className="space-y-6">
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
         <TabsList className="flex flex-wrap gap-1 h-auto p-1">
           <TabsTrigger value="organization" className="gap-2">
             <Building2 className="w-4 h-4" />
@@ -288,6 +297,10 @@ export default function Settings() {
           <TabsTrigger value="payments" className="gap-2">
             <CreditCard className="w-4 h-4" />
             <span className="hidden sm:inline">Payments</span>
+          </TabsTrigger>
+          <TabsTrigger value="billing" className="gap-2">
+            <Wallet className="w-4 h-4" />
+            <span className="hidden sm:inline">Billing</span>
           </TabsTrigger>
           <TabsTrigger value="sales-tax" className="gap-2">
             <Receipt className="w-4 h-4" />
@@ -724,6 +737,12 @@ export default function Settings() {
         <TabsContent value="payments" className="space-y-6">
           <PaymentSettingsTab />
         </TabsContent>
+
+        <TabsContent value="billing" className="space-y-6">
+          <BillingSettingsTab />
+        </TabsContent>
+
+
 
         <TabsContent value="sales-tax" className="space-y-6">
           <SalesTaxSettingsTab />
