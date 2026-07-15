@@ -25,6 +25,7 @@ import { AutoRateUpdatesTab } from '@/components/settings/AutoRateUpdatesTab';
 import { PaymentSettingsTab } from '@/components/settings/PaymentSettingsTab';
 import { ExecutiveSignerSettingsCard } from '@/components/settings/ExecutiveSignerSettingsCard';
 import { DeleteOrganizationDialog } from '@/components/settings/DeleteOrganizationDialog';
+import { BillingSettingsTab } from '@/components/settings/BillingSettingsTab';
 import { Trash2 } from 'lucide-react';
 
 import { useOrganizationContext } from '@/hooks/useOrganizationContext';
