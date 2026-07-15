@@ -26841,6 +26841,10 @@ export type Database = {
         Returns: boolean
       }
       cra_required_approvals: { Args: { _amount: number }; Returns: number }
+      delete_organization_cascade: {
+        Args: { _actor: string; _org_id: string }
+        Returns: undefined
+      }
       finalize_voice_billing: {
         Args: { p_final_cost: number; p_session_id: string }
         Returns: undefined

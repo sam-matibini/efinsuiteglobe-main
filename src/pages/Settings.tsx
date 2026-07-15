@@ -24,6 +24,8 @@ import { GlobalComplianceTab } from '@/components/settings/GlobalComplianceTab';
 import { AutoRateUpdatesTab } from '@/components/settings/AutoRateUpdatesTab';
 import { PaymentSettingsTab } from '@/components/settings/PaymentSettingsTab';
 import { ExecutiveSignerSettingsCard } from '@/components/settings/ExecutiveSignerSettingsCard';
+import { DeleteOrganizationDialog } from '@/components/settings/DeleteOrganizationDialog';
+import { Trash2 } from 'lucide-react';
 
 import { useOrganizationContext } from '@/hooks/useOrganizationContext';
 import { useUserPreferences } from '@/hooks/useUserPreferences';
@@ -43,13 +45,14 @@ export default function Settings() {
   const [createOrgOpen, setCreateOrgOpen] = useState(false);
   const [countryPopoverOpen, setCountryPopoverOpen] = useState(false);
   const [industryPopoverOpen, setIndustryPopoverOpen] = useState(false);
+  const [deleteOrgOpen, setDeleteOrgOpen] = useState(false);
 
   // Use centralized industry list
   const industries = INDUSTRY_OPTIONS;
   const { currentOrganization: organization, isLoading: orgLoading } = useOrganizationContext();
   const { preferences, isLoading: prefsLoading, savePreferences } = useUserPreferences();
   const { data: countries = [], isLoading: countriesLoading } = useCountries();
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const queryClient = useQueryClient();
   const bulkReverseMutation = useBulkReverseJournalEntries();
   const npoModuleActivation = useNpoModuleActivation();
@@ -668,6 +671,38 @@ export default function Settings() {
           </div>
 
           <ExecutiveSignerSettingsCard />
+
+          {(isAdmin || organization.owner_id === user?.id) && (
+            <Card className="p-6 border-destructive/50">
+              <div className="flex items-start justify-between gap-4 flex-wrap">
+                <div className="space-y-1">
+                  <h2 className="text-lg font-semibold text-destructive flex items-center gap-2">
+                    <AlertTriangle className="w-5 h-5" />
+                    Danger Zone
+                  </h2>
+                  <p className="text-sm text-muted-foreground max-w-xl">
+                    Permanently delete this organization and all of its data. This action cannot be
+                    undone.
+                  </p>
+                </div>
+                <Button
+                  variant="destructive"
+                  onClick={() => setDeleteOrgOpen(true)}
+                  className="gap-2"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Delete organization
+                </Button>
+              </div>
+            </Card>
+          )}
+
+          <DeleteOrganizationDialog
+            open={deleteOrgOpen}
+            onOpenChange={setDeleteOrgOpen}
+            organizationId={organization.id}
+            organizationName={organization.name}
+          />
         </TabsContent>
 
         <TabsContent value="compliance" className="space-y-6">
