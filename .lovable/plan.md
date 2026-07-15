@@ -1,31 +1,37 @@
-## Problem
+# Plan: Clean up prior-year data on Sunview Homes & Construction Inc.
 
-The Balance Sheet's Equity section shows both:
-- **Retained Earnings** `(255,939.67)` — from Statement of RE closing balance (already net of dividends)
-- **Dividends Paid** `(54,000.00)` — a separate equity line item
+## What I found
 
-The Statement of Retained Earnings below the balance sheet clearly shows dividends of $54,000 are already deducted inside the RE closing balance (Opening 214,478.55 + Net income 12,538.88 − Dividends 54,000 = Closing 255,939.67).
+I checked every dated table for the Sunview organization (`a999d6ac-b2cd-44bc-9b8c-f5ded4f81cf6`).
 
-So dividends are being counted twice, which is why the balance sheet is out of balance by exactly $54,000.
+**No records actually exist with 2023 dates** — journal entries, invoices, bills, expenses, bank transactions, and credit card transactions all have zero rows dated in 2023. Account `opening_balance` is also zero everywhere and there are no `fiscal_year_closes` rows.
 
-## Fix (frontend only, `src/pages/BalanceSheet.tsx`)
+However, there is a clear block of prior-year data that does not match anything the user entered:
 
-1. **Add helper** `isDividendAccount(account)` — matches by name (`dividends`, `dividends paid`, `dividends declared`, `owner's drawings`, `owner drawings`, `distributions to owners`) and code patterns commonly used for dividend/drawing accounts.
+| Source | Count | Dates | Amount |
+|---|---|---|---|
+| Credit card txns on card ending 2525 | 327 | Jan–Dec **2001** | $293,832.21 |
+| Journal entries generated from those charges | 826 posted JEs | Dec 2001 range | $292,871.15 Dr = $292,871.15 Cr |
 
-2. **Exclude dividend accounts from the equity total** in `equityAccountsExcludingREandCYE` (around lines 436–454): add a filter `!isDividendAccount(a)` alongside the existing CYE/RE exclusions. Dividend movement is already baked into `reClosingBalance`.
+All 327 charges were bulk‑inserted in a single burst at 2026‑07‑10 08:15:37 UTC. They are not tied to any `import_batches` row (the only user import is the trial‑balance CSV posted 2026‑07‑15). Card 4969 and all bank/JE activity for 2024–2026 look normal and consistent with what you entered.
 
-3. **Hide dividend accounts from the equity display tree** in `buildHierarchicalRows('equity')` (around lines 600–611): filter out dividend accounts the same way CYE is filtered. Comparative-period subtotals reuse the same account list, so comparatives will match automatically.
+My read: the "2023" you referenced is this pre‑period block (the app records them as 2001 due to a bad date parse on that credit-card import). It is showing up as prior‑period activity in the Balance Sheet.
 
-4. **Do NOT touch the Statement of Retained Earnings** (`useRetainedEarningsStatement` / RPC) — the RPC is already correct; it is the source of truth for the dividends line.
+## What I'll do
 
-## Why this is the right fix
+1. **Delete the 826 journal entries** created from card 2525's 2001 charges (and their `journal_entry_lines`) — identified by `reference LIKE 'CC-%'` and matching `journal_entry_id` on those credit-card transactions.
+2. **Delete the 327 credit_card_transactions** on card 2525 (`664423aa-373c-489f-b71d-38d6091d7b18`).
+3. **Leave card 2525 itself in place** (the card record is empty of history but keeps your setup); say so and let you delete it separately if you want.
+4. **Run the balance recalculation** (same logic as `useRecalculateBalances`) to reset every account's `current_balance` from the remaining posted journal entries so the Balance Sheet, Trial Balance, and Retained Earnings statement match the cleaned ledger.
+5. Verify: re-check that no rows in any table have `entry_date`/`transaction_date`/etc. before 2024 for this org, and print a short before/after summary.
 
-- ASPE/GAAP: dividends declared reduce Retained Earnings — they are not a separate equity component on the Balance Sheet. They belong in the Statement of Retained Earnings (which we already render) and inside the RE closing balance.
-- Same pattern already used in this file for `Current Year Earnings` (3-00-202) and `Retained Earnings` (3-00-201), which are excluded from the raw equity aggregate for the same double-counting reason.
+## What I'll NOT touch
 
-## Expected result
+- Trial-balance import from 2026‑07‑15 (22 rows).
+- 2024–2026 journal entries, bank transactions, invoices, bills, expenses (all consistent with your activity).
+- Card 4969 and its 130 transactions.
+- Any other organization.
 
-- Equity section shows Share Capital + Retained Earnings only (no Dividends Paid line).
-- Total Equity decreases by $54,000 in the display, matching the RE closing balance already used.
-- "Balance Sheet is out of balance" banner disappears; `Total Assets = Total Liabilities + Equity` holds.
-- Statement of Retained Earnings block below the Balance Sheet is unchanged and continues to show the dividends line as a rollforward component.
+## Confirm before I run
+
+You said "2023" but the actual bad data is dated 2001 on card 2525 — same block, wrong displayed year. If you meant something different (e.g. you want me to keep the 2001 charges and only wipe something else), tell me now; otherwise I'll proceed to delete the 2001 CC charges + their journal entries and resync balances.
