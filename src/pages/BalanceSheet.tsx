@@ -623,7 +623,12 @@ export default function BalanceSheet() {
     // already included in the Retained Earnings closing balance from Statement of RE.
     let accounts = allAccounts.filter(a => a.account_type === accountType);
     if (accountType === 'equity') {
+      // Exclude CYE bucket (net income already in RE closing balance)
       accounts = accounts.filter(a => !isCurrentYearEarningsAccount(a));
+      // Exclude Dividend / Owner Drawings accounts — already netted inside
+      // the Statement of Retained Earnings closing balance. Showing them as a
+      // separate equity line would double-count the dividend on the Balance Sheet.
+      accounts = accounts.filter(a => !isDividendAccount(a));
     }
     // Suppress accounts that have been reclassified to the opposite section
     // (abnormal-balance presentation per ASPE 1521 / IFRS IAS 1).
