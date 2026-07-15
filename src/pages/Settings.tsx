@@ -48,6 +48,13 @@ export default function Settings() {
   const [countryPopoverOpen, setCountryPopoverOpen] = useState(false);
   const [industryPopoverOpen, setIndustryPopoverOpen] = useState(false);
   const [deleteOrgOpen, setDeleteOrgOpen] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = searchParams.get('tab') || 'organization';
+  const handleTabChange = (value: string) => {
+    const next = new URLSearchParams(searchParams);
+    next.set('tab', value);
+    setSearchParams(next, { replace: true });
+  };
 
   // Use centralized industry list
   const industries = INDUSTRY_OPTIONS;
