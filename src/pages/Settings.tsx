@@ -272,7 +272,7 @@ export default function Settings() {
         <p className="text-muted-foreground">Manage your organization and application settings</p>
       </div>
 
-      <Tabs defaultValue="organization" className="space-y-6">
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
         <TabsList className="flex flex-wrap gap-1 h-auto p-1">
           <TabsTrigger value="organization" className="gap-2">
             <Building2 className="w-4 h-4" />
