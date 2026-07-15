@@ -298,6 +298,17 @@ serve(async (req) => {
         'subscription_data[metadata][plan_id]': planId,
       };
 
+      // Grant a 14-day free trial to organizations that have never subscribed before
+      const { data: priorSub } = await supabaseAdmin
+        .from('subscriptions')
+        .select('id')
+        .eq('organization_id', organizationId)
+        .limit(1)
+        .maybeSingle();
+      if (!priorSub) {
+        sessionParams['subscription_data[trial_period_days]'] = '14';
+      }
+
       const session = await stripeRequest('/checkout/sessions', 'POST', sessionParams);
       if (session.error) {
         return new Response(JSON.stringify({ success: false, error: session.error.message }),

@@ -112,6 +112,11 @@ export default function SubscriptionCheckout() {
         <p className="text-muted-foreground">
           {organization ? `Subscribing for ${organization.name}` : 'Select a plan to get started'}
         </p>
+        {!currentSub && (
+          <Badge variant="secondary" className="mt-2">
+            🎉 Start with a 14-day free trial — no charge until it ends
+          </Badge>
+        )}
         {currentSub && (
           <Badge variant="secondary" className="mt-2">
             Current plan: {(currentSub as any).pricing_plans?.name || 'Unknown'}
