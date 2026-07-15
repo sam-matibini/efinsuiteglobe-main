@@ -557,6 +557,28 @@ export default function BalanceSheet() {
     );
   };
 
+  /**
+   * Identify Dividend / Owner Drawings / Distribution accounts.
+   * These reduce Retained Earnings and are already netted inside the
+   * Statement of Retained Earnings closing balance. Showing them as a
+   * separate equity line would double-count the dividend on the Balance Sheet.
+   */
+  const isDividendAccount = (account: AccountWithBalance): boolean => {
+    const nameLower = account.name?.toLowerCase() || '';
+    return (
+      nameLower.includes('dividend') ||
+      nameLower.includes("owner's draw") ||
+      nameLower.includes('owner draw') ||
+      nameLower.includes('owners draw') ||
+      nameLower.includes('shareholder draw') ||
+      nameLower.includes('distributions to owners') ||
+      nameLower.includes('distributions to shareholders') ||
+      nameLower.includes('capital distributions')
+    );
+  };
+
+
+
 
   /**
    * ============================================================================
