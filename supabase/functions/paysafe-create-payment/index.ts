@@ -57,6 +57,19 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: 'Tax payment not found' }), { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
+    // Enforce org membership on the caller
+    const callerId = claims.claims.sub as string | undefined;
+    if (!callerId) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+    const { data: isMember } = await admin.rpc('is_org_member', {
+      _user_id: callerId,
+      _org_id: tp.organization_id,
+    });
+    if (isMember !== true) {
+      return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
     // PAD enforcement for EFT rail — must have an active PAD agreement
     // covering this org's funding bank account before we can debit.
     if (body.rail === 'eft' && tp.bank_account_id) {
