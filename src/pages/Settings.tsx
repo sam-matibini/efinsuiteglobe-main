@@ -24,6 +24,8 @@ import { GlobalComplianceTab } from '@/components/settings/GlobalComplianceTab';
 import { AutoRateUpdatesTab } from '@/components/settings/AutoRateUpdatesTab';
 import { PaymentSettingsTab } from '@/components/settings/PaymentSettingsTab';
 import { ExecutiveSignerSettingsCard } from '@/components/settings/ExecutiveSignerSettingsCard';
+import { DeleteOrganizationDialog } from '@/components/settings/DeleteOrganizationDialog';
+import { Trash2 } from 'lucide-react';
 
 import { useOrganizationContext } from '@/hooks/useOrganizationContext';
 import { useUserPreferences } from '@/hooks/useUserPreferences';
