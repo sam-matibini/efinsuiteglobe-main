@@ -412,6 +412,124 @@ serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
+    // Helper: load subscription + customer id for org
+    async function loadOrgStripeCustomer(organizationId: string) {
+      const supabaseAdmin = getSupabaseAdmin();
+      const { data: sub } = await supabaseAdmin
+        .from('subscriptions')
+        .select('*')
+        .eq('organization_id', organizationId)
+        .in('status', ['active', 'trialing', 'past_due', 'canceled'])
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return sub;
+    }
+
+    if (action === 'create-billing-portal-session') {
+      if (!stripeSecretKey) {
+        return new Response(JSON.stringify({ success: false, error: 'Stripe not configured' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      const { organizationId, returnUrl, portalFlow } = body;
+      if (!organizationId) {
+        return new Response(JSON.stringify({ success: false, error: 'organizationId required' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      const sub = await loadOrgStripeCustomer(organizationId);
+      if (!sub?.stripe_customer_id) {
+        return new Response(JSON.stringify({ success: false, error: 'No Stripe customer for this organization' }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      const params: Record<string, string> = {
+        customer: sub.stripe_customer_id,
+        return_url: returnUrl || `${req.headers.get('origin') || ''}/settings?tab=billing`,
+      };
+      if (portalFlow === 'payment_method_update') {
+        params['flow_data[type]'] = 'payment_method_update';
+      } else if (portalFlow === 'subscription_cancel' && sub.stripe_subscription_id) {
+        params['flow_data[type]'] = 'subscription_cancel';
+        params['flow_data[subscription_cancel][subscription]'] = sub.stripe_subscription_id;
+      }
+      const session = await stripeRequest('/billing_portal/sessions', 'POST', params);
+      if (session.error) {
+        return new Response(JSON.stringify({ success: false, error: session.error.message }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      return new Response(JSON.stringify({ success: true, url: session.url }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    if (action === 'get-payment-method') {
+      if (!stripeSecretKey) {
+        return new Response(JSON.stringify({ success: false, error: 'Stripe not configured' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      const { organizationId } = body;
+      if (!organizationId) {
+        return new Response(JSON.stringify({ success: false, error: 'organizationId required' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      const sub = await loadOrgStripeCustomer(organizationId);
+      if (!sub?.stripe_customer_id) {
+        return new Response(JSON.stringify({ success: true, paymentMethod: null }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      const customer = await stripeRequest(`/customers/${sub.stripe_customer_id}`, 'GET');
+      let pmId = customer?.invoice_settings?.default_payment_method || customer?.default_source;
+      if (!pmId) {
+        const pms = await stripeRequest(`/payment_methods?customer=${sub.stripe_customer_id}&type=card&limit=1`, 'GET');
+        pmId = pms?.data?.[0]?.id;
+      }
+      if (!pmId) {
+        return new Response(JSON.stringify({ success: true, paymentMethod: null }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      const pm = typeof pmId === 'string' ? await stripeRequest(`/payment_methods/${pmId}`, 'GET') : pmId;
+      const card = pm?.card;
+      return new Response(JSON.stringify({
+        success: true,
+        paymentMethod: card ? {
+          brand: card.brand, last4: card.last4, exp_month: card.exp_month, exp_year: card.exp_year,
+        } : null,
+      }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    if (action === 'list-invoices') {
+      if (!stripeSecretKey) {
+        return new Response(JSON.stringify({ success: false, error: 'Stripe not configured' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      const { organizationId } = body;
+      if (!organizationId) {
+        return new Response(JSON.stringify({ success: false, error: 'organizationId required' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      const sub = await loadOrgStripeCustomer(organizationId);
+      if (!sub?.stripe_customer_id) {
+        return new Response(JSON.stringify({ success: true, invoices: [] }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      const result = await stripeRequest(`/invoices?customer=${sub.stripe_customer_id}&limit=24`, 'GET');
+      if (result.error) {
+        return new Response(JSON.stringify({ success: false, error: result.error.message }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      const invoices = (result.data || []).map((inv: any) => ({
+        id: inv.id,
+        number: inv.number,
+        created: inv.created,
+        amount_paid: inv.amount_paid,
+        amount_due: inv.amount_due,
+        currency: inv.currency,
+        status: inv.status,
+        hosted_invoice_url: inv.hosted_invoice_url,
+        invoice_pdf: inv.invoice_pdf,
+      }));
+      return new Response(JSON.stringify({ success: true, invoices }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
     return new Response(JSON.stringify({ error: 'Invalid action' }),
       { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
