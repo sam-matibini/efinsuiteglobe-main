@@ -58,11 +58,11 @@ export function minimumPlanForModule(moduleCode: ModuleCode): PlanTier {
 }
 
 /** Best-effort derivation of a plan tier from a plan name. */
-export function deriveTierFromName(name?: string | null): PlanTier {
+export function deriveTierFromName(name?: string | null): PlanTier | null {
   const n = (name || '').toLowerCase();
   if (n.includes('office')) return 'office_use';
   if (n.includes('enterprise')) return 'enterprise';
   if (n.includes('professional') || n.includes('pro')) return 'professional';
   if (n.includes('starter')) return 'starter';
-  return 'office_use';
+  return null;
 }
