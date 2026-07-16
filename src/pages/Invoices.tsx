@@ -439,6 +439,11 @@ export default function Invoices() {
         onOpenChange={(open) => !open && setSignatureRequestInvoice(null)}
         invoice={signatureRequestInvoice}
       />
+      <AICategorizeLinesDialog
+        open={showAICatDialog}
+        onOpenChange={setShowAICatDialog}
+        target="invoice"
+      />
     </div>
   );
 }
