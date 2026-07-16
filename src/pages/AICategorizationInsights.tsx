@@ -57,6 +57,10 @@ export default function AICategorizationInsights() {
         </p>
       </div>
 
+      <AICategorizationAutoApplySettings />
+
+
+
       {isLoading || !data ? (
         <div className="text-sm text-muted-foreground">Loading…</div>
       ) : (
