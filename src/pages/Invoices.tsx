@@ -23,6 +23,9 @@ import { getCountryLocalization } from '@/data/countryLocalizations';
 import { getLocaleForCountry } from '@/lib/localizedCurrencyFormatter';
 import { getDocumentLogoUrl } from '@/lib/getDocumentLogo';
 import { isNpoIndustry } from '@/data/industries';
+import { AICategorizeLinesDialog } from '@/components/ai/AICategorizeLinesDialog';
+import { AICategorizationHealth } from '@/components/banking/AICategorizationHealth';
+import { Sparkles } from 'lucide-react';
 
 export default function Invoices() {
   const { organization, isLoading: orgLoading } = useCurrentOrganization();
@@ -42,6 +45,7 @@ export default function Invoices() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [showOrgDialog, setShowOrgDialog] = useState(false);
   const [showInvoiceDialog, setShowInvoiceDialog] = useState(false);
+  const [showAICatDialog, setShowAICatDialog] = useState(false);
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
   const [selectedInvoiceForPayment, setSelectedInvoiceForPayment] = useState<{ invoiceId?: string; customerId?: string }>({});
   const [viewEditInvoice, setViewEditInvoice] = useState<{ invoice: Invoice | null; mode: 'view' | 'edit' }>({ invoice: null, mode: 'view' });
@@ -314,6 +318,13 @@ export default function Invoices() {
           <p className="text-muted-foreground">Create and manage customer invoices</p>
         </div>
         <div className="flex items-center gap-3">
+          <AICategorizationHealth context="revenue" label="Revenue AI acceptance" />
+          {!isReadOnly && (
+            <Button variant="outline" size="sm" onClick={() => setShowAICatDialog(true)}>
+              <Sparkles className="w-4 h-4 mr-2" />
+              AI Categorize Lines
+            </Button>
+          )}
           <Button variant="outline" size="sm">
             <Download className="w-4 h-4 mr-2" />
             Export
@@ -427,6 +438,11 @@ export default function Invoices() {
         open={signatureRequestInvoice !== null}
         onOpenChange={(open) => !open && setSignatureRequestInvoice(null)}
         invoice={signatureRequestInvoice}
+      />
+      <AICategorizeLinesDialog
+        open={showAICatDialog}
+        onOpenChange={setShowAICatDialog}
+        target="invoice"
       />
     </div>
   );

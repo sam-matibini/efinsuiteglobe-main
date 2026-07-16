@@ -18,22 +18,26 @@ export interface CategorizationInsights {
     suggested_account_id: string | null;
     final_account_id: string;
     count: number;
-    context: "bank" | "ap";
+    context: "bank" | "ap" | "revenue";
   }>;
 }
 
 const DAILY_CAP = 2000;
 
-export function useCategorizationInsights(organizationId: string | undefined) {
+export function useCategorizationInsights(
+  organizationId: string | undefined,
+  opts?: { context?: "bank" | "ap" | "revenue" },
+) {
+  const contextFilter = opts?.context;
   return useQuery({
-    queryKey: ["ai-categorization-insights", organizationId],
+    queryKey: ["ai-categorization-insights", organizationId, contextFilter ?? "all"],
     enabled: !!organizationId,
     queryFn: async (): Promise<CategorizationInsights> => {
       const orgId = organizationId!;
       const since30 = new Date(Date.now() - 30 * 86_400_000).toISOString();
       const since24h = new Date(Date.now() - 24 * 3_600_000).toISOString();
 
-      const { data: fb = [] } = await supabase
+      let fbQuery = supabase
         .from("ai_categorization_feedback")
         .select(
           "context,target,suggested_account_id,final_account_id,accepted,source,confidence,vendor_key,desc_key,created_at",
@@ -42,6 +46,8 @@ export function useCategorizationInsights(organizationId: string | undefined) {
         .gte("created_at", since30)
         .order("created_at", { ascending: false })
         .limit(5000);
+      if (contextFilter) fbQuery = fbQuery.eq("context", contextFilter);
+      const { data: fb = [] } = await fbQuery;
 
       const { data: logs = [] } = await supabase
         .from("ai_setup_logs")
@@ -91,7 +97,7 @@ export function useCategorizationInsights(organizationId: string | undefined) {
           suggested_account_id: string | null;
           final_account_id: string;
           count: number;
-          context: "bank" | "ap";
+          context: "bank" | "ap" | "revenue";
         }
       >();
       for (const r of fb) {
@@ -111,7 +117,7 @@ export function useCategorizationInsights(organizationId: string | undefined) {
             suggested_account_id: r.suggested_account_id,
             final_account_id: r.final_account_id,
             count: 1,
-            context: r.context as "bank" | "ap",
+            context: r.context as "bank" | "ap" | "revenue",
           });
       }
       const topCorrections = Array.from(corrKey.values())

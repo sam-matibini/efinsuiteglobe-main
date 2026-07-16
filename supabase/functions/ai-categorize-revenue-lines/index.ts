@@ -368,6 +368,7 @@ Rules:
                   new_value: { [col]: s.gl_account_id },
                   confidence: s.confidence,
                   source: s.source,
+                  reasoning: s.reasoning ?? null,
                 });
               }
             }

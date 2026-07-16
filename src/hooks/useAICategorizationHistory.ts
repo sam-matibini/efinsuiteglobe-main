@@ -12,6 +12,7 @@ export interface CategorizationApplication {
   new_value: Record<string, unknown>;
   confidence: number | null;
   source: string | null;
+  reasoning: string | null;
   applied_at: string;
   undone_at: string | null;
 }

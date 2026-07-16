@@ -228,6 +228,7 @@ export type Database = {
           new_value: Json
           organization_id: string
           prior_value: Json | null
+          reasoning: string | null
           row_id: string
           source: string | null
           target: string
@@ -243,6 +244,7 @@ export type Database = {
           new_value: Json
           organization_id: string
           prior_value?: Json | null
+          reasoning?: string | null
           row_id: string
           source?: string | null
           target: string
@@ -258,6 +260,7 @@ export type Database = {
           new_value?: Json
           organization_id?: string
           prior_value?: Json | null
+          reasoning?: string | null
           row_id?: string
           source?: string | null
           target?: string

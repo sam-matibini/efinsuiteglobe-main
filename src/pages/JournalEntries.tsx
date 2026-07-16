@@ -1,7 +1,7 @@
 import { useState, useMemo, useDeferredValue, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { format, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear, subMonths, subYears } from 'date-fns';
-import { Plus, Search, Download, Building2, Eye, Pencil, Trash2, RotateCcw, Send, ListChecks, X, ChevronLeft, ChevronRight, Upload } from 'lucide-react';
+import { Plus, Search, Download, Building2, Eye, Pencil, Trash2, RotateCcw, Send, ListChecks, X, ChevronLeft, ChevronRight, Upload, Sparkles } from 'lucide-react';
 import { parseLocalDate } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -31,6 +31,8 @@ import { ViewJournalEntryDialog } from '@/components/journal/ViewJournalEntryDia
 import { ReverseJournalEntryDialog } from '@/components/journal/ReverseJournalEntryDialog';
 import { BulkPostDialog } from '@/components/journal/BulkPostDialog';
 import BulkJournalImportDialog from '@/components/journal/BulkJournalImportDialog';
+import { AICategorizeLinesDialog } from '@/components/ai/AICategorizeLinesDialog';
+import { AICategorizationHealth } from '@/components/banking/AICategorizationHealth';
 import {
   Select,
   SelectContent,
@@ -90,6 +92,7 @@ export default function JournalEntries() {
   const [createOrgDialogOpen, setCreateOrgDialogOpen] = useState(false);
   const [bulkPostDialogOpen, setBulkPostDialogOpen] = useState(false);
   const [bulkImportDialogOpen, setBulkImportDialogOpen] = useState(false);
+  const [aiCatDialogOpen, setAiCatDialogOpen] = useState(false);
 
   const { organization, isLoading: orgLoading } = useCurrentOrganization();
 
@@ -452,6 +455,13 @@ export default function JournalEntries() {
           <p className="text-muted-foreground">Create and manage journal entries</p>
         </div>
         <div className="flex items-center gap-3">
+          <AICategorizationHealth context="revenue" label="Revenue AI acceptance" />
+          {!isReadOnly && (
+            <Button variant="outline" size="sm" onClick={() => setAiCatDialogOpen(true)}>
+              <Sparkles className="w-4 h-4 mr-2" />
+              AI Categorize Lines
+            </Button>
+          )}
           <Button variant="outline" size="sm">
             <Download className="w-4 h-4 mr-2" />
             Export
@@ -949,6 +959,11 @@ export default function JournalEntries() {
       <BulkJournalImportDialog
         open={bulkImportDialogOpen}
         onOpenChange={setBulkImportDialogOpen}
+      />
+      <AICategorizeLinesDialog
+        open={aiCatDialogOpen}
+        onOpenChange={setAiCatDialogOpen}
+        target="journal"
       />
     </div>
   );

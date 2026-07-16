@@ -48,13 +48,21 @@ export default function AICategorizationInsights() {
 
   return (
     <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold flex items-center gap-2">
-          <Sparkles className="h-6 w-6 text-primary" /> AI Categorization Insights
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          How your AI-suggested categorizations are performing across bank transactions, bills, and expense claims (last 30 days).
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold flex items-center gap-2">
+            <Sparkles className="h-6 w-6 text-primary" /> AI Categorization Insights
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            How your AI-suggested categorizations are performing across bank transactions, bills, and expense claims (last 30 days).
+          </p>
+        </div>
+        <a
+          href="/ai/categorization-history"
+          className="text-sm text-primary hover:underline whitespace-nowrap"
+        >
+          View history →
+        </a>
       </div>
 
       <AICategorizationAutoApplySettings />
