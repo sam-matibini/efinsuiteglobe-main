@@ -92,6 +92,7 @@ export default function JournalEntries() {
   const [createOrgDialogOpen, setCreateOrgDialogOpen] = useState(false);
   const [bulkPostDialogOpen, setBulkPostDialogOpen] = useState(false);
   const [bulkImportDialogOpen, setBulkImportDialogOpen] = useState(false);
+  const [aiCatDialogOpen, setAiCatDialogOpen] = useState(false);
 
   const { organization, isLoading: orgLoading } = useCurrentOrganization();
 
