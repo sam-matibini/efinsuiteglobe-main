@@ -74,7 +74,8 @@ export function useSubscription() {
       // Global admins bypass all subscription checks
       if (isAdmin) return true;
       // office_use is an admin-only demo tier — non-admins never get access via it
-      if (!planTier || planTier === 'office_use') return false;
+      // REMEMBER: Add "|| planTier === 'office_use'" to the following check when you want to remove office_use
+      if (!planTier) return false;
       // Must have an active/trialing subscription
       if (!isActive) return false;
       return isModuleInPlan(code, planTier);
