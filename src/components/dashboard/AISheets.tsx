@@ -19,6 +19,7 @@ import {
   AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { evaluateFormula, formatFormulaValue } from '@/lib/formulaEngine';
+import { useAIFormula } from '@/hooks/useAIFormula';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -204,6 +205,12 @@ export function AISheets({
   const creditCardTargetColumns = ['transaction_date', 'description', 'amount', 'payee_payor', 'reference', 'category', 'merchant_category_code', 'memo'];
 
   const activeSheet = sheets[activeSheetIndex];
+
+  // AI formula resolver (=AI, =CLASSIFY, =EXPLAIN, =PREDICT, =ANALYZE, =GENERATE_JE, etc.)
+  const aiFormula = useAIFormula({
+    columns: activeSheet?.columns ?? [],
+    sampleRows: (activeSheet?.rows ?? []).slice(0, 5),
+  });
 
   // Initialize with provided data
   useEffect(() => {
@@ -1812,11 +1819,13 @@ export function AISheets({
                             activeSheet.formulaColumns?.[col] && "text-primary font-mono"
                           )}>
                             {activeSheet.formulaColumns?.[col]
-                              ? formatFormulaValue(evaluateFormula(activeSheet.formulaColumns[col], {
-                                  row,
-                                  allRows: activeSheet.rows,
-                                  columns: activeSheet.columns,
-                                }))
+                              ? (aiFormula.isAIFormula(activeSheet.formulaColumns[col])
+                                ? String(aiFormula.resolve(activeSheet.formulaColumns[col], row))
+                                : formatFormulaValue(evaluateFormula(activeSheet.formulaColumns[col], {
+                                    row,
+                                    allRows: activeSheet.rows,
+                                    columns: activeSheet.columns,
+                                  })))
                               : String(row[col] ?? '')}
                           </div>
                         )}

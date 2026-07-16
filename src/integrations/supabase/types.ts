@@ -265,6 +265,33 @@ export type Database = {
           },
         ]
       }
+      ai_formula_cache: {
+        Row: {
+          args_hash: string
+          confidence: number | null
+          created_at: string
+          formula: string
+          organization_id: string
+          value: Json
+        }
+        Insert: {
+          args_hash: string
+          confidence?: number | null
+          created_at?: string
+          formula: string
+          organization_id: string
+          value: Json
+        }
+        Update: {
+          args_hash?: string
+          confidence?: number | null
+          created_at?: string
+          formula?: string
+          organization_id?: string
+          value?: Json
+        }
+        Relationships: []
+      }
       ai_setup_logs: {
         Row: {
           applied_value: Json | null
