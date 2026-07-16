@@ -1,4 +1,4 @@
-# Phase 4 — AI categorization for Expenses & Bills
+# Phase 4 — AI categorization for Expenses & Bills (done)
 
 Extends the Phase 3 categorization engine from bank transactions to the AP side: expense claim lines and vendor bill lines. Reuses the same edge-function pattern, cache table, rule-learning flow, and review UI.
 
