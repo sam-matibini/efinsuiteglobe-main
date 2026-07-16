@@ -1,46 +1,70 @@
-## Phase 9 — Statement Extraction: Payment classification fix + AI Sheets feed
 
-Two problems observed on the RBC Avion Visa upload (screenshot):
+## Phase 10 — Gemini Integration Audit + Credit Card Mapping Fix
 
-1. Statements with a **single signed AMOUNT column** (RBC Avion, Amex, many CC statements) confuse the extractor. Because the tool schema forces a positive `debit`/`credit` split and the model has no separate credit column to read from, `-$1,000.00 PAYMENT - THANK YOU` gets stuffed into `debit` → downstream renamed to `Charge` → imported as a charge. The Alice import path also classifies CC rows by amount sign (`rawAmount >= 0 ? 'charge' : 'payment'`), bypassing the project's description-first rule (see `credit-card-import-sign-convention` memory).
-2. There is no way to feed rows already cleaned in Alice AI Sheets back into the Statement Extraction Engine as an alternative to re-uploading the PDF.
+Two tightly-scoped changes, both frontend/edge-only. No schema changes, no changes to bank statement logic.
 
-### Fix 1 — Correct payment/charge classification end-to-end
+---
 
-**Edge function `pdf-to-spreadsheet/index.ts`**
-- Extend `STATEMENT_TOOL` with an optional `signedAmount` field and a `direction: "payment" | "charge" | "debit" | "credit"` hint per row.
-- Update `STATEMENT_PROMPT` with an explicit branch: "If the statement has a single AMOUNT column with signs (e.g. RBC Avion), read the sign — negative = payment/credit, positive = charge/debit — AND read the description ('PAYMENT', 'PAIEMENT', 'THANK YOU', 'AUTOPAY' → payment/credit). Do NOT force everything into `debit`."
-- Post-processing in `tryStatement`: when only one side is populated and the description matches a payment/refund keyword list (payment, paiement, thank you, autopay, refund, credit memo, reversal, chargeback), move the value from `debit` → `credit`. Log a `validationWarnings` note.
-- When rows are relabelled to Charge/Payment for the CC sheet, run the same keyword scan and move Charge→Payment when the description is clearly a payment. Reconciliation totals recomputed after the swap.
+### 1. Verify Google Gemini API integration end-to-end
 
-**Alice import handler `AIAccountingAssistant.tsx::handleExtractionComplete` (CC branch, line 315-340)**
-- Replace `transactionType = rawAmount >= 0 ? 'charge' : 'payment'` with a call to `classifyCreditCardType` from `src/lib/creditCardImportNormalizer.ts`, passing description, explicit type column (if the row already carries `transaction_type`), and signed amount as fallback. This aligns Alice's path with the standard CC import normalizer per the existing memory.
-- Same call is used for rows fed from AI Sheets (Fix 2).
+Two extraction paths exist today; both must work:
 
-### Fix 2 — Load AI Sheets rows as an alternative feed
+| Path | Function | Auth | Model |
+|---|---|---|---|
+| Dialog uploads (`StatementExtractionDialog`) | `pdf-to-spreadsheet` | `LOVABLE_API_KEY` → `ai.gateway.lovable.dev` | `google/gemini-2.5-flash` |
+| Programmatic hook (`useBankStatementExtraction`) | `ai-extract-bank-statement` | `GOOGLE_AI_API_KEY` → direct Google API | `gemini-2.5-pro` |
 
-`StatementExtractionDialog.tsx` currently accepts file uploads only. Add a second entry point:
+Audit steps (read-only, no code changes required unless a gap is found):
+- Confirm both secrets (`LOVABLE_API_KEY`, `GOOGLE_AI_API_KEY`) are present in project secrets via `fetch_secrets`.
+- Ping `gemini-health` edge function to verify Google reachability.
+- Re-invoke `pdf-to-spreadsheet` against a known-good sample and inspect `edge_function_logs` for `AI ... failed` entries.
+- If a secret is missing, request it via `add_secret`. If `gemini-health` returns non-2xx, surface the exact provider error to the user; do not "fix" by rotating keys blindly.
 
-- New "Load from AI Sheets" section on the upload step, alongside the file dropzone.
-- A dropdown listing recent AI Sheets workbooks for the current organization. Source: list objects in the existing `docsign-documents` storage bucket under `ai-sheets/` (already written by `pdf-to-spreadsheet`), sorted by upload time, showing filename + date.
-- Selecting a workbook fetches the `.xlsx` via signed URL, parses it with the already-imported `xlsx` library, populates `extractedData` and `extractedColumns`, and jumps straight to the `mapping` step (skipping extraction). A `_sourceFile` marker is added so the downstream import audit trail shows "AI Sheets: <name>".
-- Toggle chip at the top of the dialog: **File upload** | **AI Sheets** — visual separation, single state machine underneath.
-- Small badge on imported rows indicating the source ("PDF" vs "AI Sheets") for review.
+Deliverable: a short status report in chat plus any missing-secret action. No code changes if everything passes.
 
-Optional (nice-to-have, kept in scope): remember the last-used AI Sheets workbook per statement type in localStorage so the user doesn't hunt for it each time.
+---
 
-### Files
+### 2. Fix credit-card charge/payment mapping accuracy
 
-**Edited**
-- `supabase/functions/pdf-to-spreadsheet/index.ts` — prompt + tool schema + post-swap logic
-- `src/components/dashboard/AIAccountingAssistant.tsx` — use `classifyCreditCardType` in CC import
-- `src/components/banking/StatementExtractionDialog.tsx` — add AI Sheets source picker + xlsx fetch-and-parse
-- `src/lib/creditCardImportNormalizer.ts` — no logic change, just export used by the new call site (already exported per memory)
+**Root cause.** `pdf-to-spreadsheet` correctly emits CC rows as `Charge` / `Payment` columns and applies the description-first keyword swap (Phase 9). But `MappingPreviewDialog.tsx` then collapses those two columns into a single signed `amount` using the **bank formula** for every statement type:
 
-**Created**
-- `src/hooks/useAliceSheetsWorkbooks.ts` — lists `ai-sheets/*.xlsx` from `docsign-documents` bucket, returns `{ path, name, uploaded_at, size, signed_url }`.
+```ts
+mapped['amount'] = credit - debit;   // line 258 and line 356
+```
 
-### Out of scope
-- Structural changes to the CC transactions schema or GL posting logic.
-- Reprocessing historical mis-classified transactions (users can fix via the existing edit flow; a bulk fixer would be a separate phase if requested).
-- Multi-card sub-account splitting on RBC Avion (each cardholder ending in 4977/4969) — the current single-credit-card target will be kept; noted for a future phase.
+For a CC statement mapped as `debit=Charge`, `credit=Payment`, this produces:
+- Charge $100 → `amount = 0 - 100 = -100`  → downstream `classifyCreditCardType` sign-fallback sees negative → **classified as "payment"** ❌
+- Payment $500 → `amount = 500 - 0 = +500` → sign-fallback sees positive → **classified as "charge"** ❌
+
+Every CC row imported through the Alice extractor is being flipped unless its description happens to trigger a keyword match in `classifyCreditCardType`.
+
+**Fix.** In `src/components/banking/MappingPreviewDialog.tsx`, make the amount derivation statement-type aware:
+
+```ts
+// CC convention: positive = charge (money out of card), negative = payment (money into card)
+// Bank convention: positive = deposit (credit), negative = withdrawal (debit)
+const signedAmount = statementType === 'creditcard'
+  ? debit - credit    // Charge - Payment
+  : credit - debit;   // Credit - Debit
+```
+
+Apply this at both call sites:
+- Line 254-258 (initial `processedData` derivation used for the preview table).
+- Line 352-357 (`normalizeMappedRow`, which produces the final row handed to `onImport` → `AIAccountingAssistant`).
+
+`deriveType` at lines 313-337 already uses the CC-correct convention (positive amount → withdrawal/charge) so no change needed there — it becomes consistent once the sign is correct.
+
+Downstream `classifyCreditCardType` in `AIAccountingAssistant.tsx` (line 320) is unchanged: description-first still wins, but the sign fallback now points the right way for ambiguous vendor rows.
+
+**Out of scope**
+- Bank statement mapping logic (explicitly untouched).
+- Any change to `pdf-to-spreadsheet` extraction — Phase 9 keyword swap remains the source of truth on the extractor side.
+- Historical reprocessing of already-imported CC rows. Users must re-import affected statements or reclassify inline via the existing Credit Card Transactions page.
+- Schema, RLS, or GL posting logic (`useCreditCardGL` is already correct given a correct `transaction_type`).
+
+### Files touched
+- `src/components/banking/MappingPreviewDialog.tsx` — two-line sign-convention fix at lines ~258 and ~356.
+
+### Verification
+- Rebuild; open the Alice extraction dialog for an RBC Avion Visa PDF; confirm the preview Type column shows charges as red "Withdrawal/Charge" and payments as green "Deposit/Payment".
+- Import; open Credit Card Transactions; confirm charges post as debit-Expense/credit-CC-Liability and payments as debit-CC-Liability/credit-Bank.

@@ -252,11 +252,13 @@ export function MappingPreviewDialog({
       }
       
       // Handle amount logic (if debit/credit provided but not amount, calculate)
+      // Bank: positive = deposit (credit - debit). CC: positive = charge (debit - credit).
       if (!mapped['amount'] && (mapped['debit'] || mapped['credit'])) {
         const debit = typeof mapped['debit'] === 'number' ? mapped['debit'] : 0;
         const credit = typeof mapped['credit'] === 'number' ? mapped['credit'] : 0;
-        mapped['amount'] = credit - debit;
+        mapped['amount'] = statementType === 'creditcard' ? debit - credit : credit - debit;
       }
+
       
       return {
         rowIndex,
