@@ -567,15 +567,25 @@ export default function BalanceSheet() {
    */
   const isDividendAccount = (account: AccountWithBalance): boolean => {
     const nameLower = account.name?.toLowerCase() || '';
+    // Definitive rule: an equity account with a DEBIT normal balance is a
+    // contra-equity account (dividends, drawings, distributions, treasury stock).
+    // Its impact is already netted inside the Statement of Retained Earnings
+    // closing balance, so we must not render it as a separate Balance Sheet line.
+    if (account.account_type === 'equity' && (account as any).normal_balance === 'debit') {
+      return true;
+    }
     return (
       nameLower.includes('dividend') ||
+      nameLower.includes('drawings') ||
       nameLower.includes("owner's draw") ||
       nameLower.includes('owner draw') ||
       nameLower.includes('owners draw') ||
       nameLower.includes('shareholder draw') ||
       nameLower.includes('distributions to owners') ||
       nameLower.includes('distributions to shareholders') ||
-      nameLower.includes('capital distributions')
+      nameLower.includes('capital distributions') ||
+      nameLower.includes('treasury stock') ||
+      nameLower.includes('treasury shares')
     );
   };
 
