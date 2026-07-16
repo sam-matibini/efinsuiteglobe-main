@@ -555,6 +555,38 @@ export default function AccountantDashboard() {
     
     // Build lease note data
     const leaseNotes = await buildLeaseNoteData();
+
+    // Fetch Statement of Retained Earnings closing balances (canonical equity
+    // formula — matches BalanceSheet.tsx and AICompilationDialog validation).
+    const fmtDate = (d: Date) => {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    };
+    let currentReClosingBalance: number | undefined;
+    let priorReClosingBalance: number | undefined;
+    if (organization?.id) {
+      try {
+        const [curRe, priorRe] = await Promise.all([
+          supabase.rpc('calculate_retained_earnings_statement', {
+            p_organization_id: organization.id,
+            p_fiscal_year_start: fmtDate(currentPeriodStart),
+            p_fiscal_year_end: fmtDate(currentPeriodEnd),
+          }),
+          supabase.rpc('calculate_retained_earnings_statement', {
+            p_organization_id: organization.id,
+            p_fiscal_year_start: fmtDate(priorYearStart),
+            p_fiscal_year_end: fmtDate(priorYearEnd),
+          }),
+        ]);
+        currentReClosingBalance = Number(curRe.data?.[0]?.closing_balance ?? 0);
+        priorReClosingBalance = Number(priorRe.data?.[0]?.closing_balance ?? 0);
+      } catch (e) {
+        console.warn('Could not load RE closing balance for compilation export:', e);
+      }
+    }
+
     
     // Build comparative financial data structure for side-by-side display
     const comparativeData: ComparativeFinancialData = {
