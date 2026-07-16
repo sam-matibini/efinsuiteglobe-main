@@ -206,6 +206,12 @@ export function AISheets({
 
   const activeSheet = sheets[activeSheetIndex];
 
+  // AI formula resolver (=AI, =CLASSIFY, =EXPLAIN, =PREDICT, =ANALYZE, =GENERATE_JE, etc.)
+  const aiFormula = useAIFormula({
+    columns: activeSheet?.columns ?? [],
+    sampleRows: (activeSheet?.rows ?? []).slice(0, 5),
+  });
+
   // Initialize with provided data
   useEffect(() => {
     if (initialData.length > 0 && initialColumns.length > 0) {
