@@ -23,6 +23,9 @@ import { getCountryLocalization } from '@/data/countryLocalizations';
 import { getLocaleForCountry } from '@/lib/localizedCurrencyFormatter';
 import { getDocumentLogoUrl } from '@/lib/getDocumentLogo';
 import { isNpoIndustry } from '@/data/industries';
+import { AICategorizeLinesDialog } from '@/components/ai/AICategorizeLinesDialog';
+import { AICategorizationHealth } from '@/components/banking/AICategorizationHealth';
+import { Sparkles } from 'lucide-react';
 
 export default function Invoices() {
   const { organization, isLoading: orgLoading } = useCurrentOrganization();
