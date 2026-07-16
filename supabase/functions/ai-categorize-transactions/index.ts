@@ -345,6 +345,7 @@ Rules:
                   new_value: { gl_account_id: s.gl_account_id, category: s.category ?? null },
                   confidence: s.confidence,
                   source: s.source,
+                  reasoning: s.reasoning ?? null,
                 });
               }
             }
