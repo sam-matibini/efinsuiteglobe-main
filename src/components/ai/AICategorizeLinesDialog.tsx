@@ -42,7 +42,7 @@ interface LineLike {
 const TITLES: Record<LineTarget, string> = {
   bill: "AI Categorize Bill Lines",
   expense: "AI Categorize Expense Claim Lines",
-  po: "AI Categorize Purchase Order Lines",
+  
   invoice: "AI Categorize Invoice Lines",
   journal: "AI Categorize Journal Lines",
 };
