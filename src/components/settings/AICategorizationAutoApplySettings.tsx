@@ -113,7 +113,12 @@ export function AICategorizationAutoApplySettings() {
                       handleSave({ auto_apply_scopes: Array.from(next) });
                     }}
                   />
-                  <span>{s.label}</span>
+                  <span>
+                    {s.label}
+                    {s.hint && (
+                      <span className="ml-1 text-xs text-muted-foreground">({s.hint})</span>
+                    )}
+                  </span>
                 </label>
               );
             })}
