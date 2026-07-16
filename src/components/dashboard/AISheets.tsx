@@ -1819,11 +1819,13 @@ export function AISheets({
                             activeSheet.formulaColumns?.[col] && "text-primary font-mono"
                           )}>
                             {activeSheet.formulaColumns?.[col]
-                              ? formatFormulaValue(evaluateFormula(activeSheet.formulaColumns[col], {
-                                  row,
-                                  allRows: activeSheet.rows,
-                                  columns: activeSheet.columns,
-                                }))
+                              ? (aiFormula.isAIFormula(activeSheet.formulaColumns[col])
+                                ? String(aiFormula.resolve(activeSheet.formulaColumns[col], row))
+                                : formatFormulaValue(evaluateFormula(activeSheet.formulaColumns[col], {
+                                    row,
+                                    allRows: activeSheet.rows,
+                                    columns: activeSheet.columns,
+                                  })))
                               : String(row[col] ?? '')}
                           </div>
                         )}
