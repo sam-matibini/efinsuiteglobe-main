@@ -136,48 +136,94 @@ export default function AICategorizationHistory() {
               <TableBody>
                 {filtered.map((r) => {
                   const undoneRow = !!r.undone_at;
+                  const isOpen = !!expanded[r.id];
+                  const priorAcct = r.prior_value
+                    ? Object.values(r.prior_value)[0]
+                    : null;
+                  const newAcct = r.new_value ? Object.values(r.new_value)[0] : null;
                   return (
-                    <TableRow key={r.id} className={undoneRow ? "opacity-50" : ""}>
-                      <TableCell>
-                        <Checkbox
-                          disabled={undoneRow}
-                          checked={!!selected[r.id]}
-                          onCheckedChange={(v) =>
-                            setSelected((prev) => ({ ...prev, [r.id]: !!v }))
-                          }
-                        />
-                      </TableCell>
-                      <TableCell className="text-xs">
-                        {new Date(r.applied_at).toLocaleString()}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{CONTEXT_LABEL[r.context] ?? r.context}</Badge>
-                      </TableCell>
-                      <TableCell>{TARGET_LABEL[r.target] ?? r.target}</TableCell>
-                      <TableCell className="text-xs">{r.source ?? "—"}</TableCell>
-                      <TableCell className="text-right">
-                        {r.confidence !== null ? `${Math.round(Number(r.confidence) * 100)}%` : "—"}
-                      </TableCell>
-                      <TableCell>
-                        {undoneRow ? (
-                          <Badge variant="secondary">Undone</Badge>
-                        ) : (
-                          <Badge>Applied</Badge>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {!undoneRow && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            disabled={undo.isPending}
-                            onClick={() => handleUndo([r.id])}
+                    <>
+                      <TableRow key={r.id} className={undoneRow ? "opacity-50" : ""}>
+                        <TableCell>
+                          <Checkbox
+                            disabled={undoneRow}
+                            checked={!!selected[r.id]}
+                            onCheckedChange={(v) =>
+                              setSelected((prev) => ({ ...prev, [r.id]: !!v }))
+                            }
+                          />
+                        </TableCell>
+                        <TableCell className="text-xs">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setExpanded((prev) => ({ ...prev, [r.id]: !prev[r.id] }))
+                            }
+                            className="inline-flex items-center gap-1 hover:underline"
                           >
-                            <Undo2 className="h-3 w-3 mr-1" /> Undo
-                          </Button>
-                        )}
-                      </TableCell>
-                    </TableRow>
+                            {isOpen ? (
+                              <ChevronDown className="h-3 w-3" />
+                            ) : (
+                              <ChevronRight className="h-3 w-3" />
+                            )}
+                            {new Date(r.applied_at).toLocaleString()}
+                          </button>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{CONTEXT_LABEL[r.context] ?? r.context}</Badge>
+                        </TableCell>
+                        <TableCell>{TARGET_LABEL[r.target] ?? r.target}</TableCell>
+                        <TableCell className="text-xs">{r.source ?? "—"}</TableCell>
+                        <TableCell className="text-right">
+                          {r.confidence !== null ? `${Math.round(Number(r.confidence) * 100)}%` : "—"}
+                        </TableCell>
+                        <TableCell>
+                          {undoneRow ? (
+                            <Badge variant="secondary">Undone</Badge>
+                          ) : (
+                            <Badge>Applied</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {!undoneRow && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              disabled={undo.isPending}
+                              onClick={() => handleUndo([r.id])}
+                            >
+                              <Undo2 className="h-3 w-3 mr-1" /> Undo
+                            </Button>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                      {isOpen && (
+                        <TableRow key={`${r.id}-detail`} className="bg-muted/30">
+                          <TableCell></TableCell>
+                          <TableCell colSpan={7} className="text-xs space-y-1 py-3">
+                            <div>
+                              <span className="text-muted-foreground">Row id:</span>{" "}
+                              <span className="font-mono">{r.row_id}</span>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">Prior → New:</span>{" "}
+                              <span className="font-mono">
+                                {String(priorAcct ?? "∅")} → {String(newAcct ?? "∅")}
+                              </span>
+                            </div>
+                            {r.reasoning ? (
+                              <div>
+                                <span className="text-muted-foreground">Why:</span> {r.reasoning}
+                              </div>
+                            ) : (
+                              <div className="text-muted-foreground italic">
+                                No reasoning recorded for this change.
+                              </div>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </>
                   );
                 })}
               </TableBody>
