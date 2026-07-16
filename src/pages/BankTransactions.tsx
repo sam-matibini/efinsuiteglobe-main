@@ -1851,6 +1851,25 @@ export default function BankTransactions() {
         defaultBankAccountId={effectiveBankAccountId}
       />
 
+      {/* Phase 3 — AI categorization */}
+      <AICategorizeDialog
+        open={aiCategorizeOpen}
+        onOpenChange={setAiCategorizeOpen}
+        transactions={
+          (selectedTransactions.length > 0
+            ? selectedTransactions
+            : filteredTransactions.filter((t) => !t.gl_account_id)
+          ).map((t) => ({
+            id: t.id,
+            description: t.description ?? null,
+            amount: t.amount as number,
+            transaction_type: t.transaction_type ?? null,
+            payee_payor: (t as { payee_payor?: string | null }).payee_payor ?? null,
+          }))
+        }
+        onApplied={() => refetch()}
+      />
+
       {/* Match Payment Dialog for Credit Cards */}
       <MatchPaymentDialog
         open={matchDialogOpen}
