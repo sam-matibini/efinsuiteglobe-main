@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import type { ComparativeFinancialData } from './generateCompilationPdfEnhanced';
+import { isRetainedEarningsOrCYE, sumEquityExcludingREandCYE, type ComparativeFinancialData } from './generateCompilationPdfEnhanced';
 import type { CompilationReport } from '@/hooks/useCompilationReports';
 
 type ExecSlot = {
@@ -226,18 +226,45 @@ function buildBalanceSheetSheet(data: ComparativeFinancialData, hideZeroBalances
 
   rows.push([]);
   rows.push(['EQUITY']); sectionRows.add(rows.length - 1);
-  addAccounts(cur.equity, prior?.equity, 'credit');
-  rows.push(hasPrior ? ['Net Income (Current Period)', fmt(cur.netIncome), fmt(prior?.netIncome ?? 0)] : ['Net Income (Current Period)', fmt(cur.netIncome)]);
-  rows.push(hasPrior ? ['Total Equity', fmt(cur.totalEquity), fmt(prior?.totalEquity ?? 0)] : ['Total Equity', fmt(cur.totalEquity)]);
-  totalRows.add(rows.length - 1);
 
-  rows.push([]);
-  rows.push(
-    hasPrior
-      ? ['Total Liabilities and Equity', fmt(cur.totalLiabilities + cur.totalEquity), fmt((prior?.totalLiabilities ?? 0) + (prior?.totalEquity ?? 0))]
-      : ['Total Liabilities and Equity', fmt(cur.totalLiabilities + cur.totalEquity)]
-  );
-  totalRows.add(rows.length - 1);
+  const hasReClosing = typeof cur.reClosingBalance === 'number';
+  if (hasReClosing) {
+    // Canonical formula: filter out RE + CYE, then add reClosingBalance
+    const curEquityFiltered = cur.equity.filter(a => !isRetainedEarningsOrCYE(a));
+    const priorEquityFiltered = prior?.equity.filter(a => !isRetainedEarningsOrCYE(a));
+    addAccounts(curEquityFiltered, priorEquityFiltered, 'credit');
+    const reCur = cur.reClosingBalance ?? 0;
+    const rePrior = prior?.reClosingBalance ?? 0;
+    rows.push(hasPrior ? ['Retained Earnings', fmt(reCur), fmt(rePrior)] : ['Retained Earnings', fmt(reCur)]);
+    const totalEquityCur = sumEquityExcludingREandCYE(cur.equity) + reCur;
+    const totalEquityPrior = prior ? sumEquityExcludingREandCYE(prior.equity) + rePrior : 0;
+    rows.push(hasPrior ? ['Total Equity', fmt(totalEquityCur), fmt(totalEquityPrior)] : ['Total Equity', fmt(totalEquityCur)]);
+    totalRows.add(rows.length - 1);
+
+    rows.push([]);
+    rows.push(
+      hasPrior
+        ? ['Total Liabilities and Equity', fmt(cur.totalLiabilities + totalEquityCur), fmt((prior?.totalLiabilities ?? 0) + totalEquityPrior)]
+        : ['Total Liabilities and Equity', fmt(cur.totalLiabilities + totalEquityCur)]
+    );
+    totalRows.add(rows.length - 1);
+  } else {
+    // Legacy fallback
+    addAccounts(cur.equity, prior?.equity, 'credit');
+    rows.push(hasPrior ? ['Net Income (Current Period)', fmt(cur.netIncome), fmt(prior?.netIncome ?? 0)] : ['Net Income (Current Period)', fmt(cur.netIncome)]);
+    const totalEquityCur = cur.totalEquity + cur.netIncome;
+    const totalEquityPrior = prior ? prior.totalEquity + prior.netIncome : 0;
+    rows.push(hasPrior ? ['Total Equity', fmt(totalEquityCur), fmt(totalEquityPrior)] : ['Total Equity', fmt(totalEquityCur)]);
+    totalRows.add(rows.length - 1);
+
+    rows.push([]);
+    rows.push(
+      hasPrior
+        ? ['Total Liabilities and Equity', fmt(cur.totalLiabilities + totalEquityCur), fmt((prior?.totalLiabilities ?? 0) + totalEquityPrior)]
+        : ['Total Liabilities and Equity', fmt(cur.totalLiabilities + totalEquityCur)]
+    );
+    totalRows.add(rows.length - 1);
+  }
 
   const ws = XLSX.utils.aoa_to_sheet(rows);
   setCols(ws, [44, 18, 18]);

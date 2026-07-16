@@ -78,6 +78,51 @@ function mergeBalanceSheetAccounts(
   return Array.from(merged.entries()).map(([name, data]) => ({ name, ...data }));
 }
 
+/**
+ * Canonical equity classifier used across compilation exports.
+ * Returns true if the account should be EXCLUDED from the "other equity" list
+ * because it represents Retained Earnings or Current Year Earnings — those are
+ * replaced by the Statement of Retained Earnings closing balance.
+ *
+ * Predicates mirror AICompilationDialog.tsx and BalanceSheet.tsx.
+ */
+export function isRetainedEarningsOrCYE(acc: { code?: string | null; name?: string | null }): boolean {
+  const code = acc.code ?? '';
+  const nameLower = (acc.name ?? '').toLowerCase();
+  if (
+    code === '3-00-202' ||
+    nameLower.includes('current year earnings') ||
+    nameLower.includes('current year excess') ||
+    nameLower.includes('current year surplus') ||
+    nameLower.includes('excess (deficiency)')
+  ) return true;
+  if (
+    code === '3-00-201' ||
+    nameLower === 'retained earnings' ||
+    nameLower.includes('accumulated deficit') ||
+    nameLower.includes('unrestricted net assets') ||
+    nameLower.includes('accumulated surplus') ||
+    nameLower.includes('unrestricted funds') ||
+    nameLower.includes('accumulated funds')
+  ) return true;
+  return false;
+}
+
+/**
+ * Sum "other equity" accounts (excluding RE + CYE) with proper contra-equity
+ * sign handling. Equity is credit-normal by default; debit-normal accounts
+ * (e.g., treasury stock, owner's drawings) are subtracted.
+ */
+export function sumEquityExcludingREandCYE(
+  equity: Array<{ code?: string | null; name?: string | null; normal_balance?: string | null; calculated_balance: number }>
+): number {
+  return equity.reduce((sum, a) => {
+    if (isRetainedEarningsOrCYE(a)) return sum;
+    const sign = a.normal_balance === 'debit' ? -1 : 1;
+    return sum + (Number(a.calculated_balance) || 0) * sign;
+  }, 0);
+}
+
 
 import { aspeNoteTemplates, getFrameworkNoteTemplates, CompilationReport, resolveNoteTemplate, NoteTemplateContext } from '@/hooks/useCompilationReports';
 
@@ -149,6 +194,7 @@ export interface ComparativeFinancialData {
       totalLiabilities: number;
       totalEquity: number;
       netIncome: number;
+      reClosingBalance?: number;
     };
     incomeStatement: {
       income: Array<{ name: string; calculated_balance: number }>;
@@ -175,6 +221,7 @@ export interface ComparativeFinancialData {
       totalLiabilities: number;
       totalEquity: number;
       netIncome: number;
+      reClosingBalance?: number;
     };
     incomeStatement: {
       income: Array<{ name: string; calculated_balance: number }>;
@@ -1070,24 +1117,53 @@ Readers are cautioned that these statements may not be appropriate for their pur
   yPos += 6;
   
   doc.setFont('helvetica', 'normal');
-  mergeBalanceSheetAccounts(currentBS.equity, priorBS?.equity).forEach(eq => {
+
+  // Canonical formula (matches BalanceSheet.tsx and AICompilationDialog validation):
+  //   totalEquity = Σ(equity excluding RE + CYE, signed by normal_balance) + reClosingBalance
+  // reClosingBalance comes from the Statement of Retained Earnings RPC — it
+  // already contains Net Income and prior direct RE adjustments, so we must
+  // NOT render a separate "Current Year Earnings" line here.
+  const hasReClosing = typeof currentBS.reClosingBalance === 'number';
+
+  // Filter out RE and CYE from the displayed equity account list. If we don't
+  // have a canonical RE closing balance from the RPC, fall back to the legacy
+  // behavior so older callers keep working.
+  const equityToRender = mergeBalanceSheetAccounts(
+    hasReClosing ? currentBS.equity.filter(a => !isRetainedEarningsOrCYE(a)) : currentBS.equity,
+    hasReClosing && priorBS ? priorBS.equity.filter(a => !isRetainedEarningsOrCYE(a)) : priorBS?.equity,
+  );
+  equityToRender.forEach(eq => {
     if (!shouldHideLine(eq.currentBalance, eq.priorBalance)) {
       renderLineItem(eq.name, eq.currentBalance, eq.priorBalance || undefined, 5);
     }
   });
-  
-  // Current year earnings if applicable
-  if (currentBS.netIncome !== 0) {
-    renderLineItem(t.currentYearEarnings, currentBS.netIncome, priorBS?.netIncome, 5);
+
+  let totalEquityCurrent: number;
+  let totalEquityPrior: number;
+
+  if (hasReClosing) {
+    const reCurrent = currentBS.reClosingBalance ?? 0;
+    const rePrior = priorBS?.reClosingBalance ?? 0;
+    // Show a single Retained Earnings line at the RE closing balance
+    renderLineItem(t.retainedEarnings, reCurrent, priorBS ? rePrior : undefined, 5);
+
+    const otherEquityCurrent = sumEquityExcludingREandCYE(currentBS.equity);
+    const otherEquityPrior = priorBS ? sumEquityExcludingREandCYE(priorBS.equity) : 0;
+    totalEquityCurrent = otherEquityCurrent + reCurrent;
+    totalEquityPrior = otherEquityPrior + rePrior;
+  } else {
+    // Legacy fallback
+    if (currentBS.netIncome !== 0) {
+      renderLineItem(t.currentYearEarnings, currentBS.netIncome, priorBS?.netIncome, 5);
+    }
+    totalEquityCurrent = currentBS.totalEquity + currentBS.netIncome;
+    totalEquityPrior = priorBS ? priorBS.totalEquity + priorBS.netIncome : 0;
   }
-  
-  // Total Equity
-  const totalEquityCurrent = currentBS.totalEquity + currentBS.netIncome;
-  const totalEquityPrior = priorBS ? priorBS.totalEquity + priorBS.netIncome : 0;
+
   renderSubtotal(t.totalEquity, totalEquityCurrent, totalEquityPrior);
-  
+
   // TOTAL LIABILITIES AND EQUITY
-  renderGrandTotal(t.totalLiabAndEquity, currentBS.totalLiabilities + totalEquityCurrent, 
+  renderGrandTotal(t.totalLiabAndEquity, currentBS.totalLiabilities + totalEquityCurrent,
     (priorBS?.totalLiabilities ?? 0) + totalEquityPrior);
   
   addPageFooter();
