@@ -600,6 +600,7 @@ export default function AccountantDashboard() {
           totalLiabilities: balanceSheet.totalLiabilities,
           totalEquity: balanceSheet.totalEquity,
           netIncome: incomeStatement.netIncome,
+          reClosingBalance: currentReClosingBalance,
         },
         incomeStatement: {
           income: incomeStatement.income,
