@@ -97,7 +97,7 @@ export function useCategorizationInsights(
           suggested_account_id: string | null;
           final_account_id: string;
           count: number;
-          context: "bank" | "ap";
+          context: "bank" | "ap" | "revenue";
         }
       >();
       for (const r of fb) {
