@@ -113,6 +113,7 @@ export default function BankTransactions() {
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [extractionDialogOpen, setExtractionDialogOpen] = useState(false);
   const [aiExtractorOpen, setAiExtractorOpen] = useState(false);
+  const [aiCategorizeOpen, setAiCategorizeOpen] = useState(false);
   const [importHistoryOpen, setImportHistoryOpen] = useState(false);
   const [createRuleDialogOpen, setCreateRuleDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
