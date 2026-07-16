@@ -40,6 +40,10 @@ import { useMappingTemplates, MappingTemplate } from '@/hooks/useMappingTemplate
 import * as XLSX from 'xlsx';
 import { AdvancedMappingEngine, MappingConfig, ColumnMappingAdvanced } from './AdvancedMappingEngine';
 import { MappingPreviewDialog } from './MappingPreviewDialog';
+import {
+  useAliceSheetsWorkbooks,
+  downloadAliceSheetsWorkbook,
+} from '@/hooks/useAliceSheetsWorkbooks';
 
 type ExtractionStep = 'upload' | 'extracting' | 'mapping' | 'preview' | 'complete';
 
@@ -82,9 +86,14 @@ export function StatementExtractionDialog({
   const [mappingConfig, setMappingConfig] = useState<MappingConfig | null>(null);
   const [showPreview, setShowPreview] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
-  
+  const [sourceMode, setSourceMode] = useState<'file' | 'aisheets'>('file');
+  const [selectedWorkbookPath, setSelectedWorkbookPath] = useState<string | null>(null);
+  const [loadingWorkbook, setLoadingWorkbook] = useState(false);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { convertPdfToSpreadsheet, isConverting, progress } = usePdfToSpreadsheet();
+  const { data: aliceWorkbooks = [], isLoading: workbooksLoading } =
+    useAliceSheetsWorkbooks(open && sourceMode === 'aisheets');
   
   // Load templates from database
   const { 
@@ -246,6 +255,45 @@ export function StatementExtractionDialog({
       setStep('upload');
     }
   }, [files, maxPages, useAI, convertPdfToSpreadsheet]);
+
+  const loadFromAliceSheets = useCallback(async () => {
+    if (!selectedWorkbookPath) {
+      toast.error('Select an AI Sheets workbook first');
+      return;
+    }
+    const wb = aliceWorkbooks.find((w) => w.path === selectedWorkbookPath);
+    if (!wb) return;
+    setLoadingWorkbook(true);
+    try {
+      const buf = await downloadAliceSheetsWorkbook(selectedWorkbookPath);
+      const workbook = XLSX.read(buf);
+      const allData: Record<string, unknown>[] = [];
+      const allColumns = new Set<string>();
+      for (const sheetName of workbook.SheetNames) {
+        const sheet = workbook.Sheets[sheetName];
+        const json = XLSX.utils.sheet_to_json(sheet) as Record<string, unknown>[];
+        for (const row of json) {
+          allData.push({ ...row, _sourceFile: `AI Sheets: ${wb.name}` });
+          Object.keys(row).forEach((k) => allColumns.add(k));
+        }
+      }
+      if (allData.length === 0) {
+        toast.error('Workbook has no data rows');
+        return;
+      }
+      setExtractedData(allData);
+      setExtractedColumns(Array.from(allColumns));
+      setStep('mapping');
+      toast.success(`Loaded ${allData.length} rows from ${wb.name}`);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Failed to load workbook';
+      toast.error(msg);
+    } finally {
+      setLoadingWorkbook(false);
+    }
+  }, [selectedWorkbookPath, aliceWorkbooks]);
+
+
   
   const handleMappingComplete = useCallback((config: MappingConfig) => {
     setMappingConfig(config);
@@ -304,6 +352,97 @@ export function StatementExtractionDialog({
               </DialogHeader>
               
               <div className="flex-1 p-6 pt-0 space-y-6 overflow-y-auto">
+                {/* Source mode toggle */}
+                <div className="inline-flex rounded-lg border border-border bg-muted/30 p-1">
+                  <button
+                    type="button"
+                    onClick={() => setSourceMode('file')}
+                    className={cn(
+                      'px-3 py-1.5 text-sm rounded-md transition-colors flex items-center gap-1.5',
+                      sourceMode === 'file'
+                        ? 'bg-background shadow-sm font-medium'
+                        : 'text-muted-foreground hover:text-foreground',
+                    )}
+                  >
+                    <FileUp className="h-4 w-4" />
+                    File upload
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSourceMode('aisheets')}
+                    className={cn(
+                      'px-3 py-1.5 text-sm rounded-md transition-colors flex items-center gap-1.5',
+                      sourceMode === 'aisheets'
+                        ? 'bg-background shadow-sm font-medium'
+                        : 'text-muted-foreground hover:text-foreground',
+                    )}
+                  >
+                    <FileSpreadsheet className="h-4 w-4" />
+                    From AI Sheets
+                  </button>
+                </div>
+
+                {sourceMode === 'aisheets' && (
+                  <div className="space-y-3 p-4 rounded-lg border border-primary/20 bg-primary/5">
+                    <div className="flex items-center gap-2">
+                      <Brain className="h-4 w-4 text-primary" />
+                      <h4 className="font-medium text-sm">Load from Alice AI Sheets</h4>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Feed rows from an AI Sheets workbook you already extracted or cleaned up, and skip re-uploading the PDF.
+                    </p>
+                    <Select
+                      value={selectedWorkbookPath ?? ''}
+                      onValueChange={(v) => setSelectedWorkbookPath(v || null)}
+                      disabled={workbooksLoading || aliceWorkbooks.length === 0}
+                    >
+                      <SelectTrigger className="h-9">
+                        <SelectValue
+                          placeholder={
+                            workbooksLoading
+                              ? 'Loading workbooks…'
+                              : aliceWorkbooks.length === 0
+                                ? 'No AI Sheets workbooks found'
+                                : 'Select a workbook…'
+                          }
+                        />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {aliceWorkbooks.map((wb) => (
+                          <SelectItem key={wb.path} value={wb.path}>
+                            <div className="flex items-center gap-2">
+                              <FileSpreadsheet className="h-3.5 w-3.5 text-green-600" />
+                              <span className="truncate max-w-[320px]">{wb.name}</span>
+                              <span className="text-xs text-muted-foreground">
+                                {new Date(wb.uploaded_at).toLocaleDateString()}
+                              </span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      onClick={loadFromAliceSheets}
+                      disabled={!selectedWorkbookPath || loadingWorkbook}
+                      className="w-full"
+                    >
+                      {loadingWorkbook ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Loading workbook…
+                        </>
+                      ) : (
+                        <>
+                          <Zap className="h-4 w-4 mr-2" />
+                          Load rows into mapper
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                )}
+
+                {sourceMode === 'file' && (
+                  <>
                 {/* Upload Zone */}
                 <input
                   ref={fileInputRef}
@@ -484,6 +623,8 @@ export function StatementExtractionDialog({
                     </div>
                   </div>
                 </div>
+                  </>
+                )}
               </div>
               
               {/* Footer */}
@@ -491,14 +632,16 @@ export function StatementExtractionDialog({
                 <Button variant="outline" onClick={() => onOpenChange(false)}>
                   Cancel
                 </Button>
-                <Button 
-                  onClick={processFiles}
-                  disabled={files.length === 0 || files.every(f => f.status !== 'pending')}
-                >
-                  <FileSearch className="h-4 w-4 mr-1" />
-                  Extract Data
-                  <ChevronRight className="h-4 w-4 ml-1" />
-                </Button>
+                {sourceMode === 'file' && (
+                  <Button 
+                    onClick={processFiles}
+                    disabled={files.length === 0 || files.every(f => f.status !== 'pending')}
+                  >
+                    <FileSearch className="h-4 w-4 mr-1" />
+                    Extract Data
+                    <ChevronRight className="h-4 w-4 ml-1" />
+                  </Button>
+                )}
               </div>
             </>
           )}

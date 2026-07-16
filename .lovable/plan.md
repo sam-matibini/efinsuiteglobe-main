@@ -1,69 +1,46 @@
-# Phase 8 — Categorization surfaces on documents & explainability (DONE)
+## Phase 9 — Statement Extraction: Payment classification fix + AI Sheets feed
 
-Phase 7 shipped revenue-side AI categorization plus an undo audit log. The pipeline is now solid but two gaps remain: users cannot trigger AI categorization directly from invoice / journal / PO detail views, and when auto-apply changes an account there is no "why did the AI pick this?" surface. Phase 8 closes both.
+Two problems observed on the RBC Avion Visa upload (screenshot):
 
-## What gets built
+1. Statements with a **single signed AMOUNT column** (RBC Avion, Amex, many CC statements) confuse the extractor. Because the tool schema forces a positive `debit`/`credit` split and the model has no separate credit column to read from, `-$1,000.00 PAYMENT - THANK YOU` gets stuffed into `debit` → downstream renamed to `Charge` → imported as a charge. The Alice import path also classifies CC rows by amount sign (`rawAmount >= 0 ? 'charge' : 'payment'`), bypassing the project's description-first rule (see `credit-card-import-sign-convention` memory).
+2. There is no way to feed rows already cleaned in Alice AI Sheets back into the Statement Extraction Engine as an alternative to re-uploading the PDF.
 
-### 1. Reusable "Categorize lines" dialog
-- Rename `src/components/purchases/AICategorizeAPDialog.tsx` conceptually to a shared component: extract the review/apply UI into `src/components/ai/AICategorizeLinesDialog.tsx` that accepts:
-  - `context: "ap" | "revenue"`
-  - `target: "bill" | "expense" | "po" | "invoice" | "journal"`
-  - `parentId?: string` — when set, only load uncategorized lines belonging to that parent (single invoice/bill/PO/journal)
-- Existing bill/expense usage keeps working via a thin wrapper that re-exports with the AP defaults, so no external call sites break.
-- Hook `useLineCategorization` generalizes `useAPCategorization`: routes to `ai-categorize-ap-lines` for AP targets and `ai-categorize-revenue-lines` for revenue targets, and knows which column to update per target (bill/expense → `expense_account_id`, po → `gl_account_id`, invoice → `income_account_id`, journal → `account_id`).
+### Fix 1 — Correct payment/charge classification end-to-end
 
-### 2. Detail-view buttons
-Add an "AI Categorize Lines" button to each detail view. The button opens the dialog scoped to that parent (`parentId`).
-- Invoice detail
-- Purchase Order detail
-- Journal Entry detail
-- (Bill detail and Expense Claim detail already have entry points — no change.)
-Each button is gated by `useIsReadOnly` and only shown when at least one line has a null target account.
+**Edge function `pdf-to-spreadsheet/index.ts`**
+- Extend `STATEMENT_TOOL` with an optional `signedAmount` field and a `direction: "payment" | "charge" | "debit" | "credit"` hint per row.
+- Update `STATEMENT_PROMPT` with an explicit branch: "If the statement has a single AMOUNT column with signs (e.g. RBC Avion), read the sign — negative = payment/credit, positive = charge/debit — AND read the description ('PAYMENT', 'PAIEMENT', 'THANK YOU', 'AUTOPAY' → payment/credit). Do NOT force everything into `debit`."
+- Post-processing in `tryStatement`: when only one side is populated and the description matches a payment/refund keyword list (payment, paiement, thank you, autopay, refund, credit memo, reversal, chargeback), move the value from `debit` → `credit`. Log a `validationWarnings` note.
+- When rows are relabelled to Charge/Payment for the CC sheet, run the same keyword scan and move Charge→Payment when the description is clearly a payment. Reconciliation totals recomputed after the swap.
 
-### 3. Explainability panel
-Every auto-applied change records `new_value`, `confidence`, `source`, and (from Phase 5) a Gemini `reasoning` field cached alongside the suggestion. Phase 8 exposes this:
-- New helper column in `ai_categorization_applications`: `reasoning text` (nullable). Backfill on write from the suggestion's `reasoning`.
-- `AICategorizationHistory` page rows gain an expandable "Why?" row that shows source, confidence, prior → new account, and reasoning.
-- Inline hint on `AICategorizeLinesDialog` — when a suggestion has reasoning, show it in a tooltip next to the confidence badge.
+**Alice import handler `AIAccountingAssistant.tsx::handleExtractionComplete` (CC branch, line 315-340)**
+- Replace `transactionType = rawAmount >= 0 ? 'charge' : 'payment'` with a call to `classifyCreditCardType` from `src/lib/creditCardImportNormalizer.ts`, passing description, explicit type column (if the row already carries `transaction_type`), and signed amount as fallback. This aligns Alice's path with the standard CC import normalizer per the existing memory.
+- Same call is used for rows fed from AI Sheets (Fix 2).
 
-### 4. Health widget on revenue lists
-- Mount the existing `AICategorizationHealth` widget on the Invoices list and Journal Entries list, filtered to `context="revenue"` so acceptance/override stats are reported separately from AP and bank.
-- The health widget already supports a `context` prop; extend it to accept `"revenue"` as a valid value.
+### Fix 2 — Load AI Sheets rows as an alternative feed
 
-### 5. Nav surface
-- Add a "Categorization history" entry under the existing AI section of the sidebar (alongside "Categorization insights") so `/ai/categorization-history` is reachable without typing the URL.
+`StatementExtractionDialog.tsx` currently accepts file uploads only. Add a second entry point:
 
-## Schema changes
+- New "Load from AI Sheets" section on the upload step, alongside the file dropzone.
+- A dropdown listing recent AI Sheets workbooks for the current organization. Source: list objects in the existing `docsign-documents` storage bucket under `ai-sheets/` (already written by `pdf-to-spreadsheet`), sorted by upload time, showing filename + date.
+- Selecting a workbook fetches the `.xlsx` via signed URL, parses it with the already-imported `xlsx` library, populates `extractedData` and `extractedColumns`, and jumps straight to the `mapping` step (skipping extraction). A `_sourceFile` marker is added so the downstream import audit trail shows "AI Sheets: <name>".
+- Toggle chip at the top of the dialog: **File upload** | **AI Sheets** — visual separation, single state machine underneath.
+- Small badge on imported rows indicating the source ("PDF" vs "AI Sheets") for review.
 
-Small additive migration:
+Optional (nice-to-have, kept in scope): remember the last-used AI Sheets workbook per statement type in localStorage so the user doesn't hunt for it each time.
 
-```sql
-ALTER TABLE public.ai_categorization_applications
-  ADD COLUMN IF NOT EXISTS reasoning text;
-```
+### Files
 
-No new tables, no policy changes.
+**Edited**
+- `supabase/functions/pdf-to-spreadsheet/index.ts` — prompt + tool schema + post-swap logic
+- `src/components/dashboard/AIAccountingAssistant.tsx` — use `classifyCreditCardType` in CC import
+- `src/components/banking/StatementExtractionDialog.tsx` — add AI Sheets source picker + xlsx fetch-and-parse
+- `src/lib/creditCardImportNormalizer.ts` — no logic change, just export used by the new call site (already exported per memory)
 
-## Out of scope
-- Editing auto-apply settings per-scope threshold (org-wide threshold stays).
-- AI categorization for recurring invoices, recurring bills, or quotes.
-- Explainability for rule-based (non-AI) categorizations — reasoning stays null.
+**Created**
+- `src/hooks/useAliceSheetsWorkbooks.ts` — lists `ai-sheets/*.xlsx` from `docsign-documents` bucket, returns `{ path, name, uploaded_at, size, signed_url }`.
 
-## Files
-
-Created:
-- `src/components/ai/AICategorizeLinesDialog.tsx` — generalized dialog
-- `src/hooks/useLineCategorization.ts` — generalized categorization hook
-- Migration adding `reasoning` column
-
-Edited:
-- `src/components/purchases/AICategorizeAPDialog.tsx` → becomes a thin wrapper delegating to the new dialog with `context="ap"`
-- `supabase/functions/ai-categorize-transactions/index.ts`, `ai-categorize-ap-lines/index.ts`, `ai-categorize-revenue-lines/index.ts` — persist `reasoning` on the application row
-- `src/pages/AICategorizationHistory.tsx` — expandable "Why?" row
-- `src/components/banking/AICategorizationHealth.tsx` — accept `"revenue"` context
-- Invoice detail component — add button
-- Purchase Order detail component — add button
-- Journal Entry detail component — add button
-- Invoices list + Journal Entries list — mount health widget with revenue context
-- Sidebar nav config — add "Categorization history" link
-- `.lovable/plan.md` — Phase 8 entry
+### Out of scope
+- Structural changes to the CC transactions schema or GL posting logic.
+- Reprocessing historical mis-classified transactions (users can fix via the existing edit flow; a bulk fixer would be a separate phase if requested).
+- Multi-card sub-account splitting on RBC Avion (each cardholder ending in 4977/4969) — the current single-credit-card target will be kept; noted for a future phase.

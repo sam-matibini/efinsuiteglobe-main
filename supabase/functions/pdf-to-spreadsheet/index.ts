@@ -141,13 +141,15 @@ Call the tool \`submit_bank_statement_extraction\` exactly once with the full re
 
 HARD RULES — read carefully:
 
-1. Look at the column headers on the statement to identify which column is "Cheques & Debits / Withdrawals / Debit" and which is "Deposits & Credits / Deposit / Credit". The position of a number under those headers is the ONLY truth — never infer the side from sign, description, or guessing.
-2. Each transaction line maps to EXACTLY ONE of \`debit\` or \`credit\`. The other side MUST be 0. Both values must be POSITIVE numbers (no negatives, no parentheses).
-3. EXCLUDE every summary line: "Opening balance", "Closing balance", "Previous balance", "New balance", "Total deposits & credits", "Total cheques & debits", "Total fees", "Period total", "Statement total". Put those values into the top-level \`openingBalance\`, \`closingBalance\`, \`totalDebits\`, \`totalCredits\` fields instead. They must NOT appear inside \`transactions\`.
+1. FIRST, identify the amount-column layout of the statement:
+   (a) TWO-COLUMN layout: separate "Debit/Withdrawals/Cheques" and "Credit/Deposits" columns. Position under the header is the ONLY truth — never infer side from sign, description, or guessing.
+   (b) SINGLE-COLUMN layout (common on credit-card statements like RBC Avion Visa, Amex): one "AMOUNT ($)" column with SIGNED values. Negative amounts mean money IN (payments to the card, refunds, credits). Positive amounts mean money OUT (charges, fees, interest). In this layout, ALSO scan the description: rows containing "PAYMENT", "PAIEMENT", "THANK YOU", "MERCI", "AUTOPAY", "BILL PAYMENT", "TRANSFER TO CARD" are payments/credits regardless of the sign the model perceives.
+2. Each transaction line maps to EXACTLY ONE of \`debit\` or \`credit\`. The other side MUST be 0. Both values must be POSITIVE numbers (no negatives, no parentheses). For credit-card statements: put payments/refunds/credit-memo rows in \`credit\`; put purchases/fees/interest in \`debit\`.
+3. EXCLUDE every summary line: "Opening balance", "Closing balance", "Previous statement balance", "New balance", "Total deposits & credits", "Total cheques & debits", "Total fees", "Subtotal of monthly activity", "Period total", "Statement total". Put those into the top-level \`openingBalance\`, \`closingBalance\`, \`totalDebits\`, \`totalCredits\` fields instead. They must NOT appear inside \`transactions\`.
 4. Multi-line descriptions belong to the SAME transaction — concatenate them with a single space.
 5. Dates: use YYYY-MM-DD. Year comes from the statement period if the line omits it.
-6. Do not invent transactions. Do not skip transactions. Every row in the "Account Activity Details" table that has an amount in the Debit or Credit column must appear.
-7. Self-check before returning: sum of all \`debit\` values must equal printed \`totalDebits\` within 1 cent; sum of all \`credit\` values must equal printed \`totalCredits\` within 1 cent. If they don't match, re-read the columns — you have swapped a row.
+6. Do not invent transactions. Do not skip transactions. Every posted transaction row must appear.
+7. Self-check before returning: sum of all \`debit\` values must equal printed \`totalDebits\` within 1 cent; sum of all \`credit\` values must equal printed \`totalCredits\` within 1 cent. If they don't match, re-read — you probably put a payment on the wrong side.
 
 Return the tool call only. No prose.`;
 
@@ -335,6 +337,26 @@ serve(async (req) => {
           Balance: parseNum(t.balance) || null,
         });
       }
+
+      // Description-based side correction (fixes CC statements with a single
+      // signed AMOUNT column where the model dumped payments into `debit`).
+      const PAYMENT_KW = /(payment|paiement|thank\s*you|merci|autopay|bill\s*payment|transfer\s*to\s*card|\bpmt\b)/i;
+      const REFUND_KW = /(refund|return\b|returned|credit\s*memo|reversal|chargeback|merchant\s*credit)/i;
+      let swapped = 0;
+      for (const r of cleaned) {
+        const desc = String(r.Description ?? '');
+        const isPmtLike = PAYMENT_KW.test(desc) || REFUND_KW.test(desc);
+        if (isPmtLike && (r.Debit as number) > 0 && (r.Credit as number) === 0) {
+          r.Credit = r.Debit;
+          r.Debit = 0;
+          swapped++;
+        }
+      }
+      if (swapped > 0) {
+        validationWarnings.push(`Reclassified ${swapped} payment/refund row(s) from debit to credit based on description.`);
+      }
+
+
 
       // Reconcile against printed totals
       const sumDebit = cleaned.reduce((s, r) => s + (r.Debit as number), 0);
