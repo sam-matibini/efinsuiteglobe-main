@@ -128,8 +128,9 @@ Deno.serve(async (req) => {
       .from("ai_setup_logs")
       .select("id", { count: "exact", head: true })
       .eq("organization_id", body.organization_id)
-      .eq("action", "ai-extract-bank-statement")
+      .eq("setup_type", "bank_statement_extraction")
       .gte("created_at", since);
+
 
     if ((count ?? 0) >= DAILY_CAP) {
       return json({ error: `Daily extraction cap reached (${DAILY_CAP}/day)` }, 429);
