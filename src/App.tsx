@@ -377,6 +377,7 @@ const AppRoutes = () => (
         <Route path="/banking/credit-cards/reconcile" element={<ProtectedRoute><PageWrapper><CreditCardReconciliation /></PageWrapper></ProtectedRoute>} />
         <Route path="/banking/transactions" element={<ProtectedRoute><PageWrapper><BankTransactions /></PageWrapper></ProtectedRoute>} />
         <Route path="/ai/categorization-insights" element={<ProtectedRoute><PageWrapper><AICategorizationInsights /></PageWrapper></ProtectedRoute>} />
+        <Route path="/ai/categorization-history" element={<ProtectedRoute><PageWrapper><AICategorizationHistory /></PageWrapper></ProtectedRoute>} />
 
     <Route path="/banking/rules" element={<ProtectedRoute><PageWrapper><TransactionRules /></PageWrapper></ProtectedRoute>} />
     <Route path="/banking/reconciliation" element={<ProtectedRoute><PageWrapper><Reconciliation /></PageWrapper></ProtectedRoute>} />
