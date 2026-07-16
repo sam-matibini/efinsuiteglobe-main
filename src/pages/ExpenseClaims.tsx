@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Plus, Search, Download, MoreHorizontal, FileText, Send, Check, X, DollarSign, Building2, Paperclip } from 'lucide-react';
+import { Plus, Search, Download, MoreHorizontal, FileText, Send, Check, X, DollarSign, Building2, Paperclip, Sparkles } from 'lucide-react';
 import { PurchaseAttachmentsDialog } from '@/components/purchases/PurchaseAttachmentsDialog';
+import { AICategorizeAPDialog } from '@/components/purchases/AICategorizeAPDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
