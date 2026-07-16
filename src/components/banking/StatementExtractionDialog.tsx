@@ -623,6 +623,8 @@ export function StatementExtractionDialog({
                     </div>
                   </div>
                 </div>
+                  </>
+                )}
               </div>
               
               {/* Footer */}
@@ -630,14 +632,16 @@ export function StatementExtractionDialog({
                 <Button variant="outline" onClick={() => onOpenChange(false)}>
                   Cancel
                 </Button>
-                <Button 
-                  onClick={processFiles}
-                  disabled={files.length === 0 || files.every(f => f.status !== 'pending')}
-                >
-                  <FileSearch className="h-4 w-4 mr-1" />
-                  Extract Data
-                  <ChevronRight className="h-4 w-4 ml-1" />
-                </Button>
+                {sourceMode === 'file' && (
+                  <Button 
+                    onClick={processFiles}
+                    disabled={files.length === 0 || files.every(f => f.status !== 'pending')}
+                  >
+                    <FileSearch className="h-4 w-4 mr-1" />
+                    Extract Data
+                    <ChevronRight className="h-4 w-4 ml-1" />
+                  </Button>
+                )}
               </div>
             </>
           )}
