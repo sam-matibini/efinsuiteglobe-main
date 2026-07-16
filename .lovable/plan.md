@@ -1,4 +1,4 @@
-# Phase 7 — Revenue-side AI categorization & undo/rollback
+# Phase 7 — Revenue-side AI categorization & undo/rollback (DONE)
 
 Phases 3–6 covered AP/bank auto-categorization with feedback learning, safety rails, and scheduled sweeps. Phase 7 extends coverage to the revenue side (invoices, journal entries) and adds an undo/rollback surface so auto-applied categorizations are recoverable.
 
