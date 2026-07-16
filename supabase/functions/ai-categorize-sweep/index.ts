@@ -33,7 +33,7 @@ Deno.serve(async (req) => {
     for (const cfg of settingsList ?? []) {
       const orgId = cfg.organization_id as string;
       const scopes: string[] = cfg.auto_apply_scopes ?? [];
-      const summary: Record<string, number> = { bank: 0, bill: 0, expense: 0 };
+      const summary: Record<string, number> = { bank: 0, bill: 0, expense: 0, invoice: 0, journal: 0 };
 
       const invoke = async (path: string, body: unknown) => {
         const r = await fetch(`${Deno.env.get("SUPABASE_URL")!}/functions/v1/${path}`, {
