@@ -691,7 +691,7 @@ export default function AccountantDashboard() {
 
     // Legacy format for Word export
     const legacyFinancialData = {
-      balanceSheet: { ...balanceSheet, netIncome: incomeStatement.netIncome },
+      balanceSheet: { ...balanceSheet, netIncome: incomeStatement.netIncome, reClosingBalance: currentReClosingBalance },
       incomeStatement: { ...incomeStatement, totalCogs: incomeStatement.cogs.reduce((sum, c) => sum + Math.abs(c.calculated_balance), 0) },
       organizationName: organization?.name || 'Organization',
       leaseNotes: leaseNotes.length > 0 ? leaseNotes : undefined,
