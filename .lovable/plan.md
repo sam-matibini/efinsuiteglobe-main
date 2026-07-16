@@ -1,68 +1,59 @@
-# Fix Retained Earnings Statement — Remove non-CoA "Other" lines
-
 ## Problem
 
-The current Statement of Retained Earnings shows two lines — **Other additions** and **Other deductions** — that do not correspond to any chart-of-accounts codes. They are a synthetic bucket created by `calculate_retained_earnings_statement` to hold any direct posting hitting the Retained Earnings account (3-01-100-0002) that isn't a `CLOSE-*` system close.
+On the AI Compilation Report PDF, **Total Liabilities and Equity ≠ Total Assets**. The on-screen Balance Sheet balances correctly because it derives Total Equity from the Statement of Retained Earnings closing balance. The compilation PDF/Excel/Word exports use a different, legacy formula (`balanceSheet.totalEquity + netIncome`) that double-counts or omits pieces depending on where direct RE postings and CYE land in the raw GL sum.
 
-For Sunview Homes & Constructions, the postings behind those lines are:
+## Fix
 
-| Date       | Ref                | Dr        | Cr         | What it really is                    |
-|------------|--------------------|-----------|------------|--------------------------------------|
-| 2024-01-01 | JE-0007            | 60,743.39 |            | Opening BS setup (prior-year carry)  |
-| 2024-12-31 | JE-0008/0009/0010  | 3,309.76  | 2,334.82   | Year-end true-ups (prior periods)    |
-| 2024-12-31 | IMP-2024-MRMOZZG4  |           | 195,900.00 | Trial-balance import (opening equity)|
-| 2025-12-13 | CC-OB-0001         | 14,164.99 |            | RBC Avion Visa Business opening bal. |
-
-Net 2024 = **134,181.67 Cr** → currently shown as "Other additions" (wrong).
-Net 2025 = **14,164.99 Dr** → currently shown as "Other deductions" (wrong).
-
-Neither line maps to a real CoA account, so the statement is not ASPE-compliant.
-
-## Fix — two parts
-
-### 1. Reclass the credit-card opening balance to Due to Shareholders (data fix)
-
-Journal entry `CC-OB-0001` posted the 14,164.99 debit against Retained Earnings. It should have hit **`2-01-120-0002 — Due to Shareholders`** (liability), because the balance represents amounts the company owes the shareholder for personal card charges.
-
-Data change:
-- Update the RE line on `CC-OB-0001` to point to account `2-01-120-0002` (Due to Shareholders).
-- Keep debit/credit signs unchanged (liability increases via credit — so the entry becomes a credit to Due to Shareholders instead of a debit to RE, matched against the same offset already in the JE).
-- Fix the credit-card import routine so future CC opening balances default to Due to Shareholders (or a configurable liability), not Retained Earnings.
-
-### 2. Fold remaining direct-RE postings into Opening Retained Earnings (formula fix)
-
-After the reclass above, the only remaining direct-RE postings for 2024 are prior-year opening / trial-balance-import entries (JE-0007, JE-0008, JE-0009, JE-0010, IMP-2024-MRMOZZG4). Under ASPE these are **opening equity carryforward**, not current-period movements.
-
-Update `calculate_retained_earnings_statement` so:
+Make the compilation exports use the **same canonical equity formula** already documented in `AICompilationDialog.tsx` (lines 234–258) and used by `BalanceSheet.tsx`:
 
 ```
-Opening RE(Year N) = calculate_opening_retained_earnings(N)
-                   + Σ direct RE postings dated ≤ fiscal_year_start (Year N)
-                   + Σ prior-period-adjustment RE postings in Year N flagged as opening
+equityExcludingREandCYE = Σ equity accounts, excluding
+    3-00-201 / "Retained Earnings" / "Accumulated Deficit" /
+    "Unrestricted Net Assets" / "Accumulated Surplus" /
+    "Unrestricted Funds" / "Accumulated Funds"
+  and excluding
+    3-00-202 / "Current Year Earnings" / "Current Year Excess" /
+    "Current Year Surplus" / "Excess (Deficiency)"
+  (contra equity signed by normal_balance)
+
+totalEquity          = equityExcludingREandCYE + reClosingBalance
+totalLiabAndEquity   = totalLiabilities + totalEquity
 ```
 
-Simplest rule that fits Sunview's data and ASPE: **any non-`CLOSE-*` posting to the RE account counts toward Opening RE of the fiscal year it falls in**, not as a current-period movement. Remove the `other_additions` / `other_deductions` outputs entirely (return 0 for both, or drop them from the statement UI).
+`reClosingBalance` for both current and prior year comes from the already-fixed `calculate_retained_earnings_statement` RPC (via `useRetainedEarningsStatement`), which now correctly folds direct RE postings into opening and returns `opening + net_income − dividends`.
 
-Resulting 2024 Statement of RE:
+## Changes
 
-```
-Opening balance              134,181.67
-Net income (loss)             (7,461.12)
-Dividends declared           (54,000.00)
-Closing balance               72,720.55   ← flows into 2025 opening
-```
+### 1. `src/pages/AccountantDashboard.tsx` — pass RE closing balances into the export
 
-2025 opening becomes **72,720.55**, restoring true year-over-year continuity.
+- Read current-year and prior-year RE closing balances from `useRetainedEarningsStatement` (already in scope via `reCurrentStatement`; add prior-period statement fetch matching the comparative period end).
+- Extend `ComparativeFinancialData.currentYear.balanceSheet` and `.priorYear.balanceSheet` with a new field `reClosingBalance: number`.
+- Populate that field for both years before calling `generateEnhancedCompilationPDF`, `downloadCompilationExcel`, and `downloadCompilationWord`.
 
-## Deliverables
+### 2. `src/lib/generateCompilationPdfEnhanced.ts`
 
-1. **Migration** — new `calculate_retained_earnings_statement` that folds direct RE postings into opening balance and returns `other_additions = 0`, `other_deductions = 0`.
-2. **Data patch** — reclass `CC-OB-0001` line from `3-01-100-0002` to `2-01-120-0002`.
-3. **Import code fix** — `src/lib/creditCardImportNormalizer.ts` (and any callers) route opening balances to Due to Shareholders liability, not RE.
-4. **UI cleanup** — remove "Other additions" and "Other deductions" rows from Statement of RE in `src/pages/BalanceSheet.tsx` (both live view and Excel export) since they will always be 0 after the formula fix.
-5. **Verify** Balance Sheet still balances for both 2024 and 2025 with the new opening RE.
+- Add `reClosingBalance: number` to the `balanceSheet` shape inside `ComparativeFinancialData` (both `currentYear` and `priorYear`).
+- Replace the equity total block (currently lines 1073–1091) with the canonical formula:
+  - Filter `currentBS.equity` / `priorBS.equity` to exclude RE and CYE accounts (same code+name predicates as the dialog).
+  - Render remaining equity accounts as line items (contra-signed by `normal_balance`).
+  - Render a **Retained Earnings** line using `reClosingBalance` (do NOT also render a separate "Current Year Earnings" line — CYE is already inside `reClosingBalance`).
+  - Compute `totalEquity = equityExcludingREandCYE + reClosingBalance` for each period.
+  - Compute `totalLiabAndEquity = totalLiabilities + totalEquity`.
+- Remove the `+ currentBS.netIncome` addition when computing totals (the closing RE already contains net income).
+- Keep the Statement of Changes in Equity section unchanged; it already uses the RE opening/closing rollforward directly.
 
-## Questions before I build
+### 3. `src/lib/generateCompilationExcel.ts` and `src/lib/generateCompilationWord.ts`
 
-1. Confirm reclassing **all** the 2024 direct-RE postings (including the 12-31 true-ups JE-0008/0009/0010 for $-2,334.82 net) into Opening RE is what you want. The alternative is to keep only the 2024-01-01 and TB-import entries as opening and treat the year-end true-ups as ASPE prior-period adjustments (which is a legitimate SoRE line, but requires a `prior_period_adjustment` flag on journal entries — not currently in the schema).
-2. Confirm the CC-OB-0001 reclass target is **`2-01-120-0002 — Due to Shareholders`** (only match found in Sunview's CoA).
+- Apply the same equity-total substitution so Excel and Word exports match the PDF and the on-screen Balance Sheet.
+
+### 4. Regression guard
+
+- After changes, verify on the demo org that:
+  - PDF Total Liabilities + Total Equity == Total Assets (within $0.01) for both current and prior periods.
+  - The single "Retained Earnings" line in the PDF equals the Statement of RE closing balance shown later in the same report.
+  - No "Current Year Earnings" line is duplicated in the equity section.
+
+## Out of scope
+
+- No changes to `useFinancialReports`, `calculate_retained_earnings_statement`, or the on-screen Balance Sheet page — those are already correct.
+- No changes to notes, income statement, or cash flow sections.
