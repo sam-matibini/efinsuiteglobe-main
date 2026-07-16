@@ -355,8 +355,10 @@ export function MappingPreviewDialog({
     const debit = typeof out['debit'] === 'number' ? (out['debit'] as number) : 0;
     const credit = typeof out['credit'] === 'number' ? (out['credit'] as number) : 0;
     if ((out['amount'] === undefined || out['amount'] === null) && (hasDebit || hasCredit)) {
-      out['amount'] = credit - debit;
+      // Bank: positive = deposit (credit - debit). CC: positive = charge (debit - credit).
+      out['amount'] = statementType === 'creditcard' ? debit - credit : credit - debit;
     }
+
     if (!out['type']) {
       const t = deriveType(out);
       if (t) out['type'] = t;
