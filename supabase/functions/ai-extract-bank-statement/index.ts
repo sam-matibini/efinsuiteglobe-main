@@ -214,7 +214,7 @@ Deno.serve(async (req) => {
       was_overridden: false,
     });
 
-    });
+
 
     return json({
       extraction,
