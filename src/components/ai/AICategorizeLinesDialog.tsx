@@ -92,24 +92,6 @@ async function loadLines(
       };
     });
   }
-  if (target === "po") {
-    let q = supabase
-      .from("purchase_order_lines")
-      .select("id, description, line_total, purchase_orders!inner(organization_id, po_number, vendor:vendor_id(name))")
-      .is("gl_account_id", null)
-      .eq("purchase_orders.organization_id", orgId)
-      .limit(200);
-    if (parentId) q = q.eq("purchase_order_id", parentId);
-    const { data } = await q;
-    return (data ?? []).map((r: any) => ({
-      id: r.id,
-      description: r.description,
-      amount: r.line_total,
-      parent_label: r.purchase_orders?.vendor?.name
-        ? `${r.purchase_orders.vendor.name} · ${r.purchase_orders.po_number ?? ""}`
-        : r.purchase_orders?.po_number ?? null,
-    }));
-  }
   if (target === "invoice") {
     let q = supabase
       .from("invoice_lines")
