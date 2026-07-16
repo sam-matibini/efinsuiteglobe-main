@@ -338,6 +338,26 @@ serve(async (req) => {
         });
       }
 
+      // Description-based side correction (fixes CC statements with a single
+      // signed AMOUNT column where the model dumped payments into `debit`).
+      const PAYMENT_KW = /(payment|paiement|thank\s*you|merci|autopay|bill\s*payment|transfer\s*to\s*card|\bpmt\b)/i;
+      const REFUND_KW = /(refund|return\b|returned|credit\s*memo|reversal|chargeback|merchant\s*credit)/i;
+      let swapped = 0;
+      for (const r of cleaned) {
+        const desc = String(r.Description ?? '');
+        const isPmtLike = PAYMENT_KW.test(desc) || REFUND_KW.test(desc);
+        if (isPmtLike && (r.Debit as number) > 0 && (r.Credit as number) === 0) {
+          r.Credit = r.Debit;
+          r.Debit = 0;
+          swapped++;
+        }
+      }
+      if (swapped > 0) {
+        validationWarnings.push(`Reclassified ${swapped} payment/refund row(s) from debit to credit based on description.`);
+      }
+
+
+
       // Reconcile against printed totals
       const sumDebit = cleaned.reduce((s, r) => s + (r.Debit as number), 0);
       const sumCredit = cleaned.reduce((s, r) => s + (r.Credit as number), 0);
