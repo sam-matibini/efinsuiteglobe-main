@@ -327,7 +327,7 @@ export function AIAccountingAssistant({
             credit_card_id: effectiveCreditCardId,
             transaction_date: transactionDate,
             posted_date: postedDate,
-            description: String(tx.description || ''),
+            description,
             amount,
             transaction_type: transactionType,
             payee_payor: payeePayor ? String(payeePayor) : null,
