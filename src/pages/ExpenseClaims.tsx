@@ -62,6 +62,7 @@ export default function ExpenseClaims() {
   const [showOrgDialog, setShowOrgDialog] = useState(false);
   const [shareClaim, setShareClaim] = useState<any | null>(null);
   const [docsClaim, setDocsClaim] = useState<any | null>(null);
+  const [showAICategorize, setShowAICategorize] = useState(false);
 
   const countryCode = organization?.country || 'CA';
   const localization = getCountryLocalization(countryCode);
