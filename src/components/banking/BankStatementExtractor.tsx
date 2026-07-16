@@ -32,11 +32,19 @@ import {
 } from "@/hooks/useBankStatementExtraction";
 import { cn } from "@/lib/utils";
 
+export interface ImportedTxnForCategorization {
+  id: string;
+  description: string | null;
+  amount: number;
+  transaction_type: string | null;
+  payee_payor?: string | null;
+}
+
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   defaultBankAccountId?: string;
-  onImported?: (count: number) => void;
+  onImported?: (count: number, imported?: ImportedTxnForCategorization[]) => void;
 }
 
 type ReviewRow = ExtractedTransaction & { include: boolean; error?: string };
