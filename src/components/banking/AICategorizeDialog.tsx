@@ -173,11 +173,14 @@ export function AICategorizeDialog({
         <DialogHeader className="p-6 pb-3">
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-primary" />
-            AI Transaction Categorization
+            {postImportMode
+              ? "Review AI categorization for imported transactions"
+              : "AI Transaction Categorization"}
           </DialogTitle>
           <DialogDescription>
-            Gemini suggests a GL account and category for each transaction. Review and
-            accept below.
+            {postImportMode
+              ? "Gemini has categorized the freshly imported transactions. Review and accept below — accepted merchants will be learned into rules for next time."
+              : "Gemini suggests a GL account and category for each transaction. Review and accept below."}
           </DialogDescription>
         </DialogHeader>
 
