@@ -279,7 +279,7 @@ export function BankStatementExtractor({
                     <SelectContent>
                       {bankAccounts.map((a) => (
                         <SelectItem key={a.id} value={a.id}>
-                          {a.account_name}
+                          {a.name}
                           {a.account_number ? ` • ••${a.account_number.slice(-4)}` : ""}
                           {a.id === suggestedAccountId ? " (suggested)" : ""}
                         </SelectItem>
