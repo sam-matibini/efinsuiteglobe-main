@@ -442,17 +442,32 @@ export async function generateCompilationWord(
     ],
   }));
 
-  financialData.balanceSheet.equity.forEach(eq => {
-    balanceSheetRows.push(createFinancialRow(eq.name, eq.calculated_balance, false, 1));
-  });
+  const hasReClosing = typeof financialData.balanceSheet.reClosingBalance === 'number';
 
-  if (financialData.balanceSheet.netIncome !== 0) {
-    balanceSheetRows.push(createFinancialRow(t.currentYearEarnings, financialData.balanceSheet.netIncome, false, 1));
+  if (hasReClosing) {
+    // Canonical formula: exclude RE + CYE from account list, show single RE closing line
+    financialData.balanceSheet.equity
+      .filter(eq => !isRetainedEarningsOrCYE(eq))
+      .forEach(eq => {
+        balanceSheetRows.push(createFinancialRow(eq.name, eq.calculated_balance, false, 1));
+      });
+    const reClosing = financialData.balanceSheet.reClosingBalance ?? 0;
+    balanceSheetRows.push(createFinancialRow(t.retainedEarnings, reClosing, false, 1));
+    const totalEquity = sumEquityExcludingREandCYE(financialData.balanceSheet.equity) + reClosing;
+    balanceSheetRows.push(createFinancialRow(t.totalEquity, totalEquity, true, 1));
+    balanceSheetRows.push(createFinancialRow(t.totalLiabAndEquity, financialData.balanceSheet.totalLiabilities + totalEquity, true, 0));
+  } else {
+    // Legacy fallback
+    financialData.balanceSheet.equity.forEach(eq => {
+      balanceSheetRows.push(createFinancialRow(eq.name, eq.calculated_balance, false, 1));
+    });
+    if (financialData.balanceSheet.netIncome !== 0) {
+      balanceSheetRows.push(createFinancialRow(t.currentYearEarnings, financialData.balanceSheet.netIncome, false, 1));
+    }
+    const totalEquity = financialData.balanceSheet.totalEquity + financialData.balanceSheet.netIncome;
+    balanceSheetRows.push(createFinancialRow(t.totalEquity, totalEquity, true, 1));
+    balanceSheetRows.push(createFinancialRow(t.totalLiabAndEquity, financialData.balanceSheet.totalLiabilities + totalEquity, true, 0));
   }
-
-  const totalEquity = financialData.balanceSheet.totalEquity + financialData.balanceSheet.netIncome;
-  balanceSheetRows.push(createFinancialRow(t.totalEquity, totalEquity, true, 1));
-  balanceSheetRows.push(createFinancialRow(t.totalLiabAndEquity, financialData.balanceSheet.totalLiabilities + totalEquity, true, 0));
 
   sections.push({
     properties: {},
