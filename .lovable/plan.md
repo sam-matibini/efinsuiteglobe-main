@@ -1,53 +1,42 @@
-# Phase 2 — PDF Bank Statement Extraction (Gemini Vision)
+# Phase 3 — AI Transaction Categorization
 
-Builds on the Phase 1 Gemini foundation. Adds AI-powered extraction of bank/credit-card statements from PDFs and images, feeding directly into the existing bank import pipeline.
+Builds on Phases 1, 2, 8. Adds Gemini-powered auto-categorization for `bank_transactions` (and reusable for expenses/bills later). Suggests a GL account + category per transaction, with a confidence score and one-click accept.
 
 ## What gets built
 
-### 1. Edge function: `ai-extract-bank-statement`
-- Accepts: `{ documentId }` OR `{ fileBase64, mimeType, filename }`
-- Loads PDF/image, sends to Gemini 2.5 Pro (vision) with a strict JSON schema
-- Returns structured extraction:
-  ```
-  {
-    account: { bank_name, account_number_masked, currency, statement_period_start, statement_period_end },
-    opening_balance, closing_balance,
-    transactions: [{ date, description, amount, type: 'debit'|'credit', balance?, reference? }],
-    confidence: 0-1,
-    warnings: []
-  }
-  ```
-- JSON-mode via `responseSchema` (reuses `_shared/gemini.ts`)
-- Handles multi-page PDFs by passing full document to Gemini (native PDF support)
-- Caches raw extraction on the `documents` row (new `ai_extraction` jsonb column) so re-review doesn't re-bill
-- Per-org daily cap (default 100 extractions/day), logged to `ai_setup_logs`
+### 1. Edge function: `ai-categorize-transactions`
+- Input: `{ organization_id, transaction_ids: string[] }` (bank_transactions)
+- For each transaction, loads: description, amount, direction, payee, existing category
+- Loads org context once: chart of accounts (id, code, name, type), plus recent categorized examples (last 200 rows) to condition the model
+- Calls Gemini 2.5 Flash with a strict JSON schema returning per-transaction `{ id, gl_account_id, category, confidence, reasoning }`
+- Prefers deterministic matches first (existing `transaction_rules` engine) — only sends unmatched rows to Gemini
+- Batch of up to 50 per call; larger inputs are chunked server-side
+- Cache: per (org, description-hash + amount-sign) key in `ai_formula_cache` (reuses table, `formula='CATEGORIZE'`) with 30-day TTL — repeated descriptions cost nothing after the first
+- Daily cap: 2000 categorizations/day per org, logged to `ai_setup_logs` (`setup_type='transaction_categorization'`)
 
-### 2. Migration
-- Add `ai_extraction jsonb`, `ai_extraction_confidence numeric`, `ai_extracted_at timestamptz` columns to `documents`
-- No new tables
+### 2. Client hook: `useAICategorization`
+- `categorize(transactionIds)` → returns suggestions array
+- `applySuggestions(accepted[])` → bulk updates `bank_transactions.gl_account_id` + `category`
 
-### 3. Client: `BankStatementExtractor` component
-- New route/tab under existing Bank module: **Import → Extract from PDF**
-- Upload zone (PDF/PNG/JPG, ≤20MB)
-- Calls edge function, shows progress + confidence badge
-- Editable review table (all transactions, inline edits, checkbox to include/exclude)
-- Account matcher: dropdown of user's `bank_accounts` with fuzzy match on extracted account number
-- "Import N transactions" → inserts into `bank_transactions` with `source='ai_extracted'`, links to the document
+### 3. UI: inline in Bank Transactions page
+- New toolbar button **"AI Categorize"** on the Bank Transactions page
+  - Disabled when no rows selected → categorizes selection; if nothing selected, categorizes all uncategorized rows on the current page
+- Results appear in a review drawer: transaction | suggested account | confidence badge | Accept / Reject
+- **Accept all above X%** slider (default 85%) for one-click bulk apply
+- After apply, refresh the transaction list
 
-### 4. Integration points
-- Reuses existing `documents` storage bucket + upload flow
-- Feeds into existing `bank_transactions` table (no schema change to it)
-- Existing transaction rules & reconciliation flow apply automatically after import
+### 4. No schema changes
+- Reuses existing `bank_transactions.gl_account_id`, `bank_transactions.category`
+- Reuses `ai_formula_cache` and `ai_setup_logs`
 
 ## Out of scope (later phases)
-- Auto-categorization of extracted transactions (Phase 3)
-- Credit-card specific statement schemas beyond the shared format
-- Multi-currency FX conversion at extraction time
+- Auto-categorization on statement extraction (will chain in Phase 3.1)
+- Expense/bill categorization (same engine, different caller — later)
+- Learning from user corrections into `transaction_rules` (Phase 3.2)
 
 ## Technical notes
-
-- Gemini model: `gemini-2.5-pro` for extraction (better structure fidelity than flash on tables)
-- PDF sent inline as base64 (Gemini native PDF, no OCR preprocessing needed)
-- Response schema enforced server-side to eliminate hallucinated fields
-- Client validates dates & amounts before insert; any row failing validation stays in review with a warning
-- All edge function responses include `corsHeaders`; auth via user JWT then org membership check
+- Model: `gemini-2.5-flash` (from `GEMINI_MODELS.categorization`) — cheap and fast, sufficient for classification
+- Prompt includes only account **name + type**, not full COA metadata, to keep tokens down
+- Response schema forces `gl_account_id` to be one of the provided account ids (validated server-side; hallucinated ids dropped with warning)
+- Existing `transaction_rules` (already in schema) run first — only unmatched rows hit Gemini
+- All confidence scores stored in the review UI state only (not persisted per transaction) — the user's accept is the source of truth

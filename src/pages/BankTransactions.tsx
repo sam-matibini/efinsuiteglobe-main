@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Search, Download, Upload, ArrowUpRight, ArrowDownLeft, Link2, Check, AlertCircle, Sparkles, Settings, MoreHorizontal, Wand2, Building2, Plus, Filter, Calendar, Edit, Send, X, CheckSquare, ArrowUpDown, ArrowUp, ArrowDown, CreditCard, Landmark, RefreshCw, Lock, Eye, FileSpreadsheet, Trash2, History } from 'lucide-react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -38,6 +39,7 @@ import { MatchPaymentDialog } from '@/components/banking/MatchPaymentDialog';
 import { UnifiedImportDialog, ParsedBankTransaction, ParsedCreditCardTransaction } from '@/components/banking/UnifiedImportDialog';
 import { StatementExtractionDialog } from '@/components/banking/StatementExtractionDialog';
 import { BankStatementExtractor } from '@/components/banking/BankStatementExtractor';
+import { AICategorizeDialog } from '@/components/banking/AICategorizeDialog';
 import { ImportHistoryDialog } from '@/components/banking/ImportHistoryDialog';
 import { RuleCondition, TransactionRule } from '@/types/bankingRules';
 import { toast } from 'sonner';
@@ -112,6 +114,8 @@ export default function BankTransactions() {
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [extractionDialogOpen, setExtractionDialogOpen] = useState(false);
   const [aiExtractorOpen, setAiExtractorOpen] = useState(false);
+  const [aiCategorizeOpen, setAiCategorizeOpen] = useState(false);
+  const queryClient = useQueryClient();
   const [importHistoryOpen, setImportHistoryOpen] = useState(false);
   const [createRuleDialogOpen, setCreateRuleDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -1492,6 +1496,15 @@ export default function BankTransactions() {
                   : 'Unimport Selected'
                 }
               </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setAiCategorizeOpen(true)}
+                disabled={filteredTransactions.length === 0}
+              >
+                <Sparkles className="w-4 h-4 mr-2" />
+                AI Categorize
+              </Button>
               <Button 
                 size="sm" 
                 onClick={handleBulkPostToGL}
@@ -1838,6 +1851,28 @@ export default function BankTransactions() {
         open={aiExtractorOpen}
         onOpenChange={setAiExtractorOpen}
         defaultBankAccountId={effectiveBankAccountId}
+      />
+
+      {/* Phase 3 — AI categorization */}
+      <AICategorizeDialog
+        open={aiCategorizeOpen}
+        onOpenChange={setAiCategorizeOpen}
+        transactions={
+          (selectedTransactions.length > 0
+            ? selectedTransactions
+            : filteredTransactions.filter((t) => !t.gl_account_id)
+          ).map((t) => ({
+            id: t.id,
+            description: t.description ?? null,
+            amount: t.amount as number,
+            transaction_type: t.transaction_type ?? null,
+            payee_payor: (t as { payee_payor?: string | null }).payee_payor ?? null,
+          }))
+        }
+        onApplied={() => {
+          queryClient.invalidateQueries({ queryKey: ['bank-transactions'] });
+          queryClient.invalidateQueries({ queryKey: ['credit-card-transactions'] });
+        }}
       />
 
       {/* Match Payment Dialog for Credit Cards */}
