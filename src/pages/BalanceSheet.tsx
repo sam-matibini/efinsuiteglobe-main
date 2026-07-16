@@ -1097,14 +1097,6 @@ export default function BalanceSheet() {
     const compNetIncome = reComparativeStatements.map(c => formatAmount(c?.data.netIncomeLoss ?? 0));
     rows.push(['  Net income (loss)', formatAmount(currentNetIncome), ...compNetIncome]);
     
-    // Other additions (conditional)
-    const currentOtherAdditions = reCurrentStatement?.data.otherAdditions ?? 0;
-    const hasAnyOtherAdditions = currentOtherAdditions !== 0 || reComparativeStatements.some(c => (c?.data.otherAdditions ?? 0) !== 0);
-    if (hasAnyOtherAdditions) {
-      const compOtherAdditions = reComparativeStatements.map(c => formatAmount(c?.data.otherAdditions ?? 0));
-      rows.push(['  Other additions', formatAmount(currentOtherAdditions), ...compOtherAdditions]);
-    }
-    
     // Dividends declared (conditional)
     const currentDividends = reCurrentStatement?.data.dividendsDeclared ?? 0;
     const hasAnyDividends = currentDividends !== 0 || reComparativeStatements.some(c => (c?.data.dividendsDeclared ?? 0) !== 0);
@@ -1112,14 +1104,7 @@ export default function BalanceSheet() {
       const compDividends = reComparativeStatements.map(c => formatAmount(-(c?.data.dividendsDeclared ?? 0)));
       rows.push(['  Dividends declared', formatAmount(-currentDividends), ...compDividends]);
     }
-    
-    // Other deductions (conditional)
-    const currentOtherDeductions = reCurrentStatement?.data.otherDeductions ?? 0;
-    const hasAnyOtherDeductions = currentOtherDeductions !== 0 || reComparativeStatements.some(c => (c?.data.otherDeductions ?? 0) !== 0);
-    if (hasAnyOtherDeductions) {
-      const compOtherDeductions = reComparativeStatements.map(c => formatAmount(-(c?.data.otherDeductions ?? 0)));
-      rows.push(['  Other deductions', formatAmount(-currentOtherDeductions), ...compOtherDeductions]);
-    }
+
     
     // Closing balance
     const currentClosingRE = reCurrentStatement?.data.closingBalance ?? 0;
@@ -1777,25 +1762,8 @@ export default function BalanceSheet() {
                     })}
                   </tr>
 
-                  {/* Other Additions (conditional) */}
-                  {((reCurrentStatement?.data.otherAdditions ?? 0) !== 0 || reComparativeStatements.some(c => (c?.data.otherAdditions ?? 0) !== 0)) && (
-                    <tr className="border-b border-border/30 hover:bg-muted/20 transition-colors">
-                      <td className="py-2.5 px-6" style={{ paddingLeft: 30 }}>
-                        <span className="text-foreground">Other additions</span>
-                      </td>
-                      <td className="py-2.5 px-6 text-right font-mono">
-                        {reCurrentStatement ? formatCurrencyOrDash(reCurrentStatement.data.otherAdditions) : '-'}
-                      </td>
-                      {comparisonPeriods.map((_, i) => {
-                        const compRE = reComparativeStatements[i];
-                        return (
-                          <td key={i} className="py-2.5 px-6 text-right font-mono">
-                            {compRE ? formatCurrencyOrDash(compRE.data.otherAdditions) : '-'}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  )}
+
+
 
                   {/* Dividends Declared (conditional) */}
                   {((reCurrentStatement?.data.dividendsDeclared ?? 0) !== 0 || reComparativeStatements.some(c => (c?.data.dividendsDeclared ?? 0) !== 0)) && (
@@ -1817,25 +1785,8 @@ export default function BalanceSheet() {
                     </tr>
                   )}
 
-                  {/* Other Deductions (conditional) */}
-                  {((reCurrentStatement?.data.otherDeductions ?? 0) !== 0 || reComparativeStatements.some(c => (c?.data.otherDeductions ?? 0) !== 0)) && (
-                    <tr className="border-b border-border/30 hover:bg-muted/20 transition-colors">
-                      <td className="py-2.5 px-6" style={{ paddingLeft: 30 }}>
-                        <span className="text-foreground">Other deductions</span>
-                      </td>
-                      <td className="py-2.5 px-6 text-right font-mono">
-                        {reCurrentStatement ? formatCurrencyOrDash(-(reCurrentStatement.data.otherDeductions)) : '-'}
-                      </td>
-                      {comparisonPeriods.map((_, i) => {
-                        const compRE = reComparativeStatements[i];
-                        return (
-                          <td key={i} className="py-2.5 px-6 text-right font-mono">
-                            {compRE ? formatCurrencyOrDash(-(compRE.data.otherDeductions)) : '-'}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  )}
+
+
 
                   {/* Closing Balance - GIFI 3849 */}
                   <tr className="bg-muted/20 border-t-2 border-border font-semibold">
