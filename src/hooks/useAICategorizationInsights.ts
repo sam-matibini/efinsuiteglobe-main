@@ -117,7 +117,7 @@ export function useCategorizationInsights(
             suggested_account_id: r.suggested_account_id,
             final_account_id: r.final_account_id,
             count: 1,
-            context: r.context as "bank" | "ap",
+            context: r.context as "bank" | "ap" | "revenue",
           });
       }
       const topCorrections = Array.from(corrKey.values())
