@@ -1630,26 +1630,10 @@ export default function BalanceSheet() {
                   <>
                     <td className="py-2 px-6 text-right font-mono font-semibold">{formatCurrency(totalEquity)}</td>
                     {comparisonPeriods.map((_, i) => {
-                      const compREClosing = reComparativeStatements[i]?.data?.closingBalance ?? 0;
-                      const compPeriodData = comparativeData?.[i + 1];
-                      const compEquityAccts = (compPeriodData?.balances ?? [])
-                        .filter(a => a.account_type === 'equity')
-                        .filter(a => {
-                          const code = a.code;
-                          const nameLower = a.name?.toLowerCase() || '';
-                          if (code === '3-00-202' || nameLower.includes('current year earnings') || nameLower.includes('current year excess') || nameLower.includes('current year surplus') || nameLower.includes('excess (deficiency)')) return false;
-                          if (code === '3-00-201' || nameLower === 'retained earnings' || nameLower.includes('accumulated deficit') || nameLower.includes('unrestricted net assets') || nameLower.includes('accumulated surplus') || nameLower.includes('unrestricted funds') || nameLower.includes('accumulated funds')) return false;
-                          return true;
-                        })
-                        .reduce((sum, a) => {
-                          const isContra = a.normal_balance !== 'credit';
-                          const sign = isContra ? -1 : 1;
-                          return sum + ((a.calculated_balance ?? 0) * sign);
-                        }, 0);
-                      const compEquityTotal = compEquityAccts + compREClosing;
+                      const compTotal = comparativeTotals[i + 1];
                       return (
                         <td key={i} className="py-2 px-6 text-right font-mono font-semibold">
-                          {formatCurrency(compEquityTotal)}
+                          {compTotal ? formatCurrency(compTotal.totalEquity) : '-'}
                         </td>
                       );
                     })}
@@ -1676,26 +1660,10 @@ export default function BalanceSheet() {
                   <td className="py-2.5 px-6 font-semibold" style={{ paddingLeft: 30 }}>Total for {equityLabel}</td>
                   <td className="py-2.5 px-6 text-right font-mono font-semibold">{formatCurrency(totalEquity)}</td>
                   {comparisonPeriods.map((_, i) => {
-                    const compREClosing = reComparativeStatements[i]?.data?.closingBalance ?? 0;
-                    const compPeriodData = comparativeData?.[i + 1];
-                    const compEquityAccts = (compPeriodData?.balances ?? [])
-                      .filter(a => a.account_type === 'equity')
-                      .filter(a => {
-                        const code = a.code;
-                        const nameLower = a.name?.toLowerCase() || '';
-                        if (code === '3-00-202' || nameLower.includes('current year earnings') || nameLower.includes('current year excess') || nameLower.includes('current year surplus') || nameLower.includes('excess (deficiency)')) return false;
-                        if (code === '3-00-201' || nameLower === 'retained earnings' || nameLower.includes('accumulated deficit') || nameLower.includes('unrestricted net assets') || nameLower.includes('accumulated surplus') || nameLower.includes('unrestricted funds') || nameLower.includes('accumulated funds')) return false;
-                        return true;
-                      })
-                      .reduce((sum, a) => {
-                        const isContra = a.normal_balance !== 'credit';
-                        const sign = isContra ? -1 : 1;
-                        return sum + ((a.calculated_balance ?? 0) * sign);
-                      }, 0);
-                    const compEquityTotal = compEquityAccts + compREClosing;
+                    const compTotal = comparativeTotals[i + 1];
                     return (
                       <td key={i} className="py-2.5 px-6 text-right font-mono font-semibold">
-                        {formatCurrency(compEquityTotal)}
+                        {compTotal ? formatCurrency(compTotal.totalEquity) : '-'}
                       </td>
                     );
                   })}
@@ -1708,29 +1676,10 @@ export default function BalanceSheet() {
                 <td className="py-3 px-6 text-right font-mono font-bold">{formatCurrency(totalLiabilitiesAndEquity)}</td>
                 {comparisonPeriods.map((_, i) => {
                   const compTotal = comparativeTotals[i + 1];
-                  // Use the comparative RE closing balance (already includes net income)
-                  const compREClosing = reComparativeStatements[i]?.data?.closingBalance ?? 0;
-                  // Get comparative equity accounts excluding RE and CYE
-                  const compPeriodData = comparativeData?.[i + 1];
-                  const compEquityAccts = (compPeriodData?.balances ?? [])
-                    .filter(a => a.account_type === 'equity')
-                      .filter(a => {
-                        const code = a.code;
-                        const nameLower = a.name?.toLowerCase() || '';
-                        if (code === '3-00-202' || nameLower.includes('current year earnings') || nameLower.includes('current year excess') || nameLower.includes('current year surplus') || nameLower.includes('excess (deficiency)')) return false;
-                        if (code === '3-00-201' || nameLower === 'retained earnings' || nameLower.includes('accumulated deficit') || nameLower.includes('unrestricted net assets') || nameLower.includes('accumulated surplus') || nameLower.includes('unrestricted funds') || nameLower.includes('accumulated funds')) return false;
-                        return true;
-                      })
-                    .reduce((sum, a) => {
-                      const isContra = a.normal_balance !== 'credit';
-                      const sign = isContra ? -1 : 1;
-                      return sum + ((a.calculated_balance ?? 0) * sign);
-                    }, 0);
-                  const compEquityTotal = compEquityAccts + compREClosing;
-                  const compLETotal = (compTotal?.totalLiabilities ?? 0) + compEquityTotal;
+                  const compLETotal = (compTotal?.totalLiabilities ?? 0) + (compTotal?.totalEquity ?? 0);
                   return (
                     <td key={i} className="py-3 px-6 text-right font-mono font-bold">
-                      {formatCurrency(compLETotal)}
+                      {compTotal ? formatCurrency(compLETotal) : '-'}
                     </td>
                   );
                 })}
