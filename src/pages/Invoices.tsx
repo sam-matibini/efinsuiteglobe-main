@@ -318,6 +318,13 @@ export default function Invoices() {
           <p className="text-muted-foreground">Create and manage customer invoices</p>
         </div>
         <div className="flex items-center gap-3">
+          <AICategorizationHealth context="revenue" label="Revenue AI acceptance" />
+          {!isReadOnly && (
+            <Button variant="outline" size="sm" onClick={() => setShowAICatDialog(true)}>
+              <Sparkles className="w-4 h-4 mr-2" />
+              AI Categorize Lines
+            </Button>
+          )}
           <Button variant="outline" size="sm">
             <Download className="w-4 h-4 mr-2" />
             Export
