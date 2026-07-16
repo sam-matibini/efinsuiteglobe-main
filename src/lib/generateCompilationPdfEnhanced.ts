@@ -1117,24 +1117,53 @@ Readers are cautioned that these statements may not be appropriate for their pur
   yPos += 6;
   
   doc.setFont('helvetica', 'normal');
-  mergeBalanceSheetAccounts(currentBS.equity, priorBS?.equity).forEach(eq => {
+
+  // Canonical formula (matches BalanceSheet.tsx and AICompilationDialog validation):
+  //   totalEquity = Σ(equity excluding RE + CYE, signed by normal_balance) + reClosingBalance
+  // reClosingBalance comes from the Statement of Retained Earnings RPC — it
+  // already contains Net Income and prior direct RE adjustments, so we must
+  // NOT render a separate "Current Year Earnings" line here.
+  const hasReClosing = typeof currentBS.reClosingBalance === 'number';
+
+  // Filter out RE and CYE from the displayed equity account list. If we don't
+  // have a canonical RE closing balance from the RPC, fall back to the legacy
+  // behavior so older callers keep working.
+  const equityToRender = mergeBalanceSheetAccounts(
+    hasReClosing ? currentBS.equity.filter(a => !isRetainedEarningsOrCYE(a)) : currentBS.equity,
+    hasReClosing && priorBS ? priorBS.equity.filter(a => !isRetainedEarningsOrCYE(a)) : priorBS?.equity,
+  );
+  equityToRender.forEach(eq => {
     if (!shouldHideLine(eq.currentBalance, eq.priorBalance)) {
       renderLineItem(eq.name, eq.currentBalance, eq.priorBalance || undefined, 5);
     }
   });
-  
-  // Current year earnings if applicable
-  if (currentBS.netIncome !== 0) {
-    renderLineItem(t.currentYearEarnings, currentBS.netIncome, priorBS?.netIncome, 5);
+
+  let totalEquityCurrent: number;
+  let totalEquityPrior: number;
+
+  if (hasReClosing) {
+    const reCurrent = currentBS.reClosingBalance ?? 0;
+    const rePrior = priorBS?.reClosingBalance ?? 0;
+    // Show a single Retained Earnings line at the RE closing balance
+    renderLineItem(t.retainedEarnings, reCurrent, priorBS ? rePrior : undefined, 5);
+
+    const otherEquityCurrent = sumEquityExcludingREandCYE(currentBS.equity);
+    const otherEquityPrior = priorBS ? sumEquityExcludingREandCYE(priorBS.equity) : 0;
+    totalEquityCurrent = otherEquityCurrent + reCurrent;
+    totalEquityPrior = otherEquityPrior + rePrior;
+  } else {
+    // Legacy fallback
+    if (currentBS.netIncome !== 0) {
+      renderLineItem(t.currentYearEarnings, currentBS.netIncome, priorBS?.netIncome, 5);
+    }
+    totalEquityCurrent = currentBS.totalEquity + currentBS.netIncome;
+    totalEquityPrior = priorBS ? priorBS.totalEquity + priorBS.netIncome : 0;
   }
-  
-  // Total Equity
-  const totalEquityCurrent = currentBS.totalEquity + currentBS.netIncome;
-  const totalEquityPrior = priorBS ? priorBS.totalEquity + priorBS.netIncome : 0;
+
   renderSubtotal(t.totalEquity, totalEquityCurrent, totalEquityPrior);
-  
+
   // TOTAL LIABILITIES AND EQUITY
-  renderGrandTotal(t.totalLiabAndEquity, currentBS.totalLiabilities + totalEquityCurrent, 
+  renderGrandTotal(t.totalLiabAndEquity, currentBS.totalLiabilities + totalEquityCurrent,
     (priorBS?.totalLiabilities ?? 0) + totalEquityPrior);
   
   addPageFooter();
