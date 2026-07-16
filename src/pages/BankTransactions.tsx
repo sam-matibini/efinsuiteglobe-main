@@ -1833,6 +1833,13 @@ export default function BankTransactions() {
         creditCardId={effectiveCreditCardId}
       />
 
+      {/* Phase 2 — Gemini-powered statement extractor */}
+      <BankStatementExtractor
+        open={aiExtractorOpen}
+        onOpenChange={setAiExtractorOpen}
+        defaultBankAccountId={effectiveBankAccountId}
+      />
+
       {/* Match Payment Dialog for Credit Cards */}
       <MatchPaymentDialog
         open={matchDialogOpen}
