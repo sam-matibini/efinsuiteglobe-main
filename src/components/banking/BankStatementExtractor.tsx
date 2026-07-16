@@ -306,6 +306,9 @@ export function BankStatementExtractor({
                 </div>
                 <div className="flex items-end text-sm text-muted-foreground">
                   {includedValid.length} of {rows.length} rows ready to import
+                  <span className="ml-2 inline-flex items-center gap-1 text-primary">
+                    <Sparkles className="h-3 w-3" /> AI will categorize these after import
+                  </span>
                 </div>
               </div>
 
