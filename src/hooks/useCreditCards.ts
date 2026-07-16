@@ -78,10 +78,19 @@ export interface CreditCardTransaction {
 }
 
 /**
- * Find an equity account for credit card opening balance adjustment.
- * The opening balance represents how much you owe, so we need to:
- * - CREDIT the Credit Card Liability (increase liability)
- * - DEBIT an equity/adjustment account (not another liability!)
+ * Find the offset account for a credit card opening balance.
+ *
+ * ASPE/GAAP: A credit-card opening balance represents amounts already spent by
+ * (or on behalf of) the shareholder/owner via a corporate card. The
+ * bookkeeping is:
+ *   Dr. Due to Shareholders  (reduce what the company owes the shareholder,
+ *                             OR debit Shareholder Loan Receivable)
+ *   Cr. Credit Card Liability (establish opening balance)
+ *
+ * We therefore route the offset to a "Due to Shareholders" / "Shareholder
+ * Loan" liability account — NEVER to Retained Earnings, which would distort
+ * equity and produce a non-CoA "Other deduction" on the Statement of
+ * Retained Earnings.
  */
 async function findEquityAdjustmentAccount(organizationId: string): Promise<string | null> {
   const { data: accounts } = await supabase
@@ -90,17 +99,20 @@ async function findEquityAdjustmentAccount(organizationId: string): Promise<stri
     .eq('organization_id', organizationId)
     .eq('is_header', false)
     .eq('is_active', true)
-    .in('account_type', ['equity', 'expense']);
+    .in('account_type', ['liability', 'equity']);
 
   if (!accounts || accounts.length === 0) return null;
 
-  // Priority: Opening Balance Equity > Retained Earnings > Owner's Equity > any expense
-  const priorities = [
-    (a: { name: string; account_type: string }) => a.account_type === 'equity' && a.name.toLowerCase().includes('opening'),
-    (a: { name: string; account_type: string }) => a.account_type === 'equity' && a.name.toLowerCase().includes('retained'),
-    (a: { name: string; account_type: string }) => a.account_type === 'equity' && a.name.toLowerCase().includes('owner'),
-    (a: { name: string; account_type: string }) => a.account_type === 'equity',
-    (a: { name: string; account_type: string }) => a.account_type === 'expense' && a.name.toLowerCase().includes('miscellaneous'),
+  const nameMatches = (a: { name: string }, needles: string[]) =>
+    needles.some(n => a.name.toLowerCase().includes(n));
+
+  // Priority order — shareholder-related liability first, then owner
+  // contribution equity, then a generic opening-balance clearing account.
+  const priorities: Array<(a: { name: string; account_type: string }) => boolean> = [
+    (a) => a.account_type === 'liability' && nameMatches(a, ['due to shareholder', 'shareholder loan', 'loan from shareholder', 'due to owner']),
+    (a) => a.account_type === 'liability' && nameMatches(a, ['shareholder', 'director loan', 'owner']),
+    (a) => a.account_type === 'equity' && nameMatches(a, ['owner contribution', "owner's contribution", 'owner capital', "owner's capital", 'proprietor']),
+    (a) => a.account_type === 'equity' && nameMatches(a, ['opening balance']),
   ];
 
   for (const check of priorities) {
@@ -108,10 +120,9 @@ async function findEquityAdjustmentAccount(organizationId: string): Promise<stri
     if (found) return found.id;
   }
 
-  // Last resort: use any expense account
-  const expenseAccount = accounts.find(a => a.account_type === 'expense');
-  return expenseAccount?.id || null;
+  return null;
 }
+
 
 /**
  * Generate next credit card opening balance reference number

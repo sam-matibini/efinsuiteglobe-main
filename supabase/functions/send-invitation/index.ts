@@ -150,7 +150,7 @@ const handler = async (req: Request): Promise<Response> => {
     const inviterName = inviterProfile?.full_name || inviterProfile?.email || "A team member";
 
     // Generate invitation link
-    const appUrl = Deno.env.get("APP_URL") || "https://efinsuiteglobe.lovable.app";
+    const appUrl = Deno.env.get("APP_URL") || "https://efinsuite.com";
     const inviteLink = `${appUrl}/accept-invite?token=${invitation.token}`;
 
     // Send email using Resend API

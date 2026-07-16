@@ -381,7 +381,7 @@ export function useSendDocument() {
 
       // Build external signing link base URL.
       // Priority: explicit env URL > current non-preview origin > published app URL fallback
-      const publishedBaseUrl = 'https://efinsuiteglobe.lovable.app';
+      const publishedBaseUrl = 'https://efinsuite.com';
       const envBaseUrl = (import.meta.env.VITE_PUBLIC_APP_URL as string | undefined)?.trim();
       const currentOrigin = typeof window !== 'undefined' ? window.location.origin : '';
       const isPreviewOrigin = currentOrigin.includes('.lovableproject.com');

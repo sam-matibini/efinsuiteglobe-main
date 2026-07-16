@@ -135,6 +135,61 @@ const isCashOrBankAccount = (account: AccountWithBalance): boolean => {
   return name.includes('bank') || name.includes('cash') || name.includes('petty');
 };
 
+const isCurrentYearEarningsEquityAccount = (account: Pick<AccountWithBalance, 'code' | 'name'>): boolean => {
+  const nameLower = account.name?.toLowerCase() || '';
+  return (
+    account.code === '3-00-202' ||
+    nameLower.includes('current year earnings') ||
+    nameLower.includes('current year earning') ||
+    nameLower.includes('current earnings') ||
+    nameLower === 'current year net income' ||
+    nameLower === 'current year income' ||
+    nameLower.includes('current year excess') ||
+    nameLower.includes('current year surplus') ||
+    nameLower.includes('excess (deficiency)')
+  );
+};
+
+const isRetainedEarningsEquityAccount = (account: Pick<AccountWithBalance, 'code' | 'name'>): boolean => {
+  const nameLower = account.name?.toLowerCase() || '';
+  return (
+    account.code === '3-00-201' ||
+    nameLower === 'retained earnings' ||
+    nameLower === 'retained profits' ||
+    nameLower.includes('retained earnings') ||
+    nameLower.includes('accumulated deficit') ||
+    nameLower.includes('accumulated earnings') ||
+    nameLower.includes('unrestricted net assets') ||
+    nameLower.includes('accumulated surplus') ||
+    nameLower.includes('unrestricted funds') ||
+    nameLower.includes('accumulated funds')
+  );
+};
+
+const isDividendOrContraEquityAccount = (account: Pick<AccountWithBalance, 'account_type' | 'normal_balance' | 'name'>): boolean => {
+  const nameLower = account.name?.toLowerCase() || '';
+  return (
+    (account.account_type === 'equity' && account.normal_balance === 'debit') ||
+    nameLower.includes('dividend') ||
+    nameLower.includes("owner's draw") ||
+    nameLower.includes('owner draw') ||
+    nameLower.includes('owners draw') ||
+    nameLower.includes('shareholder draw') ||
+    nameLower.includes('drawing') ||
+    nameLower.includes('distribution') ||
+    nameLower.includes('treasury stock') ||
+    nameLower.includes('treasury shares')
+  );
+};
+
+const isExcludedFromEquityTotal = (account: AccountWithBalance | any): boolean => {
+  return (
+    isCurrentYearEarningsEquityAccount(account) ||
+    isRetainedEarningsEquityAccount(account) ||
+    isDividendOrContraEquityAccount(account)
+  );
+};
+
 export default function BalanceSheet() {
   // Use shared report filters
   const { 
@@ -373,26 +428,9 @@ export default function BalanceSheet() {
     comparisonPeriods
   );
 
-  // Get comparative totals for display, then adjust each period's totals for
-  // abnormal-balance reclassification so comparative L+E ties to comparative Assets.
-  // For ASPE display we derive Equity = Assets - Liabilities (per period) so the
-  // displayed equation always balances, matching the on-screen totals.
   const rawComparativeTotals = getComparativeTotals();
-  const comparativeTotals = useMemo(() => {
-    return rawComparativeTotals.map((ct: any) => {
-      const adjAssets = ct.totalAssets ?? 0;
-      const adjLiabs = ct.totalLiabilities ?? 0;
-      const adjEquity = ct.totalEquity ?? 0;
-      const diff = Math.abs(adjAssets - (adjLiabs + adjEquity));
-      return {
-        ...ct,
-        totalAssets: adjAssets,
-        totalLiabilities: adjLiabs,
-        totalEquity: adjEquity,
-        isBalanced: diff < 0.02,
-      };
-    });
-  }, [rawComparativeTotals]);
+
+
 
   // Balance Sheet is a point-in-time report, so retained earnings must be
   // rolled forward from the fiscal-year start that contains each column's as-of
@@ -427,6 +465,44 @@ export default function BalanceSheet() {
     retainedEarningsComparisonPeriods
   );
 
+  // Recompute each comparative period's totalEquity to match the on-screen
+  // rows: non-RE/CYE/dividend equity accounts + Statement of Retained Earnings
+  // closing balance. This mirrors the current-period logic and prevents
+  // dividends/drawings from being double-counted (they are already netted
+  // inside the RE closing balance).
+  const comparativeTotals = useMemo(() => {
+    return rawComparativeTotals.map((ct: any, i: number) => {
+      const adjAssets = ct.totalAssets ?? 0;
+      const adjLiabs = ct.totalLiabilities ?? 0;
+
+      const pd = comparativeData?.[i];
+      let adjEquity = ct.totalEquity ?? 0;
+      if (pd?.balances) {
+        const nonReEquity = pd.balances
+          .filter((a: any) => a.account_type === 'equity' && !a.is_header && !isExcludedFromEquityTotal(a))
+          .reduce((sum: number, a: any) => {
+            const sign = a.normal_balance === 'credit' ? 1 : -1;
+            return sum + (Number(a.calculated_balance) || 0) * sign;
+          }, 0);
+        const reClosing = i === 0
+          ? (reCurrentStatement?.data?.closingBalance ?? 0)
+          : (reComparativeStatements?.[i - 1]?.data?.closingBalance ?? 0);
+        adjEquity = nonReEquity + reClosing;
+      }
+
+      const diff = Math.abs(adjAssets - (adjLiabs + adjEquity));
+      return {
+        ...ct,
+        totalAssets: adjAssets,
+        totalLiabilities: adjLiabs,
+        totalEquity: adjEquity,
+        isBalanced: diff < 0.02,
+      };
+    });
+  }, [rawComparativeTotals, comparativeData, reCurrentStatement, reComparativeStatements]);
+
+
+
   // Get RE closing balance from Statement of Retained Earnings
   // This already includes Net Income, so we do NOT add netIncome separately
   const reClosingBalance = (reCurrentStatement?.data?.closingBalance ?? 0);
@@ -436,14 +512,7 @@ export default function BalanceSheet() {
   const equityAccountsExcludingREandCYE = allAccounts
     .filter(a => a.account_type === 'equity')
     .filter(a => {
-      const code = a.code;
-      const nameLower = a.name?.toLowerCase() || '';
-      // Exclude CYE account (3-00-202) and ASNPO equivalents
-      if (code === '3-00-202' || nameLower.includes('current year earnings') || nameLower.includes('current year excess') || nameLower.includes('current year surplus') || nameLower.includes('excess (deficiency)')) return false;
-      // Exclude RE account (3-00-201) and ASNPO equivalents - we use Statement of RE closing balance instead
-      if (code === '3-00-201' || nameLower === 'retained earnings' || nameLower.includes('accumulated deficit') || nameLower.includes('unrestricted net assets') || nameLower.includes('accumulated surplus') || nameLower.includes('unrestricted funds') || nameLower.includes('accumulated funds')) return false;
-      // Exclude Dividend / Owner Drawings accounts — already netted inside the Statement of RE closing balance
-      if (nameLower.includes('dividend') || nameLower.includes("owner's draw") || nameLower.includes('owner draw') || nameLower.includes('owners draw') || nameLower.includes('shareholder draw') || nameLower.includes('distributions to owners') || nameLower.includes('distributions to shareholders') || nameLower.includes('capital distributions')) return false;
+      if (isExcludedFromEquityTotal(a)) return false;
       // Exclude equity accounts that have been reclassified to Assets (abnormal debit balance)
       if (reclassification.equityToAssetIds.has(a.id)) return false;
       return true;
@@ -524,19 +593,7 @@ export default function BalanceSheet() {
    * ASPE year-to-year continuity.
    */
   const isCurrentYearEarningsAccount = (account: AccountWithBalance): boolean => {
-    const nameLower = account.name?.toLowerCase() || '';
-    return (
-      account.code === '3-00-202' ||
-      nameLower.includes('current year earnings') ||
-      nameLower.includes('current year earning') ||
-      nameLower.includes('current earnings') ||
-      nameLower === 'current year net income' ||
-      nameLower === 'current year income' ||
-      // ASNPO equivalents
-      nameLower.includes('current year excess') ||
-      nameLower.includes('current year surplus') ||
-      nameLower.includes('excess (deficiency)')
-    );
+    return isCurrentYearEarningsEquityAccount(account);
   };
 
   /**
@@ -544,19 +601,7 @@ export default function BalanceSheet() {
    * to ALWAYS be displayed in Shareholders' Equity section, even if zero.
    */
   const isRetainedEarningsAccount = (account: AccountWithBalance): boolean => {
-    const nameLower = account.name?.toLowerCase() || '';
-    return (
-      account.code === '3-00-201' ||
-      nameLower === 'retained earnings' ||
-      nameLower === 'retained profits' ||
-      nameLower.includes('accumulated deficit') ||
-      nameLower.includes('accumulated earnings') ||
-      // ASNPO equivalents
-      nameLower.includes('unrestricted net assets') ||
-      nameLower.includes('accumulated surplus') ||
-      nameLower.includes('unrestricted funds') ||
-      nameLower.includes('accumulated funds')
-    );
+    return isRetainedEarningsEquityAccount(account);
   };
 
   /**
@@ -566,17 +611,7 @@ export default function BalanceSheet() {
    * separate equity line would double-count the dividend on the Balance Sheet.
    */
   const isDividendAccount = (account: AccountWithBalance): boolean => {
-    const nameLower = account.name?.toLowerCase() || '';
-    return (
-      nameLower.includes('dividend') ||
-      nameLower.includes("owner's draw") ||
-      nameLower.includes('owner draw') ||
-      nameLower.includes('owners draw') ||
-      nameLower.includes('shareholder draw') ||
-      nameLower.includes('distributions to owners') ||
-      nameLower.includes('distributions to shareholders') ||
-      nameLower.includes('capital distributions')
-    );
+    return isDividendOrContraEquityAccount(account);
   };
 
 
@@ -1062,14 +1097,6 @@ export default function BalanceSheet() {
     const compNetIncome = reComparativeStatements.map(c => formatAmount(c?.data.netIncomeLoss ?? 0));
     rows.push(['  Net income (loss)', formatAmount(currentNetIncome), ...compNetIncome]);
     
-    // Other additions (conditional)
-    const currentOtherAdditions = reCurrentStatement?.data.otherAdditions ?? 0;
-    const hasAnyOtherAdditions = currentOtherAdditions !== 0 || reComparativeStatements.some(c => (c?.data.otherAdditions ?? 0) !== 0);
-    if (hasAnyOtherAdditions) {
-      const compOtherAdditions = reComparativeStatements.map(c => formatAmount(c?.data.otherAdditions ?? 0));
-      rows.push(['  Other additions', formatAmount(currentOtherAdditions), ...compOtherAdditions]);
-    }
-    
     // Dividends declared (conditional)
     const currentDividends = reCurrentStatement?.data.dividendsDeclared ?? 0;
     const hasAnyDividends = currentDividends !== 0 || reComparativeStatements.some(c => (c?.data.dividendsDeclared ?? 0) !== 0);
@@ -1077,14 +1104,7 @@ export default function BalanceSheet() {
       const compDividends = reComparativeStatements.map(c => formatAmount(-(c?.data.dividendsDeclared ?? 0)));
       rows.push(['  Dividends declared', formatAmount(-currentDividends), ...compDividends]);
     }
-    
-    // Other deductions (conditional)
-    const currentOtherDeductions = reCurrentStatement?.data.otherDeductions ?? 0;
-    const hasAnyOtherDeductions = currentOtherDeductions !== 0 || reComparativeStatements.some(c => (c?.data.otherDeductions ?? 0) !== 0);
-    if (hasAnyOtherDeductions) {
-      const compOtherDeductions = reComparativeStatements.map(c => formatAmount(-(c?.data.otherDeductions ?? 0)));
-      rows.push(['  Other deductions', formatAmount(-currentOtherDeductions), ...compOtherDeductions]);
-    }
+
     
     // Closing balance
     const currentClosingRE = reCurrentStatement?.data.closingBalance ?? 0;
@@ -1599,26 +1619,10 @@ export default function BalanceSheet() {
                   <>
                     <td className="py-2 px-6 text-right font-mono font-semibold">{formatCurrency(totalEquity)}</td>
                     {comparisonPeriods.map((_, i) => {
-                      const compREClosing = reComparativeStatements[i]?.data?.closingBalance ?? 0;
-                      const compPeriodData = comparativeData?.[i + 1];
-                      const compEquityAccts = (compPeriodData?.balances ?? [])
-                        .filter(a => a.account_type === 'equity')
-                        .filter(a => {
-                          const code = a.code;
-                          const nameLower = a.name?.toLowerCase() || '';
-                          if (code === '3-00-202' || nameLower.includes('current year earnings') || nameLower.includes('current year excess') || nameLower.includes('current year surplus') || nameLower.includes('excess (deficiency)')) return false;
-                          if (code === '3-00-201' || nameLower === 'retained earnings' || nameLower.includes('accumulated deficit') || nameLower.includes('unrestricted net assets') || nameLower.includes('accumulated surplus') || nameLower.includes('unrestricted funds') || nameLower.includes('accumulated funds')) return false;
-                          return true;
-                        })
-                        .reduce((sum, a) => {
-                          const isContra = a.normal_balance !== 'credit';
-                          const sign = isContra ? -1 : 1;
-                          return sum + ((a.calculated_balance ?? 0) * sign);
-                        }, 0);
-                      const compEquityTotal = compEquityAccts + compREClosing;
+                      const compTotal = comparativeTotals[i + 1];
                       return (
                         <td key={i} className="py-2 px-6 text-right font-mono font-semibold">
-                          {formatCurrency(compEquityTotal)}
+                          {compTotal ? formatCurrency(compTotal.totalEquity) : '-'}
                         </td>
                       );
                     })}
@@ -1645,26 +1649,10 @@ export default function BalanceSheet() {
                   <td className="py-2.5 px-6 font-semibold" style={{ paddingLeft: 30 }}>Total for {equityLabel}</td>
                   <td className="py-2.5 px-6 text-right font-mono font-semibold">{formatCurrency(totalEquity)}</td>
                   {comparisonPeriods.map((_, i) => {
-                    const compREClosing = reComparativeStatements[i]?.data?.closingBalance ?? 0;
-                    const compPeriodData = comparativeData?.[i + 1];
-                    const compEquityAccts = (compPeriodData?.balances ?? [])
-                      .filter(a => a.account_type === 'equity')
-                      .filter(a => {
-                        const code = a.code;
-                        const nameLower = a.name?.toLowerCase() || '';
-                        if (code === '3-00-202' || nameLower.includes('current year earnings') || nameLower.includes('current year excess') || nameLower.includes('current year surplus') || nameLower.includes('excess (deficiency)')) return false;
-                        if (code === '3-00-201' || nameLower === 'retained earnings' || nameLower.includes('accumulated deficit') || nameLower.includes('unrestricted net assets') || nameLower.includes('accumulated surplus') || nameLower.includes('unrestricted funds') || nameLower.includes('accumulated funds')) return false;
-                        return true;
-                      })
-                      .reduce((sum, a) => {
-                        const isContra = a.normal_balance !== 'credit';
-                        const sign = isContra ? -1 : 1;
-                        return sum + ((a.calculated_balance ?? 0) * sign);
-                      }, 0);
-                    const compEquityTotal = compEquityAccts + compREClosing;
+                    const compTotal = comparativeTotals[i + 1];
                     return (
                       <td key={i} className="py-2.5 px-6 text-right font-mono font-semibold">
-                        {formatCurrency(compEquityTotal)}
+                        {compTotal ? formatCurrency(compTotal.totalEquity) : '-'}
                       </td>
                     );
                   })}
@@ -1677,29 +1665,10 @@ export default function BalanceSheet() {
                 <td className="py-3 px-6 text-right font-mono font-bold">{formatCurrency(totalLiabilitiesAndEquity)}</td>
                 {comparisonPeriods.map((_, i) => {
                   const compTotal = comparativeTotals[i + 1];
-                  // Use the comparative RE closing balance (already includes net income)
-                  const compREClosing = reComparativeStatements[i]?.data?.closingBalance ?? 0;
-                  // Get comparative equity accounts excluding RE and CYE
-                  const compPeriodData = comparativeData?.[i + 1];
-                  const compEquityAccts = (compPeriodData?.balances ?? [])
-                    .filter(a => a.account_type === 'equity')
-                      .filter(a => {
-                        const code = a.code;
-                        const nameLower = a.name?.toLowerCase() || '';
-                        if (code === '3-00-202' || nameLower.includes('current year earnings') || nameLower.includes('current year excess') || nameLower.includes('current year surplus') || nameLower.includes('excess (deficiency)')) return false;
-                        if (code === '3-00-201' || nameLower === 'retained earnings' || nameLower.includes('accumulated deficit') || nameLower.includes('unrestricted net assets') || nameLower.includes('accumulated surplus') || nameLower.includes('unrestricted funds') || nameLower.includes('accumulated funds')) return false;
-                        return true;
-                      })
-                    .reduce((sum, a) => {
-                      const isContra = a.normal_balance !== 'credit';
-                      const sign = isContra ? -1 : 1;
-                      return sum + ((a.calculated_balance ?? 0) * sign);
-                    }, 0);
-                  const compEquityTotal = compEquityAccts + compREClosing;
-                  const compLETotal = (compTotal?.totalLiabilities ?? 0) + compEquityTotal;
+                  const compLETotal = (compTotal?.totalLiabilities ?? 0) + (compTotal?.totalEquity ?? 0);
                   return (
                     <td key={i} className="py-3 px-6 text-right font-mono font-bold">
-                      {formatCurrency(compLETotal)}
+                      {compTotal ? formatCurrency(compLETotal) : '-'}
                     </td>
                   );
                 })}
@@ -1793,25 +1762,8 @@ export default function BalanceSheet() {
                     })}
                   </tr>
 
-                  {/* Other Additions (conditional) */}
-                  {((reCurrentStatement?.data.otherAdditions ?? 0) !== 0 || reComparativeStatements.some(c => (c?.data.otherAdditions ?? 0) !== 0)) && (
-                    <tr className="border-b border-border/30 hover:bg-muted/20 transition-colors">
-                      <td className="py-2.5 px-6" style={{ paddingLeft: 30 }}>
-                        <span className="text-foreground">Other additions</span>
-                      </td>
-                      <td className="py-2.5 px-6 text-right font-mono">
-                        {reCurrentStatement ? formatCurrencyOrDash(reCurrentStatement.data.otherAdditions) : '-'}
-                      </td>
-                      {comparisonPeriods.map((_, i) => {
-                        const compRE = reComparativeStatements[i];
-                        return (
-                          <td key={i} className="py-2.5 px-6 text-right font-mono">
-                            {compRE ? formatCurrencyOrDash(compRE.data.otherAdditions) : '-'}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  )}
+
+
 
                   {/* Dividends Declared (conditional) */}
                   {((reCurrentStatement?.data.dividendsDeclared ?? 0) !== 0 || reComparativeStatements.some(c => (c?.data.dividendsDeclared ?? 0) !== 0)) && (
@@ -1833,25 +1785,8 @@ export default function BalanceSheet() {
                     </tr>
                   )}
 
-                  {/* Other Deductions (conditional) */}
-                  {((reCurrentStatement?.data.otherDeductions ?? 0) !== 0 || reComparativeStatements.some(c => (c?.data.otherDeductions ?? 0) !== 0)) && (
-                    <tr className="border-b border-border/30 hover:bg-muted/20 transition-colors">
-                      <td className="py-2.5 px-6" style={{ paddingLeft: 30 }}>
-                        <span className="text-foreground">Other deductions</span>
-                      </td>
-                      <td className="py-2.5 px-6 text-right font-mono">
-                        {reCurrentStatement ? formatCurrencyOrDash(-(reCurrentStatement.data.otherDeductions)) : '-'}
-                      </td>
-                      {comparisonPeriods.map((_, i) => {
-                        const compRE = reComparativeStatements[i];
-                        return (
-                          <td key={i} className="py-2.5 px-6 text-right font-mono">
-                            {compRE ? formatCurrencyOrDash(-(compRE.data.otherDeductions)) : '-'}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  )}
+
+
 
                   {/* Closing Balance - GIFI 3849 */}
                   <tr className="bg-muted/20 border-t-2 border-border font-semibold">

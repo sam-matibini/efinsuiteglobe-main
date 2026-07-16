@@ -5,7 +5,7 @@ import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 // Allowed origins for CORS
 const ALLOWED_ORIGINS = [
   "https://id-preview--7ad11d58-fd56-4aea-9970-5a9b2d47b933.lovable.app",
-  "https://efinsuiteglobe.lovable.app",
+  "https://efinsuite.com",
   "http://localhost:5173",
   "http://localhost:8080",
 ];
