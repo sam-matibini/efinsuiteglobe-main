@@ -1,4 +1,4 @@
-# Phase 8 — Categorization surfaces on documents & explainability
+# Phase 8 — Categorization surfaces on documents & explainability (DONE)
 
 Phase 7 shipped revenue-side AI categorization plus an undo audit log. The pipeline is now solid but two gaps remain: users cannot trigger AI categorization directly from invoice / journal / PO detail views, and when auto-apply changes an account there is no "why did the AI pick this?" surface. Phase 8 closes both.
 
