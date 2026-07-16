@@ -1,6 +1,6 @@
 // Phase 7 — AI categorization application history + undo page.
 import { useMemo, useState } from "react";
-import { Sparkles, Undo2, Loader2 } from "lucide-react";
+import { Sparkles, Undo2, Loader2, ChevronDown, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { useOrganizationContext } from "@/hooks/useOrganizationContext";
 import { useAICategorizationHistory } from "@/hooks/useAICategorizationHistory";
