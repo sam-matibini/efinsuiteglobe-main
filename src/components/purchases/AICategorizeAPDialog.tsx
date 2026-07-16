@@ -159,6 +159,27 @@ export function AICategorizeAPDialog({ open, onOpenChange, target }: Props) {
     const n = await applySuggestions(target, acceptedList);
     toast.success(`Applied ${n} categorizations`);
 
+    // Phase 5 — feedback capture
+    if (organization?.id && suggestions.length > 0) {
+      const items = suggestions.map((s) => {
+        const l = lineMap.get(s.id);
+        const isAccepted = !!accepted[s.id] && !!s.gl_account_id;
+        return {
+          line_id: s.id,
+          target: (target === "bill" ? "bill" : "expense") as "bill" | "expense",
+          suggested_account_id: s.gl_account_id,
+          final_account_id: isAccepted ? s.gl_account_id : null,
+          source: s.source,
+          confidence: s.confidence,
+          vendor_key: l?.parent_label ?? null,
+          desc_key: l?.description ?? null,
+        };
+      });
+      void supabase.functions.invoke("ai-record-categorization-feedback", {
+        body: { organization_id: organization.id, context: "ap", items },
+      });
+    }
+
     if (organization?.id) {
       const aiPromotions = acceptedList
         .filter((s) => s.source === "ai" && s.gl_account_id)
@@ -182,6 +203,7 @@ export function AICategorizeAPDialog({ open, onOpenChange, target }: Props) {
 
     setTimeout(() => onOpenChange(false), learnedRules && learnedRules > 0 ? 1200 : 400);
   };
+
 
   const title =
     target === "bill" ? "AI Categorize Bill Lines" : "AI Categorize Expense Claim Lines";
