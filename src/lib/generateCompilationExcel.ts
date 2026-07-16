@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import { isRetainedEarningsOrCYE, sumEquityExcludingREandCYE, type ComparativeFinancialData } from './generateCompilationPdfEnhanced';
+import { isExcludedFromCompilationEquityTotal, sumEquityExcludingREandCYE, type ComparativeFinancialData } from './generateCompilationPdfEnhanced';
 import type { CompilationReport } from '@/hooks/useCompilationReports';
 
 type ExecSlot = {
@@ -230,8 +230,8 @@ function buildBalanceSheetSheet(data: ComparativeFinancialData, hideZeroBalances
   const hasReClosing = typeof cur.reClosingBalance === 'number';
   if (hasReClosing) {
     // Canonical formula: filter out RE + CYE, then add reClosingBalance
-    const curEquityFiltered = cur.equity.filter(a => !isRetainedEarningsOrCYE(a));
-    const priorEquityFiltered = prior?.equity.filter(a => !isRetainedEarningsOrCYE(a));
+    const curEquityFiltered = cur.equity.filter(a => !isExcludedFromCompilationEquityTotal(a));
+    const priorEquityFiltered = prior?.equity.filter(a => !isExcludedFromCompilationEquityTotal(a));
     addAccounts(curEquityFiltered, priorEquityFiltered, 'credit');
     const reCur = cur.reClosingBalance ?? 0;
     const rePrior = prior?.reClosingBalance ?? 0;
