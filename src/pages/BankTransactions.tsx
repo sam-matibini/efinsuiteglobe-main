@@ -37,6 +37,7 @@ import { EditCreditCardTransactionDialog } from '@/components/banking/EditCredit
 import { MatchPaymentDialog } from '@/components/banking/MatchPaymentDialog';
 import { UnifiedImportDialog, ParsedBankTransaction, ParsedCreditCardTransaction } from '@/components/banking/UnifiedImportDialog';
 import { StatementExtractionDialog } from '@/components/banking/StatementExtractionDialog';
+import { BankStatementExtractor } from '@/components/banking/BankStatementExtractor';
 import { ImportHistoryDialog } from '@/components/banking/ImportHistoryDialog';
 import { RuleCondition, TransactionRule } from '@/types/bankingRules';
 import { toast } from 'sonner';
@@ -110,6 +111,7 @@ export default function BankTransactions() {
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [extractionDialogOpen, setExtractionDialogOpen] = useState(false);
+  const [aiExtractorOpen, setAiExtractorOpen] = useState(false);
   const [importHistoryOpen, setImportHistoryOpen] = useState(false);
   const [createRuleDialogOpen, setCreateRuleDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -996,6 +998,10 @@ export default function BankTransactions() {
                   <Sparkles className="w-4 h-4 mr-2" />
                   AI Extraction Engine
                 </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setAiExtractorOpen(true)}>
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  Extract from PDF (Gemini)
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           )}
@@ -1825,6 +1831,13 @@ export default function BankTransactions() {
         onImport={handleExtractionImport}
         bankAccountId={effectiveBankAccountId}
         creditCardId={effectiveCreditCardId}
+      />
+
+      {/* Phase 2 — Gemini-powered statement extractor */}
+      <BankStatementExtractor
+        open={aiExtractorOpen}
+        onOpenChange={setAiExtractorOpen}
+        defaultBankAccountId={effectiveBankAccountId}
       />
 
       {/* Match Payment Dialog for Credit Cards */}

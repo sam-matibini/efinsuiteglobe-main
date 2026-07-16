@@ -7021,6 +7021,9 @@ export type Database = {
       }
       documents: {
         Row: {
+          ai_extracted_at: string | null
+          ai_extraction: Json | null
+          ai_extraction_confidence: number | null
           auto_delete_at: string | null
           completed_at: string | null
           compliance_certificate_url: string | null
@@ -7059,6 +7062,9 @@ export type Database = {
           voided_by: string | null
         }
         Insert: {
+          ai_extracted_at?: string | null
+          ai_extraction?: Json | null
+          ai_extraction_confidence?: number | null
           auto_delete_at?: string | null
           completed_at?: string | null
           compliance_certificate_url?: string | null
@@ -7097,6 +7103,9 @@ export type Database = {
           voided_by?: string | null
         }
         Update: {
+          ai_extracted_at?: string | null
+          ai_extraction?: Json | null
+          ai_extraction_confidence?: number | null
           auto_delete_at?: string | null
           completed_at?: string | null
           compliance_certificate_url?: string | null
