@@ -100,6 +100,7 @@ const Bills = lazy(() => import("./pages/Bills"));
 const BankAccounts = lazy(() => import("./pages/BankAccounts"));
 const BankTransactions = lazy(() => import("./pages/BankTransactions"));
 const AICategorizationInsights = lazy(() => import("./pages/AICategorizationInsights"));
+const AICategorizationHistory = lazy(() => import("./pages/AICategorizationHistory"));
 const SettlementReconciliation = lazy(() => import("./pages/SettlementReconciliation"));
 const TransactionRules = lazy(() => import("./pages/TransactionRules"));
 const Reconciliation = lazy(() => import("./pages/Reconciliation"));
@@ -376,6 +377,7 @@ const AppRoutes = () => (
         <Route path="/banking/credit-cards/reconcile" element={<ProtectedRoute><PageWrapper><CreditCardReconciliation /></PageWrapper></ProtectedRoute>} />
         <Route path="/banking/transactions" element={<ProtectedRoute><PageWrapper><BankTransactions /></PageWrapper></ProtectedRoute>} />
         <Route path="/ai/categorization-insights" element={<ProtectedRoute><PageWrapper><AICategorizationInsights /></PageWrapper></ProtectedRoute>} />
+        <Route path="/ai/categorization-history" element={<ProtectedRoute><PageWrapper><AICategorizationHistory /></PageWrapper></ProtectedRoute>} />
 
     <Route path="/banking/rules" element={<ProtectedRoute><PageWrapper><TransactionRules /></PageWrapper></ProtectedRoute>} />
     <Route path="/banking/reconciliation" element={<ProtectedRoute><PageWrapper><Reconciliation /></PageWrapper></ProtectedRoute>} />

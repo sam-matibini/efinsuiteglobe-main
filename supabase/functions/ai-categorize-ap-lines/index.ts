@@ -355,10 +355,31 @@ Rules:
               s.confidence >= threshold &&
               (s.source === "cache" || s.source === "ai")
             ) {
+              const { data: prior } = await admin
+                .from(table)
+                .select("id, expense_account_id, category")
+                .eq("id", s.id)
+                .maybeSingle();
+              const priorVal = {
+                expense_account_id: (prior as any)?.expense_account_id ?? null,
+                category: (prior as any)?.category ?? null,
+              };
               const update: Record<string, unknown> = { expense_account_id: s.gl_account_id };
               if (body.target === "expense" && s.category) update.category = s.category;
               const { error: upErr } = await admin.from(table).update(update).eq("id", s.id);
-              if (!upErr) autoApplied.push(s.id);
+              if (!upErr) {
+                autoApplied.push(s.id);
+                await admin.from("ai_categorization_applications").insert({
+                  organization_id: body.organization_id,
+                  context: "ap",
+                  target: body.target,
+                  row_id: s.id,
+                  prior_value: priorVal,
+                  new_value: { expense_account_id: s.gl_account_id, category: s.category ?? null },
+                  confidence: s.confidence,
+                  source: s.source,
+                });
+              }
             }
           }
           if (autoApplied.length > 0) {

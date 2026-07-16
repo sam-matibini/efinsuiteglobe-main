@@ -11,10 +11,12 @@ import { useOrganizationContext } from "@/hooks/useOrganizationContext";
 import { useAICategorizationSettings } from "@/hooks/useAICategorizationSettings";
 import { useCategorizationInsights } from "@/hooks/useAICategorizationInsights";
 
-const SCOPES: Array<{ id: "bank" | "bill" | "expense"; label: string }> = [
+const SCOPES: Array<{ id: "bank" | "bill" | "expense" | "invoice" | "journal"; label: string; hint?: string }> = [
   { id: "bank", label: "Bank transactions" },
   { id: "bill", label: "Vendor bill lines" },
   { id: "expense", label: "Expense claim lines" },
+  { id: "invoice", label: "Invoice lines", hint: "Draft only" },
+  { id: "journal", label: "Journal entry lines", hint: "Draft only" },
 ];
 
 export function AICategorizationAutoApplySettings() {
@@ -93,7 +95,7 @@ export function AICategorizationAutoApplySettings() {
 
         <div className="space-y-2">
           <Label>Scopes</Label>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
             {SCOPES.map((s) => {
               const checked = scopes.includes(s.id);
               return (
@@ -111,7 +113,12 @@ export function AICategorizationAutoApplySettings() {
                       handleSave({ auto_apply_scopes: Array.from(next) });
                     }}
                   />
-                  <span>{s.label}</span>
+                  <span>
+                    {s.label}
+                    {s.hint && (
+                      <span className="ml-1 text-xs text-muted-foreground">({s.hint})</span>
+                    )}
+                  </span>
                 </label>
               );
             })}

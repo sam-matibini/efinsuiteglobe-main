@@ -10,8 +10,8 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-type Context = "bank" | "ap";
-type Target = "bank_transaction" | "bill" | "expense";
+type Context = "bank" | "ap" | "revenue";
+type Target = "bank_transaction" | "bill" | "expense" | "po" | "invoice" | "journal";
 type Source = "cache" | "ai" | "none" | "manual";
 
 interface FeedbackItem {
@@ -104,8 +104,14 @@ Deno.serve(async (req) => {
     if (insErr) return j({ error: insErr.message }, 500);
 
     // Invalidate stale cache for overridden cache/ai suggestions
-    const formula = body.context === "bank" ? "CATEGORIZE_TXN" : "CATEGORIZE_AP";
-    const prefix = body.context === "bank" ? "" : "AP|";
+    const formula =
+      body.context === "bank"
+        ? "CATEGORIZE_TXN"
+        : body.context === "revenue"
+          ? "CATEGORIZE_REVENUE"
+          : "CATEGORIZE_AP";
+    const prefix =
+      body.context === "bank" ? "" : body.context === "revenue" ? "REV|" : "AP|";
     let cacheInvalidated = 0;
     for (const it of body.items) {
       const overridden =
