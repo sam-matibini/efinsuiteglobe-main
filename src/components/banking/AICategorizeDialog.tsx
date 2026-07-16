@@ -90,6 +90,8 @@ export function AICategorizeDialog({
       setSuggestions([]);
       setAccepted({});
       setHasRun(false);
+      setLearnedRules(null);
+      setAutoRan(false);
     }
   }, [open]);
 
@@ -110,6 +112,15 @@ export function AICategorizeDialog({
     if (res.length === 0) toast.info("No suggestions returned");
   };
 
+  // Phase 3.1 — auto-run in post-import mode as soon as the dialog opens.
+  useEffect(() => {
+    if (open && postImportMode && !autoRan && !hasRun && transactions.length > 0) {
+      setAutoRan(true);
+      void runCategorize();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, postImportMode, autoRan, hasRun, transactions.length]);
+
   // Re-select when threshold changes.
   useEffect(() => {
     if (!hasRun) return;
@@ -127,6 +138,31 @@ export function AICategorizeDialog({
   const handleApply = async () => {
     const n = await applySuggestions(acceptedList);
     toast.success(`Applied ${n} categorizations`);
+
+    // Phase 3.2 — promote AI-sourced acceptances into transaction_rules.
+    if (currentOrganization?.id) {
+      const aiPromotions = acceptedList
+        .filter((s) => s.source === "ai" && s.gl_account_id)
+        .map((s) => {
+          const t = txnMap.get(s.id);
+          return {
+            description: t?.description ?? null,
+            gl_account_id: s.gl_account_id!,
+            category: s.category ?? null,
+          };
+        });
+      if (aiPromotions.length > 0) {
+        const created = await promoteRules(currentOrganization.id, aiPromotions);
+        setLearnedRules(created);
+        if (created > 0) {
+          onApplied?.(n);
+          // Keep dialog open briefly so the user can see the learned-rules note.
+          setTimeout(() => onOpenChange(false), 1200);
+          return;
+        }
+      }
+    }
+
     onApplied?.(n);
     onOpenChange(false);
   };
