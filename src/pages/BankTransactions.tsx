@@ -1867,7 +1867,10 @@ export default function BankTransactions() {
             payee_payor: (t as { payee_payor?: string | null }).payee_payor ?? null,
           }))
         }
-        onApplied={() => refetch()}
+        onApplied={() => {
+          void refetchBankTx?.();
+          void refetchCcTx?.();
+        }}
       />
 
       {/* Match Payment Dialog for Credit Cards */}
