@@ -99,6 +99,7 @@ const Vendors = lazy(() => import("./pages/Vendors"));
 const Bills = lazy(() => import("./pages/Bills"));
 const BankAccounts = lazy(() => import("./pages/BankAccounts"));
 const BankTransactions = lazy(() => import("./pages/BankTransactions"));
+const AICategorizationInsights = lazy(() => import("./pages/AICategorizationInsights"));
 const SettlementReconciliation = lazy(() => import("./pages/SettlementReconciliation"));
 const TransactionRules = lazy(() => import("./pages/TransactionRules"));
 const Reconciliation = lazy(() => import("./pages/Reconciliation"));
