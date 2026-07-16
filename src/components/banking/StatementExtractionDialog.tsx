@@ -352,6 +352,97 @@ export function StatementExtractionDialog({
               </DialogHeader>
               
               <div className="flex-1 p-6 pt-0 space-y-6 overflow-y-auto">
+                {/* Source mode toggle */}
+                <div className="inline-flex rounded-lg border border-border bg-muted/30 p-1">
+                  <button
+                    type="button"
+                    onClick={() => setSourceMode('file')}
+                    className={cn(
+                      'px-3 py-1.5 text-sm rounded-md transition-colors flex items-center gap-1.5',
+                      sourceMode === 'file'
+                        ? 'bg-background shadow-sm font-medium'
+                        : 'text-muted-foreground hover:text-foreground',
+                    )}
+                  >
+                    <FileUp className="h-4 w-4" />
+                    File upload
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSourceMode('aisheets')}
+                    className={cn(
+                      'px-3 py-1.5 text-sm rounded-md transition-colors flex items-center gap-1.5',
+                      sourceMode === 'aisheets'
+                        ? 'bg-background shadow-sm font-medium'
+                        : 'text-muted-foreground hover:text-foreground',
+                    )}
+                  >
+                    <FileSpreadsheet className="h-4 w-4" />
+                    From AI Sheets
+                  </button>
+                </div>
+
+                {sourceMode === 'aisheets' && (
+                  <div className="space-y-3 p-4 rounded-lg border border-primary/20 bg-primary/5">
+                    <div className="flex items-center gap-2">
+                      <Brain className="h-4 w-4 text-primary" />
+                      <h4 className="font-medium text-sm">Load from Alice AI Sheets</h4>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Feed rows from an AI Sheets workbook you already extracted or cleaned up, and skip re-uploading the PDF.
+                    </p>
+                    <Select
+                      value={selectedWorkbookPath ?? ''}
+                      onValueChange={(v) => setSelectedWorkbookPath(v || null)}
+                      disabled={workbooksLoading || aliceWorkbooks.length === 0}
+                    >
+                      <SelectTrigger className="h-9">
+                        <SelectValue
+                          placeholder={
+                            workbooksLoading
+                              ? 'Loading workbooks…'
+                              : aliceWorkbooks.length === 0
+                                ? 'No AI Sheets workbooks found'
+                                : 'Select a workbook…'
+                          }
+                        />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {aliceWorkbooks.map((wb) => (
+                          <SelectItem key={wb.path} value={wb.path}>
+                            <div className="flex items-center gap-2">
+                              <FileSpreadsheet className="h-3.5 w-3.5 text-green-600" />
+                              <span className="truncate max-w-[320px]">{wb.name}</span>
+                              <span className="text-xs text-muted-foreground">
+                                {new Date(wb.uploaded_at).toLocaleDateString()}
+                              </span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      onClick={loadFromAliceSheets}
+                      disabled={!selectedWorkbookPath || loadingWorkbook}
+                      className="w-full"
+                    >
+                      {loadingWorkbook ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Loading workbook…
+                        </>
+                      ) : (
+                        <>
+                          <Zap className="h-4 w-4 mr-2" />
+                          Load rows into mapper
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                )}
+
+                {sourceMode === 'file' && (
+                  <>
                 {/* Upload Zone */}
                 <input
                   ref={fileInputRef}
