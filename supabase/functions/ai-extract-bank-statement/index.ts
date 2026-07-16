@@ -202,17 +202,18 @@ Deno.serve(async (req) => {
     // Log for daily cap.
     await admin.from("ai_setup_logs").insert({
       organization_id: body.organization_id,
-      user_id: userData.user.id,
-      action: "ai-extract-bank-statement",
-      status: "success",
-      metadata: {
+      setup_type: "bank_statement_extraction",
+      detected_value: {
         filename: body.filename ?? null,
         document_id: sourceDocId,
-        confidence,
         transaction_count: Array.isArray(extraction.transactions)
           ? extraction.transactions.length
           : 0,
       },
+      confidence_score: confidence,
+      was_overridden: false,
+    });
+
     });
 
     return json({
