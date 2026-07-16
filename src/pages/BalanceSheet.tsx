@@ -373,26 +373,9 @@ export default function BalanceSheet() {
     comparisonPeriods
   );
 
-  // Get comparative totals for display, then adjust each period's totals for
-  // abnormal-balance reclassification so comparative L+E ties to comparative Assets.
-  // For ASPE display we derive Equity = Assets - Liabilities (per period) so the
-  // displayed equation always balances, matching the on-screen totals.
   const rawComparativeTotals = getComparativeTotals();
-  const comparativeTotals = useMemo(() => {
-    return rawComparativeTotals.map((ct: any) => {
-      const adjAssets = ct.totalAssets ?? 0;
-      const adjLiabs = ct.totalLiabilities ?? 0;
-      const adjEquity = ct.totalEquity ?? 0;
-      const diff = Math.abs(adjAssets - (adjLiabs + adjEquity));
-      return {
-        ...ct,
-        totalAssets: adjAssets,
-        totalLiabilities: adjLiabs,
-        totalEquity: adjEquity,
-        isBalanced: diff < 0.02,
-      };
-    });
-  }, [rawComparativeTotals]);
+
+
 
   // Balance Sheet is a point-in-time report, so retained earnings must be
   // rolled forward from the fiscal-year start that contains each column's as-of
@@ -426,6 +409,54 @@ export default function BalanceSheet() {
     retainedEarningsCurrentPeriod,
     retainedEarningsComparisonPeriods
   );
+
+  // Recompute each comparative period's totalEquity to match the on-screen
+  // rows: non-RE/CYE/dividend equity accounts + Statement of Retained Earnings
+  // closing balance. This mirrors the current-period logic and prevents
+  // dividends/drawings from being double-counted (they are already netted
+  // inside the RE closing balance).
+  const comparativeTotals = useMemo(() => {
+    const isExcludedEquity = (a: any): boolean => {
+      const code = a.code || '';
+      const nameLower = (a.name || '').toLowerCase();
+      if (code === '3-00-202' || nameLower.includes('current year earnings') || nameLower.includes('current year excess') || nameLower.includes('current year surplus') || nameLower.includes('excess (deficiency)')) return true;
+      if (code === '3-00-201' || nameLower === 'retained earnings' || nameLower.includes('accumulated deficit') || nameLower.includes('unrestricted net assets') || nameLower.includes('accumulated surplus') || nameLower.includes('unrestricted funds') || nameLower.includes('accumulated funds')) return true;
+      if (a.account_type === 'equity' && a.normal_balance === 'debit') return true; // contra-equity (dividends/drawings/treasury)
+      if (nameLower.includes('dividend') || nameLower.includes("owner's draw") || nameLower.includes('owner draw') || nameLower.includes('owners draw') || nameLower.includes('shareholder draw') || nameLower.includes('distributions to owners') || nameLower.includes('distributions to shareholders') || nameLower.includes('capital distributions') || nameLower.includes('drawings') || nameLower.includes('treasury stock') || nameLower.includes('treasury shares')) return true;
+      return false;
+    };
+
+    return rawComparativeTotals.map((ct: any, i: number) => {
+      const adjAssets = ct.totalAssets ?? 0;
+      const adjLiabs = ct.totalLiabilities ?? 0;
+
+      const pd = comparativeData?.[i];
+      let adjEquity = ct.totalEquity ?? 0;
+      if (pd?.balances) {
+        const nonReEquity = pd.balances
+          .filter((a: any) => a.account_type === 'equity' && !a.is_header && !isExcludedEquity(a))
+          .reduce((sum: number, a: any) => {
+            const sign = a.normal_balance === 'credit' ? 1 : -1;
+            return sum + (Number(a.calculated_balance) || 0) * sign;
+          }, 0);
+        const reClosing = i === 0
+          ? (reCurrentStatement?.data?.closingBalance ?? 0)
+          : (reComparativeStatements?.[i - 1]?.data?.closingBalance ?? 0);
+        adjEquity = nonReEquity + reClosing;
+      }
+
+      const diff = Math.abs(adjAssets - (adjLiabs + adjEquity));
+      return {
+        ...ct,
+        totalAssets: adjAssets,
+        totalLiabilities: adjLiabs,
+        totalEquity: adjEquity,
+        isBalanced: diff < 0.02,
+      };
+    });
+  }, [rawComparativeTotals, comparativeData, reCurrentStatement, reComparativeStatements]);
+
+
 
   // Get RE closing balance from Statement of Retained Earnings
   // This already includes Net Income, so we do NOT add netIncome separately
