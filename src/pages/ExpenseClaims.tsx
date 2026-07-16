@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Plus, Search, Download, MoreHorizontal, FileText, Send, Check, X, DollarSign, Building2, Paperclip } from 'lucide-react';
+import { Plus, Search, Download, MoreHorizontal, FileText, Send, Check, X, DollarSign, Building2, Paperclip, Sparkles } from 'lucide-react';
 import { PurchaseAttachmentsDialog } from '@/components/purchases/PurchaseAttachmentsDialog';
+import { AICategorizeAPDialog } from '@/components/purchases/AICategorizeAPDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
@@ -61,6 +62,7 @@ export default function ExpenseClaims() {
   const [showOrgDialog, setShowOrgDialog] = useState(false);
   const [shareClaim, setShareClaim] = useState<any | null>(null);
   const [docsClaim, setDocsClaim] = useState<any | null>(null);
+  const [showAICategorize, setShowAICategorize] = useState(false);
 
   const countryCode = organization?.country || 'CA';
   const localization = getCountryLocalization(countryCode);
@@ -131,6 +133,12 @@ export default function ExpenseClaims() {
             <Download className="w-4 h-4 mr-2" />
             Export
           </Button>
+          {!isReadOnly && (
+            <Button variant="outline" size="sm" onClick={() => setShowAICategorize(true)}>
+              <Sparkles className="w-4 h-4 mr-2" />
+              AI Categorize Lines
+            </Button>
+          )}
           {!isReadOnly && (
             <Button 
               className="bg-accent hover:bg-accent/90 text-accent-foreground"
@@ -303,6 +311,11 @@ export default function ExpenseClaims() {
         title={docsClaim ? `Claim ${docsClaim.claim_number} — Documents` : undefined}
         currentNotes={docsClaim?.description}
         invalidateKeys={["expense_claims"]}
+      />
+      <AICategorizeAPDialog
+        open={showAICategorize}
+        onOpenChange={setShowAICategorize}
+        target="expense"
       />
     </div>
   );

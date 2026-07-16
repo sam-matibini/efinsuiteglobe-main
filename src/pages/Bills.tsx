@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Plus, Search, Download, MoreHorizontal, Check, AlertTriangle, Clock, DollarSign, Send, Paperclip } from 'lucide-react';
+import { Plus, Search, Download, MoreHorizontal, Check, AlertTriangle, Clock, DollarSign, Send, Paperclip, Sparkles } from 'lucide-react';
+import { AICategorizeAPDialog } from '@/components/purchases/AICategorizeAPDialog';
 import { PurchaseAttachmentsDialog } from '@/components/purchases/PurchaseAttachmentsDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -37,6 +38,7 @@ export default function Bills() {
   const [selectedBillForPayment, setSelectedBillForPayment] = useState<{ vendorId?: string; billId?: string }>({});
   const [shareBill, setShareBill] = useState<any | null>(null);
   const [docsBill, setDocsBill] = useState<any | null>(null);
+  const [showAICategorize, setShowAICategorize] = useState(false);
 
 
   const { bills, isLoading, totalOutstanding, overdueAmount, paidThisMonth, updateBillStatus } = useBills();
@@ -116,6 +118,12 @@ export default function Bills() {
             <Download className="w-4 h-4 mr-2" />
             Export
           </Button>
+          {!isReadOnly && (
+            <Button variant="outline" size="sm" onClick={() => setShowAICategorize(true)}>
+              <Sparkles className="w-4 h-4 mr-2" />
+              AI Categorize Lines
+            </Button>
+          )}
           {!isReadOnly && (
             <Button 
               className="bg-accent hover:bg-accent/90 text-accent-foreground"
@@ -309,6 +317,11 @@ export default function Bills() {
         title={docsBill ? `Bill ${docsBill.bill_number} — Documents` : undefined}
         currentNotes={docsBill?.notes}
         invalidateKeys={["bills"]}
+      />
+      <AICategorizeAPDialog
+        open={showAICategorize}
+        onOpenChange={setShowAICategorize}
+        target="bill"
       />
     </div>
   );
