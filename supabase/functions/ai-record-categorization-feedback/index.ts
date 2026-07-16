@@ -10,8 +10,8 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-type Context = "bank" | "ap";
-type Target = "bank_transaction" | "bill" | "expense";
+type Context = "bank" | "ap" | "revenue";
+type Target = "bank_transaction" | "bill" | "expense" | "po" | "invoice" | "journal";
 type Source = "cache" | "ai" | "none" | "manual";
 
 interface FeedbackItem {
