@@ -6,7 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { CategorizationSuggestion, PromoteItem } from "./useAICategorization";
 
 export type LineContext = "ap" | "revenue";
-export type LineTarget = "bill" | "expense" | "po" | "invoice" | "journal";
+export type LineTarget = "bill" | "expense" | "invoice" | "journal";
 
 const CONFIG: Record<
   LineTarget,
@@ -23,12 +23,6 @@ const CONFIG: Record<
     endpoint: "ai-categorize-ap-lines",
     table: "expense_claim_lines",
     accountCol: "expense_account_id",
-  },
-  po: {
-    context: "ap",
-    endpoint: "ai-categorize-ap-lines",
-    table: "purchase_order_lines",
-    accountCol: "gl_account_id",
   },
   invoice: {
     context: "revenue",
