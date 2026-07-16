@@ -134,6 +134,12 @@ export default function ExpenseClaims() {
             Export
           </Button>
           {!isReadOnly && (
+            <Button variant="outline" size="sm" onClick={() => setShowAICategorize(true)}>
+              <Sparkles className="w-4 h-4 mr-2" />
+              AI Categorize Lines
+            </Button>
+          )}
+          {!isReadOnly && (
             <Button 
               className="bg-accent hover:bg-accent/90 text-accent-foreground"
               onClick={() => setShowCreateDialog(true)}
