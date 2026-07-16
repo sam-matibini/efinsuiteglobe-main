@@ -322,7 +322,66 @@ Rules:
       was_overridden: false,
     });
 
-    return json({ suggestions });
+    // Phase 6 — server-side auto-apply
+    let autoApplied: string[] = [];
+    if (body.auto_apply) {
+      const { data: settings } = await admin
+        .from("ai_categorization_settings")
+        .select("auto_apply_enabled, auto_apply_threshold, auto_apply_scopes")
+        .eq("organization_id", body.organization_id)
+        .maybeSingle();
+      const scope = body.target === "bill" ? "bill" : "expense";
+      if (
+        settings?.auto_apply_enabled &&
+        (settings.auto_apply_scopes ?? []).includes(scope)
+      ) {
+        const threshold = Number(settings.auto_apply_threshold ?? 95) / 100;
+        const since30 = new Date(Date.now() - 30 * 86_400_000).toISOString();
+        const { data: fb } = await admin
+          .from("ai_categorization_feedback")
+          .select("accepted")
+          .eq("organization_id", body.organization_id)
+          .eq("context", "ap")
+          .eq("target", body.target)
+          .gte("created_at", since30);
+        const total = fb?.length ?? 0;
+        const accepted = (fb ?? []).filter((r) => r.accepted).length;
+        const rate = total >= 20 ? accepted / total : 1;
+        if (rate >= 0.8) {
+          const table = body.target === "bill" ? "bill_lines" : "expense_claim_lines";
+          for (const s of suggestions) {
+            if (
+              s.gl_account_id &&
+              s.confidence >= threshold &&
+              (s.source === "cache" || s.source === "ai")
+            ) {
+              const update: Record<string, unknown> = { expense_account_id: s.gl_account_id };
+              if (body.target === "expense" && s.category) update.category = s.category;
+              const { error: upErr } = await admin.from(table).update(update).eq("id", s.id);
+              if (!upErr) autoApplied.push(s.id);
+            }
+          }
+          if (autoApplied.length > 0) {
+            const rows = suggestions
+              .filter((s) => autoApplied.includes(s.id))
+              .map((s) => ({
+                organization_id: body.organization_id,
+                context: "ap" as const,
+                target: body.target as "bill" | "expense",
+                line_id: s.id,
+                suggested_account_id: s.gl_account_id,
+                final_account_id: s.gl_account_id,
+                source: s.source,
+                confidence: s.confidence,
+              }));
+            await admin.from("ai_categorization_feedback").insert(rows);
+          }
+        }
+      }
+    }
+
+    return json({ suggestions, auto_applied: autoApplied });
+
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error("ai-categorize-ap-lines error", msg);
