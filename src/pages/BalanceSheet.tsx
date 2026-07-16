@@ -1762,25 +1762,8 @@ export default function BalanceSheet() {
                     })}
                   </tr>
 
-                  {/* Other Additions (conditional) */}
-                  {((reCurrentStatement?.data.otherAdditions ?? 0) !== 0 || reComparativeStatements.some(c => (c?.data.otherAdditions ?? 0) !== 0)) && (
-                    <tr className="border-b border-border/30 hover:bg-muted/20 transition-colors">
-                      <td className="py-2.5 px-6" style={{ paddingLeft: 30 }}>
-                        <span className="text-foreground">Other additions</span>
-                      </td>
-                      <td className="py-2.5 px-6 text-right font-mono">
-                        {reCurrentStatement ? formatCurrencyOrDash(reCurrentStatement.data.otherAdditions) : '-'}
-                      </td>
-                      {comparisonPeriods.map((_, i) => {
-                        const compRE = reComparativeStatements[i];
-                        return (
-                          <td key={i} className="py-2.5 px-6 text-right font-mono">
-                            {compRE ? formatCurrencyOrDash(compRE.data.otherAdditions) : '-'}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  )}
+
+
 
                   {/* Dividends Declared (conditional) */}
                   {((reCurrentStatement?.data.dividendsDeclared ?? 0) !== 0 || reComparativeStatements.some(c => (c?.data.dividendsDeclared ?? 0) !== 0)) && (
