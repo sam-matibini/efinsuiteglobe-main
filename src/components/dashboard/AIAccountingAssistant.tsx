@@ -44,6 +44,7 @@ import { useAliceShare } from '@/hooks/useAliceShare';
 import { AISheets } from './AISheets';
 import { AIFinancialToolkit } from './AIFinancialToolkit';
 import { StatementExtractionDialog } from '@/components/banking/StatementExtractionDialog';
+import { classifyCreditCardType, normalizeCreditCardAmount } from '@/lib/creditCardImportNormalizer';
 import { TemplateManagementPanel } from '@/components/banking/TemplateManagementPanel';
 import { toast } from 'sonner';
 
