@@ -960,6 +960,11 @@ export default function JournalEntries() {
         open={bulkImportDialogOpen}
         onOpenChange={setBulkImportDialogOpen}
       />
+      <AICategorizeLinesDialog
+        open={aiCatDialogOpen}
+        onOpenChange={setAiCatDialogOpen}
+        target="journal"
+      />
     </div>
   );
 }
