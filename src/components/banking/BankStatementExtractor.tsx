@@ -32,11 +32,19 @@ import {
 } from "@/hooks/useBankStatementExtraction";
 import { cn } from "@/lib/utils";
 
+export interface ImportedTxnForCategorization {
+  id: string;
+  description: string | null;
+  amount: number;
+  transaction_type: string | null;
+  payee_payor?: string | null;
+}
+
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   defaultBankAccountId?: string;
-  onImported?: (count: number) => void;
+  onImported?: (count: number, imported?: ImportedTxnForCategorization[]) => void;
 }
 
 type ReviewRow = ExtractedTransaction & { include: boolean; error?: string };
@@ -147,10 +155,19 @@ export function BankStatementExtractor({
         memo: `AI extracted${file ? ` from ${file.name}` : ""}`,
         status: "pending",
       }));
-      const { error } = await supabase.from("bank_transactions").insert(payload);
+      const { data: inserted, error } = await supabase
+        .from("bank_transactions")
+        .insert(payload)
+        .select("id, description, amount, transaction_type");
       if (error) throw error;
       toast.success(`Imported ${payload.length} transactions`);
-      onImported?.(payload.length);
+      const importedList: ImportedTxnForCategorization[] = (inserted ?? []).map((r) => ({
+        id: r.id as string,
+        description: (r.description as string | null) ?? null,
+        amount: Number(r.amount ?? 0),
+        transaction_type: (r.transaction_type as string | null) ?? null,
+      }));
+      onImported?.(payload.length, importedList);
       // Reset
       setFile(null);
       setExtraction(null);
@@ -289,6 +306,9 @@ export function BankStatementExtractor({
                 </div>
                 <div className="flex items-end text-sm text-muted-foreground">
                   {includedValid.length} of {rows.length} rows ready to import
+                  <span className="ml-2 inline-flex items-center gap-1 text-primary">
+                    <Sparkles className="h-3 w-3" /> AI will categorize these after import
+                  </span>
                 </div>
               </div>
 

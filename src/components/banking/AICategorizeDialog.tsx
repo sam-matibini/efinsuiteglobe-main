@@ -37,6 +37,8 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   transactions: TxnLike[];
   onApplied?: (count: number) => void;
+  /** Phase 3.1 — post-import mode: auto-runs categorization and uses tighter defaults. */
+  postImportMode?: boolean;
 }
 
 export function AICategorizeDialog({
@@ -44,15 +46,18 @@ export function AICategorizeDialog({
   onOpenChange,
   transactions,
   onApplied,
+  postImportMode,
 }: Props) {
   const { currentOrganization } = useOrganizationContext();
-  const { categorize, applySuggestions, isCategorizing, isApplying } =
+  const { categorize, applySuggestions, promoteRules, isCategorizing, isApplying } =
     useAICategorization();
 
   const [suggestions, setSuggestions] = useState<CategorizationSuggestion[]>([]);
   const [accepted, setAccepted] = useState<Record<string, boolean>>({});
-  const [threshold, setThreshold] = useState(85);
+  const [threshold, setThreshold] = useState(postImportMode ? 90 : 85);
   const [hasRun, setHasRun] = useState(false);
+  const [learnedRules, setLearnedRules] = useState<number | null>(null);
+  const [autoRan, setAutoRan] = useState(false);
 
   const { data: accounts = [] } = useQuery({
     queryKey: ["coa-lite", currentOrganization?.id],
@@ -85,6 +90,8 @@ export function AICategorizeDialog({
       setSuggestions([]);
       setAccepted({});
       setHasRun(false);
+      setLearnedRules(null);
+      setAutoRan(false);
     }
   }, [open]);
 
@@ -105,6 +112,15 @@ export function AICategorizeDialog({
     if (res.length === 0) toast.info("No suggestions returned");
   };
 
+  // Phase 3.1 — auto-run in post-import mode as soon as the dialog opens.
+  useEffect(() => {
+    if (open && postImportMode && !autoRan && !hasRun && transactions.length > 0) {
+      setAutoRan(true);
+      void runCategorize();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, postImportMode, autoRan, hasRun, transactions.length]);
+
   // Re-select when threshold changes.
   useEffect(() => {
     if (!hasRun) return;
@@ -122,6 +138,31 @@ export function AICategorizeDialog({
   const handleApply = async () => {
     const n = await applySuggestions(acceptedList);
     toast.success(`Applied ${n} categorizations`);
+
+    // Phase 3.2 — promote AI-sourced acceptances into transaction_rules.
+    if (currentOrganization?.id) {
+      const aiPromotions = acceptedList
+        .filter((s) => s.source === "ai" && s.gl_account_id)
+        .map((s) => {
+          const t = txnMap.get(s.id);
+          return {
+            description: t?.description ?? null,
+            gl_account_id: s.gl_account_id!,
+            category: s.category ?? null,
+          };
+        });
+      if (aiPromotions.length > 0) {
+        const created = await promoteRules(currentOrganization.id, aiPromotions);
+        setLearnedRules(created);
+        if (created > 0) {
+          onApplied?.(n);
+          // Keep dialog open briefly so the user can see the learned-rules note.
+          setTimeout(() => onOpenChange(false), 1200);
+          return;
+        }
+      }
+    }
+
     onApplied?.(n);
     onOpenChange(false);
   };
@@ -132,11 +173,14 @@ export function AICategorizeDialog({
         <DialogHeader className="p-6 pb-3">
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-primary" />
-            AI Transaction Categorization
+            {postImportMode
+              ? "Review AI categorization for imported transactions"
+              : "AI Transaction Categorization"}
           </DialogTitle>
           <DialogDescription>
-            Gemini suggests a GL account and category for each transaction. Review and
-            accept below.
+            {postImportMode
+              ? "Gemini has categorized the freshly imported transactions. Review and accept below — accepted merchants will be learned into rules for next time."
+              : "Gemini suggests a GL account and category for each transaction. Review and accept below."}
           </DialogDescription>
         </DialogHeader>
 
@@ -269,10 +313,17 @@ export function AICategorizeDialog({
           )}
         </div>
 
-        <div className="border-t p-4 flex justify-between gap-2">
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>
-            <X className="h-4 w-4 mr-1" /> Cancel
-          </Button>
+        <div className="border-t p-4 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-3">
+            <Button variant="ghost" onClick={() => onOpenChange(false)}>
+              <X className="h-4 w-4 mr-1" /> Cancel
+            </Button>
+            {learnedRules !== null && learnedRules > 0 && (
+              <span className="text-xs text-muted-foreground">
+                ✨ Learned {learnedRules} new rule{learnedRules === 1 ? "" : "s"}
+              </span>
+            )}
+          </div>
           {hasRun && (
             <Button
               onClick={handleApply}

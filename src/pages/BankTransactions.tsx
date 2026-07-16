@@ -115,6 +115,7 @@ export default function BankTransactions() {
   const [extractionDialogOpen, setExtractionDialogOpen] = useState(false);
   const [aiExtractorOpen, setAiExtractorOpen] = useState(false);
   const [aiCategorizeOpen, setAiCategorizeOpen] = useState(false);
+  const [postImportTxns, setPostImportTxns] = useState<Array<{ id: string; description: string | null; amount: number; transaction_type: string | null; payee_payor?: string | null }>>([]);
   const queryClient = useQueryClient();
   const [importHistoryOpen, setImportHistoryOpen] = useState(false);
   const [createRuleDialogOpen, setCreateRuleDialogOpen] = useState(false);
@@ -1851,23 +1852,36 @@ export default function BankTransactions() {
         open={aiExtractorOpen}
         onOpenChange={setAiExtractorOpen}
         defaultBankAccountId={effectiveBankAccountId}
+        onImported={(_count, imported) => {
+          queryClient.invalidateQueries({ queryKey: ['bank-transactions'] });
+          if (imported && imported.length > 0) {
+            setPostImportTxns(imported);
+            setAiCategorizeOpen(true);
+          }
+        }}
       />
 
       {/* Phase 3 — AI categorization */}
       <AICategorizeDialog
         open={aiCategorizeOpen}
-        onOpenChange={setAiCategorizeOpen}
+        onOpenChange={(v) => {
+          setAiCategorizeOpen(v);
+          if (!v) setPostImportTxns([]);
+        }}
+        postImportMode={postImportTxns.length > 0}
         transactions={
-          (selectedTransactions.length > 0
-            ? selectedTransactions
-            : filteredTransactions.filter((t) => !t.gl_account_id)
-          ).map((t) => ({
-            id: t.id,
-            description: t.description ?? null,
-            amount: t.amount as number,
-            transaction_type: t.transaction_type ?? null,
-            payee_payor: (t as { payee_payor?: string | null }).payee_payor ?? null,
-          }))
+          postImportTxns.length > 0
+            ? postImportTxns
+            : (selectedTransactions.length > 0
+                ? selectedTransactions
+                : filteredTransactions.filter((t) => !t.gl_account_id)
+              ).map((t) => ({
+                id: t.id,
+                description: t.description ?? null,
+                amount: t.amount as number,
+                transaction_type: t.transaction_type ?? null,
+                payee_payor: (t as { payee_payor?: string | null }).payee_payor ?? null,
+              }))
         }
         onApplied={() => {
           queryClient.invalidateQueries({ queryKey: ['bank-transactions'] });

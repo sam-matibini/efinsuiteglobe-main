@@ -1,4 +1,5 @@
 // Phase 3 — AI categorization hook.
+// Phase 3.2 — promotes accepted AI suggestions into reusable transaction_rules.
 import { useCallback, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -9,6 +10,12 @@ export interface CategorizationSuggestion {
   confidence: number;
   reasoning?: string;
   source: "rule" | "cache" | "ai" | "none";
+}
+
+export interface PromoteItem {
+  description: string | null;
+  gl_account_id: string;
+  category?: string | null;
 }
 
 export function useAICategorization() {
@@ -72,5 +79,22 @@ export function useAICategorization() {
     [],
   );
 
-  return { isCategorizing, isApplying, error, categorize, applySuggestions };
+  const promoteRules = useCallback(
+    async (organizationId: string, items: PromoteItem[]): Promise<number> => {
+      if (items.length === 0) return 0;
+      try {
+        const { data, error: fnError } = await supabase.functions.invoke(
+          "ai-promote-categorization-rules",
+          { body: { organization_id: organizationId, accepted: items } },
+        );
+        if (fnError) return 0;
+        return (data as { rules_created?: number })?.rules_created ?? 0;
+      } catch {
+        return 0;
+      }
+    },
+    [],
+  );
+
+  return { isCategorizing, isApplying, error, categorize, applySuggestions, promoteRules };
 }
