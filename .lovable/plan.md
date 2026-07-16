@@ -1,55 +1,86 @@
-# Phase 4 — AI categorization for Expenses & Bills (done)
+# Phase 5 — Continuous learning & categorization analytics
 
-Extends the Phase 3 categorization engine from bank transactions to the AP side: expense claim lines and vendor bill lines. Reuses the same edge-function pattern, cache table, rule-learning flow, and review UI.
+Phases 3–4 shipped one-shot AI categorization for bank, bill, and expense lines with rule promotion. Phase 5 closes the loop: measure how well AI + learned rules are doing, feed corrections back, and surface it in the UI.
 
 ## What gets built
 
-### 1. Edge function `ai-categorize-ap-lines`
-- Input: `{ organization_id, target: "bill" | "expense", line_ids: string[] }`.
-- Loads lines from `bill_lines` or `expense_claim_lines` with parent context (vendor name, memo, amount, date).
-- Same tiered flow as `ai-categorize-transactions`:
-  1. Cache lookup in `ai_formula_cache` with `formula='CATEGORIZE_AP'` keyed by `(org | vendor | normDesc)`.
-  2. Gemini Flash fallback with the org's postable expense/COGS/asset accounts as the allowed set.
-- Batches 50 lines per model call; enforces the same 2000/day cap via `ai_setup_logs` (`setup_type='ap_categorization'`).
-- Returns `{ suggestions: [{ id, gl_account_id, category, confidence, reasoning, source }] }`.
+### 1. Feedback capture
+- New edge function `ai-record-categorization-feedback`.
+- Input: `{ organization_id, context: "bank" | "ap", items: [{ line_id, target, suggested_account_id, final_account_id, source, confidence }] }`.
+- Writes to a new `ai_categorization_feedback` table (see schema below).
+- Called from `AICategorizeDialog` / `AICategorizeAPDialog` on Apply — records both accepted (suggested == final) and overridden (suggested != final) rows.
 
-### 2. Rule learning reuse
-- `ai-promote-categorization-rules` gains an optional `context: "bank" | "ap"` field (default `"bank"`) so learned AP rules are tagged and don't pollute bank rule matching. Keyword derivation logic unchanged.
-- Only `source: "ai"` suggestions are promoted after user accepts.
+### 2. Cache correction
+- When `suggested != final` and `source in ('cache','ai')`, the same function invalidates the matching `ai_formula_cache` row (delete by `args_hash`) so the next run re-asks the model instead of repeating a bad answer.
+- If overrides for the same `(vendor|normDesc)` key cross a threshold (≥ 3 with the same corrected account), auto-promote a `transaction_rules` / AP rule via existing `ai-promote-categorization-rules` (reused, context-aware).
 
-### 3. Frontend
-- New hook `useAPCategorization` mirroring `useAICategorization` with `target` parameter — thin wrapper so the dialog stays generic.
-- `AICategorizeDialog` gains a `target` prop (`"bank" | "bill" | "expense"`) that switches:
-  - Header copy and empty-state text.
-  - The invoke target (bank vs AP function).
-  - The apply mutation (updates `bill_lines.gl_account_id` / `expense_claim_lines.gl_account_id`).
-- Add "AI Categorize" buttons to:
-  - `Bills` detail view (bulk-select lines → open dialog with `target="bill"`).
-  - `ExpenseClaims` detail view (bulk-select lines → open dialog with `target="expense"`).
+### 3. Analytics view
+- New page `src/pages/AICategorizationInsights.tsx` (route `/ai/categorization-insights`) plus a card on the existing AI settings/dashboard area.
+- Reads `ai_categorization_feedback` + `ai_setup_logs` (setup_type in `categorization`, `ap_categorization`) and shows:
+  - Volume: lines categorized per day, split by context (bank/bill/expense).
+  - Quality: acceptance rate, override rate, avg confidence, cache-hit rate.
+  - Top corrections: `(vendor, wrong_account → right_account, count)` — one-click "Promote to rule".
+  - Daily cap usage vs 2000 limit.
+- Small `<AICategorizationHealth />` widget on the bank + AP list pages for at-a-glance acceptance %.
 
-### 4. No schema changes
-- Reuses `bill_lines.gl_account_id`, `expense_claim_lines.gl_account_id`, `ai_formula_cache`, `ai_setup_logs`, `transaction_rules`.
+### 4. Dialog wiring
+- `AICategorizeDialog` and `AICategorizeAPDialog` call the feedback function inside their existing Apply mutation. No new user-facing steps.
+- Track which suggestions were edited before apply so we can distinguish accepted vs overridden.
+
+## Schema changes
+
+One migration:
+
+```sql
+CREATE TABLE public.ai_categorization_feedback (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id uuid NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+  context text NOT NULL CHECK (context IN ('bank','ap')),
+  target text NOT NULL CHECK (target IN ('bank_transaction','bill','expense')),
+  line_id uuid NOT NULL,
+  suggested_account_id uuid,
+  final_account_id uuid,
+  source text CHECK (source IN ('cache','ai','none','manual')),
+  confidence numeric(4,3),
+  accepted boolean GENERATED ALWAYS AS (suggested_account_id IS NOT DISTINCT FROM final_account_id) STORED,
+  vendor_key text,
+  desc_key text,
+  created_by uuid REFERENCES auth.users(id),
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+GRANT SELECT, INSERT ON public.ai_categorization_feedback TO authenticated;
+GRANT ALL ON public.ai_categorization_feedback TO service_role;
+ALTER TABLE public.ai_categorization_feedback ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "org members read feedback"
+  ON public.ai_categorization_feedback FOR SELECT TO authenticated
+  USING (is_org_member(auth.uid(), organization_id));
+CREATE POLICY "org members insert feedback"
+  ON public.ai_categorization_feedback FOR INSERT TO authenticated
+  WITH CHECK (is_org_member(auth.uid(), organization_id));
+
+CREATE INDEX idx_ai_cat_fb_org_created ON public.ai_categorization_feedback (organization_id, created_at DESC);
+CREATE INDEX idx_ai_cat_fb_vendor ON public.ai_categorization_feedback (organization_id, context, vendor_key, desc_key);
+```
+
+No changes to existing tables.
 
 ## Out of scope
-- Auto-categorization on bill/expense creation (opt-in review flow only, same as Phase 3.1 was for bank).
-- Tax code suggestion (already handled by tax resolver).
-- PO line categorization.
-
-## Technical notes
-- Account filter for AP: `account_type IN ('expense','cost_of_goods_sold','other_expense','fixed_asset')` plus any accounts flagged as `is_expense_default`.
-- Cache TTL: 30 days, same as bank.
-- Reuse `AICategorizeDialog` — no forked dialog component; drive differences from props.
-- Confidence default 85% (same as bank), 90% post-creation if we later wire auto-run.
+- Retraining a custom model — we only steer via cache invalidation + rule promotion.
+- Cross-org learning.
+- Auto-apply high-confidence categorizations without review (still opt-in).
 
 ## Files
 
 Created:
-- `supabase/functions/ai-categorize-ap-lines/index.ts`
-- `src/hooks/useAPCategorization.ts`
+- `supabase/functions/ai-record-categorization-feedback/index.ts`
+- `src/pages/AICategorizationInsights.tsx`
+- `src/components/banking/AICategorizationHealth.tsx`
+- `src/hooks/useAICategorizationInsights.ts`
 
 Edited:
-- `supabase/functions/ai-promote-categorization-rules/index.ts` — add `context` field
-- `src/components/banking/AICategorizeDialog.tsx` — generalize with `target` prop
-- Bill detail component (e.g. `src/components/purchases/BillDetail*.tsx`) — add "AI Categorize lines" action
-- Expense claim detail component (e.g. `src/components/expenses/ExpenseClaimDetail*.tsx`) — add "AI Categorize lines" action
-- `.lovable/plan.md` — mark Phase 4 done
+- `src/components/banking/AICategorizeDialog.tsx` — record feedback on apply
+- `src/components/purchases/AICategorizeAPDialog.tsx` — record feedback on apply
+- `src/hooks/useAICategorization.ts` — expose overridden vs accepted
+- `src/hooks/useAPCategorization.ts` — same
+- `src/App.tsx` (or router file) — add `/ai/categorization-insights` route
+- `.lovable/plan.md` — mark Phase 5 done
