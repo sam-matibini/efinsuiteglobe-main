@@ -315,8 +315,10 @@ export function AIAccountingAssistant({
         // Direct import using hook - include GL account from selected credit card
         const mappedTransactions = transactions.map(tx => {
           const rawAmount = Number(tx.amount ?? 0);
-          const amount = Number.isFinite(rawAmount) ? Math.abs(rawAmount) : 0;
-          const transactionType = rawAmount >= 0 ? 'charge' : 'payment';
+          const description = String(tx.description || '');
+          const explicitType = (tx.transaction_type ?? tx.type ?? null) as string | null;
+          const transactionType = classifyCreditCardType(rawAmount, explicitType, description);
+          const amount = normalizeCreditCardAmount(rawAmount);
           const transactionDate = String(tx.transaction_date || tx.date || new Date().toISOString().split('T')[0]);
           const payeePayor = tx.payee_payor ?? tx.merchant_name ?? tx.merchant ?? tx.payee ?? tx.payor ?? null;
           const postedDate = String(tx.posted_date ?? tx.posting_date ?? '') || null;
