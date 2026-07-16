@@ -71,9 +71,10 @@ export function BankStatementExtractor({
       if (!currentOrganization?.id) return [];
       const { data, error } = await supabase
         .from("bank_accounts")
-        .select("id, account_name, account_number, bank_name, currency")
+        .select("id, name, account_number, institution, currency")
         .eq("organization_id", currentOrganization.id)
-        .order("account_name");
+        .order("name");
+
       if (error) throw error;
       return data ?? [];
     },
