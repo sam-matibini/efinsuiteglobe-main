@@ -135,6 +135,61 @@ const isCashOrBankAccount = (account: AccountWithBalance): boolean => {
   return name.includes('bank') || name.includes('cash') || name.includes('petty');
 };
 
+const isCurrentYearEarningsEquityAccount = (account: Pick<AccountWithBalance, 'code' | 'name'>): boolean => {
+  const nameLower = account.name?.toLowerCase() || '';
+  return (
+    account.code === '3-00-202' ||
+    nameLower.includes('current year earnings') ||
+    nameLower.includes('current year earning') ||
+    nameLower.includes('current earnings') ||
+    nameLower === 'current year net income' ||
+    nameLower === 'current year income' ||
+    nameLower.includes('current year excess') ||
+    nameLower.includes('current year surplus') ||
+    nameLower.includes('excess (deficiency)')
+  );
+};
+
+const isRetainedEarningsEquityAccount = (account: Pick<AccountWithBalance, 'code' | 'name'>): boolean => {
+  const nameLower = account.name?.toLowerCase() || '';
+  return (
+    account.code === '3-00-201' ||
+    nameLower === 'retained earnings' ||
+    nameLower === 'retained profits' ||
+    nameLower.includes('retained earnings') ||
+    nameLower.includes('accumulated deficit') ||
+    nameLower.includes('accumulated earnings') ||
+    nameLower.includes('unrestricted net assets') ||
+    nameLower.includes('accumulated surplus') ||
+    nameLower.includes('unrestricted funds') ||
+    nameLower.includes('accumulated funds')
+  );
+};
+
+const isDividendOrContraEquityAccount = (account: Pick<AccountWithBalance, 'account_type' | 'normal_balance' | 'name'>): boolean => {
+  const nameLower = account.name?.toLowerCase() || '';
+  return (
+    (account.account_type === 'equity' && account.normal_balance === 'debit') ||
+    nameLower.includes('dividend') ||
+    nameLower.includes("owner's draw") ||
+    nameLower.includes('owner draw') ||
+    nameLower.includes('owners draw') ||
+    nameLower.includes('shareholder draw') ||
+    nameLower.includes('drawing') ||
+    nameLower.includes('distribution') ||
+    nameLower.includes('treasury stock') ||
+    nameLower.includes('treasury shares')
+  );
+};
+
+const isExcludedFromEquityTotal = (account: AccountWithBalance | any): boolean => {
+  return (
+    isCurrentYearEarningsEquityAccount(account) ||
+    isRetainedEarningsEquityAccount(account) ||
+    isDividendOrContraEquityAccount(account)
+  );
+};
+
 export default function BalanceSheet() {
   // Use shared report filters
   const { 
@@ -416,16 +471,6 @@ export default function BalanceSheet() {
   // dividends/drawings from being double-counted (they are already netted
   // inside the RE closing balance).
   const comparativeTotals = useMemo(() => {
-    const isExcludedEquity = (a: any): boolean => {
-      const code = a.code || '';
-      const nameLower = (a.name || '').toLowerCase();
-      if (code === '3-00-202' || nameLower.includes('current year earnings') || nameLower.includes('current year excess') || nameLower.includes('current year surplus') || nameLower.includes('excess (deficiency)')) return true;
-      if (code === '3-00-201' || nameLower === 'retained earnings' || nameLower.includes('accumulated deficit') || nameLower.includes('unrestricted net assets') || nameLower.includes('accumulated surplus') || nameLower.includes('unrestricted funds') || nameLower.includes('accumulated funds')) return true;
-      if (a.account_type === 'equity' && a.normal_balance === 'debit') return true; // contra-equity (dividends/drawings/treasury)
-      if (nameLower.includes('dividend') || nameLower.includes("owner's draw") || nameLower.includes('owner draw') || nameLower.includes('owners draw') || nameLower.includes('shareholder draw') || nameLower.includes('distributions to owners') || nameLower.includes('distributions to shareholders') || nameLower.includes('capital distributions') || nameLower.includes('drawings') || nameLower.includes('treasury stock') || nameLower.includes('treasury shares')) return true;
-      return false;
-    };
-
     return rawComparativeTotals.map((ct: any, i: number) => {
       const adjAssets = ct.totalAssets ?? 0;
       const adjLiabs = ct.totalLiabilities ?? 0;
@@ -434,7 +479,7 @@ export default function BalanceSheet() {
       let adjEquity = ct.totalEquity ?? 0;
       if (pd?.balances) {
         const nonReEquity = pd.balances
-          .filter((a: any) => a.account_type === 'equity' && !a.is_header && !isExcludedEquity(a))
+          .filter((a: any) => a.account_type === 'equity' && !a.is_header && !isExcludedFromEquityTotal(a))
           .reduce((sum: number, a: any) => {
             const sign = a.normal_balance === 'credit' ? 1 : -1;
             return sum + (Number(a.calculated_balance) || 0) * sign;
@@ -467,14 +512,7 @@ export default function BalanceSheet() {
   const equityAccountsExcludingREandCYE = allAccounts
     .filter(a => a.account_type === 'equity')
     .filter(a => {
-      const code = a.code;
-      const nameLower = a.name?.toLowerCase() || '';
-      // Exclude CYE account (3-00-202) and ASNPO equivalents
-      if (code === '3-00-202' || nameLower.includes('current year earnings') || nameLower.includes('current year excess') || nameLower.includes('current year surplus') || nameLower.includes('excess (deficiency)')) return false;
-      // Exclude RE account (3-00-201) and ASNPO equivalents - we use Statement of RE closing balance instead
-      if (code === '3-00-201' || nameLower === 'retained earnings' || nameLower.includes('accumulated deficit') || nameLower.includes('unrestricted net assets') || nameLower.includes('accumulated surplus') || nameLower.includes('unrestricted funds') || nameLower.includes('accumulated funds')) return false;
-      // Exclude Dividend / Owner Drawings accounts — already netted inside the Statement of RE closing balance
-      if (nameLower.includes('dividend') || nameLower.includes("owner's draw") || nameLower.includes('owner draw') || nameLower.includes('owners draw') || nameLower.includes('shareholder draw') || nameLower.includes('distributions to owners') || nameLower.includes('distributions to shareholders') || nameLower.includes('capital distributions')) return false;
+      if (isExcludedFromEquityTotal(a)) return false;
       // Exclude equity accounts that have been reclassified to Assets (abnormal debit balance)
       if (reclassification.equityToAssetIds.has(a.id)) return false;
       return true;
@@ -555,19 +593,7 @@ export default function BalanceSheet() {
    * ASPE year-to-year continuity.
    */
   const isCurrentYearEarningsAccount = (account: AccountWithBalance): boolean => {
-    const nameLower = account.name?.toLowerCase() || '';
-    return (
-      account.code === '3-00-202' ||
-      nameLower.includes('current year earnings') ||
-      nameLower.includes('current year earning') ||
-      nameLower.includes('current earnings') ||
-      nameLower === 'current year net income' ||
-      nameLower === 'current year income' ||
-      // ASNPO equivalents
-      nameLower.includes('current year excess') ||
-      nameLower.includes('current year surplus') ||
-      nameLower.includes('excess (deficiency)')
-    );
+    return isCurrentYearEarningsEquityAccount(account);
   };
 
   /**
@@ -575,19 +601,7 @@ export default function BalanceSheet() {
    * to ALWAYS be displayed in Shareholders' Equity section, even if zero.
    */
   const isRetainedEarningsAccount = (account: AccountWithBalance): boolean => {
-    const nameLower = account.name?.toLowerCase() || '';
-    return (
-      account.code === '3-00-201' ||
-      nameLower === 'retained earnings' ||
-      nameLower === 'retained profits' ||
-      nameLower.includes('accumulated deficit') ||
-      nameLower.includes('accumulated earnings') ||
-      // ASNPO equivalents
-      nameLower.includes('unrestricted net assets') ||
-      nameLower.includes('accumulated surplus') ||
-      nameLower.includes('unrestricted funds') ||
-      nameLower.includes('accumulated funds')
-    );
+    return isRetainedEarningsEquityAccount(account);
   };
 
   /**
@@ -597,17 +611,7 @@ export default function BalanceSheet() {
    * separate equity line would double-count the dividend on the Balance Sheet.
    */
   const isDividendAccount = (account: AccountWithBalance): boolean => {
-    const nameLower = account.name?.toLowerCase() || '';
-    return (
-      nameLower.includes('dividend') ||
-      nameLower.includes("owner's draw") ||
-      nameLower.includes('owner draw') ||
-      nameLower.includes('owners draw') ||
-      nameLower.includes('shareholder draw') ||
-      nameLower.includes('distributions to owners') ||
-      nameLower.includes('distributions to shareholders') ||
-      nameLower.includes('capital distributions')
-    );
+    return isDividendOrContraEquityAccount(account);
   };
 
 
