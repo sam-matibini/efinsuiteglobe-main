@@ -11,7 +11,9 @@ interface Body {
   organization_id: string;
   target: Target;
   line_ids: string[];
+  auto_apply?: boolean;
 }
+
 
 interface Suggestion {
   id: string;
