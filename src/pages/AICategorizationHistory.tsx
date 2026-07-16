@@ -223,7 +223,7 @@ export default function AICategorizationHistory() {
                           </TableCell>
                         </TableRow>
                       )}
-                    </>
+                    </Fragment>
                   );
                 })}
               </TableBody>
