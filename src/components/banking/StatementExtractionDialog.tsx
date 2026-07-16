@@ -40,6 +40,10 @@ import { useMappingTemplates, MappingTemplate } from '@/hooks/useMappingTemplate
 import * as XLSX from 'xlsx';
 import { AdvancedMappingEngine, MappingConfig, ColumnMappingAdvanced } from './AdvancedMappingEngine';
 import { MappingPreviewDialog } from './MappingPreviewDialog';
+import {
+  useAliceSheetsWorkbooks,
+  downloadAliceSheetsWorkbook,
+} from '@/hooks/useAliceSheetsWorkbooks';
 
 type ExtractionStep = 'upload' | 'extracting' | 'mapping' | 'preview' | 'complete';
 
