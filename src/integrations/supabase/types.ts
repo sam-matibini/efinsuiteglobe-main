@@ -218,6 +218,62 @@ export type Database = {
           },
         ]
       }
+      ai_categorization_applications: {
+        Row: {
+          applied_at: string
+          confidence: number | null
+          context: string
+          feedback_id: string | null
+          id: string
+          new_value: Json
+          organization_id: string
+          prior_value: Json | null
+          row_id: string
+          source: string | null
+          target: string
+          undone_at: string | null
+          undone_by: string | null
+        }
+        Insert: {
+          applied_at?: string
+          confidence?: number | null
+          context: string
+          feedback_id?: string | null
+          id?: string
+          new_value: Json
+          organization_id: string
+          prior_value?: Json | null
+          row_id: string
+          source?: string | null
+          target: string
+          undone_at?: string | null
+          undone_by?: string | null
+        }
+        Update: {
+          applied_at?: string
+          confidence?: number | null
+          context?: string
+          feedback_id?: string | null
+          id?: string
+          new_value?: Json
+          organization_id?: string
+          prior_value?: Json | null
+          row_id?: string
+          source?: string | null
+          target?: string
+          undone_at?: string | null
+          undone_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_categorization_applications_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_categorization_feedback: {
         Row: {
           accepted: boolean | null
