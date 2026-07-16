@@ -442,9 +442,8 @@ export default function BalanceSheet() {
       if (code === '3-00-202' || nameLower.includes('current year earnings') || nameLower.includes('current year excess') || nameLower.includes('current year surplus') || nameLower.includes('excess (deficiency)')) return false;
       // Exclude RE account (3-00-201) and ASNPO equivalents - we use Statement of RE closing balance instead
       if (code === '3-00-201' || nameLower === 'retained earnings' || nameLower.includes('accumulated deficit') || nameLower.includes('unrestricted net assets') || nameLower.includes('accumulated surplus') || nameLower.includes('unrestricted funds') || nameLower.includes('accumulated funds')) return false;
-      // Exclude Dividend / Owner Drawings / contra-equity accounts — already netted inside the Statement of RE closing balance
-      if (a.normal_balance === 'debit') return false;
-      if (nameLower.includes('dividend') || nameLower.includes('drawings') || nameLower.includes("owner's draw") || nameLower.includes('owner draw') || nameLower.includes('owners draw') || nameLower.includes('shareholder draw') || nameLower.includes('distributions to owners') || nameLower.includes('distributions to shareholders') || nameLower.includes('capital distributions') || nameLower.includes('treasury stock') || nameLower.includes('treasury shares')) return false;
+      // Exclude Dividend / Owner Drawings accounts — already netted inside the Statement of RE closing balance
+      if (nameLower.includes('dividend') || nameLower.includes("owner's draw") || nameLower.includes('owner draw') || nameLower.includes('owners draw') || nameLower.includes('shareholder draw') || nameLower.includes('distributions to owners') || nameLower.includes('distributions to shareholders') || nameLower.includes('capital distributions')) return false;
       // Exclude equity accounts that have been reclassified to Assets (abnormal debit balance)
       if (reclassification.equityToAssetIds.has(a.id)) return false;
       return true;
@@ -568,25 +567,15 @@ export default function BalanceSheet() {
    */
   const isDividendAccount = (account: AccountWithBalance): boolean => {
     const nameLower = account.name?.toLowerCase() || '';
-    // Definitive rule: an equity account with a DEBIT normal balance is a
-    // contra-equity account (dividends, drawings, distributions, treasury stock).
-    // Its impact is already netted inside the Statement of Retained Earnings
-    // closing balance, so we must not render it as a separate Balance Sheet line.
-    if (account.account_type === 'equity' && (account as any).normal_balance === 'debit') {
-      return true;
-    }
     return (
       nameLower.includes('dividend') ||
-      nameLower.includes('drawings') ||
       nameLower.includes("owner's draw") ||
       nameLower.includes('owner draw') ||
       nameLower.includes('owners draw') ||
       nameLower.includes('shareholder draw') ||
       nameLower.includes('distributions to owners') ||
       nameLower.includes('distributions to shareholders') ||
-      nameLower.includes('capital distributions') ||
-      nameLower.includes('treasury stock') ||
-      nameLower.includes('treasury shares')
+      nameLower.includes('capital distributions')
     );
   };
 

@@ -1,42 +1,49 @@
-## Problem
 
-On the Balance Sheet, the Equity section is showing a separate **"Dividends Paid"** line (Sunview Homes: 194,000 cumulative debit). That same dividend activity is *also* rolled into the **Statement of Retained Earnings (Deficit)** shown right below the Balance Sheet (Dividends declared 54,000 in 2025 + 140,000 in 2024, ending with Closing balance -59,269.33).
+## Problems
 
-Because the RE closing balance already nets dividends, listing "Dividends Paid" as its own equity line double-counts the reduction and pushes Total Equity off by the dividend amount — which is why the balance sheet reports "out of balance".
+### 1. Balance Sheet 2024 comparative is out of balance
+Expected: Total Liabilities & Equity 2024 = **$128,883.40** (Liab 112,426.62 + Equity 16,456.78).
+Displayed: **($11,116.60)** because "Total for Equity" comparative shows **(123,543.22)** — the outer per-period equity total still subtracts Dividends Paid (140,000), even though the inner rows correctly show Common Shares 100 + RE Closing 16,356.78 = 16,456.78.
 
-`src/pages/BalanceSheet.tsx` does have an `isDividendAccount(...)` name filter, but the Sunview account slipped through: the visible row on-screen proves the exclusion is not being applied to this account in the rendered rows (likely because the row is being emitted from the RE / contra-equity path before the filter runs, or the filter runs against a different account list than the one shown).
+Cause: the inner Balance Sheet equity rows were switched to use the Statement of Retained Earnings closing balance (and to exclude dividend/drawings accounts), but `comparativeTotals[i].totalEquity` is still taken straight from `getComparativeTotals()`, which sums every equity account (including Dividends Paid) and does not use the RE Statement closing balance. Current period works because its `totalEquity` is recomputed locally; comparatives are not.
+
+### 2. Retained Earnings does not roll forward
+2024 Closing RE = **$16,356.78** but 2025 Opening RE = **$2,191.79** (should equal 16,356.78). Diff = 14,164.99, which is a debit posted directly to the Retained Earnings GL account on 2025-12-13 (reference `CC-OB-0001`, "Opening Balance – RBC Avion Visa").
+
+Cause: `public.calculate_retained_earnings_statement` folds any direct (non-CLOSE-*) postings to the RE account **inside the reporting period** into `opening_balance` (`v_opening := v_opening + v_direct_adjustment`). This breaks the ASPE rollforward rule:
+
+> `RE(Opening, Year N) = RE(Closing, Year N-1)`
+
+The underlying `calculate_opening_retained_earnings` already returns the correct prior-year rollforward (verified: 16,356.78 for 2025). The statement RPC is corrupting it.
 
 ## Fix
 
-Enforce a single, authoritative "contra-equity dividend" exclusion on the Balance Sheet equity section only. The RE Statement below is unchanged and remains the single source of truth for dividends.
+### A. Database — `calculate_retained_earnings_statement` (migration)
+- Stop folding in-period direct RE postings into `opening_balance`.
+- Surface them instead as `other_additions` (net credit) or `other_deductions` (net debit) so the statement remains transparent and ASPE-compliant.
+- Closing formula becomes:
+  `closing = opening + net_income + other_additions - dividends - other_deductions`
+- Effect: 2025 opening becomes 16,356.78 (matches 2024 closing). The 14,164.99 debit is displayed on its own line as "Other deductions / prior period adjustments".
 
-### Changes — `src/pages/BalanceSheet.tsx`
+No schema changes; function body only. This is the ASPE-correct behaviour, so it applies to all organizations, not just Sunview.
 
-1. Broaden `isDividendAccount(...)` so it catches every reasonable naming convention *and* known GIFI-style codes, not just names containing "dividend":
-   - names matching: `dividend`, `dividends paid`, `dividends declared`, `owner draw(s)`, `owner's draw(s)`, `shareholder draw(s)`, `distribution(s) to owners/shareholders`, `capital distributions`, `drawings`
-   - account codes ending in the known contra-equity slots (e.g. `-0003` under the `3-01-100` shareholder-equity header used by Sunview, plus any account whose `normal_balance = 'debit'` while `account_type = 'equity'` — a contra-equity account by definition)
-2. Apply that same predicate in **all three** places that build the equity section so nothing leaks through:
-   - `equityAccountsExcludingREandCYE` (Total Equity math, ~line 436)
-   - `buildHierarchicalRows('equity')` (rendered rows, ~line 624)
-   - the `equityRows` `useMemo` / section-subtotal recalculation (~line 896) — recompute subtotals *after* the exclusion so `Total for EQUITY` matches the visible rows
-3. Recompute the on-screen "Balanced / Out of balance" indicator against the new (post-exclusion) `totalEquity`. Expected result for Sunview 2025:
-   - Common Shares: 100.00
-   - Retained Earnings (from RE Statement closing): (59,269.33)
-   - **Dividends Paid line: removed**
-   - Total Equity: (59,169.33)
-   - Assets − Liabilities should now equal Total Equity → **Balanced: 0.00**
+### B. Frontend — `src/pages/BalanceSheet.tsx`
+Recompute each comparative period's `totalEquity` the same way the current period does, so the outer "Total for Equity" ties to the visible rows:
 
-### Deliberately out of scope
+```
+totalEquity[i] = (raw comparative equity excluding RE, CYE, and dividend/drawings accounts)
+                + reComparativeStatements[i].data.closingBalance
+```
 
-- No changes to the **Statement of Retained Earnings (Deficit)** — dividends stay listed there.
-- No changes to the underlying `Dividends Paid` GL account or its journal entries. Its balance still exists in the ledger; we simply do not present it as a separate line in the Balance Sheet's Equity section.
-- No changes to the Income Statement, Cash Flow, or Statement of Changes in Equity (those already treat dividends correctly).
-- No database migration required.
+Update the `comparativeTotals` `useMemo` to derive per-period `totalEquity` from the RE Statement closing balance and non-RE equity accounts (mirroring the current-period logic already in place around lines 434–460). Also refresh `totalLiabilities + totalEquity` used for the "Total for Liabilities & Equity" comparative column so it renders 128,883.40 for 2024.
 
-### Verification steps
+No changes to the Income Statement, Cash Flow, or SOCE. No changes to underlying GL data.
 
-1. Open `/reports/balance-sheet` for Sunview Homes & Construction Inc.
-2. Confirm the Equity section shows only `Common Shares` and `Retained Earnings`, with no `Dividends Paid` row.
-3. Confirm `Total for Equity` = Common Shares + RE closing balance from the RE Statement below.
-4. Confirm `Total for Liabilities & Equity` = `Total Assets` and the "Balanced" indicator reads 0.00 for both 2025 and 2024 columns.
-5. Spot-check a non-Sunview org that has no dividend account to make sure Equity rendering is unchanged.
+## Verification
+1. Reload Balance Sheet for Sunview:
+   - 2024: Common Shares 100.00 + Retained Earnings 16,356.78 → Total Equity 16,456.78; Total L+E **128,883.40**; Balanced ✓
+   - 2025: Common Shares 100.00 + Retained Earnings (59,269.33) → Total Equity (59,169.33); Total L+E 290,499.88; Balanced ✓
+2. Statement of Retained Earnings (Deficit):
+   - 2024 Closing 16,356.78 → 2025 Opening **16,356.78** (rollover restored)
+   - 2025 shows a separate `Other deductions` line of 14,164.99 for the direct RE posting; Closing (59,269.33) unchanged.
+3. Confirm continuity for other orgs via a spot check of `calculate_retained_earnings_statement` for two consecutive years.
