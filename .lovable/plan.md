@@ -1,85 +1,86 @@
-# Phase 6 — Auto-apply high-confidence categorizations & PO line coverage
+# Phase 7 — Revenue-side AI categorization & undo/rollback
 
-Phases 3–5 shipped review-based categorization with feedback learning. Phase 6 removes the review step for high-confidence, high-trust cases and extends coverage to purchase orders.
+Phases 3–6 covered AP/bank auto-categorization with feedback learning, safety rails, and scheduled sweeps. Phase 7 extends coverage to the revenue side (invoices, journal entries) and adds an undo/rollback surface so auto-applied categorizations are recoverable.
 
 ## What gets built
 
-### 1. Org-level auto-apply setting
-- New row in the existing `organization_ai_settings` (or fall back to a small new table if that doesn't exist — TBD after inspection) storing:
-  - `ai_categorization_auto_apply_enabled` (bool, default false)
-  - `ai_categorization_auto_apply_threshold` (int, default 95) — confidence percentage
-  - `ai_categorization_auto_apply_scopes` (text[], subset of `bank`, `bill`, `expense`, `po`)
-- Settings UI panel `AICategorizationAutoApplySettings.tsx` under Settings > AI. Shows current acceptance rate from the insights hook so users see whether they should trust auto-apply.
-- Auto-apply is gated on both the org setting AND the per-scope acceptance rate over the last 30 days being ≥ 80% (safety rail — if the model is being overridden a lot, we do not auto-apply regardless of the toggle).
+### 1. Revenue-side categorization (invoices + manual journal entries)
+- New edge function `ai-categorize-revenue-lines` mirroring `ai-categorize-ap-lines`:
+  - `target: "invoice" | "journal"` → writes to `invoice_lines.revenue_account_id` or `journal_entry_lines.account_id` (only for lines flagged `pending_ai=true` or with null account).
+  - Reuses the rule/cache/AI cascade from AP with a revenue-oriented system prompt (income accounts, deferred revenue, contra-revenue).
+  - Supports the same `auto_apply` flag with the org-level threshold + 80% acceptance safety rail already enforced in Phase 6.
+- Feedback goes through the existing `ai-record-categorization-feedback` with `context="revenue"` and `target` in `{invoice, journal}`.
+- Insights hook + health widget filter by context so revenue and AP stats stay separate.
 
-### 2. Auto-apply pipeline
-- Edge functions `ai-categorize-transactions` and `ai-categorize-ap-lines` gain an optional `auto_apply: boolean` request field.
-- When `auto_apply=true` and the caller passes the setting check (evaluated server-side), suggestions with `confidence >= threshold/100` AND `source in ('rule','cache','ai')` are written directly to the target table inside the same function, and their ids are returned in `auto_applied: string[]`.
-- Feedback rows are inserted with `final = suggested` and `source` preserved so acceptance-rate stats stay honest.
-- The remaining below-threshold / low-source suggestions still come back for review as today.
-- Callers that already open the review dialog keep working; new callers (post-import chain, scheduled sweeps) can pass `auto_apply: true`.
+### 2. Auto-apply scope expansion
+- Add `invoice` and `journal` values to `ai_categorization_settings.auto_apply_scopes`.
+- Sweep function (`ai-categorize-sweep`) picks up:
+  - `invoice_lines` with null `revenue_account_id` for invoices in `draft` status only (never touch posted invoices).
+  - `journal_entry_lines` with null `account_id` for entries in `draft` status only.
+- Settings panel gains two new scope checkboxes with a clear "draft only" note.
 
-### 3. Scheduled sweep
-- New edge function `ai-categorize-sweep` (cron via `supabase/config.toml` schedule) runs nightly per org that has auto-apply enabled:
-  - Picks up uncategorized bank txns, bill lines, expense lines (limit 500 per scope).
-  - Invokes the categorize functions with `auto_apply: true`.
-  - Writes a summary row to `ai_setup_logs` (`setup_type='auto_apply_sweep'`).
+### 3. Undo / rollback surface
+- New table `ai_categorization_applications` recording every auto-apply (org, target, row id, prior value, new value, confidence, source, feedback id, applied_at, undone_at).
+- Both `ai-categorize-transactions` and `ai-categorize-ap-lines` (and the new revenue function) write one row per auto-applied line.
+- New edge function `ai-undo-categorization`:
+  - Accepts an application id (or bulk ids). Restores the prior value on the target row, marks the application undone, and logs a corrective feedback row so the model learns from the reversal.
+- New page `/ai/categorization-history` shows the last 30 days of auto-applied changes with per-row Undo, a bulk "Undo last sweep" action, and filters by scope/date.
 
-### 4. Purchase order line categorization (new AP scope)
-- Extend `ai-categorize-ap-lines` `target` union with `"po"` targeting `purchase_order_lines.gl_account_id`.
-- Add "AI Categorize Lines" action to Purchase Orders detail view, using the existing `AICategorizeAPDialog` with `target="po"`.
-- Feedback logging + rule learning reuse Phase 5 with `context="ap"` and `target="po"`.
+### 4. Frontend surfaces
+- Invoice detail view: "AI Categorize Lines" button opening the existing `AICategorizeAPDialog` refactored to accept `context="revenue"` + `target="invoice"` (rename to `AICategorizeLinesDialog`, keep AP callsites working).
+- Journal Entry detail view: same button with `target="journal"`.
+- Invoices list + Journal Entries list: mount `AICategorizationHealth` filtered to revenue context.
+- Add "Categorization History" nav entry under Settings > AI alongside Insights.
 
-### 5. Frontend surfaces
-- Add `AICategorizationHealth` widget to Bills, Expense Claims, and Purchase Orders list pages (mirrors bank).
-- Add "AI Insights" nav entry under Settings so `/ai/categorization-insights` is reachable without knowing the URL.
-- On auto-apply toggle change, invalidate the insights query so the UI reflects new settings.
+### 5. Safety
+- Auto-apply for revenue is gated the same way as AP: `auto_apply_enabled` + scope in `auto_apply_scopes` + 30-day acceptance rate ≥ 80% for that scope.
+- Posted / issued invoices and posted journals are never touched, regardless of settings.
+- Undo is disabled once a downstream event has locked the row (invoice issued, journal posted, period locked).
 
 ## Schema changes
 
-Only if `organization_ai_settings` (or equivalent) does not already exist. Otherwise the migration is `ALTER TABLE ... ADD COLUMN` for the three new fields with defaults. If a new table is needed:
-
 ```sql
-CREATE TABLE public.ai_categorization_settings (
-  organization_id uuid PRIMARY KEY REFERENCES public.organizations(id) ON DELETE CASCADE,
-  auto_apply_enabled boolean NOT NULL DEFAULT false,
-  auto_apply_threshold integer NOT NULL DEFAULT 95 CHECK (auto_apply_threshold BETWEEN 50 AND 100),
-  auto_apply_scopes text[] NOT NULL DEFAULT ARRAY[]::text[],
-  created_at timestamptz NOT NULL DEFAULT now(),
-  updated_at timestamptz NOT NULL DEFAULT now()
+CREATE TABLE public.ai_categorization_applications (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id uuid NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+  context text NOT NULL,        -- 'bank' | 'ap' | 'revenue'
+  target text NOT NULL,         -- 'bank' | 'bill' | 'expense' | 'po' | 'invoice' | 'journal'
+  row_id uuid NOT NULL,
+  prior_value jsonb,
+  new_value jsonb NOT NULL,
+  confidence numeric,
+  source text,
+  feedback_id uuid,
+  applied_at timestamptz NOT NULL DEFAULT now(),
+  undone_at timestamptz,
+  undone_by uuid
 );
-GRANT SELECT, INSERT, UPDATE ON public.ai_categorization_settings TO authenticated;
-GRANT ALL ON public.ai_categorization_settings TO service_role;
-ALTER TABLE public.ai_categorization_settings ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "org members read settings"
-  ON public.ai_categorization_settings FOR SELECT TO authenticated
-  USING (public.is_org_member(auth.uid(), organization_id));
-CREATE POLICY "org admins write settings"
-  ON public.ai_categorization_settings FOR ALL TO authenticated
-  USING (public.is_org_admin(auth.uid(), organization_id))
-  WITH CHECK (public.is_org_admin(auth.uid(), organization_id));
+-- GRANT + RLS via is_org_member / is_org_admin, mirroring ai_categorization_settings.
+-- Also: ALTER TABLE ai_categorization_settings so auto_apply_scopes CHECK accepts the new values (drop old check, add new).
 ```
 
 ## Out of scope
-- Auto-apply for journal entries and invoices (revenue side has different risk profile).
-- Undo/rollback of auto-applied categorizations (users still edit the target row manually; feedback loop covers repeated mistakes).
-- Cross-org model tuning.
+- Auto-apply for issued/posted rows (only draft).
+- Model fine-tuning per org.
+- Undo across period locks or fiscal-year closes.
 
 ## Files
 
 Created:
-- `supabase/functions/ai-categorize-sweep/index.ts`
-- `src/components/settings/AICategorizationAutoApplySettings.tsx`
-- `src/hooks/useAICategorizationSettings.ts`
+- `supabase/functions/ai-categorize-revenue-lines/index.ts`
+- `supabase/functions/ai-undo-categorization/index.ts`
+- `src/pages/AICategorizationHistory.tsx`
+- `src/hooks/useAICategorizationHistory.ts`
+- Migration for `ai_categorization_applications` + scope check update
 
 Edited:
-- `supabase/functions/ai-categorize-transactions/index.ts` — accept `auto_apply`, apply high-confidence rows server-side, return `auto_applied`
-- `supabase/functions/ai-categorize-ap-lines/index.ts` — same, plus support `target="po"` against `purchase_order_lines`
-- `supabase/functions/ai-record-categorization-feedback/index.ts` — accept `"po"` target
-- Purchase Orders detail component — add "AI Categorize Lines" button opening `AICategorizeAPDialog` with `target="po"`
-- `src/components/purchases/AICategorizeAPDialog.tsx` — accept `target="po"`, load PO lines
-- `src/hooks/useAPCategorization.ts` — accept `target="po"` and update `purchase_order_lines`
-- Bills / Expense Claims / Purchase Orders list pages — mount `AICategorizationHealth`
-- Settings nav / router — link to `/ai/categorization-insights` and the auto-apply settings panel
-- Migration for `ai_categorization_settings` (only if the existing settings table doesn't already cover this)
-- `.lovable/plan.md` — mark Phase 6 done
+- `supabase/functions/ai-categorize-transactions/index.ts` — log applications
+- `supabase/functions/ai-categorize-ap-lines/index.ts` — log applications
+- `supabase/functions/ai-categorize-sweep/index.ts` — add `invoice`/`journal` scopes
+- `supabase/functions/ai-record-categorization-feedback/index.ts` — accept `revenue` context + `invoice`/`journal` targets
+- `src/components/purchases/AICategorizeAPDialog.tsx` → rename/generalize to `AICategorizeLinesDialog`
+- `src/components/settings/AICategorizationAutoApplySettings.tsx` — add invoice/journal scope toggles
+- Invoice + Journal Entry detail components — add AI Categorize button
+- Invoices + Journal Entries list pages — mount health widget
+- `src/App.tsx` — route `/ai/categorization-history`
+- `.lovable/plan.md` — Phase 7 entry
