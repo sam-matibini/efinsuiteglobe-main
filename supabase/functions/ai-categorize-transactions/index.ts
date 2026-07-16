@@ -9,6 +9,7 @@ import { GEMINI_MODELS } from "../_shared/geminiModels.ts";
 interface Body {
   organization_id: string;
   transaction_ids: string[];
+  auto_apply?: boolean;
 }
 
 interface Suggestion {
