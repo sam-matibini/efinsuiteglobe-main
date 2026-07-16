@@ -1870,8 +1870,8 @@ export default function BankTransactions() {
           }))
         }
         onApplied={() => {
-          void refetchBankTx?.();
-          void refetchCcTx?.();
+          queryClient.invalidateQueries({ queryKey: ['bank-transactions'] });
+          queryClient.invalidateQueries({ queryKey: ['credit-card-transactions'] });
         }}
       />
 
