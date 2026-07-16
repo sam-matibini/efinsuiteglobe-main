@@ -40,6 +40,7 @@ export default function AICategorizationHistory() {
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [contextFilter, setContextFilter] = useState<string>("all");
   const [showUndone, setShowUndone] = useState(false);
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   const filtered = useMemo(() => {
     return data.filter((r) => {
