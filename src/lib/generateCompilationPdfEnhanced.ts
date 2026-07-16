@@ -78,6 +78,51 @@ function mergeBalanceSheetAccounts(
   return Array.from(merged.entries()).map(([name, data]) => ({ name, ...data }));
 }
 
+/**
+ * Canonical equity classifier used across compilation exports.
+ * Returns true if the account should be EXCLUDED from the "other equity" list
+ * because it represents Retained Earnings or Current Year Earnings — those are
+ * replaced by the Statement of Retained Earnings closing balance.
+ *
+ * Predicates mirror AICompilationDialog.tsx and BalanceSheet.tsx.
+ */
+export function isRetainedEarningsOrCYE(acc: { code?: string | null; name?: string | null }): boolean {
+  const code = acc.code ?? '';
+  const nameLower = (acc.name ?? '').toLowerCase();
+  if (
+    code === '3-00-202' ||
+    nameLower.includes('current year earnings') ||
+    nameLower.includes('current year excess') ||
+    nameLower.includes('current year surplus') ||
+    nameLower.includes('excess (deficiency)')
+  ) return true;
+  if (
+    code === '3-00-201' ||
+    nameLower === 'retained earnings' ||
+    nameLower.includes('accumulated deficit') ||
+    nameLower.includes('unrestricted net assets') ||
+    nameLower.includes('accumulated surplus') ||
+    nameLower.includes('unrestricted funds') ||
+    nameLower.includes('accumulated funds')
+  ) return true;
+  return false;
+}
+
+/**
+ * Sum "other equity" accounts (excluding RE + CYE) with proper contra-equity
+ * sign handling. Equity is credit-normal by default; debit-normal accounts
+ * (e.g., treasury stock, owner's drawings) are subtracted.
+ */
+export function sumEquityExcludingREandCYE(
+  equity: Array<{ code?: string | null; name?: string | null; normal_balance?: string | null; calculated_balance: number }>
+): number {
+  return equity.reduce((sum, a) => {
+    if (isRetainedEarningsOrCYE(a)) return sum;
+    const sign = a.normal_balance === 'debit' ? -1 : 1;
+    return sum + (Number(a.calculated_balance) || 0) * sign;
+  }, 0);
+}
+
 
 import { aspeNoteTemplates, getFrameworkNoteTemplates, CompilationReport, resolveNoteTemplate, NoteTemplateContext } from '@/hooks/useCompilationReports';
 
