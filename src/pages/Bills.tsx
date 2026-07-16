@@ -38,6 +38,7 @@ export default function Bills() {
   const [selectedBillForPayment, setSelectedBillForPayment] = useState<{ vendorId?: string; billId?: string }>({});
   const [shareBill, setShareBill] = useState<any | null>(null);
   const [docsBill, setDocsBill] = useState<any | null>(null);
+  const [showAICategorize, setShowAICategorize] = useState(false);
 
 
   const { bills, isLoading, totalOutstanding, overdueAmount, paidThisMonth, updateBillStatus } = useBills();
