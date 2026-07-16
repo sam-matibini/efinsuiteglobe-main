@@ -86,9 +86,14 @@ export function StatementExtractionDialog({
   const [mappingConfig, setMappingConfig] = useState<MappingConfig | null>(null);
   const [showPreview, setShowPreview] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
-  
+  const [sourceMode, setSourceMode] = useState<'file' | 'aisheets'>('file');
+  const [selectedWorkbookPath, setSelectedWorkbookPath] = useState<string | null>(null);
+  const [loadingWorkbook, setLoadingWorkbook] = useState(false);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { convertPdfToSpreadsheet, isConverting, progress } = usePdfToSpreadsheet();
+  const { data: aliceWorkbooks = [], isLoading: workbooksLoading } =
+    useAliceSheetsWorkbooks(open && sourceMode === 'aisheets');
   
   // Load templates from database
   const { 
