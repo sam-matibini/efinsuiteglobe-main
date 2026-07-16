@@ -80,11 +80,9 @@ function mergeBalanceSheetAccounts(
 
 /**
  * Canonical equity classifier used across compilation exports.
- * Returns true if the account should be EXCLUDED from the "other equity" list
- * because it represents Retained Earnings or Current Year Earnings — those are
- * replaced by the Statement of Retained Earnings closing balance.
- *
- * Predicates mirror AICompilationDialog.tsx and BalanceSheet.tsx.
+ * Returns true if the account represents Retained Earnings or Current Year
+ * Earnings — those are replaced by the Statement of Retained Earnings closing
+ * balance.
  */
 export function isRetainedEarningsOrCYE(acc: { code?: string | null; name?: string | null }): boolean {
   const code = acc.code ?? '';
@@ -92,6 +90,10 @@ export function isRetainedEarningsOrCYE(acc: { code?: string | null; name?: stri
   if (
     code === '3-00-202' ||
     nameLower.includes('current year earnings') ||
+    nameLower.includes('current year earning') ||
+    nameLower.includes('current earnings') ||
+    nameLower === 'current year net income' ||
+    nameLower === 'current year income' ||
     nameLower.includes('current year excess') ||
     nameLower.includes('current year surplus') ||
     nameLower.includes('excess (deficiency)')
@@ -99,7 +101,10 @@ export function isRetainedEarningsOrCYE(acc: { code?: string | null; name?: stri
   if (
     code === '3-00-201' ||
     nameLower === 'retained earnings' ||
+    nameLower === 'retained profits' ||
+    nameLower.includes('retained earnings') ||
     nameLower.includes('accumulated deficit') ||
+    nameLower.includes('accumulated earnings') ||
     nameLower.includes('unrestricted net assets') ||
     nameLower.includes('accumulated surplus') ||
     nameLower.includes('unrestricted funds') ||
@@ -109,15 +114,42 @@ export function isRetainedEarningsOrCYE(acc: { code?: string | null; name?: stri
 }
 
 /**
- * Sum "other equity" accounts (excluding RE + CYE) with proper contra-equity
- * sign handling. Equity is credit-normal by default; debit-normal accounts
- * (e.g., treasury stock, owner's drawings) are subtracted.
+ * Dividend/distribution/drawing accounts are already netted into the Statement
+ * of Retained Earnings closing balance. Showing them again in Equity would
+ * double-count the reduction and break Total Liabilities + Equity.
+ */
+export function isDividendOrContraEquityAccount(acc: { account_type?: string | null; normal_balance?: string | null; name?: string | null }): boolean {
+  const nameLower = (acc.name ?? '').toLowerCase();
+  return (
+    (acc.account_type === 'equity' && acc.normal_balance === 'debit') ||
+    acc.normal_balance === 'debit' ||
+    nameLower.includes('dividend') ||
+    nameLower.includes("owner's draw") ||
+    nameLower.includes('owner draw') ||
+    nameLower.includes('owners draw') ||
+    nameLower.includes('shareholder draw') ||
+    nameLower.includes('drawing') ||
+    nameLower.includes('distribution') ||
+    nameLower.includes('treasury stock') ||
+    nameLower.includes('treasury shares')
+  );
+}
+
+export function isExcludedFromCompilationEquityTotal(
+  acc: { code?: string | null; name?: string | null; account_type?: string | null; normal_balance?: string | null }
+): boolean {
+  return isRetainedEarningsOrCYE(acc) || isDividendOrContraEquityAccount(acc);
+}
+
+/**
+ * Sum "other equity" accounts, excluding RE/CYE and dividends/drawings already
+ * netted inside retained earnings. Name kept for backwards compatibility.
  */
 export function sumEquityExcludingREandCYE(
-  equity: Array<{ code?: string | null; name?: string | null; normal_balance?: string | null; calculated_balance: number }>
+  equity: Array<{ code?: string | null; name?: string | null; account_type?: string | null; normal_balance?: string | null; calculated_balance: number }>
 ): number {
   return equity.reduce((sum, a) => {
-    if (isRetainedEarningsOrCYE(a)) return sum;
+    if (isExcludedFromCompilationEquityTotal(a)) return sum;
     const sign = a.normal_balance === 'debit' ? -1 : 1;
     return sum + (Number(a.calculated_balance) || 0) * sign;
   }, 0);
@@ -1129,8 +1161,8 @@ Readers are cautioned that these statements may not be appropriate for their pur
   // have a canonical RE closing balance from the RPC, fall back to the legacy
   // behavior so older callers keep working.
   const equityToRender = mergeBalanceSheetAccounts(
-    hasReClosing ? currentBS.equity.filter(a => !isRetainedEarningsOrCYE(a)) : currentBS.equity,
-    hasReClosing && priorBS ? priorBS.equity.filter(a => !isRetainedEarningsOrCYE(a)) : priorBS?.equity,
+    hasReClosing ? currentBS.equity.filter(a => !isExcludedFromCompilationEquityTotal(a)) : currentBS.equity,
+    hasReClosing && priorBS ? priorBS.equity.filter(a => !isExcludedFromCompilationEquityTotal(a)) : priorBS?.equity,
   );
   equityToRender.forEach(eq => {
     if (!shouldHideLine(eq.currentBalance, eq.priorBalance)) {
