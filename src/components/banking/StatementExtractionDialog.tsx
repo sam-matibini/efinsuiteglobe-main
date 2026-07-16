@@ -255,6 +255,45 @@ export function StatementExtractionDialog({
       setStep('upload');
     }
   }, [files, maxPages, useAI, convertPdfToSpreadsheet]);
+
+  const loadFromAliceSheets = useCallback(async () => {
+    if (!selectedWorkbookPath) {
+      toast.error('Select an AI Sheets workbook first');
+      return;
+    }
+    const wb = aliceWorkbooks.find((w) => w.path === selectedWorkbookPath);
+    if (!wb) return;
+    setLoadingWorkbook(true);
+    try {
+      const buf = await downloadAliceSheetsWorkbook(selectedWorkbookPath);
+      const workbook = XLSX.read(buf);
+      const allData: Record<string, unknown>[] = [];
+      const allColumns = new Set<string>();
+      for (const sheetName of workbook.SheetNames) {
+        const sheet = workbook.Sheets[sheetName];
+        const json = XLSX.utils.sheet_to_json(sheet) as Record<string, unknown>[];
+        for (const row of json) {
+          allData.push({ ...row, _sourceFile: `AI Sheets: ${wb.name}` });
+          Object.keys(row).forEach((k) => allColumns.add(k));
+        }
+      }
+      if (allData.length === 0) {
+        toast.error('Workbook has no data rows');
+        return;
+      }
+      setExtractedData(allData);
+      setExtractedColumns(Array.from(allColumns));
+      setStep('mapping');
+      toast.success(`Loaded ${allData.length} rows from ${wb.name}`);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Failed to load workbook';
+      toast.error(msg);
+    } finally {
+      setLoadingWorkbook(false);
+    }
+  }, [selectedWorkbookPath, aliceWorkbooks]);
+
+
   
   const handleMappingComplete = useCallback((config: MappingConfig) => {
     setMappingConfig(config);
