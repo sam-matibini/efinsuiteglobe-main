@@ -1492,6 +1492,15 @@ export default function BankTransactions() {
                   : 'Unimport Selected'
                 }
               </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setAiCategorizeOpen(true)}
+                disabled={filteredTransactions.length === 0}
+              >
+                <Sparkles className="w-4 h-4 mr-2" />
+                AI Categorize
+              </Button>
               <Button 
                 size="sm" 
                 onClick={handleBulkPostToGL}
