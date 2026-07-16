@@ -45,6 +45,7 @@ export default function Invoices() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [showOrgDialog, setShowOrgDialog] = useState(false);
   const [showInvoiceDialog, setShowInvoiceDialog] = useState(false);
+  const [showAICatDialog, setShowAICatDialog] = useState(false);
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
   const [selectedInvoiceForPayment, setSelectedInvoiceForPayment] = useState<{ invoiceId?: string; customerId?: string }>({});
   const [viewEditInvoice, setViewEditInvoice] = useState<{ invoice: Invoice | null; mode: 'view' | 'edit' }>({ invoice: null, mode: 'view' });
