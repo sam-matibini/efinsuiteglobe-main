@@ -142,7 +142,7 @@ export default function AICategorizationHistory() {
                     : null;
                   const newAcct = r.new_value ? Object.values(r.new_value)[0] : null;
                   return (
-                    <>
+                    <Fragment key={r.id}>
                       <TableRow key={r.id} className={undoneRow ? "opacity-50" : ""}>
                         <TableCell>
                           <Checkbox
