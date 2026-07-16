@@ -312,6 +312,11 @@ export default function ExpenseClaims() {
         currentNotes={docsClaim?.description}
         invalidateKeys={["expense_claims"]}
       />
+      <AICategorizeAPDialog
+        open={showAICategorize}
+        onOpenChange={setShowAICategorize}
+        target="expense"
+      />
     </div>
   );
 }
