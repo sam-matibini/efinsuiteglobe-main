@@ -640,6 +640,7 @@ export default function AccountantDashboard() {
           totalLiabilities: priorTotals.totalLiabilities,
           totalEquity: priorTotals.totalEquity,
           netIncome: priorTotals.netIncome,
+          reClosingBalance: priorReClosingBalance,
         },
         incomeStatement: {
           income: priorIncomeData?.income.map(a => ({ name: a.name, calculated_balance: a.calculated_balance })) || [],
