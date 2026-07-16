@@ -1,7 +1,7 @@
 import { Document, Paragraph, TextRun, HeadingLevel, AlignmentType, Table, TableRow, TableCell, WidthType, BorderStyle, Packer, PageBreak, Header, Footer, PageNumber, NumberFormat } from 'docx';
 import { format, parseISO } from 'date-fns';
 import { CompilationReport, aspeNoteTemplates, getFrameworkNoteTemplates, resolveNoteTemplate, NoteTemplateContext } from '@/hooks/useCompilationReports';
-import { isRetainedEarningsOrCYE, sumEquityExcludingREandCYE, type LeaseNoteData } from './generateCompilationPdfEnhanced';
+import { isExcludedFromCompilationEquityTotal, sumEquityExcludingREandCYE, type LeaseNoteData } from './generateCompilationPdfEnhanced';
 
 export interface WordExportFinancialData {
   balanceSheet: {
@@ -447,7 +447,7 @@ export async function generateCompilationWord(
   if (hasReClosing) {
     // Canonical formula: exclude RE + CYE from account list, show single RE closing line
     financialData.balanceSheet.equity
-      .filter(eq => !isRetainedEarningsOrCYE(eq))
+      .filter(eq => !isExcludedFromCompilationEquityTotal(eq))
       .forEach(eq => {
         balanceSheetRows.push(createFinancialRow(eq.name, eq.calculated_balance, false, 1));
       });
