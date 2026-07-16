@@ -11,10 +11,12 @@ import { useOrganizationContext } from "@/hooks/useOrganizationContext";
 import { useAICategorizationSettings } from "@/hooks/useAICategorizationSettings";
 import { useCategorizationInsights } from "@/hooks/useAICategorizationInsights";
 
-const SCOPES: Array<{ id: "bank" | "bill" | "expense"; label: string }> = [
+const SCOPES: Array<{ id: "bank" | "bill" | "expense" | "invoice" | "journal"; label: string; hint?: string }> = [
   { id: "bank", label: "Bank transactions" },
   { id: "bill", label: "Vendor bill lines" },
   { id: "expense", label: "Expense claim lines" },
+  { id: "invoice", label: "Invoice lines", hint: "Draft only" },
+  { id: "journal", label: "Journal entry lines", hint: "Draft only" },
 ];
 
 export function AICategorizationAutoApplySettings() {
