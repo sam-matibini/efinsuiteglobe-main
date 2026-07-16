@@ -115,6 +115,7 @@ export default function BankTransactions() {
   const [extractionDialogOpen, setExtractionDialogOpen] = useState(false);
   const [aiExtractorOpen, setAiExtractorOpen] = useState(false);
   const [aiCategorizeOpen, setAiCategorizeOpen] = useState(false);
+  const [postImportTxns, setPostImportTxns] = useState<Array<{ id: string; description: string | null; amount: number; transaction_type: string | null; payee_payor?: string | null }>>([]);
   const queryClient = useQueryClient();
   const [importHistoryOpen, setImportHistoryOpen] = useState(false);
   const [createRuleDialogOpen, setCreateRuleDialogOpen] = useState(false);
