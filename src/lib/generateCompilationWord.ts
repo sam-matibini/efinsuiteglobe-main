@@ -1,17 +1,18 @@
 import { Document, Paragraph, TextRun, HeadingLevel, AlignmentType, Table, TableRow, TableCell, WidthType, BorderStyle, Packer, PageBreak, Header, Footer, PageNumber, NumberFormat } from 'docx';
 import { format, parseISO } from 'date-fns';
 import { CompilationReport, aspeNoteTemplates, getFrameworkNoteTemplates, resolveNoteTemplate, NoteTemplateContext } from '@/hooks/useCompilationReports';
-import type { LeaseNoteData } from './generateCompilationPdfEnhanced';
+import { isRetainedEarningsOrCYE, sumEquityExcludingREandCYE, type LeaseNoteData } from './generateCompilationPdfEnhanced';
 
 export interface WordExportFinancialData {
   balanceSheet: {
-    assets: Array<{ name: string; calculated_balance: number }>;
-    liabilities: Array<{ name: string; calculated_balance: number }>;
-    equity: Array<{ name: string; calculated_balance: number }>;
+    assets: Array<{ name: string; calculated_balance: number; code?: string; normal_balance?: string }>;
+    liabilities: Array<{ name: string; calculated_balance: number; code?: string; normal_balance?: string }>;
+    equity: Array<{ name: string; calculated_balance: number; code?: string; normal_balance?: string }>;
     totalAssets: number;
     totalLiabilities: number;
     totalEquity: number;
     netIncome: number;
+    reClosingBalance?: number;
   };
   incomeStatement: {
     income: Array<{ name: string; calculated_balance: number }>;
