@@ -111,12 +111,8 @@ Deno.serve(async (req) => {
     const accountList = accounts ?? [];
     const accountIds = new Set(accountList.map((a) => a.id));
 
-    // Load org transaction_rules (simple substring match on description).
-    const { data: rules } = await admin
-      .from("transaction_rules")
-      .select("id, name, match_pattern, gl_account_id, category, is_active")
-      .eq("organization_id", body.organization_id)
-      .eq("is_active", true);
+
+
 
     // Note: transaction_rules use jsonb conditions/actions; deterministic matching
     // is deferred to a future phase. All uncategorized rows go through cache → AI.
