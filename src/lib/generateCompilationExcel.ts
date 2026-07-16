@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import type { ComparativeFinancialData } from './generateCompilationPdfEnhanced';
+import { isRetainedEarningsOrCYE, sumEquityExcludingREandCYE, type ComparativeFinancialData } from './generateCompilationPdfEnhanced';
 import type { CompilationReport } from '@/hooks/useCompilationReports';
 
 type ExecSlot = {
