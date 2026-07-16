@@ -318,6 +318,11 @@ export default function Bills() {
         currentNotes={docsBill?.notes}
         invalidateKeys={["bills"]}
       />
+      <AICategorizeAPDialog
+        open={showAICategorize}
+        onOpenChange={setShowAICategorize}
+        target="bill"
+      />
     </div>
   );
 }
