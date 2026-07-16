@@ -324,12 +324,29 @@ Rules:
               s.confidence >= threshold &&
               (s.source === "rule" || s.source === "cache" || s.source === "ai")
             ) {
+              const priorTxn = (txns ?? []).find((t) => t.id === s.id);
+              const priorVal = {
+                gl_account_id: priorTxn?.gl_account_id ?? null,
+                category: priorTxn?.category ?? null,
+              };
               const { error: upErr } = await admin
                 .from("bank_transactions")
                 .update({ gl_account_id: s.gl_account_id, category: s.category ?? null })
                 .eq("id", s.id)
                 .eq("organization_id", body.organization_id);
-              if (!upErr) autoApplied.push(s.id);
+              if (!upErr) {
+                autoApplied.push(s.id);
+                await admin.from("ai_categorization_applications").insert({
+                  organization_id: body.organization_id,
+                  context: "bank",
+                  target: "bank_transaction",
+                  row_id: s.id,
+                  prior_value: priorVal,
+                  new_value: { gl_account_id: s.gl_account_id, category: s.category ?? null },
+                  confidence: s.confidence,
+                  source: s.source,
+                });
+              }
             }
           }
           if (autoApplied.length > 0) {
