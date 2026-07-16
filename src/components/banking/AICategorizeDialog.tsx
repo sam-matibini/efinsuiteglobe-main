@@ -313,10 +313,17 @@ export function AICategorizeDialog({
           )}
         </div>
 
-        <div className="border-t p-4 flex justify-between gap-2">
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>
-            <X className="h-4 w-4 mr-1" /> Cancel
-          </Button>
+        <div className="border-t p-4 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-3">
+            <Button variant="ghost" onClick={() => onOpenChange(false)}>
+              <X className="h-4 w-4 mr-1" /> Cancel
+            </Button>
+            {learnedRules !== null && learnedRules > 0 && (
+              <span className="text-xs text-muted-foreground">
+                ✨ Learned {learnedRules} new rule{learnedRules === 1 ? "" : "s"}
+              </span>
+            )}
+          </div>
           {hasRun && (
             <Button
               onClick={handleApply}
