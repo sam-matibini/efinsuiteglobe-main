@@ -91,7 +91,7 @@ Deno.serve(async (req) => {
       if (existingKeys.has(key)) continue;
       toInsert.push({
         organization_id: body.organization_id,
-        name: `AI: "${g.keyword}"`,
+        name: `${body.context === "ap" ? "AI (AP)" : "AI"}: "${g.keyword}"`,
         description: `Auto-created from accepted AI suggestion`,
         is_active: true,
         priority: 50,
