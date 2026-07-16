@@ -998,6 +998,10 @@ export default function BankTransactions() {
                   <Sparkles className="w-4 h-4 mr-2" />
                   AI Extraction Engine
                 </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setAiExtractorOpen(true)}>
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  Extract from PDF (Gemini)
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           )}
