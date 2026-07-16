@@ -87,6 +87,48 @@ Deno.serve(async (req) => {
         }
       }
 
+      // Revenue: draft invoices
+      if (scopes.includes("invoice")) {
+        const { data: rows } = await admin
+          .from("invoice_lines")
+          .select("id, invoices!inner(organization_id, status)")
+          .is("income_account_id", null)
+          .eq("invoices.organization_id", orgId)
+          .eq("invoices.status", "draft")
+          .limit(SCOPE_LIMIT);
+        const ids = (rows ?? []).map((r: { id: string }) => r.id);
+        if (ids.length > 0) {
+          const res = await invoke("ai-categorize-revenue-lines", {
+            organization_id: orgId,
+            target: "invoice",
+            line_ids: ids,
+            auto_apply: true,
+          });
+          summary.invoice = res.auto_applied?.length ?? 0;
+        }
+      }
+
+      // Revenue: draft journal entries
+      if (scopes.includes("journal")) {
+        const { data: rows } = await admin
+          .from("journal_entry_lines")
+          .select("id, journal_entries!inner(organization_id, status)")
+          .is("account_id", null)
+          .eq("journal_entries.organization_id", orgId)
+          .eq("journal_entries.status", "draft")
+          .limit(SCOPE_LIMIT);
+        const ids = (rows ?? []).map((r: { id: string }) => r.id);
+        if (ids.length > 0) {
+          const res = await invoke("ai-categorize-revenue-lines", {
+            organization_id: orgId,
+            target: "journal",
+            line_ids: ids,
+            auto_apply: true,
+          });
+          summary.journal = res.auto_applied?.length ?? 0;
+        }
+      }
+
       await admin.from("ai_setup_logs").insert({
         organization_id: orgId,
         setup_type: "auto_apply_sweep",
