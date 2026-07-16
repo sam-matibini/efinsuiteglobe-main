@@ -155,10 +155,19 @@ export function BankStatementExtractor({
         memo: `AI extracted${file ? ` from ${file.name}` : ""}`,
         status: "pending",
       }));
-      const { error } = await supabase.from("bank_transactions").insert(payload);
+      const { data: inserted, error } = await supabase
+        .from("bank_transactions")
+        .insert(payload)
+        .select("id, description, amount, transaction_type");
       if (error) throw error;
       toast.success(`Imported ${payload.length} transactions`);
-      onImported?.(payload.length);
+      const importedList: ImportedTxnForCategorization[] = (inserted ?? []).map((r) => ({
+        id: r.id as string,
+        description: (r.description as string | null) ?? null,
+        amount: Number(r.amount ?? 0),
+        transaction_type: (r.transaction_type as string | null) ?? null,
+      }));
+      onImported?.(payload.length, importedList);
       // Reset
       setFile(null);
       setExtraction(null);
