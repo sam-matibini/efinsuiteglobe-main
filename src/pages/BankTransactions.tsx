@@ -38,6 +38,7 @@ import { MatchPaymentDialog } from '@/components/banking/MatchPaymentDialog';
 import { UnifiedImportDialog, ParsedBankTransaction, ParsedCreditCardTransaction } from '@/components/banking/UnifiedImportDialog';
 import { StatementExtractionDialog } from '@/components/banking/StatementExtractionDialog';
 import { BankStatementExtractor } from '@/components/banking/BankStatementExtractor';
+import { AICategorizeDialog } from '@/components/banking/AICategorizeDialog';
 import { ImportHistoryDialog } from '@/components/banking/ImportHistoryDialog';
 import { RuleCondition, TransactionRule } from '@/types/bankingRules';
 import { toast } from 'sonner';
