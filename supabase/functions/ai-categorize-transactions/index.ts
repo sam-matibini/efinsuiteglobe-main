@@ -118,33 +118,13 @@ Deno.serve(async (req) => {
       .eq("organization_id", body.organization_id)
       .eq("is_active", true);
 
+    // Note: transaction_rules use jsonb conditions/actions; deterministic matching
+    // is deferred to a future phase. All uncategorized rows go through cache → AI.
     const suggestions: Suggestion[] = [];
     const toAi: typeof txns = [];
 
     for (const t of txns ?? []) {
-      // 1) Deterministic rules first.
-      const desc = (t.description ?? "") + " " + (t.payee_payor ?? "");
-      const rule = (rules ?? []).find((r) => {
-        if (!r.match_pattern) return false;
-        try {
-          return desc.toLowerCase().includes(String(r.match_pattern).toLowerCase());
-        } catch {
-          return false;
-        }
-      });
-      if (rule?.gl_account_id) {
-        suggestions.push({
-          id: t.id,
-          gl_account_id: rule.gl_account_id,
-          category: rule.category ?? null,
-          confidence: 1,
-          reasoning: `Matched rule: ${rule.name}`,
-          source: "rule",
-        });
-        continue;
-      }
 
-      // 2) Cache hit.
       const sign = Number(t.amount) >= 0 ? "+" : "-";
       const cacheKeyRaw = `${body.organization_id}|${sign}|${normDesc(t.description ?? "")}`;
       const argsHash = await hashKey(cacheKeyRaw);
