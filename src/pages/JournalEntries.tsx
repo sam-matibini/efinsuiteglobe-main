@@ -31,6 +31,8 @@ import { ViewJournalEntryDialog } from '@/components/journal/ViewJournalEntryDia
 import { ReverseJournalEntryDialog } from '@/components/journal/ReverseJournalEntryDialog';
 import { BulkPostDialog } from '@/components/journal/BulkPostDialog';
 import BulkJournalImportDialog from '@/components/journal/BulkJournalImportDialog';
+import { AICategorizeLinesDialog } from '@/components/ai/AICategorizeLinesDialog';
+import { AICategorizationHealth } from '@/components/banking/AICategorizationHealth';
 import {
   Select,
   SelectContent,
