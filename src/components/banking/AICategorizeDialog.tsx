@@ -139,6 +139,27 @@ export function AICategorizeDialog({
     const n = await applySuggestions(acceptedList);
     toast.success(`Applied ${n} categorizations`);
 
+    // Phase 5 — record feedback for all reviewed suggestions.
+    if (currentOrganization?.id && suggestions.length > 0) {
+      const items = suggestions.map((s) => {
+        const t = txnMap.get(s.id);
+        const isAccepted = !!accepted[s.id] && !!s.gl_account_id;
+        return {
+          line_id: s.id,
+          target: "bank_transaction" as const,
+          suggested_account_id: s.gl_account_id,
+          final_account_id: isAccepted ? s.gl_account_id : null,
+          source: s.source,
+          confidence: s.confidence,
+          vendor_key: t?.payee_payor ?? null,
+          desc_key: t?.description ?? null,
+        };
+      });
+      void supabase.functions.invoke("ai-record-categorization-feedback", {
+        body: { organization_id: currentOrganization.id, context: "bank", items },
+      });
+    }
+
     // Phase 3.2 — promote AI-sourced acceptances into transaction_rules.
     if (currentOrganization?.id) {
       const aiPromotions = acceptedList
@@ -156,7 +177,6 @@ export function AICategorizeDialog({
         setLearnedRules(created);
         if (created > 0) {
           onApplied?.(n);
-          // Keep dialog open briefly so the user can see the learned-rules note.
           setTimeout(() => onOpenChange(false), 1200);
           return;
         }
@@ -166,6 +186,7 @@ export function AICategorizeDialog({
     onApplied?.(n);
     onOpenChange(false);
   };
+
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

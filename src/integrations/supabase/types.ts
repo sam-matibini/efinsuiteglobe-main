@@ -218,6 +218,65 @@ export type Database = {
           },
         ]
       }
+      ai_categorization_feedback: {
+        Row: {
+          accepted: boolean | null
+          confidence: number | null
+          context: string
+          created_at: string
+          created_by: string | null
+          desc_key: string | null
+          final_account_id: string | null
+          id: string
+          line_id: string
+          organization_id: string
+          source: string | null
+          suggested_account_id: string | null
+          target: string
+          vendor_key: string | null
+        }
+        Insert: {
+          accepted?: boolean | null
+          confidence?: number | null
+          context: string
+          created_at?: string
+          created_by?: string | null
+          desc_key?: string | null
+          final_account_id?: string | null
+          id?: string
+          line_id: string
+          organization_id: string
+          source?: string | null
+          suggested_account_id?: string | null
+          target: string
+          vendor_key?: string | null
+        }
+        Update: {
+          accepted?: boolean | null
+          confidence?: number | null
+          context?: string
+          created_at?: string
+          created_by?: string | null
+          desc_key?: string | null
+          final_account_id?: string | null
+          id?: string
+          line_id?: string
+          organization_id?: string
+          source?: string | null
+          suggested_account_id?: string | null
+          target?: string
+          vendor_key?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_categorization_feedback_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_financial_tools: {
         Row: {
           ai_insights: Json | null

@@ -1,4 +1,4 @@
-# Phase 5 — Continuous learning & categorization analytics
+# Phase 5 — Continuous learning & categorization analytics (done)
 
 Phases 3–4 shipped one-shot AI categorization for bank, bill, and expense lines with rule promotion. Phase 5 closes the loop: measure how well AI + learned rules are doing, feed corrections back, and surface it in the UI.
 
