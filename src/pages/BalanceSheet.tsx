@@ -1785,25 +1785,8 @@ export default function BalanceSheet() {
                     </tr>
                   )}
 
-                  {/* Other Deductions (conditional) */}
-                  {((reCurrentStatement?.data.otherDeductions ?? 0) !== 0 || reComparativeStatements.some(c => (c?.data.otherDeductions ?? 0) !== 0)) && (
-                    <tr className="border-b border-border/30 hover:bg-muted/20 transition-colors">
-                      <td className="py-2.5 px-6" style={{ paddingLeft: 30 }}>
-                        <span className="text-foreground">Other deductions</span>
-                      </td>
-                      <td className="py-2.5 px-6 text-right font-mono">
-                        {reCurrentStatement ? formatCurrencyOrDash(-(reCurrentStatement.data.otherDeductions)) : '-'}
-                      </td>
-                      {comparisonPeriods.map((_, i) => {
-                        const compRE = reComparativeStatements[i];
-                        return (
-                          <td key={i} className="py-2.5 px-6 text-right font-mono">
-                            {compRE ? formatCurrencyOrDash(-(compRE.data.otherDeductions)) : '-'}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  )}
+
+
 
                   {/* Closing Balance - GIFI 3849 */}
                   <tr className="bg-muted/20 border-t-2 border-border font-semibold">
