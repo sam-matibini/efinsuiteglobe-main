@@ -277,6 +277,41 @@ export type Database = {
           },
         ]
       }
+      ai_categorization_settings: {
+        Row: {
+          auto_apply_enabled: boolean
+          auto_apply_scopes: string[]
+          auto_apply_threshold: number
+          created_at: string
+          organization_id: string
+          updated_at: string
+        }
+        Insert: {
+          auto_apply_enabled?: boolean
+          auto_apply_scopes?: string[]
+          auto_apply_threshold?: number
+          created_at?: string
+          organization_id: string
+          updated_at?: string
+        }
+        Update: {
+          auto_apply_enabled?: boolean
+          auto_apply_scopes?: string[]
+          auto_apply_threshold?: number
+          created_at?: string
+          organization_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_categorization_settings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_financial_tools: {
         Row: {
           ai_insights: Json | null
