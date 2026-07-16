@@ -1097,14 +1097,6 @@ export default function BalanceSheet() {
     const compNetIncome = reComparativeStatements.map(c => formatAmount(c?.data.netIncomeLoss ?? 0));
     rows.push(['  Net income (loss)', formatAmount(currentNetIncome), ...compNetIncome]);
     
-    // Other additions (conditional)
-    const currentOtherAdditions = reCurrentStatement?.data.otherAdditions ?? 0;
-    const hasAnyOtherAdditions = currentOtherAdditions !== 0 || reComparativeStatements.some(c => (c?.data.otherAdditions ?? 0) !== 0);
-    if (hasAnyOtherAdditions) {
-      const compOtherAdditions = reComparativeStatements.map(c => formatAmount(c?.data.otherAdditions ?? 0));
-      rows.push(['  Other additions', formatAmount(currentOtherAdditions), ...compOtherAdditions]);
-    }
-    
     // Dividends declared (conditional)
     const currentDividends = reCurrentStatement?.data.dividendsDeclared ?? 0;
     const hasAnyDividends = currentDividends !== 0 || reComparativeStatements.some(c => (c?.data.dividendsDeclared ?? 0) !== 0);
@@ -1112,14 +1104,7 @@ export default function BalanceSheet() {
       const compDividends = reComparativeStatements.map(c => formatAmount(-(c?.data.dividendsDeclared ?? 0)));
       rows.push(['  Dividends declared', formatAmount(-currentDividends), ...compDividends]);
     }
-    
-    // Other deductions (conditional)
-    const currentOtherDeductions = reCurrentStatement?.data.otherDeductions ?? 0;
-    const hasAnyOtherDeductions = currentOtherDeductions !== 0 || reComparativeStatements.some(c => (c?.data.otherDeductions ?? 0) !== 0);
-    if (hasAnyOtherDeductions) {
-      const compOtherDeductions = reComparativeStatements.map(c => formatAmount(-(c?.data.otherDeductions ?? 0)));
-      rows.push(['  Other deductions', formatAmount(-currentOtherDeductions), ...compOtherDeductions]);
-    }
+
     
     // Closing balance
     const currentClosingRE = reCurrentStatement?.data.closingBalance ?? 0;
