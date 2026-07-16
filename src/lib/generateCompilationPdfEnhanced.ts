@@ -221,6 +221,7 @@ export interface ComparativeFinancialData {
       totalLiabilities: number;
       totalEquity: number;
       netIncome: number;
+      reClosingBalance?: number;
     };
     incomeStatement: {
       income: Array<{ name: string; calculated_balance: number }>;
