@@ -1,7 +1,7 @@
 import { useState, useMemo, useDeferredValue, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { format, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear, subMonths, subYears } from 'date-fns';
-import { Plus, Search, Download, Building2, Eye, Pencil, Trash2, RotateCcw, Send, ListChecks, X, ChevronLeft, ChevronRight, Upload } from 'lucide-react';
+import { Plus, Search, Download, Building2, Eye, Pencil, Trash2, RotateCcw, Send, ListChecks, X, ChevronLeft, ChevronRight, Upload, Sparkles } from 'lucide-react';
 import { parseLocalDate } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
