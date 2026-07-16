@@ -37,6 +37,8 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   transactions: TxnLike[];
   onApplied?: (count: number) => void;
+  /** Phase 3.1 — post-import mode: auto-runs categorization and uses tighter defaults. */
+  postImportMode?: boolean;
 }
 
 export function AICategorizeDialog({
@@ -44,15 +46,18 @@ export function AICategorizeDialog({
   onOpenChange,
   transactions,
   onApplied,
+  postImportMode,
 }: Props) {
   const { currentOrganization } = useOrganizationContext();
-  const { categorize, applySuggestions, isCategorizing, isApplying } =
+  const { categorize, applySuggestions, promoteRules, isCategorizing, isApplying } =
     useAICategorization();
 
   const [suggestions, setSuggestions] = useState<CategorizationSuggestion[]>([]);
   const [accepted, setAccepted] = useState<Record<string, boolean>>({});
-  const [threshold, setThreshold] = useState(85);
+  const [threshold, setThreshold] = useState(postImportMode ? 90 : 85);
   const [hasRun, setHasRun] = useState(false);
+  const [learnedRules, setLearnedRules] = useState<number | null>(null);
+  const [autoRan, setAutoRan] = useState(false);
 
   const { data: accounts = [] } = useQuery({
     queryKey: ["coa-lite", currentOrganization?.id],
