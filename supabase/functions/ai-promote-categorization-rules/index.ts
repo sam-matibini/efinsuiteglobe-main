@@ -11,6 +11,8 @@ interface AcceptedItem {
 interface Payload {
   organization_id: string;
   accepted: AcceptedItem[];
+  /** Phase 4 — tag learned rules so AP promotions don't get confused with bank rules. */
+  context?: "bank" | "ap";
 }
 
 const STOPWORDS = new Set([
