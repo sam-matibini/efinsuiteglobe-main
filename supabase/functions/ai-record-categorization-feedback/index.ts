@@ -104,8 +104,14 @@ Deno.serve(async (req) => {
     if (insErr) return j({ error: insErr.message }, 500);
 
     // Invalidate stale cache for overridden cache/ai suggestions
-    const formula = body.context === "bank" ? "CATEGORIZE_TXN" : "CATEGORIZE_AP";
-    const prefix = body.context === "bank" ? "" : "AP|";
+    const formula =
+      body.context === "bank"
+        ? "CATEGORIZE_TXN"
+        : body.context === "revenue"
+          ? "CATEGORIZE_REVENUE"
+          : "CATEGORIZE_AP";
+    const prefix =
+      body.context === "bank" ? "" : body.context === "revenue" ? "REV|" : "AP|";
     let cacheInvalidated = 0;
     for (const it of body.items) {
       const overridden =
