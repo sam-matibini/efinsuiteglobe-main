@@ -39,6 +39,11 @@ const SCHEMA = {
         properties: {
           date: { type: "string", description: "ISO 8601 YYYY-MM-DD" },
           description: { type: "string" },
+          payer_payee: {
+            type: "string",
+            description:
+              "Cleaned counterparty name extracted from the description. For credits/deposits/payments this is the PAYER; for debits/charges this is the PAYEE. Strip reference numbers, POS/terminal codes, city/state, card-last-4 suffixes, and generic prefixes. Leave empty only for rows like INTEREST/BANK FEE/SERVICE CHARGE.",
+          },
           amount: { type: "number", description: "Absolute value" },
           type: { type: "string", enum: ["debit", "credit"] },
           balance: { type: "number" },
