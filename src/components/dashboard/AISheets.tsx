@@ -1496,24 +1496,33 @@ export function AISheets({
         <div className="flex-1" />
 
         {/* Import to banking actions with mapping */}
-        {(onImportToBank || onImportToCreditCard) && activeSheet.rows.length > 0 && (
+        {activeSheet.rows.length > 0 && (onImportToBank || onImportToCreditCard || effectiveBankAccountId || effectiveCreditCardId) && (
           <>
             <Separator orientation="vertical" className="h-6" />
+            <Button
+              variant="default"
+              size="sm"
+              className="bg-primary"
+              onClick={() => openMappingDialog(detectStatementType())}
+              title="Auto-detects credit card vs bank statement"
+            >
+              <Upload className="h-4 w-4 mr-1" />
+              Post to Banking
+            </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="default" size="sm" className="bg-primary">
-                  <Columns className="h-4 w-4 mr-1" />
-                  Map & Import
+                <Button variant="outline" size="sm" title="Manual mapping">
+                  <Columns className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                {onImportToBank && (
+                {(onImportToBank || effectiveBankAccountId) && (
                   <DropdownMenuItem onClick={() => openMappingDialog('bank')}>
                     <Building2 className="h-4 w-4 mr-2" />
                     Map to Bank Statement
                   </DropdownMenuItem>
                 )}
-                {onImportToCreditCard && (
+                {(onImportToCreditCard || effectiveCreditCardId) && (
                   <DropdownMenuItem onClick={() => openMappingDialog('creditcard')}>
                     <CreditCard className="h-4 w-4 mr-2" />
                     Map to Credit Card
