@@ -986,88 +986,137 @@ export function AISheets({
   const openMappingDialog = (target: 'bank' | 'creditcard') => {
     setImportTarget(target);
     const targetCols = target === 'bank' ? bankTargetColumns : creditCardTargetColumns;
-    // Auto-map based on column name similarity
+    const sourceCols = activeSheet.columns;
+    // Alias-based auto-map with fallback to name-similarity
     const autoMappings: ColumnMapping[] = targetCols.map(tc => {
-      const match = activeSheet.columns.find(sc => 
-        sc.toLowerCase().replace(/[_\s-]/g, '').includes(tc.replace(/_/g, '')) ||
-        tc.replace(/_/g, '').includes(sc.toLowerCase().replace(/[_\s-]/g, ''))
-      );
-      return { sourceColumn: match || '', targetColumn: tc };
+      let match = matchAlias(tc, sourceCols);
+      if (!match) {
+        const tcN = tc.replace(/^_/, '').replace(/_/g, '');
+        match = sourceCols.find(sc => {
+          const n = normalize(sc);
+          return n.includes(tcN) || tcN.includes(n);
+        }) || '';
+      }
+      return { sourceColumn: match, targetColumn: tc };
     });
     setColumnMappings(autoMappings);
     setMappingDialogOpen(true);
   };
 
-  const handleImportWithMapping = () => {
-    if (importTarget && activeSheet.rows.length > 0) {
-      // Transform data based on mappings
-      const mappedData = activeSheet.rows.map(row => {
-        const newRow: SheetRow = {};
-        columnMappings.forEach(m => {
-          if (m.sourceColumn && m.targetColumn) {
-            newRow[m.targetColumn] = row[m.sourceColumn];
-          }
-        });
-        return newRow;
-      });
+  const toNum = (v: unknown): number => {
+    if (v === null || v === undefined || v === '') return 0;
+    const n = Number(String(v).replace(/[$,\s()]/g, '').replace(/^-?/, m => m));
+    // Handle parentheses as negative
+    const s = String(v);
+    const isParenNeg = /^\s*\(.*\)\s*$/.test(s);
+    const parsed = Number.isFinite(n) ? n : 0;
+    return isParenNeg ? -Math.abs(parsed) : parsed;
+  };
 
-      if (importTarget === 'bank') {
-        if (onImportToBank) {
-          onImportToBank(mappedData, columnMappings);
-          toast.success(`Imported ${mappedData.length} rows to bank transactions`);
-        } else if (effectiveBankAccountId) {
-          // Direct import using hook - include GL account from selected bank account
-          const mappedTransactions = mappedData.map(tx => {
-            const rawAmount = Number(tx.amount ?? 0);
-            const amount = Number.isFinite(rawAmount) ? Math.abs(rawAmount) : 0;
+  const handleImportWithMapping = () => {
+    if (!importTarget || activeSheet.rows.length === 0) return;
+
+    // Transform data based on mappings
+    const mappedData = activeSheet.rows.map(row => {
+      const newRow: SheetRow = {};
+      columnMappings.forEach(m => {
+        if (m.sourceColumn && m.targetColumn) {
+          newRow[m.targetColumn] = row[m.sourceColumn];
+        }
+      });
+      return newRow;
+    });
+
+    if (importTarget === 'bank') {
+      if (onImportToBank) {
+        onImportToBank(mappedData, columnMappings);
+        toast.success(`Imported ${mappedData.length} rows to bank transactions`);
+      } else if (effectiveBankAccountId) {
+        const mappedTransactions = mappedData
+          .map(tx => {
+            const withdrawal = toNum(tx._withdrawal_column);
+            const deposit = toNum(tx._deposit_column);
+            const rawAmount = toNum(tx.amount);
+            let amount = 0;
+            let transaction_type: 'deposit' | 'withdrawal' = 'deposit';
+            if (Math.abs(withdrawal) > 0 || Math.abs(deposit) > 0) {
+              if (Math.abs(withdrawal) > 0) {
+                amount = Math.abs(withdrawal);
+                transaction_type = 'withdrawal';
+              } else {
+                amount = Math.abs(deposit);
+                transaction_type = 'deposit';
+              }
+            } else {
+              amount = Math.abs(rawAmount);
+              transaction_type = rawAmount >= 0 ? 'deposit' : 'withdrawal';
+            }
+            if (amount === 0) return null;
             const transactionDate = String(tx.transaction_date || tx.date || new Date().toISOString().split('T')[0]);
             const payeePayor = tx.payee_payor ?? tx.merchant_name ?? tx.merchant ?? tx.payee ?? tx.payor ?? null;
-            const isDeposit = rawAmount >= 0;
-
             return {
               bank_account_id: effectiveBankAccountId,
               gl_account_id: effectiveBankGlAccountId || null,
               transaction_date: transactionDate,
               description: String(tx.description || ''),
               amount,
-              transaction_type: (isDeposit ? 'deposit' : 'withdrawal') as 'deposit' | 'withdrawal',
+              transaction_type,
               payee_payor: payeePayor ? String(payeePayor) : null,
               reference: tx.reference ? String(tx.reference) : null,
               category: tx.category ? String(tx.category) : null,
               memo: tx.memo ? String(tx.memo) : null,
             };
-          });
-          importBankTx.mutate(mappedTransactions);
-          toast.success(`Imported ${mappedData.length} rows to bank transactions`);
-        } else {
-          toast.error('No bank account found. Please create a bank account first.');
+          })
+          .filter((t): t is NonNullable<typeof t> => t !== null);
+        if (mappedTransactions.length === 0) {
+          toast.error('No valid rows to import (all amounts are zero or empty)');
           return;
         }
-      } else if (importTarget === 'creditcard') {
-        if (onImportToCreditCard) {
-          onImportToCreditCard(mappedData, columnMappings);
-          toast.success(`Imported ${mappedData.length} rows to credit card transactions`);
-        } else if (effectiveCreditCardId) {
-          // Direct import using hook - include GL account from selected credit card
-          const mappedTransactions = mappedData.map(tx => {
-            const rawAmount = Number(tx.amount ?? 0);
-            const amount = Number.isFinite(rawAmount) ? Math.abs(rawAmount) : 0;
-            const transactionType = rawAmount >= 0 ? 'charge' : 'payment';
+        importBankTx.mutate(mappedTransactions);
+        toast.success(`Imported ${mappedTransactions.length} rows to bank transactions`);
+      } else {
+        toast.error('No bank account found. Please create a bank account first.');
+        return;
+      }
+    } else if (importTarget === 'creditcard') {
+      if (onImportToCreditCard) {
+        onImportToCreditCard(mappedData, columnMappings);
+        toast.success(`Imported ${mappedData.length} rows to credit card transactions`);
+      } else if (effectiveCreditCardId) {
+        const mappedTransactions = mappedData
+          .map(tx => {
+            const charge = toNum(tx._charge_column);
+            const payment = toNum(tx._payment_column);
+            const rawAmount = toNum(tx.amount);
+            let amount = 0;
+            let transaction_type: 'charge' | 'payment' = 'charge';
+            if (Math.abs(charge) > 0 || Math.abs(payment) > 0) {
+              if (Math.abs(charge) > 0) {
+                amount = Math.abs(charge);
+                transaction_type = 'charge';
+              } else {
+                amount = Math.abs(payment);
+                transaction_type = 'payment';
+              }
+            } else {
+              amount = Math.abs(rawAmount);
+              transaction_type = rawAmount >= 0 ? 'charge' : 'payment';
+            }
+            if (amount === 0) return null;
             const transactionDate = String(tx.transaction_date || tx.date || new Date().toISOString().split('T')[0]);
             const payeePayor = tx.payee_payor ?? tx.merchant_name ?? tx.merchant ?? tx.payee ?? tx.payor ?? null;
             const postedDate = String(tx.posted_date ?? tx.posting_date ?? '') || null;
-
             return {
               credit_card_id: effectiveCreditCardId,
               transaction_date: transactionDate,
               posted_date: postedDate,
               description: String(tx.description || ''),
               amount,
-              transaction_type: transactionType,
+              transaction_type,
               payee_payor: payeePayor ? String(payeePayor) : null,
               reference: tx.reference ? String(tx.reference) : null,
               category: tx.category ? String(tx.category) : null,
-              merchant_category_code: null,
+              merchant_category_code: tx.merchant_category_code ? String(tx.merchant_category_code) : null,
               memo: tx.memo ? String(tx.memo) : null,
               is_cleared: false,
               cleared_at: null,
@@ -1076,17 +1125,22 @@ export function AISheets({
               status: 'pending' as const,
               imported_at: new Date().toISOString(),
             };
-          });
-          importCcTx.mutate(mappedTransactions);
-          toast.success(`Imported ${mappedData.length} rows to credit card transactions`);
-        } else {
-          toast.error('No credit card found. Please add a credit card first.');
+          })
+          .filter((t): t is NonNullable<typeof t> => t !== null);
+        if (mappedTransactions.length === 0) {
+          toast.error('No valid rows to import (all amounts are zero or empty)');
           return;
         }
+        importCcTx.mutate(mappedTransactions);
+        toast.success(`Imported ${mappedTransactions.length} rows to credit card transactions`);
+      } else {
+        toast.error('No credit card found. Please add a credit card first.');
+        return;
       }
-      setMappingDialogOpen(false);
     }
+    setMappingDialogOpen(false);
   };
+
 
   const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
