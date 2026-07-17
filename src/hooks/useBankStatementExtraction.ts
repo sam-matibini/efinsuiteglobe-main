@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 export interface ExtractedTransaction {
   date: string;
   description: string;
+  payer_payee?: string;
   amount: number;
   type: "debit" | "credit";
   balance?: number;
