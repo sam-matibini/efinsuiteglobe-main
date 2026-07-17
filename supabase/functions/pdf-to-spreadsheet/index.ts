@@ -402,13 +402,13 @@ serve(async (req) => {
 
       // For bank statements use Withdrawal/Deposit naming used downstream; for CC use Charge/Payment-friendly columns.
       columns = isCC
-        ? ['Date', 'Description', 'Reference', 'Charge', 'Payment', 'Balance']
-        : ['Date', 'Description', 'Reference', 'Debit', 'Credit', 'Balance'];
+        ? ['Date', 'Description', 'Payer/Payee', 'Reference', 'Charge', 'Payment', 'Balance']
+        : ['Date', 'Description', 'Payer/Payee', 'Reference', 'Debit', 'Credit', 'Balance'];
 
       // If CC, rename Debit/Credit -> Charge/Payment in rows
       rows = isCC
         ? cleaned.map((r) => ({
-            Date: r.Date, Description: r.Description, Reference: r.Reference,
+            Date: r.Date, Description: r.Description, 'Payer/Payee': r['Payer/Payee'], Reference: r.Reference,
             Charge: r.Debit, Payment: r.Credit, Balance: r.Balance,
           }))
         : cleaned;
