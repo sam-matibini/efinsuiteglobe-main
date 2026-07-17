@@ -1506,15 +1506,77 @@ export function AISheets({
         <div className="flex-1" />
 
         {/* Import to banking actions with mapping */}
-        {activeSheet.rows.length > 0 && (onImportToBank || onImportToCreditCard || effectiveBankAccountId || effectiveCreditCardId) && (
+        {activeSheet.rows.length > 0 && (onImportToBank || onImportToCreditCard || effectiveBankAccountId || effectiveCreditCardId) && (() => {
+          const detectedType = detectStatementType();
+          const noDestination = detectedType === 'bank'
+            ? bankAccounts.length === 0
+            : creditCards.length === 0;
+          return (
           <>
             <Separator orientation="vertical" className="h-6" />
+            {/* Destination account selector — drives where extracted rows are posted */}
+            {detectedType === 'bank' ? (
+              <Select
+                value={selectedBankAccountId || effectiveBankAccountId || ''}
+                onValueChange={(val) => setSelectedBankAccountId(val)}
+              >
+                <SelectTrigger className="h-8 w-[220px] text-xs" title="Bank account to post into">
+                  <div className="flex items-center gap-1.5 truncate">
+                    <Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                    <SelectValue placeholder="Select bank account..." />
+                  </div>
+                </SelectTrigger>
+                <SelectContent className="bg-background border border-border z-50">
+                  {bankAccounts.length === 0 ? (
+                    <SelectItem value="__none__" disabled>No bank accounts — add one in Banking</SelectItem>
+                  ) : bankAccounts.map(account => (
+                    <SelectItem key={account.id} value={account.id}>
+                      <div className="flex items-center gap-2">
+                        <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
+                        <span>{account.name}</span>
+                        {account.account_number && (
+                          <span className="text-muted-foreground text-xs">···{account.account_number.slice(-4)}</span>
+                        )}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <Select
+                value={selectedCreditCardId || effectiveCreditCardId || ''}
+                onValueChange={(val) => setSelectedCreditCardId(val)}
+              >
+                <SelectTrigger className="h-8 w-[220px] text-xs" title="Credit card to post into">
+                  <div className="flex items-center gap-1.5 truncate">
+                    <CreditCard className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                    <SelectValue placeholder="Select credit card..." />
+                  </div>
+                </SelectTrigger>
+                <SelectContent className="bg-background border border-border z-50">
+                  {creditCards.length === 0 ? (
+                    <SelectItem value="__none__" disabled>No credit cards — add one in Banking</SelectItem>
+                  ) : creditCards.map(card => (
+                    <SelectItem key={card.id} value={card.id}>
+                      <div className="flex items-center gap-2">
+                        <CreditCard className="h-3.5 w-3.5 text-muted-foreground" />
+                        <span>{card.name}</span>
+                        {card.card_number && (
+                          <span className="text-muted-foreground text-xs">···{card.card_number.slice(-4)}</span>
+                        )}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
             <Button
               variant="default"
               size="sm"
               className="bg-primary"
-              onClick={() => openMappingDialog(detectStatementType())}
-              title="Auto-detects credit card vs bank statement"
+              disabled={noDestination}
+              onClick={() => openMappingDialog(detectedType)}
+              title={noDestination ? 'Add a bank account or credit card first' : 'Auto-detects credit card vs bank statement'}
             >
               <Upload className="h-4 w-4 mr-1" />
               Post to Banking
@@ -1541,7 +1603,8 @@ export function AISheets({
               </DropdownMenuContent>
             </DropdownMenu>
           </>
-        )}
+          );
+        })()}
       </div>
 
       {/* Sheet Tabs */}
