@@ -1,66 +1,43 @@
 ## Goal
-Add a **"Post to Banking"** gateway in AI Sheets that (a) auto-detects whether the loaded statement is a **credit card** or **bank** statement, (b) routes rows into the correct destination table (`credit_card_transactions` or `bank_transactions`), and (c) maps AI-Sheets columns (including split **Charge / Payment** columns like the uploaded screenshot) to the target schema without manual re-mapping in most cases.
+Expose the bank/credit-card account picker directly on the AI Sheets toolbar (next to **Post to Banking**) so the user picks the destination account *before* posting. Today the picker exists only inside the mapping dialog, which makes the linkage between AI Sheets rows and the banking account invisible on the main surface.
 
-Today, AI Sheets already has `Map & Import → Bank` and `Map & Import → Credit Card`, but:
-- The user must pick the destination manually.
-- Auto-mapping is name-similarity only; it does **not** understand split **Charge/Debit** vs **Payment/Credit** columns, so signs/types are wrong for CC statements.
-- `Payer/Payee`, `Reference`, `Posted Date`, `MCC` are inconsistently mapped.
+## Scope
+Frontend-only change in `src/components/dashboard/AISheets.tsx`. No schema, hook, or edge-function changes. Posting still flows through the existing `useBankTransactions` / `useCreditCardTransactions` hooks against the selected `bank_accounts.id` / `credit_cards.id`.
 
 ## Changes
 
-### 1. Statement type detection — `src/components/dashboard/AISheets.tsx`
-Add `detectStatementType(columns, rows, sourceFile)`:
-- Credit card if any of: columns include both a charge-side (`Charge`, `Debit`, `Purchases`) and payment-side (`Payment`, `Credit`, `Payments/Credits`); or filename contains `credit`, `visa`, `mastercard`, `amex`, `card`, `statement-####`; or a `Posted Date` / `Transaction Date` pair exists.
-- Otherwise treat as bank.
-- Returned as `{ kind: 'bank' | 'creditcard', confidence, reasons[] }`.
+### 1. Toolbar destination selector (next to "Post to Banking")
+Add a compact `Select` immediately before the **Post to Banking** button on the toolbar (line ~1499). Its content depends on the auto-detected statement type:
 
-### 2. Unified "Post to Banking" gateway button
-Replace the two dropdown items with a single primary action **Post to Banking** (keep advanced menu for manual override):
-- On click: run detection, open the mapping dialog pre-set to the detected target and pre-selected account/card (first active `bank_account` or `credit_card`, matching last-used if available).
-- Show a small badge in the dialog header: `Detected: Credit Card statement (Charge/Payment columns)` with a `Switch to Bank` link.
+- If `detectStatementType() === 'bank'` → list active `bankAccounts` (name + last-4).
+- If `'creditcard'` → list active `creditCards` (name + last-4).
 
-### 3. Enhanced auto-mapping (covers uploaded statement shape)
-Extend `openMappingDialog` auto-mapper with a header-alias table applied before name-similarity fallback:
+Behavior:
+- Value binds to the existing `selectedBankAccountId` / `selectedCreditCardId` state.
+- Default = current `effectiveBankAccount` / `effectiveCreditCard` (first active) on mount.
+- Groups `[icon] Account name  ···1234` per row, using `Building2` for bank and `CreditCard` for card.
+- Empty-state item: "No bank accounts — add one in Banking" / "No credit cards — add one in Banking" (disabled).
+- Persist the last-used account per type in `localStorage` (`aisheets:lastBankAccountId`, `aisheets:lastCreditCardId`) and rehydrate on mount so the selection sticks across sessions.
 
-```
-transaction_date  ← Date, Trans Date, Transaction Date
-posted_date       ← Posted, Posted Date, Posting Date
-description       ← Description, Details, Narrative, Memo
-payee_payor       ← Payer/Payee, Payee, Payer, Merchant, Counterparty
-reference         ← Reference, Ref, Ref #, Cheque, Check No
-category          ← Category, Type
-merchant_category_code ← MCC, Merchant Category
-charge_column     ← Charge, Debit, Withdrawal, Purchases, Amount Out
-payment_column    ← Payment, Credit, Deposit, Payments/Credits, Amount In
-amount            ← Amount (single-column fallback)
-```
+### 2. Keep dialog selector in sync
+The dialog selector at lines 2179-2233 stays but simply reflects `selectedBankAccountId` / `selectedCreditCardId`. No duplicate state.
 
-`charge_column` / `payment_column` are **virtual targets** used only when the sheet has split columns.
+### 3. Guard the Post button
+Disable **Post to Banking** when the resolved destination id is missing (`!effectiveBankAccountId && !effectiveCreditCardId`) with tooltip "Add a bank account or credit card first". This prevents silent no-ops.
 
-### 4. Amount reconciliation in `handleImportWithMapping`
-Before building the payload, collapse split columns into signed `amount` + correct `transaction_type`:
+### 4. Show the chosen account in the dialog header
+Replace the current "Detected: …" line with:
+> Posting to **{account.name}** (···{last4}) — detected {Credit Card|Bank} statement.
 
-- **Credit card path** (sign convention per project memory `credit-card-import-sign-convention`):
-  - If `charge_column` mapped: `amount = |charge|`, `transaction_type = 'charge'`.
-  - Else if `payment_column` mapped: `amount = |payment|`, `transaction_type = 'payment'`.
-  - Else fallback to single `amount` (positive → charge, negative → payment).
-- **Bank path**:
-  - If split columns: `withdrawal → withdrawal`, `deposit → deposit`.
-  - Else single amount: positive → deposit, negative → withdrawal.
+Purely presentational; account id already drives `importBankTx` / `importCcTx`.
 
-Skip rows where both charge and payment are empty/zero (statement subtotal rows).
-
-### 5. Preview panel in the mapping dialog
-Add a compact 5-row preview under the mapping grid showing the resolved `date | description | payee_payor | amount | type` so the user can visually confirm signs before posting. No new dialog — inline in the existing `mappingDialogOpen` sheet.
-
-### 6. No schema / edge-function changes
-`bank_transactions` and `credit_card_transactions` already accept every field used. Posting continues to go through existing `importBankTx` / `importCcTx` hooks so GL journal creation and RLS remain intact.
+### 5. Statement-type switch also swaps selector
+When the user manually chooses "Map to Bank Statement" or "Map to Credit Card" from the advanced dropdown, the toolbar selector updates to the matching account list.
 
 ## Files touched
-- `src/components/dashboard/AISheets.tsx` — detection, unified button, alias-based auto-map, split-column reconciliation, inline preview.
+- `src/components/dashboard/AISheets.tsx` — toolbar selector, defaults, disabled state, dialog header text.
 
 ## Out of scope
-- No changes to Gemini extraction prompts (Phase 11 already added `payer_payee`).
-- No new DB tables, migrations, or edge functions.
-- No changes to the existing standalone `StatementExtractionDialog` flow.
-- No historical backfill.
+- No changes to import hooks, mapping logic, alias table, or preview panel.
+- No new tables, columns, or edge functions.
+- No changes to `StatementExtractionDialog` or the standalone `MappingPreviewDialog`.
