@@ -2243,10 +2243,21 @@ export function AISheets({
               Post to {importTarget === 'bank' ? 'Bank' : 'Credit Card'} Transactions
             </DialogTitle>
             <DialogDescription>
-              Detected: <span className="font-medium text-foreground">
-                {importTarget === 'creditcard' ? 'Credit Card statement' : 'Bank statement'}
-              </span>. Review the column mapping below — split Charge/Payment or Withdrawal/Deposit columns are auto-combined into signed amounts.
+              {(() => {
+                const acct = importTarget === 'bank' ? effectiveBankAccount : effectiveCreditCard;
+                const acctNum = importTarget === 'bank'
+                  ? (effectiveBankAccount?.account_number || '')
+                  : ((effectiveCreditCard as { card_number?: string })?.card_number || '');
+                const last4 = acctNum ? `···${acctNum.slice(-4)}` : '';
+                const kind = importTarget === 'creditcard' ? 'Credit Card' : 'Bank';
+                return acct ? (
+                  <>Posting to <span className="font-medium text-foreground">{acct.name}</span> {last4 && <span className="text-muted-foreground">{last4}</span>} — detected {kind} statement.</>
+                ) : (
+                  <>Detected {kind} statement. Select a destination account below.</>
+                );
+              })()}
             </DialogDescription>
+
           </DialogHeader>
           
           {/* Account Selection */}
