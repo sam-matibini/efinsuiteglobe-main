@@ -8,6 +8,7 @@ import { Loader2, ArrowLeft, Mail, CheckCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import efinsuiteLogo from '@/assets/efinsuite-logo.png';
+import { BackToHomeLink } from '@/components/auth/BackToHomeLink';
 
 export default function ForgotPassword() {
   const { toast } = useToast();
