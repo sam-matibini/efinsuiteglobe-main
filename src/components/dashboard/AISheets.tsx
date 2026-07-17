@@ -181,9 +181,19 @@ export function AISheets({
   
   const { convertPdfToSpreadsheet, isConverting: isPdfConverting, progress } = usePdfToSpreadsheet();
   
-  // Account selection state
-  const [selectedBankAccountId, setSelectedBankAccountId] = useState<string | null>(null);
-  const [selectedCreditCardId, setSelectedCreditCardId] = useState<string | null>(null);
+  // Account selection state (rehydrate last-used per type from localStorage)
+  const [selectedBankAccountId, setSelectedBankAccountId] = useState<string | null>(
+    () => (typeof window !== 'undefined' ? localStorage.getItem('aisheets:lastBankAccountId') : null)
+  );
+  const [selectedCreditCardId, setSelectedCreditCardId] = useState<string | null>(
+    () => (typeof window !== 'undefined' ? localStorage.getItem('aisheets:lastCreditCardId') : null)
+  );
+  useEffect(() => {
+    if (selectedBankAccountId) localStorage.setItem('aisheets:lastBankAccountId', selectedBankAccountId);
+  }, [selectedBankAccountId]);
+  useEffect(() => {
+    if (selectedCreditCardId) localStorage.setItem('aisheets:lastCreditCardId', selectedCreditCardId);
+  }, [selectedCreditCardId]);
   
   // Import hooks for direct database operations when callbacks aren't provided
   const { accounts: bankAccounts } = useBankAccounts();
