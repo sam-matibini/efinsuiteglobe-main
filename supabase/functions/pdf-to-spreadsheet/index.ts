@@ -151,6 +151,7 @@ HARD RULES — read carefully:
 5. Dates: use YYYY-MM-DD. Year comes from the statement period if the line omits it.
 6. Do not invent transactions. Do not skip transactions. Every posted transaction row must appear.
 7. Self-check before returning: sum of all \`debit\` values must equal printed \`totalDebits\` within 1 cent; sum of all \`credit\` values must equal printed \`totalCredits\` within 1 cent. If they don't match, re-read — you probably put a payment on the wrong side.
+8. \`payer_payee\`: for EVERY transaction, extract the cleaned counterparty name from the description. This is the PAYER on credits/payments/deposits (e.g. "John Smith", "Employer Name", "Cardholder Payment", "Interac e-Transfer from Alice") and the PAYEE on debits/charges (e.g. "Starbucks", "Shell", "Amazon", "Hydro One"). Strip transaction reference numbers, POS ids, city/province, terminal codes, card-last-4 suffixes, and generic prefixes like "POS PURCHASE", "DEBIT MEMO", "PAYMENT -". Return just the recognizable name. Only leave it empty for rows like "INTEREST", "SERVICE CHARGE", "BANK FEE" where no counterparty exists.
 
 Return the tool call only. No prose.`;
 
