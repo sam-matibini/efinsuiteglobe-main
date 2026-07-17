@@ -200,9 +200,58 @@ export function AISheets({
   const { importTransactions: importBankTx } = useBankTransactions(effectiveBankAccountId);
   const { importTransactions: importCcTx } = useCreditCardTransactions(effectiveCreditCardId);
   
-  // Bank/CC target columns
-  const bankTargetColumns = ['transaction_date', 'description', 'amount', 'payee_payor', 'reference', 'category', 'memo'];
-  const creditCardTargetColumns = ['transaction_date', 'description', 'amount', 'payee_payor', 'reference', 'category', 'merchant_category_code', 'memo'];
+  // Bank/CC target columns. Virtual targets prefixed with "_" collapse split
+  // Charge/Payment or Withdrawal/Deposit statement columns into a single signed
+  // amount + transaction_type during posting.
+  const bankTargetColumns = ['transaction_date', 'description', 'amount', '_withdrawal_column', '_deposit_column', 'payee_payor', 'reference', 'category', 'memo'];
+  const creditCardTargetColumns = ['transaction_date', 'posted_date', 'description', 'amount', '_charge_column', '_payment_column', 'payee_payor', 'reference', 'category', 'merchant_category_code', 'memo'];
+
+  // Header aliases: source-column patterns that map onto a target field.
+  const HEADER_ALIASES: Record<string, string[]> = {
+    transaction_date: ['date', 'trans date', 'transaction date', 'txn date'],
+    posted_date: ['posted', 'posted date', 'posting date', 'post date'],
+    description: ['description', 'details', 'narrative', 'transaction details'],
+    payee_payor: ['payer/payee', 'payee/payer', 'payee', 'payer', 'payor', 'merchant', 'counterparty', 'payer_payee'],
+    reference: ['reference', 'ref', 'ref #', 'ref no', 'cheque', 'check', 'check no', 'cheque no'],
+    category: ['category', 'type'],
+    merchant_category_code: ['mcc', 'merchant category', 'merchant category code'],
+    memo: ['memo', 'notes', 'note'],
+    _charge_column: ['charge', 'charges', 'debit', 'debits', 'purchases', 'amount out', 'withdrawal'],
+    _payment_column: ['payment', 'payments', 'credit', 'credits', 'payments/credits', 'amount in', 'deposit'],
+    _withdrawal_column: ['withdrawal', 'withdrawals', 'debit', 'debits', 'amount out', 'money out', 'paid out'],
+    _deposit_column: ['deposit', 'deposits', 'credit', 'credits', 'amount in', 'money in', 'paid in'],
+    amount: ['amount', 'value', 'total'],
+  };
+
+  const normalize = (s: string) => s.toLowerCase().replace(/[_\s\-/#().]+/g, '');
+
+  const matchAlias = (target: string, sourceCols: string[]): string => {
+    const aliases = HEADER_ALIASES[target] ?? [target];
+    const normAliases = aliases.map(normalize);
+    // Exact alias match
+    for (const src of sourceCols) {
+      const n = normalize(src);
+      if (normAliases.includes(n)) return src;
+    }
+    // Alias contained in header
+    for (const src of sourceCols) {
+      const n = normalize(src);
+      if (normAliases.some(a => a && (n === a || n.startsWith(a) || n.endsWith(a)))) return src;
+    }
+    return '';
+  };
+
+  // Detect whether the currently active sheet looks like a credit card statement.
+  const detectStatementType = (): 'bank' | 'creditcard' => {
+    const cols = (activeSheet?.columns ?? []).map(normalize);
+    const src = (activeSheet?.sourceFile ?? '').toLowerCase();
+    const hasCharge = cols.some(c => ['charge', 'charges', 'purchases'].includes(c));
+    const hasPayment = cols.some(c => ['payment', 'payments', 'paymentscredits'].includes(c));
+    if (hasCharge && hasPayment) return 'creditcard';
+    if (/credit|visa|mastercard|amex|americanexpress|card|statement-?\d/.test(src)) return 'creditcard';
+    if (cols.includes('posteddate') && cols.includes('transactiondate')) return 'creditcard';
+    return 'bank';
+  };
 
   const activeSheet = sheets[activeSheetIndex];
 
@@ -937,88 +986,137 @@ export function AISheets({
   const openMappingDialog = (target: 'bank' | 'creditcard') => {
     setImportTarget(target);
     const targetCols = target === 'bank' ? bankTargetColumns : creditCardTargetColumns;
-    // Auto-map based on column name similarity
+    const sourceCols = activeSheet.columns;
+    // Alias-based auto-map with fallback to name-similarity
     const autoMappings: ColumnMapping[] = targetCols.map(tc => {
-      const match = activeSheet.columns.find(sc => 
-        sc.toLowerCase().replace(/[_\s-]/g, '').includes(tc.replace(/_/g, '')) ||
-        tc.replace(/_/g, '').includes(sc.toLowerCase().replace(/[_\s-]/g, ''))
-      );
-      return { sourceColumn: match || '', targetColumn: tc };
+      let match = matchAlias(tc, sourceCols);
+      if (!match) {
+        const tcN = tc.replace(/^_/, '').replace(/_/g, '');
+        match = sourceCols.find(sc => {
+          const n = normalize(sc);
+          return n.includes(tcN) || tcN.includes(n);
+        }) || '';
+      }
+      return { sourceColumn: match, targetColumn: tc };
     });
     setColumnMappings(autoMappings);
     setMappingDialogOpen(true);
   };
 
-  const handleImportWithMapping = () => {
-    if (importTarget && activeSheet.rows.length > 0) {
-      // Transform data based on mappings
-      const mappedData = activeSheet.rows.map(row => {
-        const newRow: SheetRow = {};
-        columnMappings.forEach(m => {
-          if (m.sourceColumn && m.targetColumn) {
-            newRow[m.targetColumn] = row[m.sourceColumn];
-          }
-        });
-        return newRow;
-      });
+  const toNum = (v: unknown): number => {
+    if (v === null || v === undefined || v === '') return 0;
+    const n = Number(String(v).replace(/[$,\s()]/g, '').replace(/^-?/, m => m));
+    // Handle parentheses as negative
+    const s = String(v);
+    const isParenNeg = /^\s*\(.*\)\s*$/.test(s);
+    const parsed = Number.isFinite(n) ? n : 0;
+    return isParenNeg ? -Math.abs(parsed) : parsed;
+  };
 
-      if (importTarget === 'bank') {
-        if (onImportToBank) {
-          onImportToBank(mappedData, columnMappings);
-          toast.success(`Imported ${mappedData.length} rows to bank transactions`);
-        } else if (effectiveBankAccountId) {
-          // Direct import using hook - include GL account from selected bank account
-          const mappedTransactions = mappedData.map(tx => {
-            const rawAmount = Number(tx.amount ?? 0);
-            const amount = Number.isFinite(rawAmount) ? Math.abs(rawAmount) : 0;
+  const handleImportWithMapping = () => {
+    if (!importTarget || activeSheet.rows.length === 0) return;
+
+    // Transform data based on mappings
+    const mappedData = activeSheet.rows.map(row => {
+      const newRow: SheetRow = {};
+      columnMappings.forEach(m => {
+        if (m.sourceColumn && m.targetColumn) {
+          newRow[m.targetColumn] = row[m.sourceColumn];
+        }
+      });
+      return newRow;
+    });
+
+    if (importTarget === 'bank') {
+      if (onImportToBank) {
+        onImportToBank(mappedData, columnMappings);
+        toast.success(`Imported ${mappedData.length} rows to bank transactions`);
+      } else if (effectiveBankAccountId) {
+        const mappedTransactions = mappedData
+          .map(tx => {
+            const withdrawal = toNum(tx._withdrawal_column);
+            const deposit = toNum(tx._deposit_column);
+            const rawAmount = toNum(tx.amount);
+            let amount = 0;
+            let transaction_type: 'deposit' | 'withdrawal' = 'deposit';
+            if (Math.abs(withdrawal) > 0 || Math.abs(deposit) > 0) {
+              if (Math.abs(withdrawal) > 0) {
+                amount = Math.abs(withdrawal);
+                transaction_type = 'withdrawal';
+              } else {
+                amount = Math.abs(deposit);
+                transaction_type = 'deposit';
+              }
+            } else {
+              amount = Math.abs(rawAmount);
+              transaction_type = rawAmount >= 0 ? 'deposit' : 'withdrawal';
+            }
+            if (amount === 0) return null;
             const transactionDate = String(tx.transaction_date || tx.date || new Date().toISOString().split('T')[0]);
             const payeePayor = tx.payee_payor ?? tx.merchant_name ?? tx.merchant ?? tx.payee ?? tx.payor ?? null;
-            const isDeposit = rawAmount >= 0;
-
             return {
               bank_account_id: effectiveBankAccountId,
               gl_account_id: effectiveBankGlAccountId || null,
               transaction_date: transactionDate,
               description: String(tx.description || ''),
               amount,
-              transaction_type: (isDeposit ? 'deposit' : 'withdrawal') as 'deposit' | 'withdrawal',
+              transaction_type,
               payee_payor: payeePayor ? String(payeePayor) : null,
               reference: tx.reference ? String(tx.reference) : null,
               category: tx.category ? String(tx.category) : null,
               memo: tx.memo ? String(tx.memo) : null,
             };
-          });
-          importBankTx.mutate(mappedTransactions);
-          toast.success(`Imported ${mappedData.length} rows to bank transactions`);
-        } else {
-          toast.error('No bank account found. Please create a bank account first.');
+          })
+          .filter((t): t is NonNullable<typeof t> => t !== null);
+        if (mappedTransactions.length === 0) {
+          toast.error('No valid rows to import (all amounts are zero or empty)');
           return;
         }
-      } else if (importTarget === 'creditcard') {
-        if (onImportToCreditCard) {
-          onImportToCreditCard(mappedData, columnMappings);
-          toast.success(`Imported ${mappedData.length} rows to credit card transactions`);
-        } else if (effectiveCreditCardId) {
-          // Direct import using hook - include GL account from selected credit card
-          const mappedTransactions = mappedData.map(tx => {
-            const rawAmount = Number(tx.amount ?? 0);
-            const amount = Number.isFinite(rawAmount) ? Math.abs(rawAmount) : 0;
-            const transactionType = rawAmount >= 0 ? 'charge' : 'payment';
+        importBankTx.mutate(mappedTransactions);
+        toast.success(`Imported ${mappedTransactions.length} rows to bank transactions`);
+      } else {
+        toast.error('No bank account found. Please create a bank account first.');
+        return;
+      }
+    } else if (importTarget === 'creditcard') {
+      if (onImportToCreditCard) {
+        onImportToCreditCard(mappedData, columnMappings);
+        toast.success(`Imported ${mappedData.length} rows to credit card transactions`);
+      } else if (effectiveCreditCardId) {
+        const mappedTransactions = mappedData
+          .map(tx => {
+            const charge = toNum(tx._charge_column);
+            const payment = toNum(tx._payment_column);
+            const rawAmount = toNum(tx.amount);
+            let amount = 0;
+            let transaction_type: 'charge' | 'payment' = 'charge';
+            if (Math.abs(charge) > 0 || Math.abs(payment) > 0) {
+              if (Math.abs(charge) > 0) {
+                amount = Math.abs(charge);
+                transaction_type = 'charge';
+              } else {
+                amount = Math.abs(payment);
+                transaction_type = 'payment';
+              }
+            } else {
+              amount = Math.abs(rawAmount);
+              transaction_type = rawAmount >= 0 ? 'charge' : 'payment';
+            }
+            if (amount === 0) return null;
             const transactionDate = String(tx.transaction_date || tx.date || new Date().toISOString().split('T')[0]);
             const payeePayor = tx.payee_payor ?? tx.merchant_name ?? tx.merchant ?? tx.payee ?? tx.payor ?? null;
             const postedDate = String(tx.posted_date ?? tx.posting_date ?? '') || null;
-
             return {
               credit_card_id: effectiveCreditCardId,
               transaction_date: transactionDate,
               posted_date: postedDate,
               description: String(tx.description || ''),
               amount,
-              transaction_type: transactionType,
+              transaction_type,
               payee_payor: payeePayor ? String(payeePayor) : null,
               reference: tx.reference ? String(tx.reference) : null,
               category: tx.category ? String(tx.category) : null,
-              merchant_category_code: null,
+              merchant_category_code: tx.merchant_category_code ? String(tx.merchant_category_code) : null,
               memo: tx.memo ? String(tx.memo) : null,
               is_cleared: false,
               cleared_at: null,
@@ -1027,17 +1125,22 @@ export function AISheets({
               status: 'pending' as const,
               imported_at: new Date().toISOString(),
             };
-          });
-          importCcTx.mutate(mappedTransactions);
-          toast.success(`Imported ${mappedData.length} rows to credit card transactions`);
-        } else {
-          toast.error('No credit card found. Please add a credit card first.');
+          })
+          .filter((t): t is NonNullable<typeof t> => t !== null);
+        if (mappedTransactions.length === 0) {
+          toast.error('No valid rows to import (all amounts are zero or empty)');
           return;
         }
+        importCcTx.mutate(mappedTransactions);
+        toast.success(`Imported ${mappedTransactions.length} rows to credit card transactions`);
+      } else {
+        toast.error('No credit card found. Please add a credit card first.');
+        return;
       }
-      setMappingDialogOpen(false);
     }
+    setMappingDialogOpen(false);
   };
+
 
   const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1393,24 +1496,33 @@ export function AISheets({
         <div className="flex-1" />
 
         {/* Import to banking actions with mapping */}
-        {(onImportToBank || onImportToCreditCard) && activeSheet.rows.length > 0 && (
+        {activeSheet.rows.length > 0 && (onImportToBank || onImportToCreditCard || effectiveBankAccountId || effectiveCreditCardId) && (
           <>
             <Separator orientation="vertical" className="h-6" />
+            <Button
+              variant="default"
+              size="sm"
+              className="bg-primary"
+              onClick={() => openMappingDialog(detectStatementType())}
+              title="Auto-detects credit card vs bank statement"
+            >
+              <Upload className="h-4 w-4 mr-1" />
+              Post to Banking
+            </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="default" size="sm" className="bg-primary">
-                  <Columns className="h-4 w-4 mr-1" />
-                  Map & Import
+                <Button variant="outline" size="sm" title="Manual mapping">
+                  <Columns className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                {onImportToBank && (
+                {(onImportToBank || effectiveBankAccountId) && (
                   <DropdownMenuItem onClick={() => openMappingDialog('bank')}>
                     <Building2 className="h-4 w-4 mr-2" />
                     Map to Bank Statement
                   </DropdownMenuItem>
                 )}
-                {onImportToCreditCard && (
+                {(onImportToCreditCard || effectiveCreditCardId) && (
                   <DropdownMenuItem onClick={() => openMappingDialog('creditcard')}>
                     <CreditCard className="h-4 w-4 mr-2" />
                     Map to Credit Card
@@ -2055,10 +2167,12 @@ export function AISheets({
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Columns className="h-5 w-5" />
-              Map Columns for {importTarget === 'bank' ? 'Bank' : 'Credit Card'} Import
+              Post to {importTarget === 'bank' ? 'Bank' : 'Credit Card'} Transactions
             </DialogTitle>
             <DialogDescription>
-              Map your spreadsheet columns to the target statement fields.
+              Detected: <span className="font-medium text-foreground">
+                {importTarget === 'creditcard' ? 'Credit Card statement' : 'Bank statement'}
+              </span>. Review the column mapping below — split Charge/Payment or Withdrawal/Deposit columns are auto-combined into signed amounts.
             </DialogDescription>
           </DialogHeader>
           
@@ -2123,7 +2237,16 @@ export function AISheets({
               <div key={idx} className="flex items-center gap-3">
                 <div className="flex-1">
                   <Label className="text-xs text-muted-foreground mb-1 block">
-                    {mapping.targetColumn.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                    {(() => {
+                      const map: Record<string, string> = {
+                        _charge_column: 'Charge column (CC)',
+                        _payment_column: 'Payment column (CC)',
+                        _withdrawal_column: 'Withdrawal column',
+                        _deposit_column: 'Deposit column',
+                      };
+                      if (map[mapping.targetColumn]) return map[mapping.targetColumn];
+                      return mapping.targetColumn.replace(/^_/, '').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                    })()}
                   </Label>
                   <Select
                     value={mapping.sourceColumn || '__skip__'}
@@ -2147,6 +2270,58 @@ export function AISheets({
               </div>
             ))}
           </div>
+          {/* Resolved preview */}
+          {(() => {
+            const get = (row: SheetRow, target: string): unknown => {
+              const m = columnMappings.find(cm => cm.targetColumn === target);
+              return m?.sourceColumn ? row[m.sourceColumn] : undefined;
+            };
+            const preview = activeSheet.rows.slice(0, 3).map(row => {
+              const charge = toNum(get(row, importTarget === 'creditcard' ? '_charge_column' : '_withdrawal_column'));
+              const payment = toNum(get(row, importTarget === 'creditcard' ? '_payment_column' : '_deposit_column'));
+              const rawAmount = toNum(get(row, 'amount'));
+              let amt = 0;
+              let type: string;
+              if (Math.abs(charge) > 0 || Math.abs(payment) > 0) {
+                amt = Math.abs(charge) > 0 ? Math.abs(charge) : Math.abs(payment);
+                type = Math.abs(charge) > 0
+                  ? (importTarget === 'creditcard' ? 'charge' : 'withdrawal')
+                  : (importTarget === 'creditcard' ? 'payment' : 'deposit');
+              } else {
+                amt = Math.abs(rawAmount);
+                type = rawAmount >= 0
+                  ? (importTarget === 'creditcard' ? 'charge' : 'deposit')
+                  : (importTarget === 'creditcard' ? 'payment' : 'withdrawal');
+              }
+              return {
+                date: String(get(row, 'transaction_date') ?? ''),
+                desc: String(get(row, 'description') ?? ''),
+                payee: String(get(row, 'payee_payor') ?? ''),
+                amt,
+                type,
+              };
+            });
+            if (preview.length === 0) return null;
+            return (
+              <div className="border-t border-border pt-3">
+                <Label className="text-xs text-muted-foreground mb-2 block">Preview (first 3 rows)</Label>
+                <div className="text-[11px] font-mono space-y-1 max-h-32 overflow-y-auto">
+                  {preview.map((p, i) => (
+                    <div key={i} className="flex gap-2 items-center">
+                      <span className="w-20 truncate text-muted-foreground">{p.date}</span>
+                      <span className="flex-1 truncate">{p.desc}</span>
+                      <span className="w-24 truncate text-muted-foreground">{p.payee}</span>
+                      <span className="w-20 text-right">{p.amt.toFixed(2)}</span>
+                      <span className={cn(
+                        "w-16 text-right text-[10px] uppercase",
+                        (p.type === 'charge' || p.type === 'withdrawal') ? 'text-destructive' : 'text-primary'
+                      )}>{p.type}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
           <DialogFooter>
             <Button variant="outline" onClick={() => setMappingDialogOpen(false)}>
               Cancel
