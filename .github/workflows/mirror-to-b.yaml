@@ -1,0 +1,38 @@
+name: Mirror commits to Repo B
+
+on:
+  push:
+    branches:
+      - '**'
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    if: github.event.head_commit.author.name != 'mirror-bot'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Configure git identity
+        run: |
+          git config user.name "mirror-bot"
+          git config user.email "mirror-bot@users.noreply.github.com"
+
+      - name: Strip workflow files from the commit being mirrored
+        run: |
+          if [ -d ".github/workflows" ]; then
+            git rm -r --cached .github/workflows/mirror-to-b.yaml
+            rm -rf .github/workflows/mirror-to-b.yaml
+            if ! git diff --cached --quiet; then
+              git commit -m "Mirror: strip .github/workflows before sync"
+            fi
+          fi
+
+      - name: Force-push to Repo B (A always wins)
+        env:
+          TOKEN: ${{ secrets.REPO_B_TOKEN }}
+        run: |
+          git remote add repo-b https://x-access-token:${TOKEN}@github.com/kamzysert3/efinsuite-globe-raymond-branch.git
+          git push repo-b HEAD:refs/heads/${{ github.ref_name }} --force
