@@ -2167,10 +2167,12 @@ export function AISheets({
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Columns className="h-5 w-5" />
-              Map Columns for {importTarget === 'bank' ? 'Bank' : 'Credit Card'} Import
+              Post to {importTarget === 'bank' ? 'Bank' : 'Credit Card'} Transactions
             </DialogTitle>
             <DialogDescription>
-              Map your spreadsheet columns to the target statement fields.
+              Detected: <span className="font-medium text-foreground">
+                {importTarget === 'creditcard' ? 'Credit Card statement' : 'Bank statement'}
+              </span>. Review the column mapping below — split Charge/Payment or Withdrawal/Deposit columns are auto-combined into signed amounts.
             </DialogDescription>
           </DialogHeader>
           
