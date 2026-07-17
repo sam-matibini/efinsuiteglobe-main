@@ -2270,6 +2270,58 @@ export function AISheets({
               </div>
             ))}
           </div>
+          {/* Resolved preview */}
+          {(() => {
+            const get = (row: SheetRow, target: string): unknown => {
+              const m = columnMappings.find(cm => cm.targetColumn === target);
+              return m?.sourceColumn ? row[m.sourceColumn] : undefined;
+            };
+            const preview = activeSheet.rows.slice(0, 3).map(row => {
+              const charge = toNum(get(row, importTarget === 'creditcard' ? '_charge_column' : '_withdrawal_column'));
+              const payment = toNum(get(row, importTarget === 'creditcard' ? '_payment_column' : '_deposit_column'));
+              const rawAmount = toNum(get(row, 'amount'));
+              let amt = 0;
+              let type: string;
+              if (Math.abs(charge) > 0 || Math.abs(payment) > 0) {
+                amt = Math.abs(charge) > 0 ? Math.abs(charge) : Math.abs(payment);
+                type = Math.abs(charge) > 0
+                  ? (importTarget === 'creditcard' ? 'charge' : 'withdrawal')
+                  : (importTarget === 'creditcard' ? 'payment' : 'deposit');
+              } else {
+                amt = Math.abs(rawAmount);
+                type = rawAmount >= 0
+                  ? (importTarget === 'creditcard' ? 'charge' : 'deposit')
+                  : (importTarget === 'creditcard' ? 'payment' : 'withdrawal');
+              }
+              return {
+                date: String(get(row, 'transaction_date') ?? ''),
+                desc: String(get(row, 'description') ?? ''),
+                payee: String(get(row, 'payee_payor') ?? ''),
+                amt,
+                type,
+              };
+            });
+            if (preview.length === 0) return null;
+            return (
+              <div className="border-t border-border pt-3">
+                <Label className="text-xs text-muted-foreground mb-2 block">Preview (first 3 rows)</Label>
+                <div className="text-[11px] font-mono space-y-1 max-h-32 overflow-y-auto">
+                  {preview.map((p, i) => (
+                    <div key={i} className="flex gap-2 items-center">
+                      <span className="w-20 truncate text-muted-foreground">{p.date}</span>
+                      <span className="flex-1 truncate">{p.desc}</span>
+                      <span className="w-24 truncate text-muted-foreground">{p.payee}</span>
+                      <span className="w-20 text-right">{p.amt.toFixed(2)}</span>
+                      <span className={cn(
+                        "w-16 text-right text-[10px] uppercase",
+                        (p.type === 'charge' || p.type === 'withdrawal') ? 'text-destructive' : 'text-primary'
+                      )}>{p.type}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
           <DialogFooter>
             <Button variant="outline" onClick={() => setMappingDialogOpen(false)}>
               Cancel
