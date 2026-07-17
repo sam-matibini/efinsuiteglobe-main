@@ -200,9 +200,58 @@ export function AISheets({
   const { importTransactions: importBankTx } = useBankTransactions(effectiveBankAccountId);
   const { importTransactions: importCcTx } = useCreditCardTransactions(effectiveCreditCardId);
   
-  // Bank/CC target columns
-  const bankTargetColumns = ['transaction_date', 'description', 'amount', 'payee_payor', 'reference', 'category', 'memo'];
-  const creditCardTargetColumns = ['transaction_date', 'description', 'amount', 'payee_payor', 'reference', 'category', 'merchant_category_code', 'memo'];
+  // Bank/CC target columns. Virtual targets prefixed with "_" collapse split
+  // Charge/Payment or Withdrawal/Deposit statement columns into a single signed
+  // amount + transaction_type during posting.
+  const bankTargetColumns = ['transaction_date', 'description', 'amount', '_withdrawal_column', '_deposit_column', 'payee_payor', 'reference', 'category', 'memo'];
+  const creditCardTargetColumns = ['transaction_date', 'posted_date', 'description', 'amount', '_charge_column', '_payment_column', 'payee_payor', 'reference', 'category', 'merchant_category_code', 'memo'];
+
+  // Header aliases: source-column patterns that map onto a target field.
+  const HEADER_ALIASES: Record<string, string[]> = {
+    transaction_date: ['date', 'trans date', 'transaction date', 'txn date'],
+    posted_date: ['posted', 'posted date', 'posting date', 'post date'],
+    description: ['description', 'details', 'narrative', 'transaction details'],
+    payee_payor: ['payer/payee', 'payee/payer', 'payee', 'payer', 'payor', 'merchant', 'counterparty', 'payer_payee'],
+    reference: ['reference', 'ref', 'ref #', 'ref no', 'cheque', 'check', 'check no', 'cheque no'],
+    category: ['category', 'type'],
+    merchant_category_code: ['mcc', 'merchant category', 'merchant category code'],
+    memo: ['memo', 'notes', 'note'],
+    _charge_column: ['charge', 'charges', 'debit', 'debits', 'purchases', 'amount out', 'withdrawal'],
+    _payment_column: ['payment', 'payments', 'credit', 'credits', 'payments/credits', 'amount in', 'deposit'],
+    _withdrawal_column: ['withdrawal', 'withdrawals', 'debit', 'debits', 'amount out', 'money out', 'paid out'],
+    _deposit_column: ['deposit', 'deposits', 'credit', 'credits', 'amount in', 'money in', 'paid in'],
+    amount: ['amount', 'value', 'total'],
+  };
+
+  const normalize = (s: string) => s.toLowerCase().replace(/[_\s\-/#().]+/g, '');
+
+  const matchAlias = (target: string, sourceCols: string[]): string => {
+    const aliases = HEADER_ALIASES[target] ?? [target];
+    const normAliases = aliases.map(normalize);
+    // Exact alias match
+    for (const src of sourceCols) {
+      const n = normalize(src);
+      if (normAliases.includes(n)) return src;
+    }
+    // Alias contained in header
+    for (const src of sourceCols) {
+      const n = normalize(src);
+      if (normAliases.some(a => a && (n === a || n.startsWith(a) || n.endsWith(a)))) return src;
+    }
+    return '';
+  };
+
+  // Detect whether the currently active sheet looks like a credit card statement.
+  const detectStatementType = (): 'bank' | 'creditcard' => {
+    const cols = (activeSheet?.columns ?? []).map(normalize);
+    const src = (activeSheet?.sourceFile ?? '').toLowerCase();
+    const hasCharge = cols.some(c => ['charge', 'charges', 'purchases'].includes(c));
+    const hasPayment = cols.some(c => ['payment', 'payments', 'paymentscredits'].includes(c));
+    if (hasCharge && hasPayment) return 'creditcard';
+    if (/credit|visa|mastercard|amex|americanexpress|card|statement-?\d/.test(src)) return 'creditcard';
+    if (cols.includes('posteddate') && cols.includes('transactiondate')) return 'creditcard';
+    return 'bank';
+  };
 
   const activeSheet = sheets[activeSheetIndex];
 
