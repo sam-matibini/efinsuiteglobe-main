@@ -162,6 +162,17 @@ export default function Contact() {
           <Card className="border-border/60 shadow-lg">
             <CardContent className="p-6 md:p-8">
               <form onSubmit={handleSubmit} className="space-y-5" noValidate>
+                {/* Honeypot: hidden from users, catches bots */}
+                <input
+                  type="text"
+                  name="website"
+                  tabIndex={-1}
+                  autoComplete="off"
+                  value={honeypot}
+                  onChange={(e) => setHoneypot(e.target.value)}
+                  aria-hidden="true"
+                  style={{ position: 'absolute', left: '-10000px', width: '1px', height: '1px', opacity: 0 }}
+                />
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="name">Name</Label>
