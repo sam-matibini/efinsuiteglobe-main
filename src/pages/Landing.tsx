@@ -343,14 +343,16 @@ export default function Landing() {
                   Start Free Trial <ArrowRight className="ml-2 w-5 h-5 transition-transform duration-200 group-hover:translate-x-0.5" />
                 </Button>
               </Link>
-              <Button
-                size="lg"
-                variant="outline"
-                className="group w-full sm:w-auto border-white/20 bg-white/5 text-white hover:bg-white/10 hover:border-white/40 font-medium backdrop-blur-sm transition-transform duration-150 ease-out active:scale-[0.97]"
-              >
-                Book a Demo
-                <ArrowRight className="ml-2 w-4 h-4 transition-transform duration-200 group-hover:translate-x-0.5" />
-              </Button>
+              <Link to="/contact" className="w-full sm:w-auto">
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="group w-full sm:w-auto border-white/20 bg-white/5 text-white hover:bg-white/10 hover:border-white/40 font-medium backdrop-blur-sm transition-transform duration-150 ease-out active:scale-[0.97]"
+                >
+                  Book a Demo
+                  <ArrowRight className="ml-2 w-4 h-4 transition-transform duration-200 group-hover:translate-x-0.5" />
+                </Button>
+              </Link>
             </div>
             <p className="mt-6 text-xs uppercase tracking-[0.2em] text-white/50">
               Trusted by finance teams in 15+ countries
