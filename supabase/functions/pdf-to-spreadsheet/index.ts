@@ -333,6 +333,7 @@ serve(async (req) => {
         cleaned.push({
           Date: String(t.date ?? ''),
           Description: desc,
+          'Payer/Payee': t.payer_payee ? String(t.payer_payee).trim() : '',
           Reference: t.reference ? String(t.reference) : '',
           Debit: debit || 0,
           Credit: credit || 0,
