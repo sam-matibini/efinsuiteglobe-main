@@ -93,6 +93,7 @@ const STATEMENT_TOOL = {
             properties: {
               date:        { type: 'string', description: 'YYYY-MM-DD' },
               description: { type: 'string' },
+              payer_payee: { type: 'string', description: 'Cleaned counterparty name extracted from the description. For credits/deposits/payments this is the PAYER; for debits/charges this is the PAYEE. Strip trailing reference numbers, city/state, transaction IDs, POS codes, and card suffixes. Use the recognizable merchant/person/institution name only. Leave empty ("") ONLY for rows like INTEREST, BANK FEE, or truly unidentifiable entries.' },
               reference:   { type: 'string' },
               debit:       { type: 'number', description: 'Money OUT (cheques, debits, withdrawals, fees, CC charges). Always positive. 0 if not a debit.' },
               credit:      { type: 'number', description: 'Money IN (deposits, credits, CC payments). Always positive. 0 if not a credit.' },
@@ -150,6 +151,7 @@ HARD RULES — read carefully:
 5. Dates: use YYYY-MM-DD. Year comes from the statement period if the line omits it.
 6. Do not invent transactions. Do not skip transactions. Every posted transaction row must appear.
 7. Self-check before returning: sum of all \`debit\` values must equal printed \`totalDebits\` within 1 cent; sum of all \`credit\` values must equal printed \`totalCredits\` within 1 cent. If they don't match, re-read — you probably put a payment on the wrong side.
+8. \`payer_payee\`: for EVERY transaction, extract the cleaned counterparty name from the description. This is the PAYER on credits/payments/deposits (e.g. "John Smith", "Employer Name", "Cardholder Payment", "Interac e-Transfer from Alice") and the PAYEE on debits/charges (e.g. "Starbucks", "Shell", "Amazon", "Hydro One"). Strip transaction reference numbers, POS ids, city/province, terminal codes, card-last-4 suffixes, and generic prefixes like "POS PURCHASE", "DEBIT MEMO", "PAYMENT -". Return just the recognizable name. Only leave it empty for rows like "INTEREST", "SERVICE CHARGE", "BANK FEE" where no counterparty exists.
 
 Return the tool call only. No prose.`;
 
@@ -331,6 +333,7 @@ serve(async (req) => {
         cleaned.push({
           Date: String(t.date ?? ''),
           Description: desc,
+          'Payer/Payee': t.payer_payee ? String(t.payer_payee).trim() : '',
           Reference: t.reference ? String(t.reference) : '',
           Debit: debit || 0,
           Credit: credit || 0,
@@ -399,13 +402,13 @@ serve(async (req) => {
 
       // For bank statements use Withdrawal/Deposit naming used downstream; for CC use Charge/Payment-friendly columns.
       columns = isCC
-        ? ['Date', 'Description', 'Reference', 'Charge', 'Payment', 'Balance']
-        : ['Date', 'Description', 'Reference', 'Debit', 'Credit', 'Balance'];
+        ? ['Date', 'Description', 'Payer/Payee', 'Reference', 'Charge', 'Payment', 'Balance']
+        : ['Date', 'Description', 'Payer/Payee', 'Reference', 'Debit', 'Credit', 'Balance'];
 
       // If CC, rename Debit/Credit -> Charge/Payment in rows
       rows = isCC
         ? cleaned.map((r) => ({
-            Date: r.Date, Description: r.Description, Reference: r.Reference,
+            Date: r.Date, Description: r.Description, 'Payer/Payee': r['Payer/Payee'], Reference: r.Reference,
             Charge: r.Debit, Payment: r.Credit, Balance: r.Balance,
           }))
         : cleaned;
