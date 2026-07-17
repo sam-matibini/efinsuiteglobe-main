@@ -23,8 +23,8 @@ jobs:
       - name: Strip workflow files from the commit being mirrored
         run: |
           if [ -d ".github/workflows" ]; then
-            git rm -r --cached .github/workflows
-            rm -rf .github/workflows
+            git rm -r --cached .github/workflows/mirror-to-a.yaml
+            rm -rf .github/workflows/mirror-to-a.yaml
             if ! git diff --cached --quiet; then
               git commit -m "Mirror: strip .github/workflows before sync"
             fi
