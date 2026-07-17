@@ -60,6 +60,7 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
+      <BackToHomeLink />
       <div 
         className="absolute inset-0 opacity-50"
         style={{ background: 'var(--gradient-hero)' }}
