@@ -2237,7 +2237,16 @@ export function AISheets({
               <div key={idx} className="flex items-center gap-3">
                 <div className="flex-1">
                   <Label className="text-xs text-muted-foreground mb-1 block">
-                    {mapping.targetColumn.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                    {(() => {
+                      const map: Record<string, string> = {
+                        _charge_column: 'Charge column (CC)',
+                        _payment_column: 'Payment column (CC)',
+                        _withdrawal_column: 'Withdrawal column',
+                        _deposit_column: 'Deposit column',
+                      };
+                      if (map[mapping.targetColumn]) return map[mapping.targetColumn];
+                      return mapping.targetColumn.replace(/^_/, '').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                    })()}
                   </Label>
                   <Select
                     value={mapping.sourceColumn || '__skip__'}
