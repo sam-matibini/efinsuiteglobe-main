@@ -811,7 +811,7 @@ export default function Landing() {
                 <li><a href="https://www.efintax.biz" target="_blank" rel="noopener noreferrer" className="hover:text-accent">About</a></li>
                 <li><a href="https://www.efintax.biz" target="_blank" rel="noopener noreferrer" className="hover:text-accent">Blog</a></li>
                 <li><a href="https://www.efintax.biz" target="_blank" rel="noopener noreferrer" className="hover:text-accent">Careers</a></li>
-                <li><a href="https://www.efintax.biz" target="_blank" rel="noopener noreferrer" className="hover:text-accent">Contact</a></li>
+                <li><Link to="/contact" className="hover:text-accent">Contact</Link></li>
                 <li>
                   <a href="https://www.linkedin.com/company/110252262/admin/dashboard/" target="_blank" rel="noopener noreferrer" className="hover:text-accent flex items-center gap-1">
                     <Linkedin className="w-4 h-4" />
