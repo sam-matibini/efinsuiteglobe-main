@@ -252,6 +252,7 @@ const AppRoutes = () => (
   <Routes>
     {/* Public routes */}
     <Route path="/landing" element={<Landing />} />
+    <Route path="/contact" element={<Contact />} />
     <Route path="/install" element={<Install />} />
     <Route path="/privacy-policy" element={<PrivacyPolicy />} />
     <Route path="/terms-of-service" element={<TermsOfService />} />
