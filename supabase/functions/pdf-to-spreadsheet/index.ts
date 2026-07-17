@@ -93,6 +93,7 @@ const STATEMENT_TOOL = {
             properties: {
               date:        { type: 'string', description: 'YYYY-MM-DD' },
               description: { type: 'string' },
+              payer_payee: { type: 'string', description: 'Cleaned counterparty name extracted from the description. For credits/deposits/payments this is the PAYER; for debits/charges this is the PAYEE. Strip trailing reference numbers, city/state, transaction IDs, POS codes, and card suffixes. Use the recognizable merchant/person/institution name only. Leave empty ("") ONLY for rows like INTEREST, BANK FEE, or truly unidentifiable entries.' },
               reference:   { type: 'string' },
               debit:       { type: 'number', description: 'Money OUT (cheques, debits, withdrawals, fees, CC charges). Always positive. 0 if not a debit.' },
               credit:      { type: 'number', description: 'Money IN (deposits, credits, CC payments). Always positive. 0 if not a credit.' },
