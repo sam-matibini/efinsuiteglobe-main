@@ -95,7 +95,7 @@ export default function Signup() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
+    <div className="relative min-h-screen flex items-start md:items-center justify-center bg-background p-4 py-10 md:py-4 overflow-x-hidden">
       <BackToHomeLink />
       <div 
         className="absolute inset-0 opacity-50"
