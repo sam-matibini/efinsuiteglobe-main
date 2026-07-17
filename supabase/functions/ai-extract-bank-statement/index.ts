@@ -66,6 +66,7 @@ STRICT JSON matching the provided schema. Rules:
 - Include every transaction row, in chronological order.
 - account_number_masked should include only the last 4 digits when the full number is not visible.
 - confidence: your honest 0-1 estimate of extraction fidelity.
+- payer_payee: for EVERY transaction, extract the cleaned counterparty name from the description. Payer for credits/deposits/payments; payee for debits/charges. Strip reference numbers, POS ids, city/state, terminal codes, card suffixes, and generic prefixes ("POS PURCHASE", "DEBIT MEMO", "PAYMENT -"). Return just the recognizable merchant/person/institution. Leave empty only when no counterparty exists (INTEREST, BANK FEE, SERVICE CHARGE).
 - warnings: notes on unclear rows, missing balance, unreconciled totals, etc.`;
 
 function json(body: unknown, status = 200) {
