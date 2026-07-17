@@ -8,6 +8,7 @@ import { Eye, EyeOff, Loader2, Check } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import efinsuiteLogo from '@/assets/efinsuite-logo.png';
+import { BackToHomeLink } from '@/components/auth/BackToHomeLink';
 
 export default function Signup() {
   const navigate = useNavigate();
@@ -95,6 +96,7 @@ export default function Signup() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
+      <BackToHomeLink />
       <div 
         className="absolute inset-0 opacity-50"
         style={{ background: 'var(--gradient-hero)' }}
