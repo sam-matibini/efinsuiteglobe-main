@@ -3,6 +3,7 @@ import { Helmet } from 'react-helmet-async';
 import { Link } from 'react-router-dom';
 import { z } from 'zod';
 import { Mail, Clock, MessageSquare, Send, Linkedin } from 'lucide-react';
+import { FunctionsHttpError } from '@supabase/supabase-js';
 
 import { LandingNav } from '@/components/landing/LandingNav';
 import { Button } from '@/components/ui/button';
@@ -11,6 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
 const contactSchema = z.object({
   name: z.string().trim().min(1, 'Name is required').max(100, 'Name must be under 100 characters'),
@@ -28,6 +30,7 @@ export default function Contact() {
   const [form, setForm] = useState<ContactForm>(initial);
   const [errors, setErrors] = useState<Partial<Record<keyof ContactForm, string>>>({});
   const [submitting, setSubmitting] = useState(false);
+  const [honeypot, setHoneypot] = useState('');
 
   const update = <K extends keyof ContactForm>(key: K, value: ContactForm[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -49,15 +52,32 @@ export default function Contact() {
 
     setSubmitting(true);
     try {
-      const { name, email, subject, message } = parsed.data;
-      const body = `${message}\n\n— ${name} (${email})`;
-      const mailto = `mailto:support@efin.money?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-      window.location.href = mailto;
+      const { error } = await supabase.functions.invoke('send-contact-message', {
+        body: { ...parsed.data, website: honeypot },
+      });
+      if (error) {
+        let details = error.message;
+        if (error instanceof FunctionsHttpError) {
+          try {
+            details = await error.context.text();
+          } catch {
+            /* ignore */
+          }
+        }
+        console.error('send-contact-message failed:', details);
+        toast({
+          title: 'Could not send message',
+          description: 'Please try again in a moment, or email support@efin.money directly.',
+          variant: 'destructive',
+        });
+        return;
+      }
       toast({
-        title: 'Message ready to send',
-        description: 'Your email client should open shortly. We reply within one business day.',
+        title: 'Message sent',
+        description: "Thanks! We'll reply within one business day.",
       });
       setForm(initial);
+      setHoneypot('');
     } finally {
       setSubmitting(false);
     }
