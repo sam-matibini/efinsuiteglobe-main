@@ -175,6 +175,7 @@ const OrganizationModulesPage = lazy(() => import("./pages/admin/OrganizationMod
 const Install = lazy(() => import("./pages/Install"));
 const AcceptInvite = lazy(() => import("./pages/AcceptInvite"));
 const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
+const Contact = lazy(() => import("./pages/Contact"));
 const TermsOfService = lazy(() => import("./pages/TermsOfService"));
 const SubscriptionCheckout = lazy(() => import("./pages/SubscriptionCheckout"));
 const SubscriptionSuccess = lazy(() => import("./pages/SubscriptionSuccess"));
