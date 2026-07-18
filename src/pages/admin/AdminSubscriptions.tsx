@@ -41,10 +41,16 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { MoreHorizontal, Search, CreditCard, RefreshCw, XCircle, Plus, Edit, Trash2, Check, Users, Building, Building2, Package, Upload, Loader2, MapPin, ArrowRightLeft, Mail } from 'lucide-react';
+import { MoreHorizontal, Search, CreditCard, RefreshCw, XCircle, Plus, Edit, Trash2, Check, Users, Building, Building2, Package, Upload, Loader2, MapPin, ArrowRightLeft, Mail, Clock, Percent, Sliders } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { useAuth } from '@/hooks/useAuth';
+import {
+  SubscriptionDefaultsCard,
+  ExtendTrialDialog,
+  OverrideSubscriptionDialog,
+  SetDiscountDialog,
+} from '@/components/admin/SubscriptionAdminControls';
 
 interface Subscription {
   id: string;
