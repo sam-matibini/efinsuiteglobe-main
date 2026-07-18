@@ -29,6 +29,7 @@ import { useCurrentOrganization } from '@/hooks/useOrganization';
 import { useFinancialReports } from '@/hooks/useFinancialReports';
 import { useReportFilters } from '@/hooks/useReportFilters';
 import { ReportFilters } from '@/components/reports/ReportFilters';
+import { StatementsPanel } from '@/components/reports/StatementsPanel';
 import { toast } from 'sonner';
 import jsPDF from 'jspdf';
 import * as XLSX from 'xlsx';
