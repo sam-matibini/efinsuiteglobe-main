@@ -85,6 +85,11 @@ export default function ManagementReport() {
     period: 'custom'
   });
 
+  const { currentStatement: reCurrentStatement } = useRetainedEarningsStatement(
+    { startDate, endDate },
+    []
+  );
+
   const handleDateRangeChange = (start: Date, end: Date) => {
     setDateRange(start, end);
   };
