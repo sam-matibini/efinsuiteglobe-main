@@ -342,6 +342,48 @@ export default function SubscriptionCheckout() {
         </Button>
       </div>
 
+      {/* Promo code */}
+      {!adminDiscountActive && !currentSub && (
+        <div className="max-w-md mx-auto">
+          {appliedPromo ? (
+            <div className="flex items-center justify-between gap-2 rounded-md border border-primary/40 bg-primary/5 px-3 py-2 text-sm">
+              <div className="flex items-center gap-2">
+                <Tag className="w-4 h-4 text-primary" />
+                <div>
+                  <div className="font-medium">{appliedPromo.code}</div>
+                  <div className="text-xs text-muted-foreground">{appliedPromo.label}</div>
+                </div>
+              </div>
+              <Button variant="ghost" size="sm" onClick={removePromoCode}>
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <Input
+                  placeholder="Have a promo code?"
+                  value={promoInput}
+                  onChange={(e) => { setPromoInput(e.target.value); setPromoError(null); }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') applyPromoCode(); }}
+                  disabled={promoLoading}
+                />
+                <Button
+                  variant="outline"
+                  onClick={applyPromoCode}
+                  disabled={promoLoading || !promoInput.trim()}
+                >
+                  {promoLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Apply'}
+                </Button>
+              </div>
+              {promoError && <p className="text-xs text-destructive">{promoError}</p>}
+            </div>
+          )}
+        </div>
+      )}
+
+
+
       <div className="grid md:grid-cols-3 gap-6">
         {plans
           ?.filter((plan) => {
