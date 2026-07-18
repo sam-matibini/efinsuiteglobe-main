@@ -22,10 +22,13 @@ interface Sheet { name: string; columns: string[]; rows: ExtractedRow[] }
 
 const MAX_PDF_SIZE_MB = 8;
 const MAX_PDF_SIZE_BYTES = MAX_PDF_SIZE_MB * 1024 * 1024;
-const EDGE_RESPONSE_BUDGET_MS = 220_000;
-const AI_REQUEST_TIMEOUT_MS = 170_000;
-const RESPONSE_BUFFER_MS = 15_000;
-const FALLBACK_CUTOFF_MS = 60_000;
+// Lovable AI Gateway enforces a ~75s upstream idle limit per request, so we
+// keep each AI call comfortably under it and rely on faster models + smaller
+// token budgets to fit within that window.
+const EDGE_RESPONSE_BUDGET_MS = 140_000;
+const AI_REQUEST_TIMEOUT_MS = 70_000;
+const RESPONSE_BUFFER_MS = 10_000;
+const FALLBACK_CUTOFF_MS = 55_000;
 const MIN_AI_CALL_MS = 10_000;
 
 type AiCallResult =
