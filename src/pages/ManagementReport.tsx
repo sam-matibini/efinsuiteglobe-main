@@ -424,6 +424,13 @@ export default function ManagementReport() {
     return `${value.toFixed(2)}x`;
   };
 
+  const fmtCurrency = (v: number) =>
+    new Intl.NumberFormat('en-CA', {
+      style: 'currency',
+      currency: organization?.base_currency || 'CAD',
+      maximumFractionDigits: 0,
+    }).format(Number.isFinite(v) ? v : 0);
+
   const getRatioStatus = (ratio: FinancialRatio): 'good' | 'warning' | 'poor' => {
     // Handle edge cases: NaN, Infinity, or missing values
     if (!Number.isFinite(ratio.value)) return 'warning';
