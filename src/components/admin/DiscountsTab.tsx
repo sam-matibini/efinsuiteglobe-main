@@ -145,6 +145,10 @@ export function DiscountsTab() {
           </TableBody>
         </Table>
       </CardContent>
+
+      <Dialog open={!!editing} onOpenChange={(v) => !v && setEditing(null)}>
+        {editing && <EditDiscountDialog preset={editing} onClose={() => setEditing(null)} />}
+      </Dialog>
     </Card>
   );
 }
