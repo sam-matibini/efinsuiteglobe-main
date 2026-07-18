@@ -34,8 +34,8 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
     queryClient.clear();
     setCurrentOrganization(org);
     localStorage.setItem(STORAGE_KEY, org.id);
-    // Trigger a page reload to refresh all data for new org context
-    window.location.reload();
+    // Navigate to the dashboard and refresh all data for new org context
+    window.location.assign('/');
   }, [queryClient]);
 
   return (
