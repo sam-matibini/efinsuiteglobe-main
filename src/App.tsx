@@ -445,7 +445,9 @@ const AppRoutes = () => {
     <Route path="*" element={<NotFound />} />
   </Routes>
   </Suspense>
-);
+  );
+};
+
 
 const DocSignRoute = () => {
   const location = useLocation();
