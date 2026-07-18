@@ -18,7 +18,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import { toast } from 'sonner';
-import { Copy, Plus, Archive } from 'lucide-react';
+import { Copy, Plus, Archive, Pencil } from 'lucide-react';
 import { format } from 'date-fns';
 
 async function callAdmin(payload: Record<string, unknown>) {
@@ -33,6 +33,7 @@ async function callAdmin(payload: Record<string, unknown>) {
 export function DiscountsTab() {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<any | null>(null);
 
   const { data: presets, isLoading } = useQuery({
     queryKey: ['discount_presets', 'all'],
@@ -118,16 +119,25 @@ export function DiscountsTab() {
                     {p.status}
                   </Badge>
                 </TableCell>
-                <TableCell>
+                <TableCell className="text-right space-x-1">
                   {p.status === 'active' && (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => archive.mutate(p.id)}
-                      disabled={archive.isPending}
-                    >
-                      <Archive className="w-4 h-4" />
-                    </Button>
+                    <>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setEditing(p)}
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => archive.mutate(p.id)}
+                        disabled={archive.isPending}
+                      >
+                        <Archive className="w-4 h-4" />
+                      </Button>
+                    </>
                   )}
                 </TableCell>
               </TableRow>
@@ -135,6 +145,10 @@ export function DiscountsTab() {
           </TableBody>
         </Table>
       </CardContent>
+
+      <Dialog open={!!editing} onOpenChange={(v) => !v && setEditing(null)}>
+        {editing && <EditDiscountDialog preset={editing} onClose={() => setEditing(null)} />}
+      </Dialog>
     </Card>
   );
 }
@@ -222,6 +236,116 @@ function CreateDiscountDialog({ onOpenChange }: { onOpenChange: (v: boolean) => 
           disabled={create.isPending || !name || !percent}
         >
           {create.isPending ? 'Creating…' : 'Create'}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  );
+}
+
+function EditDiscountDialog({ preset, onClose }: { preset: any; onClose: () => void }) {
+  const qc = useQueryClient();
+  const [name, setName] = useState(preset.name || '');
+  const [percent, setPercent] = useState(String(preset.percent ?? '10'));
+  const [duration, setDuration] = useState<'once' | 'repeating' | 'forever'>(preset.duration || 'once');
+  const [months, setMonths] = useState(String(preset.duration_in_months ?? '3'));
+  const [expiresAt, setExpiresAt] = useState(
+    preset.expires_at ? new Date(preset.expires_at).toISOString().slice(0, 10) : ''
+  );
+  const [maxRedemptions, setMaxRedemptions] = useState(
+    preset.max_redemptions ? String(preset.max_redemptions) : ''
+  );
+
+  const financialChanged =
+    Number(percent) !== Number(preset.percent) ||
+    duration !== preset.duration ||
+    (duration === 'repeating' ? Number(months) : null) !== (preset.duration_in_months || null) ||
+    (expiresAt ? new Date(expiresAt).toISOString() : null) !== (preset.expires_at || null) ||
+    (maxRedemptions ? Number(maxRedemptions) : null) !== (preset.max_redemptions || null);
+
+  const update = useMutation({
+    mutationFn: async () => {
+      await callAdmin({
+        action: 'update-preset',
+        preset_id: preset.id,
+        name,
+        percent: Number(percent),
+        duration,
+        duration_in_months: duration === 'repeating' ? Number(months) : null,
+        expires_at: expiresAt ? new Date(expiresAt).toISOString() : null,
+        max_redemptions: maxRedemptions ? Number(maxRedemptions) : null,
+      });
+    },
+    onSuccess: (res: any) => {
+      toast.success(
+        res?.coupon_replaced
+          ? 'Discount updated — a new Stripe coupon was created (old one archived).'
+          : 'Discount updated'
+      );
+      qc.invalidateQueries({ queryKey: ['discount_presets'] });
+      onClose();
+    },
+    onError: (e: any) => toast.error(e.message || 'Failed'),
+  });
+
+  return (
+    <DialogContent>
+      <DialogHeader>
+        <DialogTitle>Edit discount</DialogTitle>
+        <DialogDescription>
+          Stripe coupons are immutable, so changing anything other than the name will archive the old coupon and provision a new one. The preset ID stays the same, so anywhere it's linked keeps working.
+        </DialogDescription>
+      </DialogHeader>
+      <div className="grid gap-3">
+        <div className="space-y-1">
+          <Label>Name</Label>
+          <Input value={name} onChange={(e) => setName(e.target.value)} />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <Label>Percent off</Label>
+            <Input type="number" min={1} max={100} value={percent} onChange={(e) => setPercent(e.target.value)} />
+          </div>
+          <div className="space-y-1">
+            <Label>Duration</Label>
+            <Select value={duration} onValueChange={(v) => setDuration(v as any)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="once">Once</SelectItem>
+                <SelectItem value="repeating">Repeating (months)</SelectItem>
+                <SelectItem value="forever">Forever</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        {duration === 'repeating' && (
+          <div className="space-y-1">
+            <Label>Duration in months</Label>
+            <Input type="number" min={1} value={months} onChange={(e) => setMonths(e.target.value)} />
+          </div>
+        )}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <Label>Redeem-by date (optional)</Label>
+            <Input type="date" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} />
+          </div>
+          <div className="space-y-1">
+            <Label>Max redemptions (optional)</Label>
+            <Input type="number" min={1} value={maxRedemptions} onChange={(e) => setMaxRedemptions(e.target.value)} />
+          </div>
+        </div>
+        {financialChanged && (
+          <p className="text-xs text-muted-foreground rounded-md bg-muted p-2">
+            ⚠ These changes will archive the current Stripe coupon and create a new one. Existing subscriptions already using the old coupon keep their discount until it expires.
+          </p>
+        )}
+      </div>
+      <DialogFooter>
+        <Button variant="outline" onClick={onClose}>Cancel</Button>
+        <Button
+          onClick={() => update.mutate()}
+          disabled={update.isPending || !name || !percent}
+        >
+          {update.isPending ? 'Saving…' : 'Save changes'}
         </Button>
       </DialogFooter>
     </DialogContent>

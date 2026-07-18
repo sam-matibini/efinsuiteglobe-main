@@ -1,62 +1,68 @@
-# Phase 2: In-App Promo Codes + Admin Audit Log UI
+## Phase 3 — Downgrade/Cancel polish (#6) + Discount preset editing (#7)
 
-Moving to items #2 and #4 from the subscription roadmap.
-
----
-
-## Part A — In-app promo code field (#2)
-
-**Goal:** Let users enter a promo code inside our checkout page (before being redirected to Stripe) instead of relying solely on Stripe Checkout's promo field.
-
-### Changes
-
-1. `**supabase/functions/stripe-integration/index.ts**`
-  - Add a `validate-promotion-code` action:
-    - Accepts `{ code, plan_id, billing_cycle }`.
-    - Calls Stripe `promotionCodes.list({ code, active: true, limit: 1 })`.
-    - Validates: active, not expired, `max_redemptions` not reached, `applies_to` compatible with plan's product (if set), and currency compatible.
-    - Returns `{ valid, promotion_code_id, coupon: { percent_off | amount_off, duration, duration_in_months }, preview: { discounted_amount, savings } }`.
-  - Update `create-checkout-session` action:
-    - Accept optional `promotion_code_id`.
-    - If provided → pass `discounts: [{ promotion_code }]` and set `allow_promotion_codes: false` (mutually exclusive in Stripe).
-    - If admin coupon is attached to the org → admin coupon still wins (do not accept user promo).
-2. `**src/pages/SubscriptionCheckout.tsx**`
-  - Add a "Have a promo code?" collapsible section on the plan confirmation step.
-  - Input + "Apply" button → calls `validate-promotion-code`.
-  - On success: show discount badge (e.g. "20% off — first 3 months"), updated total, and a "Remove" affordance.
-  - On failure: inline error ("Code not valid", "Expired", "Already redeemed").
-  - Pass `promotion_code_id` into `create-checkout-session`.
-  - Hide the field entirely if the org already has an admin-applied discount (show that discount instead).
+Cancel and change-plan wiring already exist. This phase closes the remaining UX and admin gaps.
 
 ---
 
-## Part B — Audit log UI for admin overrides (#4)
+### Part A — Downgrade & Cancel flow (#6)
 
-**Goal:** Give platform admins a searchable view of all subscription overrides (trial extensions, manual status overrides, discounts applied/removed) previously written to `audit_logs` by `admin-subscription-override`.
+**A1. Downgrade guardrails on `SubscriptionCheckout`**
+When the target plan is *lower* than the current one, before showing the proration confirm dialog:
+- Compute impact using `useUsageLimits` + `planModuleAccess`:
+  - users over target `max_users`
+  - employees over target `max_employees`
+  - modules enabled that the target plan doesn't include
+- Show a "Review downgrade impact" panel inside the existing confirm dialog:
+  - Red list of over-limit resources ("You have 12 employees, Starter allows 5")
+  - Yellow list of modules that will be locked
+  - Require an "I understand" checkbox before the "Confirm switch" button enables
+- Proration preview stays as-is.
 
-### Changes
+**A2. Cancel flow improvements in `BillingSettingsTab`**
+- Add optional cancellation reason dropdown in the existing cancel `AlertDialog` (too expensive / missing features / switching tools / not using / other + free text). Sent to backend and stored via audit log.
+- Add "Cancel immediately" secondary option (in addition to current end-of-period). Backed by a new branch in `manage-subscription` that calls Stripe `DELETE /subscriptions/{id}` when `immediate: true`.
+- Show a clearer post-cancel state: banner with reactivate CTA (already present) plus the effective end date.
 
-1. `**src/components/admin/SubscriptionAuditLogTab.tsx**` (new)
-  - Table view of `audit_logs` rows where `action` starts with `subscription.` (e.g. `subscription.trial_extended`, `subscription.override`, `subscription.discount_set`, `subscription.discount_removed`).
-  - Columns: Timestamp, Admin (email via `profiles`), Organization (name), Action (badge), Details (rendered from `metadata` JSON — e.g. "+14 days", "20% off via `PRESET20`", "Removed coupon `abc123`").
-  - Filters: date range, action type (multi-select), organization search, admin search.
-  - Pagination (25/page).
-2. `**src/pages/admin/AdminSubscriptions.tsx**`
-  - Convert the current single-view page into a tabs layout: **Overview** (existing content) · **Discounts** (existing `DiscountsTab`) · **Audit Log** (new).
-3. **No backend changes required** — `admin-subscription-override` already writes to `audit_logs`. If any override paths are missing an audit write, they'll be added in the same edit.
+**A3. Backend: `stripe-integration` `manage-subscription`**
+- Accept `subscriptionAction: 'cancel'` with `{ immediate?: boolean, reason?: string, feedback?: string }`.
+- Immediate path: delete Stripe sub, mark local row `status='canceled'`, `canceled_at=now()`.
+- Write an `audit_logs` entry (`action: 'subscription.cancel'`) with reason/feedback and mode.
+
+---
+
+### Part B — Discount preset editing (#7)
+
+Stripe coupons are immutable for discount value/duration; only `name` and `metadata` are mutable. The edit UX must reflect that.
+
+**B1. `DiscountsTab` — add Edit button per row**
+Opens a dialog with two modes:
+- **Safe edits** (no Stripe coupon replacement): `name`/label, `expiry` (if not yet redeemed count > 0 you can only extend, not shorten past now), `max_redemptions` — updates the Stripe coupon's mutable fields where allowed, otherwise updates preset row only and shows a notice.
+- **Value/duration change**: since Stripe won't allow it, treat as "Replace":
+  - Archive existing Stripe coupon (`POST /coupons/{id}` `deleted` isn't allowed — use `valid=false` via delete, or mark preset archived and create a new coupon).
+  - Create a new Stripe coupon with new values.
+  - Update the preset row with the new `stripe_coupon_id` (keeps preset UUID stable so any org already granted this preset keeps working; existing subscriptions keep their old coupon on Stripe's side — new applications use the new one).
+  - Warn the admin in the dialog that in-flight subscriptions won't retroactively change.
+
+**B2. Backend: `admin-subscription-override`**
+- Add `update-preset` action: `{ preset_id, name?, max_redemptions?, expiry?, mode: 'safe' | 'replace', percent_off?, amount_off?, currency?, duration?, duration_in_months? }`.
+- Safe mode → patch preset row + Stripe coupon `name`/metadata.
+- Replace mode → delete old Stripe coupon, create new, update preset row.
+- Audit log entry per edit.
+
+**B3. UI polish**
+- Show "In use by N orgs / N subscriptions" count on each preset (query `subscriptions.stripe_coupon_id`) so admins understand impact before editing.
+- Disable "Replace" mode when redemptions exist unless admin confirms via a second checkbox.
+
+---
 
 ### Technical notes
 
-- Query via `supabase.from('audit_logs').select('*, profiles:user_id(email), organizations:organization_id(name)')` — verify `audit_logs` has FK relationships to `profiles` and `organizations` before relying on the join; fall back to two-step fetch if not.
-- All queries scoped by `useAuth().isAdmin` (page already lives under `AdminRoute`).
+Files touched:
+- `supabase/functions/stripe-integration/index.ts` — extend `manage-subscription` (immediate cancel + reason).
+- `supabase/functions/admin-subscription-override/index.ts` — add `update-preset` action.
+- `src/pages/SubscriptionCheckout.tsx` — downgrade impact panel inside confirm dialog.
+- `src/components/settings/BillingSettingsTab.tsx` — reason capture + immediate cancel option.
+- `src/components/admin/DiscountsTab.tsx` — Edit dialog, usage count column.
+- `src/hooks/useUsageLimits.ts` — reused; no changes expected.
 
----
-
-## Out of scope (deferred)
-
-- #3 Webhook hardening
-- #6 Downgrade/cancel flow
-- #7 Discount preset editing
-- #8 Security findings
-
-Proceed?
+Out of scope (defer to phase 4 alongside #3 webhook discussion): grandfathering old coupons onto new preset values, dunning UX, invoice history tab.

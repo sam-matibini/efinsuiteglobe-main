@@ -604,16 +604,55 @@ serve(async (req) => {
       }
 
       if (subscriptionAction === 'cancel') {
-        const result = await stripeRequest(`/subscriptions/${sub.stripe_subscription_id}`, 'POST', {
-          cancel_at_period_end: 'true',
-        });
-        if (result.error) {
-          return new Response(JSON.stringify({ success: false, error: result.error.message }),
-            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        const immediate = body.immediate === true;
+        const reason = (body.reason || null) as string | null;
+        const feedback = (body.feedback || null) as string | null;
+
+        if (immediate) {
+          const result = await stripeRequest(`/subscriptions/${sub.stripe_subscription_id}`, 'DELETE');
+          if (result.error) {
+            return new Response(JSON.stringify({ success: false, error: result.error.message }),
+              { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+          }
+          await supabaseAdmin.from('subscriptions').update({
+            status: 'canceled',
+            cancel_at_period_end: false,
+            canceled_at: new Date().toISOString(),
+          }).eq('id', sub.id);
+        } else {
+          const result = await stripeRequest(`/subscriptions/${sub.stripe_subscription_id}`, 'POST', {
+            cancel_at_period_end: 'true',
+          });
+          if (result.error) {
+            return new Response(JSON.stringify({ success: false, error: result.error.message }),
+              { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+          }
+          await supabaseAdmin.from('subscriptions').update({ cancel_at_period_end: true }).eq('id', sub.id);
         }
-        await supabaseAdmin.from('subscriptions').update({ cancel_at_period_end: true }).eq('id', sub.id);
-        return new Response(JSON.stringify({ success: true, message: 'Subscription will cancel at period end' }),
-          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+
+        try {
+          const { data: userData } = await supabaseAdmin.auth.getUser(
+            (req.headers.get('Authorization') || '').replace('Bearer ', '')
+          );
+          await supabaseAdmin.from('audit_logs').insert({
+            organization_id: organizationId,
+            user_id: userData?.user?.id || null,
+            action: immediate ? 'subscription.cancel_immediate' : 'subscription.cancel_at_period_end',
+            entity_type: 'subscription',
+            entity_id: sub.id,
+            old_values: { status: sub.status, cancel_at_period_end: sub.cancel_at_period_end },
+            new_values: { reason, feedback, immediate },
+          });
+        } catch (e) {
+          console.warn('audit insert failed', (e as Error).message);
+        }
+
+        return new Response(JSON.stringify({
+          success: true,
+          message: immediate
+            ? 'Subscription canceled immediately'
+            : 'Subscription will cancel at period end',
+        }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
 
       if (subscriptionAction === 'reactivate') {

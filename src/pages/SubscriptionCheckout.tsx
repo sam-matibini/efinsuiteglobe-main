@@ -4,7 +4,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrganization } from '@/hooks/useOrganization';
 import { useAuth } from '@/hooks/useAuth';
-import { deriveTierFromName } from '@/config/planModuleAccess';
+import { deriveTierFromName, PLAN_MODULE_ACCESS, PLAN_TIER_ORDER, PLAN_TIER_LABELS, type PlanTier } from '@/config/planModuleAccess';
+import { useUsageLimits } from '@/hooks/useUsageLimits';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -67,6 +68,7 @@ function formatDate(ts: number | null | undefined) {
 export default function SubscriptionCheckout() {
   const { organization } = useCurrentOrganization();
   const { isAdmin } = useAuth();
+  const { userCount, employeeCount } = useUsageLimits();
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const highlightTier = searchParams.get('plan');
@@ -301,6 +303,23 @@ export default function SubscriptionCheckout() {
       setConfirmLoading(false);
     }
   };
+
+  // Downgrade impact analysis
+  const currentTier = deriveTierFromName((currentSub as any)?.pricing_plans?.name);
+  const newTier = changePlan ? (changePlan.tier as PlanTier | null) || deriveTierFromName(changePlan.name) : null;
+  const isDowngrade =
+    !!currentTier && !!newTier &&
+    PLAN_TIER_ORDER.indexOf(newTier) < PLAN_TIER_ORDER.indexOf(currentTier);
+
+  const lostModules = (isDowngrade && currentTier && newTier)
+    ? PLAN_MODULE_ACCESS[currentTier].filter(m => !PLAN_MODULE_ACCESS[newTier].includes(m))
+    : [];
+
+  const newMaxUsers = changePlan?.max_users ?? null;
+  const newMaxEmployees = changePlan?.max_employees ?? null;
+  const usersOverLimit = isDowngrade && newMaxUsers !== null && userCount > newMaxUsers;
+  const employeesOverLimit = isDowngrade && newMaxEmployees !== null && employeeCount > newMaxEmployees;
+  const hasImpact = isDowngrade && (lostModules.length > 0 || usersOverLimit || employeesOverLimit);
 
   if (isLoading) {
     return (
@@ -575,7 +594,37 @@ export default function SubscriptionCheckout() {
                 )}
               </div>
             )}
+
+            {hasImpact && (
+              <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 space-y-2 text-sm">
+                <p className="font-medium text-destructive">
+                  Downgrading from {currentTier ? PLAN_TIER_LABELS[currentTier] : 'current plan'} to{' '}
+                  {newTier ? PLAN_TIER_LABELS[newTier] : changePlan?.name} — heads up:
+                </p>
+                {lostModules.length > 0 && (
+                  <div>
+                    <p className="text-xs font-medium mb-1">Modules you'll lose access to:</p>
+                    <ul className="text-xs text-muted-foreground list-disc pl-5 space-y-0.5">
+                      {lostModules.map(m => (
+                        <li key={m} className="capitalize">{m.replace(/_/g, ' ')}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {usersOverLimit && (
+                  <p className="text-xs text-destructive">
+                    ⚠ You have {userCount} users but the new plan allows only {newMaxUsers}. You won't be able to add more until you're under the limit.
+                  </p>
+                )}
+                {employeesOverLimit && (
+                  <p className="text-xs text-destructive">
+                    ⚠ You have {employeeCount} employees but the new plan allows only {newMaxEmployees}.
+                  </p>
+                )}
+              </div>
+            )}
           </div>
+
 
           <DialogFooter>
             <Button
