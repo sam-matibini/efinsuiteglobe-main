@@ -48,9 +48,9 @@ export function usePdfToSpreadsheet() {
     setIsConverting(true);
     setError(null);
     setProgress({ current: 0, total: 100 });
+    let errorResult: Partial<PdfToSpreadsheetResult> | null = null;
 
     try {
-      let errorData: Partial<PdfToSpreadsheetResult> | null = null;
       const formData = new FormData();
       formData.append('file', file);
       formData.append('maxPages', String(options.maxPages || 500));
@@ -81,9 +81,9 @@ export function usePdfToSpreadsheet() {
       setProgress({ current: 100, total: 100 });
 
       if (!response.ok) {
-        errorData = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
-        console.error('PDF conversion response error:', response.status, errorData);
-        throw new Error(errorData.error || `Conversion failed (${response.status})`);
+        errorResult = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
+        console.error('PDF conversion response error:', response.status, errorResult);
+        throw new Error(errorResult.error || `Conversion failed (${response.status})`);
       }
 
       const result = await response.json();
@@ -96,13 +96,14 @@ export function usePdfToSpreadsheet() {
       return {
         success: false,
         fileName: file.name,
-        totalPages: 0,
-        processedPages: 0,
+        totalPages: errorResult?.totalPages || 0,
+        processedPages: errorResult?.processedPages || 0,
         columns: [],
         rows: [],
-        message,
+        message: errorResult?.message || message,
         error: message,
         processingTimeMs: 0,
+        validationWarnings: errorResult?.validationWarnings,
       };
     } finally {
       setIsConverting(false);
