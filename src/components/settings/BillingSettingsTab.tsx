@@ -100,15 +100,29 @@ export function BillingSettingsTab() {
   const cancelMutation = useMutation({
     mutationFn: async () => {
       const { data, error } = await supabase.functions.invoke('stripe-integration', {
-        body: { action: 'manage-subscription', organizationId: orgId, subscriptionAction: 'cancel' },
+        body: {
+          action: 'manage-subscription',
+          organizationId: orgId,
+          subscriptionAction: 'cancel',
+          immediate: cancelImmediate,
+          reason: cancelReason || null,
+          feedback: cancelFeedback || null,
+        },
       });
       if (error) throw error;
       if (!data?.success) throw new Error(data?.error || 'Cancel failed');
     },
     onSuccess: () => {
-      toast.success('Subscription will cancel at the end of the current period.');
+      toast.success(
+        cancelImmediate
+          ? 'Subscription canceled immediately.'
+          : 'Subscription will cancel at the end of the current period.'
+      );
       queryClient.invalidateQueries({ queryKey: ['subscription'] });
       setCancelOpen(false);
+      setCancelReason('');
+      setCancelFeedback('');
+      setCancelImmediate(false);
     },
     onError: (e: any) => toast.error(e.message || 'Failed to cancel'),
   });
