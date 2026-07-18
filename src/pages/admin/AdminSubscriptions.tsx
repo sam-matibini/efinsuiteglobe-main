@@ -919,6 +919,10 @@ export default function AdminSubscriptions() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        <TabsContent value="discounts" className="mt-4">
+          <DiscountsTab />
+        </TabsContent>
       </Tabs>
 
       {/* Change Plan Dialog */}
