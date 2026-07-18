@@ -22124,6 +22124,36 @@ export type Database = {
         }
         Relationships: []
       }
+      stripe_webhook_events: {
+        Row: {
+          error: string | null
+          event_id: string
+          event_type: string
+          payload: Json | null
+          processed_at: string | null
+          received_at: string
+          status: string
+        }
+        Insert: {
+          error?: string | null
+          event_id: string
+          event_type: string
+          payload?: Json | null
+          processed_at?: string | null
+          received_at?: string
+          status?: string
+        }
+        Update: {
+          error?: string | null
+          event_id?: string
+          event_type?: string
+          payload?: Json | null
+          processed_at?: string | null
+          received_at?: string
+          status?: string
+        }
+        Relationships: []
+      }
       subscriptions: {
         Row: {
           admin_notes: string | null
