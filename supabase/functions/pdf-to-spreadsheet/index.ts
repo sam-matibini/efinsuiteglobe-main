@@ -24,13 +24,16 @@ interface Sheet { name: string; columns: string[]; rows: ExtractedRow[] }
 const MAX_PDF_SIZE_MB = 20;
 const MAX_PDF_SIZE_BYTES = MAX_PDF_SIZE_MB * 1024 * 1024;
 // Lovable AI Gateway enforces a ~75s upstream idle limit per request. We slice
-// the PDF into small page batches so each Gemini call fits comfortably under
-// that ceiling, then merge the batch results.
-const PAGES_PER_BATCH = 5;
+// the PDF into small page batches and process a few batches in parallel so
+// 20-page statements can complete inside the edge function wall-clock budget.
+const PAGES_PER_BATCH = 3;
+const MAX_PARALLEL_BATCHES = 3;
 const EDGE_RESPONSE_BUDGET_MS = 220_000;
 const AI_REQUEST_TIMEOUT_MS = 65_000;
 const RESPONSE_BUFFER_MS = 10_000;
 const MIN_AI_CALL_MS = 15_000;
+
+type PdfBatch = { base64: string; from: number; to: number; totalPages: number };
 
 type AiCallResult =
   | { ok: true; args: any; raw: string }
@@ -41,10 +44,10 @@ type AiCallResult =
 async function sliceIntoBatches(
   pdfBytes: Uint8Array,
   pagesPerBatch: number,
-): Promise<Array<{ base64: string; from: number; to: number; totalPages: number }>> {
+): Promise<PdfBatch[]> {
   const src = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
   const totalPages = src.getPageCount();
-  const batches: Array<{ base64: string; from: number; to: number; totalPages: number }> = [];
+  const batches: PdfBatch[] = [];
   for (let start = 0; start < totalPages; start += pagesPerBatch) {
     const end = Math.min(start + pagesPerBatch, totalPages);
     const out = await PDFDocument.create();
@@ -325,6 +328,7 @@ serve(async (req) => {
     let summary: Record<string, number | string | undefined> | undefined;
     let totalPages = 0;
     let processedPages = 0;
+    const processedPageNumbers = new Set<number>();
 
     let extractionTimedOut = false;
     const remainingAiBudget = () => Math.max(
@@ -333,8 +337,13 @@ serve(async (req) => {
     );
     const hasBudgetForAnotherCall = () =>
       EDGE_RESPONSE_BUDGET_MS - (Date.now() - startTime) - RESPONSE_BUFFER_MS > MIN_AI_CALL_MS;
+    const markBatchProcessed = (batch: PdfBatch) => {
+      if (!batch.totalPages || !batch.to) return;
+      for (let page = batch.from; page <= batch.to; page++) processedPageNumbers.add(page);
+      processedPages = Math.max(processedPages, batch.to);
+    };
 
-    let batches: Array<{ base64: string; from: number; to: number; totalPages: number }>;
+    let batches: PdfBatch[];
     try {
       batches = await sliceIntoBatches(fileData, PAGES_PER_BATCH);
     } catch (e) {
@@ -346,36 +355,53 @@ serve(async (req) => {
 
     const tryStatementBatched = async (): Promise<boolean> => {
       const model = 'google/gemini-2.5-flash';
-      const merged: ExtractedRow[] = [];
+      const batchResults: Array<{ batch: PdfBatch; args: any }> = [];
       let firstArgs: any = null;
       let lastArgs: any = null;
-      let anyOk = false;
 
-      for (const batch of batches) {
+      for (let i = 0; i < batches.length; i += MAX_PARALLEL_BATCHES) {
+        const group = batches.slice(i, i + MAX_PARALLEL_BATCHES);
         if (!hasBudgetForAnotherCall()) {
-          validationWarnings.push(`Skipped pages ${batch.from}-${batch.to}: edge time budget exhausted.`);
+          validationWarnings.push(`Skipped pages ${group[0]?.from}-${batches[batches.length - 1]?.to}: edge time budget exhausted.`);
           extractionTimedOut = true;
           break;
         }
-        const rangeLabel = batch.totalPages ? ` (pages ${batch.from}-${batch.to} of ${batch.totalPages})` : '';
-        const prompt = STATEMENT_PROMPT + `\n\nThis input covers${rangeLabel}. Return every transaction visible on THESE pages only.`;
-        const result = await callGemini(LOVABLE_API_KEY, batch.base64, prompt, STATEMENT_TOOL, model, remainingAiBudget());
-        if (!result.ok) {
-          extractionTimedOut ||= result.reason === 'timeout';
-          validationWarnings.push(`Pages ${batch.from}-${batch.to}: ${result.message || 'no structured result'}.`);
-          continue;
+
+        const timeoutMs = remainingAiBudget();
+        const results = await Promise.all(group.map(async (batch) => {
+          const rangeLabel = batch.totalPages ? ` (pages ${batch.from}-${batch.to} of ${batch.totalPages})` : '';
+          const prompt = STATEMENT_PROMPT + `\n\nThis input covers${rangeLabel}. Return every transaction visible on THESE pages only.`;
+          const result = await callGemini(LOVABLE_API_KEY, batch.base64, prompt, STATEMENT_TOOL, model, timeoutMs);
+          return { batch, result };
+        }));
+
+        for (const { batch, result } of results) {
+          if (!result.ok) {
+            extractionTimedOut ||= result.reason === 'timeout';
+            validationWarnings.push(`Pages ${batch.from}-${batch.to}: ${result.message || 'no structured result'}.`);
+            continue;
+          }
+          batchResults.push({ batch, args: result.args || {} });
+          markBatchProcessed(batch);
         }
-        anyOk = true;
-        processedPages = batch.to || processedPages;
-        const args = result.args || {};
-        if (!firstArgs) firstArgs = args;
-        lastArgs = args;
-        if (Array.isArray(args.transactions)) {
-          for (const t of args.transactions) merged.push(t as ExtractedRow);
+
+        if (results.some(({ result }) => result.ok) && processedPages >= totalPages) {
+          break;
         }
       }
 
-      if (!anyOk) return false;
+      if (batchResults.length === 0) return false;
+
+      batchResults.sort((a, b) => a.batch.from - b.batch.from);
+      firstArgs = batchResults[0]?.args || null;
+      lastArgs = batchResults[batchResults.length - 1]?.args || null;
+
+      const merged: ExtractedRow[] = [];
+      for (const item of batchResults) {
+        if (Array.isArray(item.args.transactions)) {
+          for (const t of item.args.transactions) merged.push(t as ExtractedRow);
+        }
+      }
 
       documentType = (firstArgs?.documentType || lastArgs?.documentType || 'bank_statement') as string;
       const isCC = documentType === 'credit_card_statement';
@@ -427,11 +453,17 @@ serve(async (req) => {
         validationWarnings.push(`Reclassified ${swapped} payment/refund row(s) from debit to credit based on description.`);
       }
 
-      // Reconcile against printed totals from the LAST batch (statement totals live on the summary page).
+      // Reconcile against printed totals from the latest successful batch with totals
+      // (statement totals usually live on the summary page, but page batches can return
+      // partial metadata if a late page fails).
       const sumDebit = cleaned.reduce((s, r) => s + (r.Debit as number), 0);
       const sumCredit = cleaned.reduce((s, r) => s + (r.Credit as number), 0);
-      const printedDebit = parseNum(lastArgs?.totalDebits ?? firstArgs?.totalDebits);
-      const printedCredit = parseNum(lastArgs?.totalCredits ?? firstArgs?.totalCredits);
+      const totalsArgs = [...batchResults].reverse().find(({ args }) =>
+        parseNum(args?.totalDebits) > 0 || parseNum(args?.totalCredits) > 0 ||
+        parseNum(args?.closingBalance) !== 0
+      )?.args || lastArgs || firstArgs;
+      const printedDebit = parseNum(totalsArgs?.totalDebits ?? firstArgs?.totalDebits);
+      const printedCredit = parseNum(totalsArgs?.totalCredits ?? firstArgs?.totalCredits);
       const tol = 0.02;
 
       let needsSwap = false;
@@ -459,11 +491,11 @@ serve(async (req) => {
 
       summary = {
         openingBalance: parseNum(firstArgs?.openingBalance) || undefined,
-        closingBalance: parseNum(lastArgs?.closingBalance ?? firstArgs?.closingBalance) || undefined,
+        closingBalance: parseNum(totalsArgs?.closingBalance ?? lastArgs?.closingBalance ?? firstArgs?.closingBalance) || undefined,
         totalDebits: printedDebit || undefined,
         totalCredits: printedCredit || undefined,
         periodStart: firstArgs?.statementPeriodStart ?? lastArgs?.statementPeriodStart,
-        periodEnd: lastArgs?.statementPeriodEnd ?? firstArgs?.statementPeriodEnd,
+        periodEnd: totalsArgs?.statementPeriodEnd ?? lastArgs?.statementPeriodEnd ?? firstArgs?.statementPeriodEnd,
       };
 
       columns = isCC
@@ -498,7 +530,7 @@ serve(async (req) => {
           continue;
         }
         anyOk = true;
-        processedPages = batch.to || processedPages;
+        markBatchProcessed(batch);
         const sheets = (result.args?.sheets as Sheet[]) || [];
         for (const s of sheets) allSheets.push(s);
       }
@@ -538,6 +570,8 @@ serve(async (req) => {
         success: false,
         error: 'PDF extraction took too long. Try a smaller statement, fewer pages, or upload CSV/XLSX exported from the bank.',
         message: 'PDF extraction timed out before the backend idle limit.',
+        totalPages,
+        processedPages: processedPageNumbers.size || processedPages,
         validationWarnings: validationWarnings.length ? validationWarnings : undefined,
         processingTimeMs: Date.now() - startTime,
       }), { status: 408, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
@@ -571,7 +605,7 @@ serve(async (req) => {
       success: true,
       fileName,
       totalPages,
-      processedPages: processedPages || totalPages,
+      processedPages: processedPageNumbers.size || processedPages || totalPages,
       columns,
       rows,
       sheets: extractedSheets.length > 1 ? extractedSheets : undefined,
