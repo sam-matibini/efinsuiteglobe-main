@@ -801,16 +801,15 @@ export default function Landing() {
               <ul className="space-y-2 text-sm text-white/70">
                 <li><a href="#features" className="hover:text-accent">Features</a></li>
                 <li><a href="#pricing" className="hover:text-accent">Pricing</a></li>
-                <li><a href="#" className="hover:text-accent">Integrations</a></li>
-                <li><a href="#" className="hover:text-accent">Changelog</a></li>
+                <li><a href="#security" className="hover:text-accent">Security</a></li>
+                <li><a href="#testimonials" className="hover:text-accent">Testimonials</a></li>
               </ul>
             </div>
             <div>
               <h4 className="font-semibold text-white mb-4">Company</h4>
               <ul className="space-y-2 text-sm text-white/70">
-                <li><a href="https://www.efintax.biz" target="_blank" rel="noopener noreferrer" className="hover:text-accent">About</a></li>
-                <li><a href="https://www.efintax.biz" target="_blank" rel="noopener noreferrer" className="hover:text-accent">Blog</a></li>
-                <li><a href="https://www.efintax.biz" target="_blank" rel="noopener noreferrer" className="hover:text-accent">Careers</a></li>
+                <li><Link to="/about" className="hover:text-accent">About</Link></li>
+                <li><a href="#features" className="hover:text-accent">Resources</a></li>
                 <li><Link to="/contact" className="hover:text-accent">Contact</Link></li>
                 <li>
                   <a href="https://www.linkedin.com/company/110252262/admin/dashboard/" target="_blank" rel="noopener noreferrer" className="hover:text-accent flex items-center gap-1">
