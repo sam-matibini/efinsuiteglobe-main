@@ -22,10 +22,10 @@ interface Sheet { name: string; columns: string[]; rows: ExtractedRow[] }
 
 const MAX_PDF_SIZE_MB = 8;
 const MAX_PDF_SIZE_BYTES = MAX_PDF_SIZE_MB * 1024 * 1024;
-const EDGE_RESPONSE_BUDGET_MS = 125_000;
-const AI_REQUEST_TIMEOUT_MS = 75_000;
+const EDGE_RESPONSE_BUDGET_MS = 220_000;
+const AI_REQUEST_TIMEOUT_MS = 170_000;
 const RESPONSE_BUFFER_MS = 15_000;
-const FALLBACK_CUTOFF_MS = 35_000;
+const FALLBACK_CUTOFF_MS = 60_000;
 const MIN_AI_CALL_MS = 10_000;
 
 type AiCallResult =
