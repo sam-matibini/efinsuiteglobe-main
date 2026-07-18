@@ -344,7 +344,7 @@ async function handleDiscountEvent(supabaseAdmin: SupabaseClient, event: any) {
   if (event.type === 'customer.discount.deleted') {
     await supabaseAdmin
       .from('subscriptions')
-      .update({ stripe_coupon_id: null, discount_percent: null, discount_amount: null })
+      .update({ stripe_coupon_id: null, discount_percent: null })
       .eq('id', sub.id);
     return;
   }
@@ -355,7 +355,6 @@ async function handleDiscountEvent(supabaseAdmin: SupabaseClient, event: any) {
     .update({
       stripe_coupon_id: coupon.id ?? null,
       discount_percent: coupon.percent_off ?? null,
-      discount_amount: coupon.amount_off != null ? coupon.amount_off / 100 : null,
     })
     .eq('id', sub.id);
 }
