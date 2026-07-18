@@ -745,6 +745,8 @@ export default function ManagementReport() {
             incomeStatement={incomeStatement}
             cashFlow={cashFlow}
             fmt={fmtCurrency}
+            reClosingBalance={reCurrentStatement?.data?.closingBalance}
+            rePeriodNetIncome={reCurrentStatement?.data?.netIncomeLoss}
           />
         </TabsContent>
 
