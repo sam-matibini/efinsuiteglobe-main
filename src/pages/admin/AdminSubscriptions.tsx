@@ -653,6 +653,7 @@ export default function AdminSubscriptions() {
         <TabsList>
           <TabsTrigger value="subscriptions">Subscriptions</TabsTrigger>
           <TabsTrigger value="pricing">Pricing Plans</TabsTrigger>
+          <TabsTrigger value="discounts">Discounts</TabsTrigger>
         </TabsList>
         
         <TabsContent value="subscriptions" className="mt-4 space-y-4">
