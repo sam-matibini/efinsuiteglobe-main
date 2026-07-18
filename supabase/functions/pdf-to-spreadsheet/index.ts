@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+import { PDFDocument } from 'https://esm.sh/pdf-lib@1.17.1';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -20,20 +21,46 @@ type Cell = string | number | null;
 interface ExtractedRow { [key: string]: Cell }
 interface Sheet { name: string; columns: string[]; rows: ExtractedRow[] }
 
-const MAX_PDF_SIZE_MB = 8;
+const MAX_PDF_SIZE_MB = 20;
 const MAX_PDF_SIZE_BYTES = MAX_PDF_SIZE_MB * 1024 * 1024;
-// Lovable AI Gateway enforces a ~75s upstream idle limit per request, so we
-// keep each AI call comfortably under it and rely on faster models + smaller
-// token budgets to fit within that window.
-const EDGE_RESPONSE_BUDGET_MS = 140_000;
-const AI_REQUEST_TIMEOUT_MS = 70_000;
+// Lovable AI Gateway enforces a ~75s upstream idle limit per request. We slice
+// the PDF into small page batches so each Gemini call fits comfortably under
+// that ceiling, then merge the batch results.
+const PAGES_PER_BATCH = 5;
+const EDGE_RESPONSE_BUDGET_MS = 220_000;
+const AI_REQUEST_TIMEOUT_MS = 65_000;
 const RESPONSE_BUFFER_MS = 10_000;
-const FALLBACK_CUTOFF_MS = 55_000;
-const MIN_AI_CALL_MS = 10_000;
+const MIN_AI_CALL_MS = 15_000;
 
 type AiCallResult =
   | { ok: true; args: any; raw: string }
   | { ok: false; reason: 'timeout' | 'failed' | 'empty'; message?: string };
+
+// Split a PDF into batches of N pages. Returns the base64 of each slice plus
+// the (1-indexed) page range it represents.
+async function sliceIntoBatches(
+  pdfBytes: Uint8Array,
+  pagesPerBatch: number,
+): Promise<Array<{ base64: string; from: number; to: number; totalPages: number }>> {
+  const src = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
+  const totalPages = src.getPageCount();
+  const batches: Array<{ base64: string; from: number; to: number; totalPages: number }> = [];
+  for (let start = 0; start < totalPages; start += pagesPerBatch) {
+    const end = Math.min(start + pagesPerBatch, totalPages);
+    const out = await PDFDocument.create();
+    const indices = Array.from({ length: end - start }, (_, i) => start + i);
+    const copied = await out.copyPages(src, indices);
+    for (const p of copied) out.addPage(p);
+    const bytes = await out.save();
+    batches.push({
+      base64: bytesToBase64(bytes),
+      from: start + 1,
+      to: end,
+      totalPages,
+    });
+  }
+  return batches;
+}
 
 // Regex for summary rows that must never appear as transactions
 const SUMMARY_ROW_PATTERNS = [
@@ -287,8 +314,8 @@ serve(async (req) => {
     console.log(`Processing PDF: ${fileName}, size: ${(fileData.length / 1024).toFixed(0)}KB`);
     const pdfBase64 = bytesToBase64(fileData);
 
-    // ---- Try bank-statement extraction first when filename hints at it,
-    //      otherwise generic, and fall back if the wrong path was chosen.
+    // ---- Slice the PDF into small page batches so each Gemini call fits
+    //      inside the AI Gateway's ~75s idle ceiling, then merge the results.
     const validationWarnings: string[] = [];
     let columns: string[] = [];
     let rows: ExtractedRow[] = [];
@@ -296,56 +323,94 @@ serve(async (req) => {
     let documentType: string | undefined;
     let reconciled: boolean | undefined;
     let summary: Record<string, number | string | undefined> | undefined;
+    let totalPages = 0;
+    let processedPages = 0;
 
     let extractionTimedOut = false;
     const remainingAiBudget = () => Math.max(
       MIN_AI_CALL_MS,
       Math.min(AI_REQUEST_TIMEOUT_MS, EDGE_RESPONSE_BUDGET_MS - (Date.now() - startTime) - RESPONSE_BUFFER_MS),
     );
-    const hasFallbackBudget = () => Date.now() - startTime < FALLBACK_CUTOFF_MS;
+    const hasBudgetForAnotherCall = () =>
+      EDGE_RESPONSE_BUDGET_MS - (Date.now() - startTime) - RESPONSE_BUFFER_MS > MIN_AI_CALL_MS;
 
-    const tryStatement = async () => {
-      const result = await callGemini(LOVABLE_API_KEY, pdfBase64, STATEMENT_PROMPT, STATEMENT_TOOL, 'google/gemini-2.5-flash-lite', remainingAiBudget());
-      if (!result.ok) {
-        extractionTimedOut ||= result.reason === 'timeout';
-        validationWarnings.push(result.message || 'Statement extraction did not return structured data.');
-        return false;
+    let batches: Array<{ base64: string; from: number; to: number; totalPages: number }>;
+    try {
+      batches = await sliceIntoBatches(fileData, PAGES_PER_BATCH);
+    } catch (e) {
+      console.error('PDF slice failed, falling back to single-shot:', (e as Error).message);
+      batches = [{ base64: pdfBase64, from: 1, to: 0, totalPages: 0 }];
+    }
+    totalPages = batches[0]?.totalPages ?? 0;
+    const wantsStatement = looksLikeStatement(fileName);
+
+    const tryStatementBatched = async (): Promise<boolean> => {
+      const model = 'google/gemini-2.5-flash';
+      const merged: ExtractedRow[] = [];
+      let firstArgs: any = null;
+      let lastArgs: any = null;
+      let anyOk = false;
+
+      for (const batch of batches) {
+        if (!hasBudgetForAnotherCall()) {
+          validationWarnings.push(`Skipped pages ${batch.from}-${batch.to}: edge time budget exhausted.`);
+          extractionTimedOut = true;
+          break;
+        }
+        const rangeLabel = batch.totalPages ? ` (pages ${batch.from}-${batch.to} of ${batch.totalPages})` : '';
+        const prompt = STATEMENT_PROMPT + `\n\nThis input covers${rangeLabel}. Return every transaction visible on THESE pages only.`;
+        const result = await callGemini(LOVABLE_API_KEY, batch.base64, prompt, STATEMENT_TOOL, model, remainingAiBudget());
+        if (!result.ok) {
+          extractionTimedOut ||= result.reason === 'timeout';
+          validationWarnings.push(`Pages ${batch.from}-${batch.to}: ${result.message || 'no structured result'}.`);
+          continue;
+        }
+        anyOk = true;
+        processedPages = batch.to || processedPages;
+        const args = result.args || {};
+        if (!firstArgs) firstArgs = args;
+        lastArgs = args;
+        if (Array.isArray(args.transactions)) {
+          for (const t of args.transactions) merged.push(t as ExtractedRow);
+        }
       }
-      const args = result.args || {};
-      if (!Array.isArray(args.transactions)) return false;
 
-      documentType = args.documentType || 'bank_statement';
+      if (!anyOk) return false;
+
+      documentType = (firstArgs?.documentType || lastArgs?.documentType || 'bank_statement') as string;
       const isCC = documentType === 'credit_card_statement';
 
-      // Sanitize: filter summary rows, normalize sign, single side per row
+      // Deduplicate rows across batch overlaps (date|desc|debit|credit).
+      const seen = new Set<string>();
       const cleaned: ExtractedRow[] = [];
-      for (const t of args.transactions) {
-        const desc = String(t.description ?? '').trim();
+      for (const t of merged) {
+        const desc = String((t as any).description ?? '').trim();
         if (!desc || isSummaryRow(desc)) {
           if (desc) validationWarnings.push(`Dropped summary row: "${desc}"`);
           continue;
         }
-        let debit = Math.abs(parseNum(t.debit));
-        let credit = Math.abs(parseNum(t.credit));
+        let debit = Math.abs(parseNum((t as any).debit));
+        let credit = Math.abs(parseNum((t as any).credit));
         if (debit > 0 && credit > 0) {
-          // Both populated — keep larger side
           validationWarnings.push(`Row "${desc.slice(0, 40)}" had both debit & credit; kept larger.`);
           if (debit >= credit) credit = 0; else debit = 0;
         }
         if (debit === 0 && credit === 0) continue;
+        const key = `${String((t as any).date ?? '')}|${desc}|${debit.toFixed(2)}|${credit.toFixed(2)}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
         cleaned.push({
-          Date: String(t.date ?? ''),
+          Date: String((t as any).date ?? ''),
           Description: desc,
-          'Payer/Payee': t.payer_payee ? String(t.payer_payee).trim() : '',
-          Reference: t.reference ? String(t.reference) : '',
+          'Payer/Payee': (t as any).payer_payee ? String((t as any).payer_payee).trim() : '',
+          Reference: (t as any).reference ? String((t as any).reference) : '',
           Debit: debit || 0,
           Credit: credit || 0,
-          Balance: parseNum(t.balance) || null,
+          Balance: parseNum((t as any).balance) || null,
         });
       }
 
-      // Description-based side correction (fixes CC statements with a single
-      // signed AMOUNT column where the model dumped payments into `debit`).
+      // Description-based side correction for single-signed-column CC statements.
       const PAYMENT_KW = /(payment|paiement|thank\s*you|merci|autopay|bill\s*payment|transfer\s*to\s*card|\bpmt\b)/i;
       const REFUND_KW = /(refund|return\b|returned|credit\s*memo|reversal|chargeback|merchant\s*credit)/i;
       let swapped = 0;
@@ -362,14 +427,12 @@ serve(async (req) => {
         validationWarnings.push(`Reclassified ${swapped} payment/refund row(s) from debit to credit based on description.`);
       }
 
-
-
-      // Reconcile against printed totals
+      // Reconcile against printed totals from the LAST batch (statement totals live on the summary page).
       const sumDebit = cleaned.reduce((s, r) => s + (r.Debit as number), 0);
       const sumCredit = cleaned.reduce((s, r) => s + (r.Credit as number), 0);
-      const printedDebit = parseNum(args.totalDebits);
-      const printedCredit = parseNum(args.totalCredits);
-      const tol = 0.01;
+      const printedDebit = parseNum(lastArgs?.totalDebits ?? firstArgs?.totalDebits);
+      const printedCredit = parseNum(lastArgs?.totalCredits ?? firstArgs?.totalCredits);
+      const tol = 0.02;
 
       let needsSwap = false;
       if (printedDebit > 0 && printedCredit > 0) {
@@ -395,20 +458,18 @@ serve(async (req) => {
       }
 
       summary = {
-        openingBalance: parseNum(args.openingBalance) || undefined,
-        closingBalance: parseNum(args.closingBalance) || undefined,
+        openingBalance: parseNum(firstArgs?.openingBalance) || undefined,
+        closingBalance: parseNum(lastArgs?.closingBalance ?? firstArgs?.closingBalance) || undefined,
         totalDebits: printedDebit || undefined,
         totalCredits: printedCredit || undefined,
-        periodStart: args.statementPeriodStart,
-        periodEnd: args.statementPeriodEnd,
+        periodStart: firstArgs?.statementPeriodStart ?? lastArgs?.statementPeriodStart,
+        periodEnd: lastArgs?.statementPeriodEnd ?? firstArgs?.statementPeriodEnd,
       };
 
-      // For bank statements use Withdrawal/Deposit naming used downstream; for CC use Charge/Payment-friendly columns.
       columns = isCC
         ? ['Date', 'Description', 'Payer/Payee', 'Reference', 'Charge', 'Payment', 'Balance']
         : ['Date', 'Description', 'Payer/Payee', 'Reference', 'Debit', 'Credit', 'Balance'];
 
-      // If CC, rename Debit/Credit -> Charge/Payment in rows
       rows = isCC
         ? cleaned.map((r) => ({
             Date: r.Date, Description: r.Description, 'Payer/Payee': r['Payer/Payee'], Reference: r.Reference,
@@ -417,31 +478,47 @@ serve(async (req) => {
         : cleaned;
 
       extractedSheets = [{ name: isCC ? 'CC Transactions' : 'Bank Transactions', columns, rows }];
-      return true;
+      return cleaned.length > 0;
     };
 
-    const tryGeneric = async () => {
-      const result = await callGemini(LOVABLE_API_KEY, pdfBase64, GENERIC_PROMPT, GENERIC_TOOL, 'google/gemini-2.5-flash-lite', remainingAiBudget());
-      if (!result.ok) {
-        extractionTimedOut ||= result.reason === 'timeout';
-        validationWarnings.push(result.message || 'Generic table extraction did not return structured data.');
-        return false;
+    const tryGenericBatched = async (): Promise<boolean> => {
+      const model = 'google/gemini-2.5-flash';
+      const allSheets: Sheet[] = [];
+      let anyOk = false;
+      for (const batch of batches) {
+        if (!hasBudgetForAnotherCall()) {
+          validationWarnings.push(`Skipped pages ${batch.from}-${batch.to}: edge time budget exhausted.`);
+          extractionTimedOut = true;
+          break;
+        }
+        const result = await callGemini(LOVABLE_API_KEY, batch.base64, GENERIC_PROMPT, GENERIC_TOOL, model, remainingAiBudget());
+        if (!result.ok) {
+          extractionTimedOut ||= result.reason === 'timeout';
+          validationWarnings.push(`Pages ${batch.from}-${batch.to}: ${result.message || 'no structured result'}.`);
+          continue;
+        }
+        anyOk = true;
+        processedPages = batch.to || processedPages;
+        const sheets = (result.args?.sheets as Sheet[]) || [];
+        for (const s of sheets) allSheets.push(s);
       }
-      const sheets = (result.args?.sheets as Sheet[]) || [];
-      if (!sheets.length) return false;
-      extractedSheets = sheets;
-      columns = sheets[0].columns || [];
-      rows = sheets.flatMap((s) => s.rows || []);
+      if (!anyOk || allSheets.length === 0) return false;
+      extractedSheets = allSheets;
+      columns = allSheets[0].columns || [];
+      rows = allSheets.flatMap((s) => s.rows || []);
       documentType = 'generic_table';
       return true;
     };
 
     try {
-      if (looksLikeStatement(fileName)) {
-        if (!(await tryStatement()) && !extractionTimedOut && hasFallbackBudget()) await tryGeneric();
+      if (wantsStatement) {
+        if (!(await tryStatementBatched()) && !extractionTimedOut && hasBudgetForAnotherCall()) {
+          await tryGenericBatched();
+        }
       } else {
-        // Still try statement first if generic returns nothing meaningful — but cheaper to try generic first.
-        if (!(await tryGeneric()) && !extractionTimedOut && hasFallbackBudget()) await tryStatement();
+        if (!(await tryGenericBatched()) && !extractionTimedOut && hasBudgetForAnotherCall()) {
+          await tryStatementBatched();
+        }
       }
     } catch (e) {
       if (e instanceof Response) {
@@ -454,6 +531,7 @@ serve(async (req) => {
       }
       throw e;
     }
+
 
     if (extractionTimedOut && columns.length === 0) {
       return new Response(JSON.stringify({
@@ -492,8 +570,8 @@ serve(async (req) => {
     const result = {
       success: true,
       fileName,
-      totalPages: 0,
-      processedPages: 0,
+      totalPages,
+      processedPages: processedPages || totalPages,
       columns,
       rows,
       sheets: extractedSheets.length > 1 ? extractedSheets : undefined,
