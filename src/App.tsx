@@ -250,9 +250,9 @@ const AppRoutes = () => {
   const { currentOrganization } = useOrganizationContext();
   const navigate = useNavigate();
   const location = useLocation();
-  const prevOrgIdRef = React.useRef<string | null>(null);
+  const prevOrgIdRef = useRef<string | null>(null);
 
-  React.useEffect(() => {
+  useEffect(() => {
     const newId = currentOrganization?.id ?? null;
     const prevId = prevOrgIdRef.current;
     // On a real switch (not initial hydrate), route to dashboard.
