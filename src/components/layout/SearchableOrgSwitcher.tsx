@@ -53,6 +53,9 @@ export const SearchableOrgSwitcher = forwardRef<HTMLDivElement, SearchableOrgSwi
       onSwitch(org);
       setOpen(false);
       setSearch('');
+      if (location.pathname !== '/') {
+        navigate('/');
+      }
     };
 
     const handleCreateNew = () => {
