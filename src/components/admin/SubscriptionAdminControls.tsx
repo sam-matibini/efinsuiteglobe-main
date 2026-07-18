@@ -66,7 +66,6 @@ export function SubscriptionDefaultsCard() {
         global_discount: {
           percent: Number(discountPercent),
           expires_at: discountExpires ? new Date(discountExpires).toISOString() : null,
-          stripe_coupon_id: couponId || null,
           note: note || null,
         },
       });
@@ -84,6 +83,7 @@ export function SubscriptionDefaultsCard() {
         <CardTitle>Subscription Defaults</CardTitle>
         <CardDescription>
           Global trial length and promotional discount applied to new checkouts.
+          Stripe coupons are created automatically when you save a discount.
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-4 md:grid-cols-2">
@@ -115,12 +115,10 @@ export function SubscriptionDefaultsCard() {
           />
         </div>
         <div className="space-y-2">
-          <Label>Stripe coupon ID (optional)</Label>
-          <Input
-            placeholder="coupon_..."
-            value={couponId}
-            onChange={(e) => setCouponId(e.target.value)}
-          />
+          <Label>Stripe coupon</Label>
+          <div className="text-sm text-muted-foreground px-3 py-2 border rounded-md bg-muted/30 font-mono truncate">
+            {couponId ? couponId : 'Auto-managed — created on save'}
+          </div>
         </div>
         <div className="space-y-2 md:col-span-2">
           <Label>Internal note</Label>
