@@ -535,6 +535,33 @@ export function SetDiscountDialog({
             />
           </div>
           <div className="space-y-1">
+            <Label>Duration</Label>
+            <Select
+              value={duration}
+              onValueChange={(v) => setDuration(v as any)}
+              disabled={!!usingPreset}
+            >
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="once">Once (first invoice)</SelectItem>
+                <SelectItem value="repeating">Repeating (N months)</SelectItem>
+                <SelectItem value="forever">Forever</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {duration === 'repeating' && (
+            <div className="space-y-1">
+              <Label>Repeat for (months)</Label>
+              <Input
+                type="number"
+                min={1}
+                value={durationMonths}
+                disabled={!!usingPreset}
+                onChange={(e) => setDurationMonths(e.target.value)}
+              />
+            </div>
+          )}
+          <div className="space-y-1">
             <Label>Expires (optional)</Label>
             <Input
               type="date"
