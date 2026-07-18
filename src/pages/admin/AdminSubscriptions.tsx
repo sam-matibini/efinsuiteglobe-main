@@ -1505,6 +1505,29 @@ export default function AdminSubscriptions() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {selectedSub && (
+        <>
+          <ExtendTrialDialog
+            open={extendTrialOpen}
+            onOpenChange={setExtendTrialOpen}
+            sub={selectedSub}
+            onDone={() => queryClient.invalidateQueries({ queryKey: ['admin-subscriptions'] })}
+          />
+          <OverrideSubscriptionDialog
+            open={overrideOpen}
+            onOpenChange={setOverrideOpen}
+            sub={selectedSub}
+            plans={plans || []}
+            onDone={() => queryClient.invalidateQueries({ queryKey: ['admin-subscriptions'] })}
+          />
+          <SetDiscountDialog
+            open={setDiscountOpen}
+            onOpenChange={setSetDiscountOpen}
+            sub={selectedSub}
+            onDone={() => queryClient.invalidateQueries({ queryKey: ['admin-subscriptions'] })}
+          />
+        </>
+      )}
     </div>
   );
 }
