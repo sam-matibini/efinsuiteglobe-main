@@ -183,7 +183,16 @@ export default function SubscriptionCheckout() {
         : c.duration === 'forever'
           ? ' — forever'
           : ' — first payment';
-      setAppliedPromo({ id: data.promotion_code_id, code: data.code, label: `${disc}${dur}` });
+      setAppliedPromo({
+        id: data.promotion_code_id,
+        code: data.code,
+        label: `${disc}${dur}`,
+        percent_off: c.percent_off ?? null,
+        amount_off: c.amount_off ?? null,
+        currency: c.currency ?? null,
+        duration: c.duration ?? null,
+        duration_in_months: c.duration_in_months ?? null,
+      });
       toast.success(`Promo code ${data.code} applied`);
     } catch (err: any) {
       setPromoError(err.message || 'Could not validate code');
