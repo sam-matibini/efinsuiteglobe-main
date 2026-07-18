@@ -123,6 +123,76 @@ export default function SubscriptionCheckout() {
   const isTrialing = currentSub?.status === 'trialing';
   const trialEnd = isTrialing ? (currentSub as any)?.current_period_end : null;
 
+  // Detect whether org has an admin-applied discount (per-org or global) to hide the promo field
+  const { data: adminDiscountActive } = useQuery({
+    queryKey: ['admin-discount-active', organization?.id, currentSub?.id],
+    queryFn: async () => {
+      if (!organization?.id) return false;
+      const nowIso = new Date().toISOString();
+      const sub: any = currentSub;
+      const orgActive = !!(sub && Number(sub.discount_percent) > 0 &&
+        sub.stripe_coupon_id &&
+        (!sub.discount_expires_at || sub.discount_expires_at > nowIso));
+      if (orgActive) return true;
+      const { data } = await supabase
+        .from('platform_settings')
+        .select('setting_value')
+        .eq('setting_key', 'subscription.global_discount')
+        .maybeSingle();
+      const gd: any = data?.setting_value || {};
+      return !!(Number(gd.percent) > 0 && gd.stripe_coupon_id &&
+        (!gd.expires_at || new Date(gd.expires_at) > new Date()));
+    },
+    enabled: !!organization?.id,
+  });
+
+  const applyPromoCode = async () => {
+    if (!promoInput.trim() || !organization?.id) return;
+    setPromoLoading(true);
+    setPromoError(null);
+    try {
+      const { data, error } = await supabase.functions.invoke('stripe-integration', {
+        body: {
+          action: 'validate-promotion-code',
+          code: promoInput.trim(),
+          organizationId: organization.id,
+        },
+      });
+      if (error) throw error;
+      if (data?.adminDiscountActive) {
+        setPromoError('A discount is already applied by your administrator.');
+        return;
+      }
+      if (!data?.success || !data?.valid) {
+        setPromoError(data?.error || 'Code not valid');
+        return;
+      }
+      const c = data.coupon || {};
+      const disc = c.percent_off
+        ? `${c.percent_off}% off`
+        : c.amount_off
+          ? `${((c.amount_off as number) / 100).toFixed(2)} ${(c.currency || '').toUpperCase()} off`
+          : 'Discount';
+      const dur = c.duration === 'repeating'
+        ? ` — first ${c.duration_in_months} months`
+        : c.duration === 'forever'
+          ? ' — forever'
+          : ' — first payment';
+      setAppliedPromo({ id: data.promotion_code_id, code: data.code, label: `${disc}${dur}` });
+      toast.success(`Promo code ${data.code} applied`);
+    } catch (err: any) {
+      setPromoError(err.message || 'Could not validate code');
+    } finally {
+      setPromoLoading(false);
+    }
+  };
+
+  const removePromoCode = () => {
+    setAppliedPromo(null);
+    setPromoInput('');
+    setPromoError(null);
+  };
+
   const openStripeCheckout = async (planId: string) => {
     setLoadingPlanId(planId);
     try {
@@ -132,6 +202,7 @@ export default function SubscriptionCheckout() {
           planId,
           billingCycle,
           organizationId: organization!.id,
+          promotionCodeId: appliedPromo?.id,
           successUrl: `${window.location.origin}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
           cancelUrl: `${window.location.origin}/subscription/checkout`,
         },
