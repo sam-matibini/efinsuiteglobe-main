@@ -394,6 +394,15 @@ export function EditTransactionDialog({
             </Alert>
           )}
 
+          {/* Posted-to-GL notice */}
+          {isPosted && !isReconciled && (
+            <Alert className="border-blue-500 bg-blue-50 dark:bg-blue-950/20">
+              <AlertDescription className="text-blue-800 dark:text-blue-300 text-sm">
+                This transaction is posted to the GL. Editing amount, date, description, reference, payee, or category will automatically reverse the linked journal entry and re-post it so the Trial Balance and financial statements stay in sync.
+              </AlertDescription>
+            </Alert>
+          )}
+
           {/* Transaction Summary */}
           <div className="grid grid-cols-2 gap-4 p-4 bg-muted/50 rounded-lg">
             <div className="flex items-center gap-2">

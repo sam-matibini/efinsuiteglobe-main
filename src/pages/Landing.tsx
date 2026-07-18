@@ -343,14 +343,16 @@ export default function Landing() {
                   Start Free Trial <ArrowRight className="ml-2 w-5 h-5 transition-transform duration-200 group-hover:translate-x-0.5" />
                 </Button>
               </Link>
-              <Button
-                size="lg"
-                variant="outline"
-                className="group w-full sm:w-auto border-white/20 bg-white/5 text-white hover:bg-white/10 hover:border-white/40 font-medium backdrop-blur-sm transition-transform duration-150 ease-out active:scale-[0.97]"
-              >
-                Book a Demo
-                <ArrowRight className="ml-2 w-4 h-4 transition-transform duration-200 group-hover:translate-x-0.5" />
-              </Button>
+              <Link to="/contact" className="w-full sm:w-auto">
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="group w-full sm:w-auto border-white/20 bg-white/5 text-white hover:bg-white/10 hover:border-white/40 font-medium backdrop-blur-sm transition-transform duration-150 ease-out active:scale-[0.97]"
+                >
+                  Book a Demo
+                  <ArrowRight className="ml-2 w-4 h-4 transition-transform duration-200 group-hover:translate-x-0.5" />
+                </Button>
+              </Link>
             </div>
             <p className="mt-6 text-xs uppercase tracking-[0.2em] text-white/50">
               Trusted by finance teams in 15+ countries
@@ -740,14 +742,16 @@ export default function Landing() {
                       <ArrowRight className="ml-2 w-5 h-5 transition-transform duration-200 group-hover:translate-x-0.5" />
                     </Button>
                   </Link>
-                  <Button
-                    size="lg"
-                    variant="outline"
-                    className="group w-full sm:w-auto border-white/25 bg-white/5 text-white hover:bg-white/10 hover:border-white/50 backdrop-blur-sm transition-transform duration-150 ease-out active:scale-[0.97]"
-                  >
-                    Talk to Sales
-                    <ArrowRight className="ml-2 w-4 h-4 transition-transform duration-200 group-hover:translate-x-0.5" />
-                  </Button>
+                  <Link to="/contact" className="w-full sm:w-auto">
+                    <Button
+                      size="lg"
+                      variant="outline"
+                      className="group w-full sm:w-auto border-white/25 bg-white/5 text-white hover:bg-white/10 hover:border-white/50 backdrop-blur-sm transition-transform duration-150 ease-out active:scale-[0.97]"
+                    >
+                      Talk to Sales
+                      <ArrowRight className="ml-2 w-4 h-4 transition-transform duration-200 group-hover:translate-x-0.5" />
+                    </Button>
+                  </Link>
                 </div>
               </div>
               {/* Right-side metric stack */}
@@ -797,17 +801,16 @@ export default function Landing() {
               <ul className="space-y-2 text-sm text-white/70">
                 <li><a href="#features" className="hover:text-accent">Features</a></li>
                 <li><a href="#pricing" className="hover:text-accent">Pricing</a></li>
-                <li><a href="#" className="hover:text-accent">Integrations</a></li>
-                <li><a href="#" className="hover:text-accent">Changelog</a></li>
+                <li><a href="#security" className="hover:text-accent">Security</a></li>
+                <li><a href="#testimonials" className="hover:text-accent">Testimonials</a></li>
               </ul>
             </div>
             <div>
               <h4 className="font-semibold text-white mb-4">Company</h4>
               <ul className="space-y-2 text-sm text-white/70">
-                <li><a href="https://www.efintax.biz" target="_blank" rel="noopener noreferrer" className="hover:text-accent">About</a></li>
-                <li><a href="https://www.efintax.biz" target="_blank" rel="noopener noreferrer" className="hover:text-accent">Blog</a></li>
-                <li><a href="https://www.efintax.biz" target="_blank" rel="noopener noreferrer" className="hover:text-accent">Careers</a></li>
-                <li><a href="https://www.efintax.biz" target="_blank" rel="noopener noreferrer" className="hover:text-accent">Contact</a></li>
+                <li><Link to="/about" className="hover:text-accent">About</Link></li>
+                <li><a href="#features" className="hover:text-accent">Resources</a></li>
+                <li><Link to="/contact" className="hover:text-accent">Contact</Link></li>
                 <li>
                   <a href="https://www.linkedin.com/company/110252262/admin/dashboard/" target="_blank" rel="noopener noreferrer" className="hover:text-accent flex items-center gap-1">
                     <Linkedin className="w-4 h-4" />
