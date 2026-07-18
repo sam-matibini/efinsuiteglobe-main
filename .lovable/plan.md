@@ -1,56 +1,66 @@
-# Admin: Trial, Override & Discount Controls
+# Auto-provision Stripe Coupons + Discounts Admin Tab
 
-Three related admin capabilities that all live in the existing `Admin → Subscriptions` page and reuse existing columns where possible.
+Remove the "paste a Stripe coupon ID" step. Whenever an admin sets a discount (global or per-org), the backend creates the coupon in Stripe automatically and stores its ID. Add a new **Discounts** tab in Admin → Subscriptions to manage a library of reusable Stripe coupons.
 
-## What admins get
+## What changes for the admin
 
-**Global defaults (new "Subscription Defaults" card at top of Admin → Subscriptions)**
-- Default trial length (days) — applied to every new checkout
-- Global discount percent — applied to every active/trialing org that has no per-org override
-- Optional expiry date on the global discount (so promos auto-end)
+**Global discount card (existing)**
+- Remove the "Stripe coupon ID" text input.
+- On save, if `percent > 0` and no coupon exists (or percent/duration changed), the backend creates a Stripe coupon (`percent_off`, optional `redeem_by = expires_at`, `duration = once|repeating|forever` based on expiry) and stores its ID in `platform_settings.subscription.global_discount.stripe_coupon_id`. If percent is 0, the coupon is cleared (and archived in Stripe).
 
-**Per-organization row actions (new dropdown items on each subscription row)**
-- **Extend trial** — pick "+N days" or an exact new trial end date. Sets status to `trialing` and pushes `current_period_end` forward.
-- **Override subscription** — one dialog to change plan, billing cycle, status, `current_period_end`, `custom_price`, and admin notes. Also creates a subscription row if the org has none.
-- **Set discount** — set `discount_percent` (0–100) and optional expiry, or clear it to fall back to the global discount.
+**Per-org "Set discount" dialog (existing)**
+- Same behavior: on save, backend creates/reuses a Stripe coupon for that org and stores its ID on the `subscriptions` row (new column `stripe_coupon_id`). Existing `discount_percent` / `discount_expires_at` still drive the UI.
+- Add a "Use saved discount…" selector that picks from the new discounts library (see below); selecting one copies its percent/expiry and reuses its coupon ID.
 
-All three actions write an entry into `audit_logs` (org_id, admin user, before/after values).
+**New: Discounts tab (`Admin → Subscriptions → Discounts`)**
+- Table of saved discount presets from a new `discount_presets` table: name, percent, duration (once / N months / forever), expiry (optional), Stripe coupon ID, status (active / archived), created by, created at.
+- Actions: **Create discount** (name, percent, duration, expiry, optional max redemptions) → creates the Stripe coupon and inserts the row. **Archive** → deletes the coupon in Stripe and marks the row archived. **Copy code** for the Stripe coupon ID.
+- These presets are what the global card and per-org dialog pick from.
 
 ## Data model
 
-`platform_settings` already exists (key/jsonb). Two new rows, no schema change:
-- `subscription.trial_period_days` → `{ "days": 14 }`
-- `subscription.global_discount` → `{ "percent": 0, "expires_at": null, "note": null }`
-
-`subscriptions` already has `discount_percent`, `custom_price`, `admin_notes`. Add two nullable columns via migration:
-- `discount_expires_at timestamptz` — per-org discount auto-expiry
-- `trial_extended_by uuid` / `trial_extended_at timestamptz` — audit fingerprint for the last trial extension
+New migration:
+- `subscriptions.stripe_coupon_id text nullable` — coupon currently attached to this org.
+- New table `public.discount_presets`:
+  - `id uuid pk`, `name text not null`, `percent numeric not null check (percent > 0 and percent <= 100)`,
+  - `duration text not null check (duration in ('once','repeating','forever'))`,
+  - `duration_in_months int null`, `expires_at timestamptz null`, `max_redemptions int null`,
+  - `stripe_coupon_id text not null unique`, `status text not null default 'active'`,
+  - `created_by uuid`, `created_at`, `updated_at` timestamps.
+- GRANTs: `authenticated` SELECT (so admin UI can list), `service_role` ALL. RLS: only `has_role(auth.uid(),'admin')` can select; all writes go through the edge function.
 
 ## Backend changes
 
+`supabase/functions/admin-subscription-override/index.ts`
+- Add Stripe helper `createCoupon({ percent, duration, duration_in_months, redeem_by, max_redemptions, name })` that calls `POST https://api.stripe.com/v1/coupons` with the existing `STRIPE_SECRET_KEY`.
+- Add helper `deleteCoupon(id)` (`DELETE /v1/coupons/{id}`).
+- New actions:
+  - `create-preset` → create Stripe coupon, insert `discount_presets` row.
+  - `archive-preset` → delete Stripe coupon, mark row `archived`.
+  - `list-presets` (or the UI reads the table directly via RLS).
+- Extend existing actions:
+  - `update-defaults` (global discount): if `global_discount.percent > 0`, create/replace the Stripe coupon and write its ID back into the setting. If `percent = 0`, delete the existing coupon.
+  - `set-discount` (per-org): accept either `preset_id` (reuse that coupon) or raw `discount_percent + discount_expires_at` (create a one-off coupon named `org:<id>`). Store `stripe_coupon_id` on the subscription row.
+- All coupon mutations are audit-logged (before/after including coupon id).
+
 `supabase/functions/stripe-integration/index.ts`
-- Replace the hard-coded `trial_period_days = 14` with a read from `platform_settings.subscription.trial_period_days` (fallback 14).
-- On checkout session creation, read the effective discount for the org (per-org `discount_percent` if present and not expired, else global) and, when > 0, attach it via Stripe `discounts[0][coupon]` using a stored coupon id in `platform_settings.subscription.global_discount.stripe_coupon_id`. If no coupon id is configured, skip the Stripe-side discount and only record it in DB for display/reporting.
+- Effective-discount resolution stays the same, but the coupon ID now comes from:
+  1. `subscriptions.stripe_coupon_id` if the per-org discount is active, else
+  2. `platform_settings.subscription.global_discount.stripe_coupon_id`.
+- The "skip Stripe discount when no coupon id is configured" fallback is removed — a discount without a coupon ID is now impossible for new writes, and legacy rows are treated as inactive with a console warning.
 
-New edge function `admin-subscription-override` (verify caller has `admin` role via `has_role`):
-- Actions: `extend-trial`, `override`, `set-discount`, `update-defaults`.
-- Writes to `subscriptions` / `platform_settings` and inserts an `audit_logs` entry per change.
-- Used by the admin UI so all mutations go through one authorized entry point (avoids fragile client-side RLS bypass).
+## Frontend changes
 
-## Frontend changes (all in `src/pages/admin/AdminSubscriptions.tsx`)
+`src/components/admin/SubscriptionAdminControls.tsx`
+- `SubscriptionDefaultsCard`: remove the coupon-ID input; show read-only "Stripe coupon: cpn_… (auto-managed)" once created. Save button triggers coupon provisioning via `update-defaults`.
+- `SetDiscountDialog`: add a "Use saved discount" `<Select>` populated from `discount_presets`; when a preset is chosen, percent/expiry inputs become read-only. A "Custom (one-off)" option keeps the current free-form flow.
+- New `DiscountsTab` component (list, create dialog, archive action). Uses the edge function for writes and `supabase.from('discount_presets').select()` for reads.
 
-- New **Subscription Defaults** card (trial days input, global discount %, expiry date, save button).
-- Extend the row dropdown with: *Extend trial…*, *Override…*, *Set discount…*.
-- Three dialog components (co-located): `ExtendTrialDialog`, `OverrideSubscriptionDialog`, `SetDiscountDialog`.
-- Show effective discount (per-org or inherited global) as a badge in the subscription row.
-
-`src/hooks/useSubscription.ts`
-- Surface `effectiveDiscountPercent` for downstream UI (checkout page already reads this hook).
-
-`src/pages/SubscriptionCheckout.tsx`
-- If a discount applies, show the discounted price alongside the list price on plan cards.
+`src/pages/admin/AdminSubscriptions.tsx`
+- Add a "Discounts" tab alongside the existing tabs and mount `DiscountsTab`.
 
 ## Out of scope
 
-- Actually creating Stripe coupon objects — admin pastes an existing Stripe coupon ID into the global discount setting. Auto-provisioning coupons via API can be a follow-up.
-- Per-plan (rather than per-org) discounts.
+- Coupon codes users type at checkout (promotion codes) — this ticket only handles admin-applied discounts. Can be a follow-up by wrapping the coupon in a Stripe `promotion_code`.
+- Amount-off (fixed currency) coupons — percent-off only for now.
+- Editing an existing preset's percent/duration (Stripe doesn't allow mutating those; UI offers Archive + Create new instead).
