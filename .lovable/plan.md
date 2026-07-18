@@ -1,68 +1,71 @@
-## Phase 3 — Downgrade/Cancel polish (#6) + Discount preset editing (#7)
+# Phase 4 — Webhook Hardening
 
-Cancel and change-plan wiring already exist. This phase closes the remaining UX and admin gaps.
+The `stripe-webhook` edge function works but has security and reliability gaps. This phase makes it production-grade without changing any UI.
 
----
+## Current gaps (verified in `supabase/functions/stripe-webhook/index.ts`)
 
-### Part A — Downgrade & Cancel flow (#6)
+1. **Signature secret is optional.** If `STRIPE_WEBHOOK_SECRET` is unset, events are accepted unsigned. Anyone hitting the URL can mutate subscriptions.
+2. **Signature comparison is not timing-safe.** Uses `===` inside `.some()`.
+3. **No event idempotency.** Stripe retries the same `event.id` on any non-2xx; the handler would re-run (double-updating subscriptions, potentially creating duplicate JEs — the customer-payment path is deduped by `reference`, but the subscription path is not).
+4. **No event audit log.** Nothing to inspect after the fact.
+5. **Missing subscription events**: `invoice.payment_failed`, `customer.subscription.trial_will_end`, `customer.discount.created/updated/deleted` (the last three matter now that admin overrides attach coupons).
+6. **Error handling returns 500 for every failure.** Business errors (missing org, unknown subscription) will be retried by Stripe forever. Should log + return 200 for non-retriable cases and reserve 5xx for transient infra failures.
+7. **Discount deletion in Stripe doesn't clear `subscriptions.stripe_coupon_id`** locally, so the UI can show a coupon that's already gone.
 
-**A1. Downgrade guardrails on `SubscriptionCheckout`**
-When the target plan is *lower* than the current one, before showing the proration confirm dialog:
-- Compute impact using `useUsageLimits` + `planModuleAccess`:
-  - users over target `max_users`
-  - employees over target `max_employees`
-  - modules enabled that the target plan doesn't include
-- Show a "Review downgrade impact" panel inside the existing confirm dialog:
-  - Red list of over-limit resources ("You have 12 employees, Starter allows 5")
-  - Yellow list of modules that will be locked
-  - Require an "I understand" checkbox before the "Confirm switch" button enables
-- Proration preview stays as-is.
+## Plan
 
-**A2. Cancel flow improvements in `BillingSettingsTab`**
-- Add optional cancellation reason dropdown in the existing cancel `AlertDialog` (too expensive / missing features / switching tools / not using / other + free text). Sent to backend and stored via audit log.
-- Add "Cancel immediately" secondary option (in addition to current end-of-period). Backed by a new branch in `manage-subscription` that calls Stripe `DELETE /subscriptions/{id}` when `immediate: true`.
-- Show a clearer post-cancel state: banner with reactivate CTA (already present) plus the effective end date.
+### 1. Signature verification — required + timing-safe
+- Return 500 if `STRIPE_WEBHOOK_SECRET` is not configured (fail closed).
+- Replace the current byte-string `===` compare with a constant-time comparison over the raw byte arrays.
+- Keep 5-minute timestamp tolerance.
 
-**A3. Backend: `stripe-integration` `manage-subscription`**
-- Accept `subscriptionAction: 'cancel'` with `{ immediate?: boolean, reason?: string, feedback?: string }`.
-- Immediate path: delete Stripe sub, mark local row `status='canceled'`, `canceled_at=now()`.
-- Write an `audit_logs` entry (`action: 'subscription.cancel'`) with reason/feedback and mode.
+### 2. Idempotency via a new `stripe_webhook_events` table
+Migration:
+```sql
+CREATE TABLE public.stripe_webhook_events (
+  event_id text PRIMARY KEY,
+  event_type text NOT NULL,
+  received_at timestamptz NOT NULL DEFAULT now(),
+  processed_at timestamptz,
+  status text NOT NULL DEFAULT 'received', -- received | processed | failed | ignored
+  error text,
+  payload jsonb
+);
+GRANT ALL ON public.stripe_webhook_events TO service_role;
+ALTER TABLE public.stripe_webhook_events ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "platform admins can read webhook events"
+  ON public.stripe_webhook_events FOR SELECT TO authenticated
+  USING (public.has_role(auth.uid(), 'platform_admin'));
+```
+Handler flow:
+1. Verify signature.
+2. Insert `{event_id, event_type, payload, status:'received'}`; if the insert hits the PK conflict, respond `200 { duplicate: true }` and stop.
+3. Run the switch.
+4. On success: update row to `status='processed', processed_at=now()`.
+5. On non-retriable failure: `status='ignored'` + error message, return 200.
+6. On transient failure (DB/network): `status='failed'`, return 500 so Stripe retries.
 
----
+### 3. New event handlers
+- `invoice.payment_failed` → set subscription `status='past_due'`.
+- `customer.subscription.trial_will_end` → mark `trial_ending_notified_at` (add column if needed — will confirm before migrating; skip if not needed for now and just log).
+- `customer.discount.deleted` → find subscription by `stripe_subscription_id` from `event.data.object.subscription` and null out `stripe_coupon_id`, `discount_percent`, `discount_amount`.
+- `customer.discount.created` / `updated` → mirror coupon id + percent/amount onto the row (keeps local state honest when discounts are applied via the Stripe Dashboard too).
 
-### Part B — Discount preset editing (#7)
+### 4. Error-handling policy
+- Any `throw` inside a case is caught, logged, and — unless it's a Supabase/network exception — returns 200 with `{ ignored: true, reason }`. This stops Stripe's retry storm on business-logic bugs while still surfacing them in the `stripe_webhook_events` table and Edge Function logs.
+- Reserve 5xx for signature/insert/DB-outage failures.
 
-Stripe coupons are immutable for discount value/duration; only `name` and `metadata` are mutable. The edit UX must reflect that.
+### 5. Small cleanups
+- Extract each `case` into its own function for readability (`handleCheckoutCompleted`, `handleInvoicePaid`, `handleSubscriptionUpdated`, `handleSubscriptionDeleted`, `handleInvoicePaymentFailed`, `handleDiscountEvent`).
+- Log `event.id` on every branch for traceability.
 
-**B1. `DiscountsTab` — add Edit button per row**
-Opens a dialog with two modes:
-- **Safe edits** (no Stripe coupon replacement): `name`/label, `expiry` (if not yet redeemed count > 0 you can only extend, not shorten past now), `max_redemptions` — updates the Stripe coupon's mutable fields where allowed, otherwise updates preset row only and shows a notice.
-- **Value/duration change**: since Stripe won't allow it, treat as "Replace":
-  - Archive existing Stripe coupon (`POST /coupons/{id}` `deleted` isn't allowed — use `valid=false` via delete, or mark preset archived and create a new coupon).
-  - Create a new Stripe coupon with new values.
-  - Update the preset row with the new `stripe_coupon_id` (keeps preset UUID stable so any org already granted this preset keeps working; existing subscriptions keep their old coupon on Stripe's side — new applications use the new one).
-  - Warn the admin in the dialog that in-flight subscriptions won't retroactively change.
+## Files touched
+- `supabase/functions/stripe-webhook/index.ts` — rewrite in place with the improvements above.
+- New migration for `stripe_webhook_events`.
+- No frontend changes.
 
-**B2. Backend: `admin-subscription-override`**
-- Add `update-preset` action: `{ preset_id, name?, max_redemptions?, expiry?, mode: 'safe' | 'replace', percent_off?, amount_off?, currency?, duration?, duration_in_months? }`.
-- Safe mode → patch preset row + Stripe coupon `name`/metadata.
-- Replace mode → delete old Stripe coupon, create new, update preset row.
-- Audit log entry per edit.
+## Out of scope (deliberately)
+- Admin UI to browse webhook events (can be a follow-up if you want visibility beyond the Supabase table view).
+- Replaying failed events from the DB — flag only for now.
 
-**B3. UI polish**
-- Show "In use by N orgs / N subscriptions" count on each preset (query `subscriptions.stripe_coupon_id`) so admins understand impact before editing.
-- Disable "Replace" mode when redemptions exist unless admin confirms via a second checkbox.
-
----
-
-### Technical notes
-
-Files touched:
-- `supabase/functions/stripe-integration/index.ts` — extend `manage-subscription` (immediate cancel + reason).
-- `supabase/functions/admin-subscription-override/index.ts` — add `update-preset` action.
-- `src/pages/SubscriptionCheckout.tsx` — downgrade impact panel inside confirm dialog.
-- `src/components/settings/BillingSettingsTab.tsx` — reason capture + immediate cancel option.
-- `src/components/admin/DiscountsTab.tsx` — Edit dialog, usage count column.
-- `src/hooks/useUsageLimits.ts` — reused; no changes expected.
-
-Out of scope (defer to phase 4 alongside #3 webhook discussion): grandfathering old coupons onto new preset values, dunning UX, invoice history tab.
+Approve and I'll implement.
