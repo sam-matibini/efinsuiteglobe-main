@@ -246,9 +246,12 @@ const AuthRoute = forwardRef<HTMLDivElement, { children: React.ReactNode }>(
 );
 AuthRoute.displayName = "AuthRoute";
 
-const AppRoutes = () => (
+const AppRoutes = () => {
+  const { currentOrganization } = useOrganizationContext();
+  return (
   <Suspense fallback={<RouteFallback />}>
-  <Routes>
+  <Routes key={currentOrganization?.id ?? 'no-org'}>
+
     {/* Public routes */}
     <Route path="/landing" element={<Landing />} />
     <Route path="/install" element={<Install />} />
