@@ -133,8 +133,14 @@ export function SubscriptionUpgradeModal({
         </div>
 
         <div className="text-xs text-center text-muted-foreground">
-          Your current plan:{' '}
-          <span className="font-medium">{PLAN_TIER_LABELS[currentPlanTier]}</span>
+          {reason === 'no_subscription' ? (
+            <>No active subscription</>
+          ) : (
+            <>
+              Your current plan:{' '}
+              <span className="font-medium">{PLAN_TIER_LABELS[currentPlanTier]}</span>
+            </>
+          )}
         </div>
 
         <DialogFooter className="sm:justify-between gap-2">
