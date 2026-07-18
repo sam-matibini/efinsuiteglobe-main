@@ -78,7 +78,7 @@ export function usePdfToSpreadsheet() {
         }
       );
 
-      clearInterval(progressInterval);
+      if (progressInterval) clearInterval(progressInterval);
       progressInterval = null;
       setProgress({ current: 100, total: 100 });
 
