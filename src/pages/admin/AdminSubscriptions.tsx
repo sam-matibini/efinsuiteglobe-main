@@ -41,10 +41,16 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { MoreHorizontal, Search, CreditCard, RefreshCw, XCircle, Plus, Edit, Trash2, Check, Users, Building, Building2, Package, Upload, Loader2, MapPin, ArrowRightLeft, Mail } from 'lucide-react';
+import { MoreHorizontal, Search, CreditCard, RefreshCw, XCircle, Plus, Edit, Trash2, Check, Users, Building, Building2, Package, Upload, Loader2, MapPin, ArrowRightLeft, Mail, Clock, Percent, Sliders } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { useAuth } from '@/hooks/useAuth';
+import {
+  SubscriptionDefaultsCard,
+  ExtendTrialDialog,
+  OverrideSubscriptionDialog,
+  SetDiscountDialog,
+} from '@/components/admin/SubscriptionAdminControls';
 
 interface Subscription {
   id: string;
@@ -160,6 +166,9 @@ export default function AdminSubscriptions() {
   const [selectedSub, setSelectedSub] = useState<Subscription | null>(null);
   const [changePlanDialogOpen, setChangePlanDialogOpen] = useState(false);
   const [newPlanId, setNewPlanId] = useState<string>('');
+  const [extendTrialOpen, setExtendTrialOpen] = useState(false);
+  const [overrideOpen, setOverrideOpen] = useState(false);
+  const [setDiscountOpen, setSetDiscountOpen] = useState(false);
   
   // Assign subscription state
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
@@ -645,7 +654,8 @@ export default function AdminSubscriptions() {
           <TabsTrigger value="pricing">Pricing Plans</TabsTrigger>
         </TabsList>
         
-        <TabsContent value="subscriptions" className="mt-4">
+        <TabsContent value="subscriptions" className="mt-4 space-y-4">
+          <SubscriptionDefaultsCard />
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
@@ -729,6 +739,18 @@ export default function AdminSubscriptions() {
                               }}>
                                 <RefreshCw className="w-4 h-4 mr-2" />
                                 Change Plan
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => { setSelectedSub(sub); setExtendTrialOpen(true); }}>
+                                <Clock className="w-4 h-4 mr-2" />
+                                Extend trial
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => { setSelectedSub(sub); setOverrideOpen(true); }}>
+                                <Sliders className="w-4 h-4 mr-2" />
+                                Override…
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => { setSelectedSub(sub); setSetDiscountOpen(true); }}>
+                                <Percent className="w-4 h-4 mr-2" />
+                                Set discount…
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />
                               {sub.status === 'active' && (
@@ -1483,6 +1505,29 @@ export default function AdminSubscriptions() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {selectedSub && (
+        <>
+          <ExtendTrialDialog
+            open={extendTrialOpen}
+            onOpenChange={setExtendTrialOpen}
+            sub={selectedSub}
+            onDone={() => queryClient.invalidateQueries({ queryKey: ['admin-subscriptions'] })}
+          />
+          <OverrideSubscriptionDialog
+            open={overrideOpen}
+            onOpenChange={setOverrideOpen}
+            sub={selectedSub}
+            plans={plans || []}
+            onDone={() => queryClient.invalidateQueries({ queryKey: ['admin-subscriptions'] })}
+          />
+          <SetDiscountDialog
+            open={setDiscountOpen}
+            onOpenChange={setSetDiscountOpen}
+            sub={selectedSub}
+            onDone={() => queryClient.invalidateQueries({ queryKey: ['admin-subscriptions'] })}
+          />
+        </>
+      )}
     </div>
   );
 }

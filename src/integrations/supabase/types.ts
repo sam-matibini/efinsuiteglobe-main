@@ -22088,6 +22088,7 @@ export type Database = {
           current_period_end: string | null
           current_period_start: string | null
           custom_price: number | null
+          discount_expires_at: string | null
           discount_percent: number | null
           id: string
           organization_id: string
@@ -22095,6 +22096,8 @@ export type Database = {
           plan_id: string | null
           status: Database["public"]["Enums"]["subscription_status"]
           stripe_subscription_id: string | null
+          trial_extended_at: string | null
+          trial_extended_by: string | null
           updated_at: string
         }
         Insert: {
@@ -22105,6 +22108,7 @@ export type Database = {
           current_period_end?: string | null
           current_period_start?: string | null
           custom_price?: number | null
+          discount_expires_at?: string | null
           discount_percent?: number | null
           id?: string
           organization_id: string
@@ -22112,6 +22116,8 @@ export type Database = {
           plan_id?: string | null
           status?: Database["public"]["Enums"]["subscription_status"]
           stripe_subscription_id?: string | null
+          trial_extended_at?: string | null
+          trial_extended_by?: string | null
           updated_at?: string
         }
         Update: {
@@ -22122,6 +22128,7 @@ export type Database = {
           current_period_end?: string | null
           current_period_start?: string | null
           custom_price?: number | null
+          discount_expires_at?: string | null
           discount_percent?: number | null
           id?: string
           organization_id?: string
@@ -22129,6 +22136,8 @@ export type Database = {
           plan_id?: string | null
           status?: Database["public"]["Enums"]["subscription_status"]
           stripe_subscription_id?: string | null
+          trial_extended_at?: string | null
+          trial_extended_by?: string | null
           updated_at?: string
         }
         Relationships: [

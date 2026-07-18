@@ -298,7 +298,7 @@ serve(async (req) => {
         'subscription_data[metadata][plan_id]': planId,
       };
 
-      // Grant a 14-day free trial to organizations that have never subscribed before
+      // Grant a free trial (length from platform_settings) to orgs that have never subscribed
       const { data: priorSub } = await supabaseAdmin
         .from('subscriptions')
         .select('id')
@@ -306,7 +306,36 @@ serve(async (req) => {
         .limit(1)
         .maybeSingle();
       if (!priorSub) {
-        sessionParams['subscription_data[trial_period_days]'] = '14';
+        const { data: trialSetting } = await supabaseAdmin
+          .from('platform_settings')
+          .select('setting_value')
+          .eq('setting_key', 'subscription.trial_period_days')
+          .maybeSingle();
+        const trialDays = Number((trialSetting?.setting_value as any)?.days ?? 14);
+        sessionParams['subscription_data[trial_period_days]'] = String(trialDays);
+      }
+
+      // Apply discount coupon (per-org override else global) if a Stripe coupon id is configured
+      const { data: subRow } = await supabaseAdmin
+        .from('subscriptions')
+        .select('discount_percent, discount_expires_at')
+        .eq('organization_id', organizationId)
+        .in('status', ['active', 'trialing'])
+        .maybeSingle();
+      const { data: globalDiscount } = await supabaseAdmin
+        .from('platform_settings')
+        .select('setting_value')
+        .eq('setting_key', 'subscription.global_discount')
+        .maybeSingle();
+      const gd = (globalDiscount?.setting_value as any) || {};
+      const nowTs = new Date();
+      const orgDiscountActive = subRow && Number(subRow.discount_percent) > 0 &&
+        (!subRow.discount_expires_at || new Date(subRow.discount_expires_at) > nowTs);
+      const globalDiscountActive = Number(gd.percent) > 0 &&
+        (!gd.expires_at || new Date(gd.expires_at) > nowTs);
+      const couponId = (orgDiscountActive || globalDiscountActive) ? gd.stripe_coupon_id : null;
+      if (couponId) {
+        sessionParams['discounts[0][coupon]'] = String(couponId);
       }
 
       const session = await stripeRequest('/checkout/sessions', 'POST', sessionParams);
