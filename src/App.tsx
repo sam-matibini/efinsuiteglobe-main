@@ -176,6 +176,7 @@ const Install = lazy(() => import("./pages/Install"));
 const AcceptInvite = lazy(() => import("./pages/AcceptInvite"));
 const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
 const Contact = lazy(() => import("./pages/Contact"));
+const About = lazy(() => import("./pages/About"));
 const TermsOfService = lazy(() => import("./pages/TermsOfService"));
 const SubscriptionCheckout = lazy(() => import("./pages/SubscriptionCheckout"));
 const SubscriptionSuccess = lazy(() => import("./pages/SubscriptionSuccess"));
