@@ -422,6 +422,8 @@ export function SetDiscountDialog({
   const [presetId, setPresetId] = useState<string>('custom');
   const [percent, setPercent] = useState('');
   const [expires, setExpires] = useState('');
+  const [duration, setDuration] = useState<'once' | 'repeating' | 'forever'>('forever');
+  const [durationMonths, setDurationMonths] = useState('3');
 
   const { data: presets } = useQuery({
     queryKey: ['discount_presets', 'active'],
@@ -441,6 +443,8 @@ export function SetDiscountDialog({
     setPresetId('custom');
     setPercent(sub.discount_percent != null ? String(sub.discount_percent) : '');
     setExpires(sub.discount_expires_at ? String(sub.discount_expires_at).slice(0, 10) : '');
+    setDuration(sub.discount_expires_at ? 'once' : 'forever');
+    setDurationMonths('3');
   }, [open, sub]);
 
   const usingPreset = presetId && presetId !== 'custom';
@@ -450,6 +454,8 @@ export function SetDiscountDialog({
     if (usingPreset && selectedPreset) {
       setPercent(String(selectedPreset.percent));
       setExpires(selectedPreset.expires_at ? String(selectedPreset.expires_at).slice(0, 10) : '');
+      setDuration((selectedPreset.duration as any) || 'forever');
+      setDurationMonths(String(selectedPreset.duration_in_months ?? 3));
     }
   }, [presetId, selectedPreset, usingPreset]);
 
@@ -463,6 +469,8 @@ export function SetDiscountDialog({
           : {
               discount_percent: Number(percent) || 0,
               discount_expires_at: expires ? new Date(expires).toISOString() : null,
+              duration,
+              duration_in_months: duration === 'repeating' ? Number(durationMonths) : null,
             }),
       });
     },
