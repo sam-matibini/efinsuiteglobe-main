@@ -115,9 +115,9 @@ const reports: ReportItem[] = [
   
   // Fixed Assets Reports
   { id: 'fixed-asset-register', name: 'Fixed Asset Register', description: 'Complete list of all fixed assets', category: 'Fixed Assets', module: 'Assets', icon: <Building2 className="w-5 h-5" />, href: '/fixed-assets' },
-  { id: 'depreciation-schedule', name: 'Depreciation Schedule', description: 'Monthly/annual depreciation by asset', category: 'Fixed Assets', module: 'Assets', icon: <TrendingDown className="w-5 h-5" /> },
-  { id: 'asset-disposition', name: 'Asset Disposition', description: 'Disposed assets & gain/loss', category: 'Fixed Assets', module: 'Assets', icon: <FileText className="w-5 h-5" /> },
-  { id: 'cca-schedule', name: 'CCA Schedule', description: 'Capital Cost Allowance for tax', category: 'Fixed Assets', module: 'Assets', icon: <Calculator className="w-5 h-5" />, isNew: true },
+  { id: 'depreciation-schedule', name: 'Depreciation Schedule', description: 'Monthly/annual depreciation by asset', category: 'Fixed Assets', module: 'Assets', icon: <TrendingDown className="w-5 h-5" />, href: '/fixed-assets' },
+  { id: 'asset-disposition', name: 'Asset Disposition', description: 'Disposed assets & gain/loss', category: 'Fixed Assets', module: 'Assets', icon: <FileText className="w-5 h-5" />, href: '/fixed-assets' },
+  { id: 'cca-schedule', name: 'CCA Schedule', description: 'Capital Cost Allowance for tax', category: 'Fixed Assets', module: 'Assets', icon: <Calculator className="w-5 h-5" />, href: '/fixed-assets', isNew: true },
   
   // Lease Reports
   { id: 'lease-register', name: 'Lease Register', description: 'All leases with ROU assets & liabilities', category: 'Leases', module: 'Assets', icon: <FileText className="w-5 h-5" />, href: '/leases', isNew: true },
