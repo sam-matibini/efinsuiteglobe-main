@@ -27,6 +27,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Skeleton } from '@/components/ui/skeleton';
 import { useCurrentOrganization } from '@/hooks/useOrganization';
 import { useFinancialReports } from '@/hooks/useFinancialReports';
+import { useRetainedEarningsStatement } from '@/hooks/useRetainedEarningsStatement';
 import { useReportFilters } from '@/hooks/useReportFilters';
 import { ReportFilters } from '@/components/reports/ReportFilters';
 import { StatementsPanel } from '@/components/reports/StatementsPanel';
@@ -83,6 +84,11 @@ export default function ManagementReport() {
     endDate,
     period: 'custom'
   });
+
+  const { currentStatement: reCurrentStatement } = useRetainedEarningsStatement(
+    { startDate, endDate },
+    []
+  );
 
   const handleDateRangeChange = (start: Date, end: Date) => {
     setDateRange(start, end);
@@ -739,6 +745,8 @@ export default function ManagementReport() {
             incomeStatement={incomeStatement}
             cashFlow={cashFlow}
             fmt={fmtCurrency}
+            reClosingBalance={reCurrentStatement?.data?.closingBalance}
+            rePeriodNetIncome={reCurrentStatement?.data?.netIncomeLoss}
           />
         </TabsContent>
 
