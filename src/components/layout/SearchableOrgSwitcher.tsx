@@ -50,12 +50,13 @@ export const SearchableOrgSwitcher = forwardRef<HTMLDivElement, SearchableOrgSwi
     }, [organizations, search]);
 
     const handleSelect = (org: Organization) => {
-      onSwitch(org);
       setOpen(false);
       setSearch('');
+      // Navigate to dashboard first so the remounted route tree lands on '/'
       if (location.pathname !== '/') {
-        navigate('/');
+        navigate('/', { replace: true });
       }
+      onSwitch(org);
     };
 
     const handleCreateNew = () => {
