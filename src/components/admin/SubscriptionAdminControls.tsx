@@ -341,22 +341,51 @@ export function SetDiscountDialog({
   sub: any;
   onDone: () => void;
 }) {
+  const [presetId, setPresetId] = useState<string>('custom');
   const [percent, setPercent] = useState('');
   const [expires, setExpires] = useState('');
 
+  const { data: presets } = useQuery({
+    queryKey: ['discount_presets', 'active'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('discount_presets')
+        .select('*')
+        .eq('status', 'active')
+        .order('created_at', { ascending: false });
+      return data || [];
+    },
+    enabled: open,
+  });
+
   useEffect(() => {
     if (!open || !sub) return;
+    setPresetId('custom');
     setPercent(sub.discount_percent != null ? String(sub.discount_percent) : '');
     setExpires(sub.discount_expires_at ? String(sub.discount_expires_at).slice(0, 10) : '');
   }, [open, sub]);
+
+  const usingPreset = presetId && presetId !== 'custom';
+  const selectedPreset = (presets || []).find((p: any) => p.id === presetId);
+
+  useEffect(() => {
+    if (usingPreset && selectedPreset) {
+      setPercent(String(selectedPreset.percent));
+      setExpires(selectedPreset.expires_at ? String(selectedPreset.expires_at).slice(0, 10) : '');
+    }
+  }, [presetId, selectedPreset, usingPreset]);
 
   const submit = useMutation({
     mutationFn: async () => {
       await callAdmin({
         action: 'set-discount',
         organization_id: sub.organization_id,
-        discount_percent: Number(percent) || 0,
-        discount_expires_at: expires ? new Date(expires).toISOString() : null,
+        ...(usingPreset
+          ? { preset_id: presetId }
+          : {
+              discount_percent: Number(percent) || 0,
+              discount_expires_at: expires ? new Date(expires).toISOString() : null,
+            }),
       });
     },
     onSuccess: () => {
@@ -373,21 +402,42 @@ export function SetDiscountDialog({
         <DialogHeader>
           <DialogTitle>Set discount</DialogTitle>
           <DialogDescription>
-            {sub?.organization_name} — clear the percent to fall back to the global discount.
+            {sub?.organization_name} — pick a saved discount or set a one-off percent.
+            Clear the percent to fall back to the global discount.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
+          <div className="space-y-1">
+            <Label>Use saved discount</Label>
+            <Select value={presetId} onValueChange={setPresetId}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="custom">Custom (one-off)</SelectItem>
+                {(presets || []).map((p: any) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.name} — {p.percent}% ({p.duration})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <div className="space-y-1">
             <Label>Discount (%)</Label>
             <Input
               type="number" min={0} max={100}
               value={percent}
+              disabled={usingPreset}
               onChange={(e) => setPercent(e.target.value)}
             />
           </div>
           <div className="space-y-1">
             <Label>Expires (optional)</Label>
-            <Input type="date" value={expires} onChange={(e) => setExpires(e.target.value)} />
+            <Input
+              type="date"
+              value={expires}
+              disabled={usingPreset}
+              onChange={(e) => setExpires(e.target.value)}
+            />
           </div>
         </div>
         <DialogFooter>
