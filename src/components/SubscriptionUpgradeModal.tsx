@@ -44,7 +44,9 @@ export function SubscriptionUpgradeModal({
 
   const requiredPlan: PlanTier =
     requiredPlanOverride ||
-    (reason === 'limit_users' || reason === 'limit_employees'
+    (reason === 'no_subscription'
+      ? 'starter'
+      : reason === 'limit_users' || reason === 'limit_employees'
       ? nextTierAbove(currentPlanTier)
       : requiredModule
       ? minimumPlanForModule(requiredModule)
