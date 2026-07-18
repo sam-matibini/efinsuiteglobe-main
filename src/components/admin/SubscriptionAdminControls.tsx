@@ -439,6 +439,24 @@ export function SetDiscountDialog({
     onError: (e: any) => toast.error(e.message || 'Failed'),
   });
 
+  const remove = useMutation({
+    mutationFn: async () => {
+      await callAdmin({
+        action: 'set-discount',
+        organization_id: sub.organization_id,
+        discount_percent: 0,
+        discount_expires_at: null,
+      });
+    },
+    onSuccess: () => {
+      toast.success('Discount removed');
+      onDone();
+      onOpenChange(false);
+    },
+    onError: (e: any) => toast.error(e.message || 'Failed'),
+  });
+
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
@@ -446,7 +464,7 @@ export function SetDiscountDialog({
           <DialogTitle>Set discount</DialogTitle>
           <DialogDescription>
             {sub?.organization_name} — pick a saved discount or set a one-off percent.
-            Clear the percent to fall back to the global discount.
+            Set percent to 0 or click Remove to fall back to the global discount.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
@@ -485,10 +503,20 @@ export function SetDiscountDialog({
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          {(sub?.discount_percent > 0 || sub?.stripe_coupon_id) && (
+            <Button
+              variant="destructive"
+              onClick={() => remove.mutate()}
+              disabled={remove.isPending}
+            >
+              {remove.isPending ? 'Removing…' : 'Remove discount'}
+            </Button>
+          )}
           <Button onClick={() => submit.mutate()} disabled={submit.isPending}>
             {submit.isPending ? 'Saving…' : 'Save discount'}
           </Button>
         </DialogFooter>
+
       </DialogContent>
     </Dialog>
   );
