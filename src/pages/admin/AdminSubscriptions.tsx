@@ -166,6 +166,9 @@ export default function AdminSubscriptions() {
   const [selectedSub, setSelectedSub] = useState<Subscription | null>(null);
   const [changePlanDialogOpen, setChangePlanDialogOpen] = useState(false);
   const [newPlanId, setNewPlanId] = useState<string>('');
+  const [extendTrialOpen, setExtendTrialOpen] = useState(false);
+  const [overrideOpen, setOverrideOpen] = useState(false);
+  const [setDiscountOpen, setSetDiscountOpen] = useState(false);
   
   // Assign subscription state
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
