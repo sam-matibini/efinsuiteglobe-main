@@ -88,6 +88,11 @@ export default function SubscriptionCheckout() {
     id: string;
     code: string;
     label: string;
+    percent_off?: number | null;
+    amount_off?: number | null;
+    currency?: string | null;
+    duration?: string | null;
+    duration_in_months?: number | null;
     adminDiscountActive?: boolean;
   } | null>(null);
 
@@ -178,7 +183,16 @@ export default function SubscriptionCheckout() {
         : c.duration === 'forever'
           ? ' — forever'
           : ' — first payment';
-      setAppliedPromo({ id: data.promotion_code_id, code: data.code, label: `${disc}${dur}` });
+      setAppliedPromo({
+        id: data.promotion_code_id,
+        code: data.code,
+        label: `${disc}${dur}`,
+        percent_off: c.percent_off ?? null,
+        amount_off: c.amount_off ?? null,
+        currency: c.currency ?? null,
+        duration: c.duration ?? null,
+        duration_in_months: c.duration_in_months ?? null,
+      });
       toast.success(`Promo code ${data.code} applied`);
     } catch (err: any) {
       setPromoError(err.message || 'Could not validate code');
@@ -421,12 +435,43 @@ export default function SubscriptionCheckout() {
                 </CardHeader>
                 <CardContent className="flex-1 flex flex-col justify-between space-y-4">
                   <div>
-                    <div className="text-3xl font-bold">
-                      ${price}
-                      <span className="text-sm font-normal text-muted-foreground">
-                        /{billingCycle === 'monthly' ? 'mo' : 'yr'}
-                      </span>
-                    </div>
+                    {(() => {
+                      const discounted = appliedPromo
+                        ? appliedPromo.percent_off
+                          ? Math.max(0, price * (1 - appliedPromo.percent_off / 100))
+                          : appliedPromo.amount_off
+                            ? Math.max(0, price - appliedPromo.amount_off / 100)
+                            : price
+                        : price;
+                      const hasDiscount = appliedPromo && discounted < price;
+                      return (
+                        <>
+                          <div className="text-3xl font-bold flex items-baseline gap-2 flex-wrap">
+                            {hasDiscount && (
+                              <span className="text-lg font-normal text-muted-foreground line-through">
+                                ${price}
+                              </span>
+                            )}
+                            <span>
+                              ${discounted % 1 === 0 ? discounted : discounted.toFixed(2)}
+                              <span className="text-sm font-normal text-muted-foreground">
+                                /{billingCycle === 'monthly' ? 'mo' : 'yr'}
+                              </span>
+                            </span>
+                          </div>
+                          {hasDiscount && (
+                            <p className="text-xs text-primary mt-1">
+                              With {appliedPromo!.code}
+                              {appliedPromo!.duration === 'repeating' && appliedPromo!.duration_in_months
+                                ? ` for first ${appliedPromo!.duration_in_months} ${billingCycle === 'monthly' ? 'months' : 'months'}`
+                                : appliedPromo!.duration === 'once'
+                                  ? ' on first payment'
+                                  : ''}
+                            </p>
+                          )}
+                        </>
+                      );
+                    })()}
                     {billingCycle === 'yearly' && (
                       <p className="text-sm text-muted-foreground">
                         Save ${(plan.price_monthly * 12 - plan.price_yearly).toFixed(0)}/year
