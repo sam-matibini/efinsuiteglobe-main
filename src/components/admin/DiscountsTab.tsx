@@ -119,16 +119,25 @@ export function DiscountsTab() {
                     {p.status}
                   </Badge>
                 </TableCell>
-                <TableCell>
+                <TableCell className="text-right space-x-1">
                   {p.status === 'active' && (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => archive.mutate(p.id)}
-                      disabled={archive.isPending}
-                    >
-                      <Archive className="w-4 h-4" />
-                    </Button>
+                    <>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setEditing(p)}
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => archive.mutate(p.id)}
+                        disabled={archive.isPending}
+                      >
+                        <Archive className="w-4 h-4" />
+                      </Button>
+                    </>
                   )}
                 </TableCell>
               </TableRow>
