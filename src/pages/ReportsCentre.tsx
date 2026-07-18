@@ -121,9 +121,9 @@ const reports: ReportItem[] = [
   
   // Lease Reports
   { id: 'lease-register', name: 'Lease Register', description: 'All leases with ROU assets & liabilities', category: 'Leases', module: 'Assets', icon: <FileText className="w-5 h-5" />, href: '/leases', isNew: true },
-  { id: 'lease-amortization', name: 'Lease Amortization', description: 'Payment schedules with interest/principal split', category: 'Leases', module: 'Assets', icon: <TrendingDown className="w-5 h-5" />, isNew: true },
-  { id: 'lease-maturity', name: 'Lease Maturity Analysis', description: 'Future lease payments by period', category: 'Leases', module: 'Assets', icon: <Clock className="w-5 h-5" />, isNew: true },
-  { id: 'rou-asset-summary', name: 'ROU Asset Summary', description: 'Right-of-use asset values & depreciation', category: 'Leases', module: 'Assets', icon: <Building2 className="w-5 h-5" />, isNew: true },
+  { id: 'lease-amortization', name: 'Lease Amortization', description: 'Payment schedules with interest/principal split', category: 'Leases', module: 'Assets', icon: <TrendingDown className="w-5 h-5" />, href: '/leases', isNew: true },
+  { id: 'lease-maturity', name: 'Lease Maturity Analysis', description: 'Future lease payments by period', category: 'Leases', module: 'Assets', icon: <Clock className="w-5 h-5" />, href: '/leases', isNew: true },
+  { id: 'rou-asset-summary', name: 'ROU Asset Summary', description: 'Right-of-use asset values & depreciation', category: 'Leases', module: 'Assets', icon: <Building2 className="w-5 h-5" />, href: '/leases', isNew: true },
   
   // Tax Reports
   { id: 'gst-hst', name: 'GST/HST Report', description: 'Tax collected, ITCs & net payable', category: 'Tax', module: 'Tax', icon: <BadgePercent className="w-5 h-5" />, href: '/tax', isFavorite: true },
