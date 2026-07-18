@@ -71,7 +71,7 @@ const reports: ReportItem[] = [
   { id: 'budget-vs-actual', name: 'Budget vs Actual', description: 'Compare budgeted vs actual amounts', category: 'Accounting', module: 'Accounting', icon: <BarChart3 className="w-5 h-5" />, isPremium: true },
   
   // Sales Reports (A/R)
-  { id: 'sales-summary', name: 'Sales Summary', description: 'Revenue breakdown by customer & period', category: 'Sales', module: 'Sales', icon: <TrendingUp className="w-5 h-5" /> },
+  { id: 'sales-summary', name: 'Sales Summary', description: 'Revenue breakdown by customer & period', category: 'Sales', module: 'Sales', icon: <TrendingUp className="w-5 h-5" />, href: '/sales/invoices' },
   { id: 'ar-aging', name: 'A/R Aging Report', description: 'Receivables by 30/60/90+ days buckets', category: 'Sales', module: 'Sales', icon: <Clock className="w-5 h-5" />, href: '/reports/aging', isFavorite: true },
   { id: 'ar-aging-detail', name: 'A/R Aging Detail', description: 'Detailed aging by customer with invoice breakdown', category: 'Sales', module: 'Sales', icon: <ClipboardList className="w-5 h-5" />, href: '/reports/aging' },
   { id: 'customer-balances', name: 'Customer Balances', description: 'Outstanding balances by customer', category: 'Sales', module: 'Sales', icon: <Users className="w-5 h-5" />, href: '/sales/customers' },
