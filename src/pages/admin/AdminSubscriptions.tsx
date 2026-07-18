@@ -739,6 +739,18 @@ export default function AdminSubscriptions() {
                                 <RefreshCw className="w-4 h-4 mr-2" />
                                 Change Plan
                               </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => { setSelectedSub(sub); setExtendTrialOpen(true); }}>
+                                <Clock className="w-4 h-4 mr-2" />
+                                Extend trial
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => { setSelectedSub(sub); setOverrideOpen(true); }}>
+                                <Sliders className="w-4 h-4 mr-2" />
+                                Override…
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => { setSelectedSub(sub); setSetDiscountOpen(true); }}>
+                                <Percent className="w-4 h-4 mr-2" />
+                                Set discount…
+                              </DropdownMenuItem>
                               <DropdownMenuSeparator />
                               {sub.status === 'active' && (
                                 <DropdownMenuItem
