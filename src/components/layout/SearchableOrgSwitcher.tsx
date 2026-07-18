@@ -30,6 +30,8 @@ export const SearchableOrgSwitcher = forwardRef<HTMLDivElement, SearchableOrgSwi
   }, ref) {
     const [open, setOpen] = useState(false);
     const [search, setSearch] = useState('');
+    const navigate = useNavigate();
+    const location = useLocation();
 
     // Sort alphabetically and filter by search term
     const filteredOrganizations = useMemo(() => {
