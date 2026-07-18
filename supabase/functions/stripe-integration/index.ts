@@ -433,7 +433,19 @@ serve(async (req) => {
           { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
 
-      const coupon = promo.coupon || {};
+      let coupon: any = promo.coupon || {};
+      // Fallback: if coupon wasn't inlined/expanded, or fields are missing, fetch it directly
+      const couponId = typeof promo.coupon === 'string' ? promo.coupon : coupon?.id;
+      const missingDiscount = coupon?.percent_off == null && coupon?.amount_off == null;
+      if (couponId && missingDiscount) {
+        const cRes = await fetch(`https://api.stripe.com/v1/coupons/${couponId}`, {
+          headers: { 'Authorization': `Bearer ${stripeSecretKey}` },
+        });
+        const cJson = await cRes.json();
+        if (!cJson.error) coupon = cJson;
+        console.log('[validate-promotion-code] fetched coupon directly:', JSON.stringify(cJson));
+      }
+      console.log('[validate-promotion-code] final coupon:', JSON.stringify(coupon));
 
       // Optional plan preview
       let preview: any = null;
@@ -468,11 +480,11 @@ serve(async (req) => {
         code: promo.code,
         coupon: {
           id: coupon.id,
-          percent_off: coupon.percent_off || null,
-          amount_off: coupon.amount_off || null,
-          currency: coupon.currency || null,
+          percent_off: coupon.percent_off ?? null,
+          amount_off: coupon.amount_off ?? null,
+          currency: coupon.currency ?? null,
           duration: coupon.duration || 'once',
-          duration_in_months: coupon.duration_in_months || null,
+          duration_in_months: coupon.duration_in_months ?? null,
         },
         preview,
       }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
