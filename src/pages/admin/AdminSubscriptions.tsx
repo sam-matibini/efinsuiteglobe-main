@@ -51,6 +51,7 @@ import {
   OverrideSubscriptionDialog,
   SetDiscountDialog,
 } from '@/components/admin/SubscriptionAdminControls';
+import { DiscountsTab } from '@/components/admin/DiscountsTab';
 
 interface Subscription {
   id: string;
