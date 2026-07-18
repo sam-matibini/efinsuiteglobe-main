@@ -337,7 +337,7 @@ serve(async (req) => {
     const hasBudgetForAnotherCall = () =>
       EDGE_RESPONSE_BUDGET_MS - (Date.now() - startTime) - RESPONSE_BUFFER_MS > MIN_AI_CALL_MS;
 
-    let batches: Array<{ base64: string; from: number; to: number; totalPages: number }>;
+    let batches: PdfBatch[];
     try {
       batches = await sliceIntoBatches(fileData, PAGES_PER_BATCH);
     } catch (e) {
@@ -349,36 +349,53 @@ serve(async (req) => {
 
     const tryStatementBatched = async (): Promise<boolean> => {
       const model = 'google/gemini-2.5-flash';
-      const merged: ExtractedRow[] = [];
+      const batchResults: Array<{ batch: PdfBatch; args: any }> = [];
       let firstArgs: any = null;
       let lastArgs: any = null;
-      let anyOk = false;
 
-      for (const batch of batches) {
+      for (let i = 0; i < batches.length; i += MAX_PARALLEL_BATCHES) {
+        const group = batches.slice(i, i + MAX_PARALLEL_BATCHES);
         if (!hasBudgetForAnotherCall()) {
-          validationWarnings.push(`Skipped pages ${batch.from}-${batch.to}: edge time budget exhausted.`);
+          validationWarnings.push(`Skipped pages ${group[0]?.from}-${batches[batches.length - 1]?.to}: edge time budget exhausted.`);
           extractionTimedOut = true;
           break;
         }
-        const rangeLabel = batch.totalPages ? ` (pages ${batch.from}-${batch.to} of ${batch.totalPages})` : '';
-        const prompt = STATEMENT_PROMPT + `\n\nThis input covers${rangeLabel}. Return every transaction visible on THESE pages only.`;
-        const result = await callGemini(LOVABLE_API_KEY, batch.base64, prompt, STATEMENT_TOOL, model, remainingAiBudget());
-        if (!result.ok) {
-          extractionTimedOut ||= result.reason === 'timeout';
-          validationWarnings.push(`Pages ${batch.from}-${batch.to}: ${result.message || 'no structured result'}.`);
-          continue;
+
+        const timeoutMs = remainingAiBudget();
+        const results = await Promise.all(group.map(async (batch) => {
+          const rangeLabel = batch.totalPages ? ` (pages ${batch.from}-${batch.to} of ${batch.totalPages})` : '';
+          const prompt = STATEMENT_PROMPT + `\n\nThis input covers${rangeLabel}. Return every transaction visible on THESE pages only.`;
+          const result = await callGemini(LOVABLE_API_KEY, batch.base64, prompt, STATEMENT_TOOL, model, timeoutMs);
+          return { batch, result };
+        }));
+
+        for (const { batch, result } of results) {
+          if (!result.ok) {
+            extractionTimedOut ||= result.reason === 'timeout';
+            validationWarnings.push(`Pages ${batch.from}-${batch.to}: ${result.message || 'no structured result'}.`);
+            continue;
+          }
+          batchResults.push({ batch, args: result.args || {} });
+          processedPages = Math.max(processedPages, batch.to || processedPages);
         }
-        anyOk = true;
-        processedPages = batch.to || processedPages;
-        const args = result.args || {};
-        if (!firstArgs) firstArgs = args;
-        lastArgs = args;
-        if (Array.isArray(args.transactions)) {
-          for (const t of args.transactions) merged.push(t as ExtractedRow);
+
+        if (results.some(({ result }) => result.ok) && processedPages >= totalPages) {
+          break;
         }
       }
 
-      if (!anyOk) return false;
+      if (batchResults.length === 0) return false;
+
+      batchResults.sort((a, b) => a.batch.from - b.batch.from);
+      firstArgs = batchResults[0]?.args || null;
+      lastArgs = batchResults[batchResults.length - 1]?.args || null;
+
+      const merged: ExtractedRow[] = [];
+      for (const item of batchResults) {
+        if (Array.isArray(item.args.transactions)) {
+          for (const t of item.args.transactions) merged.push(t as ExtractedRow);
+        }
+      }
 
       documentType = (firstArgs?.documentType || lastArgs?.documentType || 'bank_statement') as string;
       const isCC = documentType === 'credit_card_statement';
@@ -430,11 +447,17 @@ serve(async (req) => {
         validationWarnings.push(`Reclassified ${swapped} payment/refund row(s) from debit to credit based on description.`);
       }
 
-      // Reconcile against printed totals from the LAST batch (statement totals live on the summary page).
+      // Reconcile against printed totals from the latest successful batch with totals
+      // (statement totals usually live on the summary page, but page batches can return
+      // partial metadata if a late page fails).
       const sumDebit = cleaned.reduce((s, r) => s + (r.Debit as number), 0);
       const sumCredit = cleaned.reduce((s, r) => s + (r.Credit as number), 0);
-      const printedDebit = parseNum(lastArgs?.totalDebits ?? firstArgs?.totalDebits);
-      const printedCredit = parseNum(lastArgs?.totalCredits ?? firstArgs?.totalCredits);
+      const totalsArgs = [...batchResults].reverse().find(({ args }) =>
+        parseNum(args?.totalDebits) > 0 || parseNum(args?.totalCredits) > 0 ||
+        parseNum(args?.closingBalance) !== 0
+      )?.args || lastArgs || firstArgs;
+      const printedDebit = parseNum(totalsArgs?.totalDebits ?? firstArgs?.totalDebits);
+      const printedCredit = parseNum(totalsArgs?.totalCredits ?? firstArgs?.totalCredits);
       const tol = 0.02;
 
       let needsSwap = false;
@@ -462,11 +485,11 @@ serve(async (req) => {
 
       summary = {
         openingBalance: parseNum(firstArgs?.openingBalance) || undefined,
-        closingBalance: parseNum(lastArgs?.closingBalance ?? firstArgs?.closingBalance) || undefined,
+        closingBalance: parseNum(totalsArgs?.closingBalance ?? lastArgs?.closingBalance ?? firstArgs?.closingBalance) || undefined,
         totalDebits: printedDebit || undefined,
         totalCredits: printedCredit || undefined,
         periodStart: firstArgs?.statementPeriodStart ?? lastArgs?.statementPeriodStart,
-        periodEnd: lastArgs?.statementPeriodEnd ?? firstArgs?.statementPeriodEnd,
+        periodEnd: totalsArgs?.statementPeriodEnd ?? lastArgs?.statementPeriodEnd ?? firstArgs?.statementPeriodEnd,
       };
 
       columns = isCC
