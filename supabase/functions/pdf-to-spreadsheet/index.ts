@@ -22,10 +22,13 @@ interface Sheet { name: string; columns: string[]; rows: ExtractedRow[] }
 
 const MAX_PDF_SIZE_MB = 8;
 const MAX_PDF_SIZE_BYTES = MAX_PDF_SIZE_MB * 1024 * 1024;
-const EDGE_RESPONSE_BUDGET_MS = 220_000;
-const AI_REQUEST_TIMEOUT_MS = 170_000;
-const RESPONSE_BUFFER_MS = 15_000;
-const FALLBACK_CUTOFF_MS = 60_000;
+// Lovable AI Gateway enforces a ~75s upstream idle limit per request, so we
+// keep each AI call comfortably under it and rely on faster models + smaller
+// token budgets to fit within that window.
+const EDGE_RESPONSE_BUDGET_MS = 140_000;
+const AI_REQUEST_TIMEOUT_MS = 70_000;
+const RESPONSE_BUFFER_MS = 10_000;
+const FALLBACK_CUTOFF_MS = 55_000;
 const MIN_AI_CALL_MS = 10_000;
 
 type AiCallResult =
@@ -176,7 +179,7 @@ async function callGemini(
       body: JSON.stringify({
         model,
         temperature: 0,
-        max_tokens: 18000,
+        max_tokens: 8000,
         tools: [tool],
         tool_choice: { type: 'function', function: { name: tool.function.name } },
         messages: [{
@@ -302,7 +305,7 @@ serve(async (req) => {
     const hasFallbackBudget = () => Date.now() - startTime < FALLBACK_CUTOFF_MS;
 
     const tryStatement = async () => {
-      const result = await callGemini(LOVABLE_API_KEY, pdfBase64, STATEMENT_PROMPT, STATEMENT_TOOL, 'google/gemini-2.5-flash', remainingAiBudget());
+      const result = await callGemini(LOVABLE_API_KEY, pdfBase64, STATEMENT_PROMPT, STATEMENT_TOOL, 'google/gemini-2.5-flash-lite', remainingAiBudget());
       if (!result.ok) {
         extractionTimedOut ||= result.reason === 'timeout';
         validationWarnings.push(result.message || 'Statement extraction did not return structured data.');
@@ -418,7 +421,7 @@ serve(async (req) => {
     };
 
     const tryGeneric = async () => {
-      const result = await callGemini(LOVABLE_API_KEY, pdfBase64, GENERIC_PROMPT, GENERIC_TOOL, 'google/gemini-2.5-flash', remainingAiBudget());
+      const result = await callGemini(LOVABLE_API_KEY, pdfBase64, GENERIC_PROMPT, GENERIC_TOOL, 'google/gemini-2.5-flash-lite', remainingAiBudget());
       if (!result.ok) {
         extractionTimedOut ||= result.reason === 'timeout';
         validationWarnings.push(result.message || 'Generic table extraction did not return structured data.');
