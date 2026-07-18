@@ -315,6 +315,7 @@ Deno.serve(async (req) => {
           percent,
           duration: expiresAt ? 'once' : 'forever',
           redeem_by: expiresAt,
+          max_redemptions: 1,
           name: `Org ${organization_id.slice(0, 8)} ${percent}% off`,
         });
         couponId = coupon.id;
