@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrganization } from '@/hooks/useOrganization';
 import { useAuth } from '@/hooks/useAuth';
@@ -8,9 +8,16 @@ import { deriveTierFromName } from '@/config/planModuleAccess';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Check, CreditCard, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-
 
 interface PricingPlan {
   id: string;
@@ -28,15 +35,49 @@ interface PricingPlan {
   tier?: string | null;
 }
 
+interface ProrationPreview {
+  currency: string;
+  amount_due_today: number;
+  next_invoice_total: number;
+  next_invoice_date: number | null;
+  period_end: number | null;
+}
+
+function formatMoney(cents: number, currency: string) {
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: 'currency',
+      currency: (currency || 'usd').toUpperCase(),
+    }).format(cents / 100);
+  } catch {
+    return `${(cents / 100).toFixed(2)} ${currency?.toUpperCase() || ''}`;
+  }
+}
+
+function formatDate(ts: number | null | undefined) {
+  if (!ts) return '—';
+  return new Date(ts * 1000).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
 
 export default function SubscriptionCheckout() {
   const { organization } = useCurrentOrganization();
   const { isAdmin } = useAuth();
+  const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const highlightTier = searchParams.get('plan');
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
   const [loadingPlanId, setLoadingPlanId] = useState<string | null>(null);
 
+  // Change-plan dialog state
+  const [changePlan, setChangePlan] = useState<PricingPlan | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [preview, setPreview] = useState<ProrationPreview | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [confirmLoading, setConfirmLoading] = useState(false);
 
   const { data: plans, isLoading } = useQuery({
     queryKey: ['active-pricing-plans'],
@@ -67,11 +108,10 @@ export default function SubscriptionCheckout() {
     enabled: !!organization?.id,
   });
 
-  const handleSubscribe = async (planId: string) => {
-    if (!organization?.id) {
-      toast.error('Please select an organization first');
-      return;
-    }
+  const isTrialing = currentSub?.status === 'trialing';
+  const trialEnd = isTrialing ? (currentSub as any)?.current_period_end : null;
+
+  const openStripeCheckout = async (planId: string) => {
     setLoadingPlanId(planId);
     try {
       const { data, error } = await supabase.functions.invoke('stripe-integration', {
@@ -79,7 +119,7 @@ export default function SubscriptionCheckout() {
           action: 'create-checkout-session',
           planId,
           billingCycle,
-          organizationId: organization.id,
+          organizationId: organization!.id,
           successUrl: `${window.location.origin}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
           cancelUrl: `${window.location.origin}/subscription/checkout`,
         },
@@ -94,6 +134,72 @@ export default function SubscriptionCheckout() {
       toast.error(`Error: ${err.message}`);
     } finally {
       setLoadingPlanId(null);
+    }
+  };
+
+  const handleSubscribe = async (plan: PricingPlan) => {
+    if (!organization?.id) {
+      toast.error('Please select an organization first');
+      return;
+    }
+    // If already on an active/trialing sub, switch plan with proration preview
+    if (currentSub && (currentSub as any).stripe_subscription_id) {
+      setChangePlan(plan);
+      setPreview(null);
+      setPreviewError(null);
+      setPreviewLoading(true);
+      try {
+        const { data, error } = await supabase.functions.invoke('stripe-integration', {
+          body: {
+            action: 'preview-plan-change',
+            organizationId: organization.id,
+            newPlanId: plan.id,
+            billingCycle,
+          },
+        });
+        if (error) throw error;
+        if (data?.success) {
+          setPreview(data.preview);
+        } else {
+          setPreviewError(data?.error || 'Could not load proration preview');
+        }
+      } catch (err: any) {
+        setPreviewError(err.message || 'Could not load proration preview');
+      } finally {
+        setPreviewLoading(false);
+      }
+      return;
+    }
+    // Otherwise send to Stripe Checkout
+    await openStripeCheckout(plan.id);
+  };
+
+  const confirmChangePlan = async () => {
+    if (!organization?.id || !changePlan) return;
+    setConfirmLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('stripe-integration', {
+        body: {
+          action: 'manage-subscription',
+          subscriptionAction: 'change-plan',
+          organizationId: organization.id,
+          newPlanId: changePlan.id,
+          billingCycle,
+        },
+      });
+      if (error) throw error;
+      if (data?.success) {
+        toast.success(`Switched to ${changePlan.name}`);
+        setChangePlan(null);
+        setPreview(null);
+        await queryClient.invalidateQueries({ queryKey: ['current-subscription'] });
+      } else {
+        toast.error(data?.error || 'Failed to change plan');
+      }
+    } catch (err: any) {
+      toast.error(`Error: ${err.message}`);
+    } finally {
+      setConfirmLoading(false);
     }
   };
 
@@ -118,9 +224,19 @@ export default function SubscriptionCheckout() {
           </Badge>
         )}
         {currentSub && (
-          <Badge variant="secondary" className="mt-2">
-            Current plan: {(currentSub as any).pricing_plans?.name || 'Unknown'}
-          </Badge>
+          <div className="flex flex-wrap items-center justify-center gap-2 mt-2">
+            <Badge variant="secondary">
+              Current plan: {(currentSub as any).pricing_plans?.name || 'Unknown'}
+            </Badge>
+            {isTrialing && trialEnd && (
+              <Badge variant="outline">
+                Trial ends {formatDate(Math.floor(new Date(trialEnd).getTime() / 1000))}
+              </Badge>
+            )}
+            {(currentSub as any).cancel_at_period_end && (
+              <Badge variant="destructive">Cancels at period end</Badge>
+            )}
+          </div>
         )}
       </div>
 
@@ -147,76 +263,170 @@ export default function SubscriptionCheckout() {
         {plans
           ?.filter((plan) => {
             const tier = (plan.tier || deriveTierFromName(plan.name)) as string;
-            // Office Use is admin-only demo tier
             if (tier === 'office_use' && !isAdmin) return false;
             return true;
           })
           .map((plan) => {
-          const price = billingCycle === 'monthly' ? plan.price_monthly : plan.price_yearly;
-          const isCurrentPlan = currentSub?.plan_id === plan.id;
-          const priceReady = billingCycle === 'monthly' ? !!plan.stripe_price_id_monthly : !!plan.stripe_price_id_yearly;
-          const planTier = (plan.tier || deriveTierFromName(plan.name)) as string;
-          const isHighlighted = highlightTier && planTier === highlightTier;
+            const price = billingCycle === 'monthly' ? plan.price_monthly : plan.price_yearly;
+            const isCurrentPlan = currentSub?.plan_id === plan.id;
+            const priceReady = billingCycle === 'monthly'
+              ? !!plan.stripe_price_id_monthly
+              : !!plan.stripe_price_id_yearly;
+            const planTier = (plan.tier || deriveTierFromName(plan.name)) as string;
+            const isHighlighted = highlightTier && planTier === highlightTier;
+            const hasActiveSub = !!currentSub && !!(currentSub as any).stripe_subscription_id;
+            const ctaLabel = hasActiveSub ? 'Switch to this plan' : 'Subscribe';
 
-          return (
-            <Card key={plan.id} className={`relative flex flex-col ${isCurrentPlan ? 'border-primary ring-2 ring-primary/20' : ''} ${isHighlighted ? 'border-primary ring-2 ring-primary/40' : ''}`}>
-              {isCurrentPlan && (
-                <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground">
-                  Current Plan
-                </Badge>
-              )}
-              {isHighlighted && !isCurrentPlan && (
-                <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground">
-                  Recommended
-                </Badge>
-              )}
+            return (
+              <Card key={plan.id} className={`relative flex flex-col ${isCurrentPlan ? 'border-primary ring-2 ring-primary/20' : ''} ${isHighlighted ? 'border-primary ring-2 ring-primary/40' : ''}`}>
+                {isCurrentPlan && (
+                  <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground">
+                    Current Plan
+                  </Badge>
+                )}
+                {isHighlighted && !isCurrentPlan && (
+                  <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground">
+                    Recommended
+                  </Badge>
+                )}
 
-              <CardHeader className="pb-2">
-                <CardTitle className="text-xl">{plan.name}</CardTitle>
-                <CardDescription>{plan.description}</CardDescription>
-              </CardHeader>
-              <CardContent className="flex-1 flex flex-col justify-between space-y-4">
-                <div>
-                  <div className="text-3xl font-bold">
-                    ${price}
-                    <span className="text-sm font-normal text-muted-foreground">
-                      /{billingCycle === 'monthly' ? 'mo' : 'yr'}
-                    </span>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-xl">{plan.name}</CardTitle>
+                  <CardDescription>{plan.description}</CardDescription>
+                </CardHeader>
+                <CardContent className="flex-1 flex flex-col justify-between space-y-4">
+                  <div>
+                    <div className="text-3xl font-bold">
+                      ${price}
+                      <span className="text-sm font-normal text-muted-foreground">
+                        /{billingCycle === 'monthly' ? 'mo' : 'yr'}
+                      </span>
+                    </div>
+                    {billingCycle === 'yearly' && (
+                      <p className="text-sm text-muted-foreground">
+                        Save ${(plan.price_monthly * 12 - plan.price_yearly).toFixed(0)}/year
+                      </p>
+                    )}
+                    <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
+                      {(plan.features || []).map((feature, i) => (
+                        <li key={i} className="flex items-start gap-2">
+                          <Check className="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
+                          {feature}
+                        </li>
+                      ))}
+                    </ul>
                   </div>
-                  {billingCycle === 'yearly' && (
-                    <p className="text-sm text-muted-foreground">
-                      Save ${(plan.price_monthly * 12 - plan.price_yearly).toFixed(0)}/year
-                    </p>
-                  )}
-                  <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
-                    {(plan.features || []).map((feature, i) => (
-                      <li key={i} className="flex items-start gap-2">
-                        <Check className="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
-                        {feature}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-                <Button
-                  className="w-full mt-4"
-                  disabled={isCurrentPlan || loadingPlanId === plan.id || !priceReady}
-                  onClick={() => handleSubscribe(plan.id)}
-                >
-                  {loadingPlanId === plan.id ? (
-                    <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Redirecting...</>
-                  ) : isCurrentPlan ? (
-                    'Current Plan'
-                  ) : !priceReady ? (
-                    'Not available yet'
-                  ) : (
-                    <><CreditCard className="w-4 h-4 mr-2" /> Subscribe</>
-                  )}
-                </Button>
-              </CardContent>
-            </Card>
-          );
-        })}
+                  <Button
+                    className="w-full mt-4"
+                    disabled={isCurrentPlan || loadingPlanId === plan.id || !priceReady}
+                    onClick={() => handleSubscribe(plan)}
+                  >
+                    {loadingPlanId === plan.id ? (
+                      <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Redirecting...</>
+                    ) : isCurrentPlan ? (
+                      'Current Plan'
+                    ) : !priceReady ? (
+                      'Not available yet'
+                    ) : (
+                      <><CreditCard className="w-4 h-4 mr-2" /> {ctaLabel}</>
+                    )}
+                  </Button>
+                </CardContent>
+              </Card>
+            );
+          })}
       </div>
+
+      {/* Change-plan confirmation dialog with proration preview */}
+      <Dialog
+        open={!!changePlan}
+        onOpenChange={(open) => {
+          if (!open && !confirmLoading) {
+            setChangePlan(null);
+            setPreview(null);
+            setPreviewError(null);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Switch to {changePlan?.name}?</DialogTitle>
+            <DialogDescription>
+              Review the prorated charges before confirming the plan change.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2">
+            {previewLoading && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="w-4 h-4 animate-spin" /> Calculating proration…
+              </div>
+            )}
+
+            {previewError && (
+              <div className="text-sm text-destructive">{previewError}</div>
+            )}
+
+            {preview && !previewLoading && (
+              <div className="rounded-md border p-3 space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Billing cycle</span>
+                  <span className="font-medium capitalize">{billingCycle}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">
+                    {preview.amount_due_today < 0 ? 'Credit applied today' : 'Due today (prorated)'}
+                  </span>
+                  <span className="font-semibold">
+                    {formatMoney(Math.abs(preview.amount_due_today), preview.currency)}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Next invoice total</span>
+                  <span className="font-medium">
+                    {formatMoney(preview.next_invoice_total, preview.currency)}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Next invoice on</span>
+                  <span className="font-medium">
+                    {formatDate(preview.next_invoice_date || preview.period_end)}
+                  </span>
+                </div>
+                {isTrialing && (
+                  <p className="text-xs text-muted-foreground pt-1">
+                    You're still in your free trial — proration applies once the trial ends.
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setChangePlan(null);
+                setPreview(null);
+                setPreviewError(null);
+              }}
+              disabled={confirmLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={confirmChangePlan}
+              disabled={confirmLoading || previewLoading || !!previewError}
+            >
+              {confirmLoading ? (
+                <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Switching…</>
+              ) : (
+                'Confirm switch'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

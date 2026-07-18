@@ -7,7 +7,7 @@ const corsHeaders = {
 };
 
 interface StripeRequest {
-  action: 'health-check' | 'test' | 'create-customer' | 'create-payment-intent' | 'create-wallet-payment' | 'sync-plans' | 'create-checkout-session' | 'manage-subscription' | 'create-billing-portal-session' | 'get-payment-method' | 'list-invoices';
+  action: 'health-check' | 'test' | 'create-customer' | 'create-payment-intent' | 'create-wallet-payment' | 'sync-plans' | 'create-checkout-session' | 'manage-subscription' | 'preview-plan-change' | 'create-billing-portal-session' | 'get-payment-method' | 'list-invoices';
   returnUrl?: string;
   portalFlow?: 'payment_method_update' | 'subscription_cancel';
   customerId?: string;
@@ -317,6 +317,79 @@ serve(async (req) => {
 
       return new Response(JSON.stringify({ success: true, sessionId: session.id, url: session.url }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    // ===== PREVIEW PLAN CHANGE (proration) =====
+    if (action === 'preview-plan-change') {
+      if (!stripeSecretKey) {
+        return new Response(JSON.stringify({ success: false, error: 'Stripe not configured' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      const { organizationId, newPlanId, billingCycle } = body;
+      if (!organizationId || !newPlanId) {
+        return new Response(JSON.stringify({ success: false, error: 'organizationId and newPlanId required' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      const supabaseAdmin = getSupabaseAdmin();
+      const { data: sub } = await supabaseAdmin
+        .from('subscriptions')
+        .select('*')
+        .eq('organization_id', organizationId)
+        .in('status', ['active', 'trialing'])
+        .maybeSingle();
+      if (!sub || !sub.stripe_subscription_id) {
+        return new Response(JSON.stringify({ success: false, error: 'No active subscription found' }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      const { data: newPlan } = await supabaseAdmin.from('pricing_plans').select('*').eq('id', newPlanId).single();
+      if (!newPlan) {
+        return new Response(JSON.stringify({ success: false, error: 'New plan not found' }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      const newPriceId = billingCycle === 'yearly' ? newPlan.stripe_price_id_yearly : newPlan.stripe_price_id_monthly;
+      if (!newPriceId) {
+        return new Response(JSON.stringify({ success: false, error: 'New plan not synced to Stripe' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      const stripeSub = await stripeRequest(`/subscriptions/${sub.stripe_subscription_id}`, 'GET');
+      if (stripeSub.error) {
+        return new Response(JSON.stringify({ success: false, error: stripeSub.error.message }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      const itemId = stripeSub.items?.data?.[0]?.id;
+      const customerId = stripeSub.customer;
+      if (!itemId || !customerId) {
+        return new Response(JSON.stringify({ success: false, error: 'Could not resolve subscription item' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      const params = new URLSearchParams({
+        customer: customerId,
+        subscription: sub.stripe_subscription_id,
+        'subscription_items[0][id]': itemId,
+        'subscription_items[0][price]': newPriceId,
+        subscription_proration_behavior: 'create_prorations',
+      });
+      const upcomingRes = await fetch(`https://api.stripe.com/v1/invoices/upcoming?${params.toString()}`, {
+        headers: { 'Authorization': `Bearer ${stripeSecretKey}` },
+      });
+      const upcoming = await upcomingRes.json();
+      if (upcoming.error) {
+        return new Response(JSON.stringify({ success: false, error: upcoming.error.message }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      // Sum only prorated line items to get "amount due today"
+      const prorationLines = (upcoming.lines?.data || []).filter((l: any) => l.proration);
+      const prorationAmount = prorationLines.reduce((s: number, l: any) => s + (l.amount || 0), 0);
+      return new Response(JSON.stringify({
+        success: true,
+        preview: {
+          currency: upcoming.currency,
+          amount_due_today: prorationAmount, // cents; can be negative (credit)
+          next_invoice_total: upcoming.total, // cents
+          next_invoice_date: upcoming.next_payment_attempt || upcoming.period_end,
+          period_end: upcoming.period_end,
+        },
+      }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
     // ===== MANAGE SUBSCRIPTION =====
