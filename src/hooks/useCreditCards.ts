@@ -662,27 +662,134 @@ export function useCreditCardTransactions(creditCardId?: string, glAccountId?: s
     },
   });
 
+  const CC_GL_FIELDS: (keyof CreditCardTransaction)[] = [
+    'transaction_date',
+    'amount',
+    'transaction_type',
+    'description',
+    'reference',
+    'payee_payor',
+    'gl_account_id',
+    'category',
+  ];
+
   const updateTransaction = useMutation({
     mutationFn: async ({ id, ...updates }: Partial<CreditCardTransaction> & { id: string }) => {
-      const { data, error } = await supabase
+      const { data: existing, error: existingErr } = await supabase
         .from('credit_card_transactions')
-        .update(updates)
+        .select('*, credit_cards!inner(gl_account_id, name, organization_id)')
         .eq('id', id)
-        .select()
         .single();
-      
-      if (error) throw error;
-      return data;
+      if (existingErr) throw existingErr;
+
+      const orgId = (existing?.credit_cards as any)?.organization_id as string | undefined;
+      const ccGLAccountId = (existing?.credit_cards as any)?.gl_account_id as string | undefined;
+      const ccName = (existing?.credit_cards as any)?.name as string | undefined;
+      const linkedJEId = (existing as any)?.journal_entry_id as string | null;
+
+      const glFieldChanged = CC_GL_FIELDS.some(
+        (k) => (updates as any)[k] !== undefined && (updates as any)[k] !== (existing as any)[k]
+      );
+
+      if (!linkedJEId || !glFieldChanged) {
+        const { data, error } = await supabase
+          .from('credit_card_transactions')
+          .update(updates)
+          .eq('id', id)
+          .select()
+          .single();
+        if (error) throw error;
+        return data;
+      }
+
+      // Reverse prior JE
+      if (orgId) {
+        try {
+          await reverseLinkedJournalEntry({
+            creditCardTransactionId: id,
+            journalEntryId: linkedJEId,
+            organizationId: orgId,
+          });
+        } catch (revErr) {
+          console.error('Failed to reverse prior CC journal entry:', revErr);
+        }
+      }
+
+      const { data: updated, error: updErr } = await supabase
+        .from('credit_card_transactions')
+        .update({
+          ...updates,
+          journal_entry_id: null,
+          status: 'pending',
+        })
+        .eq('id', id)
+        .select('*')
+        .single();
+      if (updErr) throw updErr;
+
+      // Re-post minimal 2-line JE (no tax split — user can re-categorize with tax if needed)
+      const glAcct = (updated as any).gl_account_id as string | null;
+      if (orgId && ccGLAccountId && glAcct) {
+        const amount = Math.abs(Number(updated.amount));
+        const type = updated.transaction_type as string;
+        const payeeInfo = updated.payee_payor ? ` - ${updated.payee_payor}` : '';
+        let lines: Array<{ account_id: string; debit: number; credit: number; memo: string }> = [];
+        let label = 'Charge';
+        if (type === 'payment') {
+          label = 'Payment';
+          lines = [
+            { account_id: ccGLAccountId, debit: amount, credit: 0, memo: `CC Payment${payeeInfo}: ${updated.description}` },
+            { account_id: glAcct, debit: 0, credit: amount, memo: `Payment to ${ccName || 'Credit Card'}` },
+          ];
+        } else if (type === 'credit' || type === 'refund') {
+          label = 'Credit';
+          lines = [
+            { account_id: ccGLAccountId, debit: amount, credit: 0, memo: `CC Credit${payeeInfo}: ${updated.description}` },
+            { account_id: glAcct, debit: 0, credit: amount, memo: `Refund - ${updated.description}` },
+          ];
+        } else {
+          // charge / fee / interest (default)
+          label = 'Charge';
+          lines = [
+            { account_id: glAcct, debit: amount, credit: 0, memo: updated.category || updated.description },
+            { account_id: ccGLAccountId, debit: 0, credit: amount, memo: `CC Charge${payeeInfo}: ${updated.description}` },
+          ];
+        }
+
+        try {
+          const newJEId = await createJournalEntry({
+            organizationId: orgId,
+            date: updated.transaction_date,
+            description: `CC ${label}${payeeInfo}: ${updated.description}`,
+            reference: updated.reference || `CC-${id.slice(0, 8).toUpperCase()}`,
+            lines,
+            status: 'posted',
+          });
+          await supabase
+            .from('credit_card_transactions')
+            .update({ journal_entry_id: newJEId, status: 'matched' })
+            .eq('id', id);
+        } catch (jeErr) {
+          console.error('Failed to re-post CC journal entry after edit:', jeErr);
+          toast.error('Transaction updated, but re-posting to GL failed. Please re-post manually.');
+        }
+      }
+
+      await recalculateAndInvalidate(orgId, queryClient);
+      return updated;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['credit-card-transactions'] });
       queryClient.invalidateQueries({ queryKey: ['credit-cards'] });
+      queryClient.invalidateQueries({ queryKey: ['journal-entries'] });
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
       toast.success('Transaction updated');
     },
     onError: (error) => {
       toast.error('Failed to update transaction: ' + error.message);
     },
   });
+
 
   const categorizeTransaction = useMutation({
     mutationFn: async ({ 
