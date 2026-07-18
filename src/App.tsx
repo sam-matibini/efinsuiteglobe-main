@@ -1,5 +1,5 @@
-import { forwardRef, lazy, Suspense } from "react";
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { forwardRef, lazy, Suspense, useEffect, useRef } from "react";
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -248,9 +248,24 @@ AuthRoute.displayName = "AuthRoute";
 
 const AppRoutes = () => {
   const { currentOrganization } = useOrganizationContext();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const prevOrgIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const newId = currentOrganization?.id ?? null;
+    const prevId = prevOrgIdRef.current;
+    // On a real switch (not initial hydrate), route to dashboard.
+    if (prevId && newId && prevId !== newId && location.pathname !== '/') {
+      navigate('/', { replace: true });
+    }
+    prevOrgIdRef.current = newId;
+  }, [currentOrganization?.id, location.pathname, navigate]);
+
   return (
   <Suspense fallback={<RouteFallback />}>
   <Routes key={currentOrganization?.id ?? 'no-org'}>
+
 
     {/* Public routes */}
     <Route path="/landing" element={<Landing />} />
