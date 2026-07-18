@@ -1,4 +1,5 @@
 import { useState, useMemo, forwardRef } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Check, ChevronsUpDown, Building2, Plus, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -29,6 +30,8 @@ export const SearchableOrgSwitcher = forwardRef<HTMLDivElement, SearchableOrgSwi
   }, ref) {
     const [open, setOpen] = useState(false);
     const [search, setSearch] = useState('');
+    const navigate = useNavigate();
+    const location = useLocation();
 
     // Sort alphabetically and filter by search term
     const filteredOrganizations = useMemo(() => {
@@ -47,9 +50,14 @@ export const SearchableOrgSwitcher = forwardRef<HTMLDivElement, SearchableOrgSwi
     }, [organizations, search]);
 
     const handleSelect = (org: Organization) => {
-      onSwitch(org);
       setOpen(false);
       setSearch('');
+      // Navigate to dashboard FIRST so we're not on a page (e.g. /journal-entries)
+      // whose own URL-sync effects would race with the post-switch redirect.
+      if (org.id !== currentOrg?.id && location.pathname !== '/') {
+        navigate('/', { replace: true });
+      }
+      onSwitch(org);
     };
 
     const handleCreateNew = () => {

@@ -22,6 +22,9 @@ import EmployeePayHistoryDialog from '@/components/employees/EmployeePayHistoryD
 import DeleteEmployeeDialog from '@/components/employees/DeleteEmployeeDialog';
 import { useNavigate } from 'react-router-dom';
 import { useIsReadOnly } from '@/hooks/useIsReadOnly';
+import { useUsageLimits } from '@/hooks/useUsageLimits';
+import { useSubscription } from '@/hooks/useSubscription';
+import { SubscriptionUpgradeModal } from '@/components/SubscriptionUpgradeModal';
 
 export default function Employees() {
   const navigate = useNavigate();
@@ -32,10 +35,21 @@ export default function Employees() {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [payHistoryOpen, setPayHistoryOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<typeof employees[0] | null>(null);
 
   const { organization, isLoading: orgLoading } = useCurrentOrganization();
   const { employees, isLoading, stats, deleteEmployee } = useEmployees();
+  const { canAddEmployee, employeeCount, maxEmployees } = useUsageLimits();
+  const { planTier, isActive } = useSubscription();
+
+  const handleAddClick = () => {
+    if (!isActive || !canAddEmployee) {
+      setUpgradeOpen(true);
+      return;
+    }
+    setIsAddOpen(true);
+  };
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-CA', {
@@ -110,7 +124,7 @@ export default function Employees() {
         {!isReadOnly && (
           <Button 
             className="bg-accent hover:bg-accent/90 text-accent-foreground"
-            onClick={() => setIsAddOpen(true)}
+            onClick={handleAddClick}
           >
             <Plus className="w-4 h-4 mr-2" />
             Add Employee
@@ -119,6 +133,14 @@ export default function Employees() {
         <AddEmployeeDialog 
           open={isAddOpen} 
           onOpenChange={setIsAddOpen}
+        />
+        <SubscriptionUpgradeModal
+          open={upgradeOpen}
+          onOpenChange={setUpgradeOpen}
+          currentPlanTier={planTier ?? 'starter'}
+          reason={!isActive ? 'no_subscription' : 'limit_employees'}
+          currentCount={employeeCount}
+          currentMax={maxEmployees}
         />
       </div>
 

@@ -30,12 +30,11 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
   }, [organizations, currentOrganization]);
 
   const switchOrganization = useCallback((org: Organization) => {
-    // Clear all cached queries to prevent stale data leaking across orgs
-    queryClient.clear();
     setCurrentOrganization(org);
     localStorage.setItem(STORAGE_KEY, org.id);
-    // Trigger a page reload to refresh all data for new org context
-    window.location.reload();
+    // Invalidate all queries so org-scoped data refetches without tearing down the app.
+    // Org-scoped queries key on currentOrganization.id so this is a safety net.
+    void queryClient.invalidateQueries();
   }, [queryClient]);
 
   return (

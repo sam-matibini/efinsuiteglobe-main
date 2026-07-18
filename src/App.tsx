@@ -1,13 +1,14 @@
-import { forwardRef, lazy, Suspense } from "react";
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { forwardRef, lazy, Suspense, useEffect, useRef } from "react";
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { AdminRoute } from "@/components/AdminRoute";
+import { RouteAccessGuard } from "@/components/auth/RouteAccessGuard";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
-import { OrganizationProvider } from "@/hooks/useOrganizationContext";
+import { OrganizationProvider, useOrganizationContext } from "@/hooks/useOrganizationContext";
 import { ReportFiltersProvider } from "@/hooks/useReportFilters";
 
 // Eager: landing + auth pages (needed on first paint / pre-auth)
@@ -215,7 +216,7 @@ const ProtectedRoute = forwardRef<HTMLDivElement, { children: React.ReactNode }>
 
     return (
       <div ref={ref} className="contents">
-        {children}
+        <RouteAccessGuard>{children}</RouteAccessGuard>
       </div>
     );
   }
@@ -248,9 +249,27 @@ const AuthRoute = forwardRef<HTMLDivElement, { children: React.ReactNode }>(
 );
 AuthRoute.displayName = "AuthRoute";
 
-const AppRoutes = () => (
+const AppRoutes = () => {
+  const { currentOrganization } = useOrganizationContext();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const prevOrgIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const newId = currentOrganization?.id ?? null;
+    const prevId = prevOrgIdRef.current;
+    // On a real switch (not initial hydrate), route to dashboard.
+    if (prevId && newId && prevId !== newId && location.pathname !== '/') {
+      navigate('/', { replace: true });
+    }
+    prevOrgIdRef.current = newId;
+  }, [currentOrganization?.id, location.pathname, navigate]);
+
+  return (
   <Suspense fallback={<RouteFallback />}>
-  <Routes>
+  <Routes key={currentOrganization?.id ?? 'no-org'}>
+
+
     {/* Public routes */}
     <Route path="/landing" element={<Landing />} />
     <Route path="/contact" element={<Contact />} />
@@ -446,7 +465,9 @@ const AppRoutes = () => (
     <Route path="*" element={<NotFound />} />
   </Routes>
   </Suspense>
-);
+  );
+};
+
 
 const DocSignRoute = () => {
   const location = useLocation();
