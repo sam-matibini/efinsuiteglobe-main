@@ -134,36 +134,57 @@ Deno.serve(async (req) => {
           .eq('setting_key', 'subscription.global_discount')
           .maybeSingle();
         const prev = (existing?.setting_value as any) || {};
-        const percent = Number(global_discount.percent) || 0;
-        const expiresAt = global_discount.expires_at || null;
+        const presetId: string | null = global_discount.preset_id || null;
         const note = global_discount.note || null;
 
+        let percent = Number(global_discount.percent) || 0;
+        let expiresAt: string | null = global_discount.expires_at || null;
         let newCouponId: string | null = prev.stripe_coupon_id || null;
 
-        // If percent/expiry changed OR no coupon yet, (re)create coupon.
-        const changed =
-          Number(prev.percent) !== percent ||
-          (prev.expires_at || null) !== (expiresAt || null);
+        if (presetId) {
+          const { data: preset } = await admin
+            .from('discount_presets')
+            .select('*')
+            .eq('id', presetId)
+            .maybeSingle();
+          if (!preset) return json({ error: 'Preset not found' }, 404);
+          percent = Number(preset.percent);
+          expiresAt = preset.expires_at || null;
+          // Delete old auto-created coupon if it's not a preset
+          if (prev.stripe_coupon_id && !(await isPresetCoupon(admin, prev.stripe_coupon_id))) {
+            await deleteStripeCoupon(prev.stripe_coupon_id);
+          }
+          newCouponId = preset.stripe_coupon_id;
+        } else {
+          const changed =
+            Number(prev.percent) !== percent ||
+            (prev.expires_at || null) !== (expiresAt || null);
 
-        if (percent > 0 && (changed || !newCouponId)) {
-          // Delete old coupon if any
-          if (prev.stripe_coupon_id) await deleteStripeCoupon(prev.stripe_coupon_id);
-          const coupon = await createStripeCoupon({
-            percent,
-            duration: expiresAt ? 'once' : 'forever',
-            redeem_by: expiresAt,
-            name: `Global ${percent}% off`,
-          });
-          newCouponId = coupon.id;
-        } else if (percent === 0 && prev.stripe_coupon_id) {
-          await deleteStripeCoupon(prev.stripe_coupon_id);
-          newCouponId = null;
+          if (percent > 0 && (changed || !newCouponId || (newCouponId && await isPresetCoupon(admin, newCouponId)))) {
+            // Delete old auto-created coupon (not preset)
+            if (prev.stripe_coupon_id && !(await isPresetCoupon(admin, prev.stripe_coupon_id))) {
+              await deleteStripeCoupon(prev.stripe_coupon_id);
+            }
+            const coupon = await createStripeCoupon({
+              percent,
+              duration: expiresAt ? 'once' : 'forever',
+              redeem_by: expiresAt,
+              name: `Global ${percent}% off`,
+            });
+            newCouponId = coupon.id;
+          } else if (percent === 0 && prev.stripe_coupon_id) {
+            if (!(await isPresetCoupon(admin, prev.stripe_coupon_id))) {
+              await deleteStripeCoupon(prev.stripe_coupon_id);
+            }
+            newCouponId = null;
+          }
         }
 
         const newValue = {
           percent,
           expires_at: expiresAt,
           stripe_coupon_id: newCouponId,
+          preset_id: presetId,
           note,
         };
         await admin.from('platform_settings').upsert(
@@ -179,6 +200,7 @@ Deno.serve(async (req) => {
 
       return json({ success: true });
     }
+
 
     // ============ EXTEND TRIAL ============
     if (action === 'extend-trial') {
