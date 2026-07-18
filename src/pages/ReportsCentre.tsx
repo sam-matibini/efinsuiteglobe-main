@@ -142,8 +142,8 @@ const reports: ReportItem[] = [
   { id: 't4-summary', name: 'T4 Summary', description: 'T4 slip summary for tax year', category: 'Payroll', module: 'Payroll', icon: <FileText className="w-5 h-5" />, href: '/payroll/tax-slips' },
   { id: 'roe-report', name: 'ROE Report', description: 'Record of Employment listing', category: 'Payroll', module: 'Payroll', icon: <ClipboardList className="w-5 h-5" />, href: '/payroll/roe' },
   { id: 'employee-list', name: 'Employee List', description: 'Active & inactive employees', category: 'Payroll', module: 'Payroll', icon: <UserCheck className="w-5 h-5" />, href: '/payroll/employees' },
-  { id: 'vacation-accrual', name: 'Vacation Accrual', description: 'Vacation pay owing by employee', category: 'Payroll', module: 'Payroll', icon: <CalendarDays className="w-5 h-5" /> },
-  { id: 'benefits-report', name: 'Benefits Report', description: 'Employee benefits summary', category: 'Payroll', module: 'Payroll', icon: <Shield className="w-5 h-5" /> },
+  { id: 'vacation-accrual', name: 'Vacation Accrual', description: 'Vacation pay owing by employee', category: 'Payroll', module: 'Payroll', icon: <CalendarDays className="w-5 h-5" />, href: '/payroll/reports' },
+  { id: 'benefits-report', name: 'Benefits Report', description: 'Employee benefits summary', category: 'Payroll', module: 'Payroll', icon: <Shield className="w-5 h-5" />, href: '/payroll/reports' },
   
   // Management Reports
   { id: 'executive-summary', name: 'Executive Summary', description: 'KPIs & financial highlights', category: 'Management', module: 'Dashboard', icon: <BarChart3 className="w-5 h-5" />, href: '/' },
