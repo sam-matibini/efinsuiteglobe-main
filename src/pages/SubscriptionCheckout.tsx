@@ -183,16 +183,18 @@ export default function SubscriptionCheckout() {
         : c.duration === 'forever'
           ? ' — forever'
           : ' — first payment';
-      setAppliedPromo({
+      const applied = {
         id: data.promotion_code_id,
         code: data.code,
         label: `${disc}${dur}`,
-        percent_off: c.percent_off ?? null,
-        amount_off: c.amount_off ?? null,
+        percent_off: c.percent_off != null ? Number(c.percent_off) : null,
+        amount_off: c.amount_off != null ? Number(c.amount_off) : null,
         currency: c.currency ?? null,
         duration: c.duration ?? null,
-        duration_in_months: c.duration_in_months ?? null,
-      });
+        duration_in_months: c.duration_in_months != null ? Number(c.duration_in_months) : null,
+      };
+      console.log('[promo] applied', applied, 'raw coupon:', c);
+      setAppliedPromo(applied);
       toast.success(`Promo code ${data.code} applied`);
     } catch (err: any) {
       setPromoError(err.message || 'Could not validate code');
