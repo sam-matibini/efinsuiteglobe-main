@@ -423,8 +423,8 @@ serve(async (req) => {
           { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
 
-      // Retrieve individually with expanded coupon (list responses often omit nested objects)
-      const retRes = await fetch(`https://api.stripe.com/v1/promotion_codes/${promo.id}?expand[0]=coupon`, {
+      // Newer Stripe API versions expose the coupon under promotion.coupon.
+      const retRes = await fetch(`https://api.stripe.com/v1/promotion_codes/${promo.id}?expand[0]=promotion.coupon`, {
         headers: { 'Authorization': `Bearer ${stripeSecretKey}` },
       });
       const retJson = await retRes.json();
@@ -441,8 +441,15 @@ serve(async (req) => {
           { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
 
-      let coupon: any = (promo.coupon && typeof promo.coupon === 'object') ? promo.coupon : {};
-      const couponId = typeof promo.coupon === 'string' ? promo.coupon : coupon?.id;
+      const promotionCoupon = promo.promotion?.type === 'coupon' ? promo.promotion.coupon : null;
+      let coupon: any =
+        (promotionCoupon && typeof promotionCoupon === 'object')
+          ? promotionCoupon
+          : ((promo.coupon && typeof promo.coupon === 'object') ? promo.coupon : {});
+      const couponId =
+        typeof promotionCoupon === 'string'
+          ? promotionCoupon
+          : (promotionCoupon?.id || (typeof promo.coupon === 'string' ? promo.coupon : coupon?.id));
       const missingDiscount = coupon?.percent_off == null && coupon?.amount_off == null;
       if (couponId && missingDiscount) {
         const cRes = await fetch(`https://api.stripe.com/v1/coupons/${couponId}`, {
