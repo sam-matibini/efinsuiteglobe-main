@@ -1,31 +1,37 @@
-## Goal
+## Problem
 
-Extend the Management Report page (`/reports/management`) with interim/YTD financial statements alongside the existing ratios and charts. Management reports are internal and unaudited, so statements will be rendered in a condensed, printable format for the selected period.
+In the Reports Centre (`/reports`), roughly 25 report cards have no `href` set, so clicking them does nothing — the card just sits there and the user sees no data. Every card that already has an `href` points to a route that exists in `App.tsx` (verified by diffing hrefs against the route table), so the issue is limited to the missing links, not broken paths.
 
-## What to add
+Cards currently missing links:
+- Sales: Sales Summary, Customer Statement
+- Banking: Outstanding Checks, Cash Position
+- Inventory: Stock Movement, Reorder Report, Inventory Adjustments
+- Fixed Assets: Depreciation Schedule, Asset Disposition, CCA Schedule
+- Leases: Lease Amortization, Lease Maturity Analysis, ROU Asset Summary
+- Tax: Tax Summary, QST Report, PST Report, Tax Exception Report
+- Payroll: Employee Earnings, Payroll Register, Deduction Report, PD7A Report, Vacation Accrual, Benefits Report
+- Management: Financial Ratios, Budget vs Actual
 
-A new **"Financial Statements"** tab (added to the existing `Tabs` component) containing four condensed statements for the current filter period:
+## Fix
 
-1. **Income Statement (YTD/Interim)** — Revenue, COGS, Gross Profit, Operating Expenses, Operating Income, Other Income/Expense, Net Income.
-2. **Balance Sheet (As-of end date)** — Assets, Liabilities, Equity with Current Year Earnings.
-3. **Cash Flow Statement (Indirect)** — Operating/Investing/Financing sections for the period.
-4. **Statement of Changes in Equity** — Opening balances, movements, closing balances.
+In `src/pages/ReportsCentre.tsx`, wire every card to the best existing route so clicks always land on real data:
 
-Each statement is a condensed/summary view (section subtotals + top-level accounts, not full drill-down), suitable for management review. A period label reading "For the period ended {endDate}" or "Fiscal Year to Date" auto-derives from the filter.
+| Report | New href |
+|---|---|
+| Sales Summary | `/sales/invoices` |
+| Customer Statement | `/sales/customers` |
+| Outstanding Checks / Cash Position | `/banking/accounts` |
+| Stock Movement / Reorder Report / Inventory Adjustments | `/inventory` |
+| Depreciation Schedule / Asset Disposition / CCA Schedule | `/fixed-assets` |
+| Lease Amortization / Maturity / ROU Asset Summary | `/leases` |
+| Tax Summary / QST / PST / Tax Exception | `/tax` |
+| Employee Earnings / Payroll Register / Deduction Report / Vacation Accrual / Benefits Report | `/payroll/reports` |
+| PD7A Report | `/payroll/remittances` |
+| Financial Ratios | `/reports/management` |
+| Budget vs Actual | `/reports/management` |
 
-## Implementation
+Also small UX polish so clicks always feel responsive:
+- Keep the existing "Pro/New" badges but remove the `cursor-default` fallback branch — every card is now clickable.
+- Leave `isPremium` / `isNew` flags as-is (informational only).
 
-**File edited:** `src/pages/ManagementReport.tsx`
-
-1. Extend the hook usage to also pull cash flow and equity data:
-   - `useFinancialReports` already exposes `getBalanceSheetData` and `getIncomeStatementData`. Reuse `getCashFlowData` and `getEquityStatementData` if they exist; otherwise import from the existing hooks used by `CashFlow.tsx` and `ChangesInEquity.tsx` (`useFinancialReports` variants already power those pages).
-2. Add a new `<TabsTrigger value="statements">Financial Statements</TabsTrigger>` and matching `<TabsContent>`.
-3. Build a small reusable `<StatementSection>` component inside the file that renders a titled table with rows and a bolded subtotal — used by all four statements.
-4. Extend the Export to Excel and Export to PDF handlers to include each statement as a new sheet / new PDF page when the statements tab has data.
-5. Header label switches to include "Interim/YTD Financial Statements" when the statements tab is active.
-
-## Out of scope
-
-- No new database work, no schema changes.
-- No changes to the underlying report calculation hooks — reuse them as-is.
-- No comparative period columns (the dedicated report pages already provide those); management view stays single-period for brevity.
+No changes to routes, data hooks, or business logic — this is a presentation-layer link fix inside `ReportsCentre.tsx` only.
