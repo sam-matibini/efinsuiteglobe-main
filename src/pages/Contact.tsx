@@ -98,7 +98,9 @@ export default function Contact() {
         <meta name="twitter:card" content="summary" />
       </Helmet>
 
-      <LandingNav />
+      <div className="sticky top-0 z-50">
+        <LandingNav />
+      </div>
 
       {/* Hero */}
       <section className="relative overflow-hidden bg-gradient-to-b from-primary via-primary to-background text-white">
