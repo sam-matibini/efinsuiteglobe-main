@@ -127,10 +127,10 @@ const reports: ReportItem[] = [
   
   // Tax Reports
   { id: 'gst-hst', name: 'GST/HST Report', description: 'Tax collected, ITCs & net payable', category: 'Tax', module: 'Tax', icon: <BadgePercent className="w-5 h-5" />, href: '/tax', isFavorite: true },
-  { id: 'tax-summary', name: 'Tax Summary', description: 'All tax transactions by code', category: 'Tax', module: 'Tax', icon: <Receipt className="w-5 h-5" /> },
-  { id: 'qst-report', name: 'QST Report', description: 'Quebec Sales Tax report', category: 'Tax', module: 'Tax', icon: <Calculator className="w-5 h-5" /> },
-  { id: 'pst-report', name: 'PST Report', description: 'Provincial Sales Tax report', category: 'Tax', module: 'Tax', icon: <Calculator className="w-5 h-5" /> },
-  { id: 'tax-exception', name: 'Tax Exception Report', description: 'Transactions with tax issues', category: 'Tax', module: 'Tax', icon: <AlertTriangle className="w-5 h-5" /> },
+  { id: 'tax-summary', name: 'Tax Summary', description: 'All tax transactions by code', category: 'Tax', module: 'Tax', icon: <Receipt className="w-5 h-5" />, href: '/tax' },
+  { id: 'qst-report', name: 'QST Report', description: 'Quebec Sales Tax report', category: 'Tax', module: 'Tax', icon: <Calculator className="w-5 h-5" />, href: '/tax' },
+  { id: 'pst-report', name: 'PST Report', description: 'Provincial Sales Tax report', category: 'Tax', module: 'Tax', icon: <Calculator className="w-5 h-5" />, href: '/tax' },
+  { id: 'tax-exception', name: 'Tax Exception Report', description: 'Transactions with tax issues', category: 'Tax', module: 'Tax', icon: <AlertTriangle className="w-5 h-5" />, href: '/tax' },
   
   // Payroll Reports
   { id: 'payroll-summary', name: 'Payroll Summary', description: 'Pay run totals & contributions', category: 'Payroll', module: 'Payroll', icon: <Users className="w-5 h-5" />, href: '/payroll/reports' },
