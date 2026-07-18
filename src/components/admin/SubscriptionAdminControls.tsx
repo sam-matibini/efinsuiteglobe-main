@@ -58,6 +58,8 @@ export function SubscriptionDefaultsCard() {
   const [presetId, setPresetId] = useState<string>('custom');
   const [discountPercent, setDiscountPercent] = useState('0');
   const [discountExpires, setDiscountExpires] = useState('');
+  const [duration, setDuration] = useState<'once' | 'repeating' | 'forever'>('forever');
+  const [durationMonths, setDurationMonths] = useState('3');
   const [couponId, setCouponId] = useState('');
   const [note, setNote] = useState('');
 
@@ -68,6 +70,8 @@ export function SubscriptionDefaultsCard() {
     setPresetId(gd.preset_id || 'custom');
     setDiscountPercent(String(gd.percent ?? 0));
     setDiscountExpires(gd.expires_at ? gd.expires_at.slice(0, 10) : '');
+    setDuration((gd.duration as any) || (gd.expires_at ? 'once' : 'forever'));
+    setDurationMonths(String(gd.duration_in_months ?? 3));
     setCouponId(gd.stripe_coupon_id || '');
     setNote(gd.note || '');
   }, [settings]);
@@ -79,6 +83,8 @@ export function SubscriptionDefaultsCard() {
     if (usingPreset && selectedPreset) {
       setDiscountPercent(String(selectedPreset.percent));
       setDiscountExpires(selectedPreset.expires_at ? String(selectedPreset.expires_at).slice(0, 10) : '');
+      setDuration((selectedPreset.duration as any) || 'forever');
+      setDurationMonths(String(selectedPreset.duration_in_months ?? 3));
     }
   }, [presetId, selectedPreset, usingPreset]);
 
@@ -92,6 +98,8 @@ export function SubscriptionDefaultsCard() {
           : {
               percent: Number(discountPercent),
               expires_at: discountExpires ? new Date(discountExpires).toISOString() : null,
+              duration,
+              duration_in_months: duration === 'repeating' ? Number(durationMonths) : null,
               note: note || null,
             },
       });
