@@ -1,32 +1,54 @@
-## Plan: Backend for `/contact` form via Resend
+## Problem
 
-### 1. New edge function `supabase/functions/send-contact-message/index.ts`
-- Public (no JWT required — form is on unauthenticated `/contact` page).
-- CORS-enabled (OPTIONS handler + headers on every response).
-- Validates body with Zod: `name` (1–100), `email` (email, ≤255), `subject` (1–150), `message` (10–2000). Returns 400 with field errors on failure.
-- Basic anti-abuse: honeypot field `website` (must be empty) + reject if body missing/oversized.
-- Reads `RESEND_API_KEY` from env (already configured — used by existing `resend-integration`). If missing, returns 500 with a clear message.
-- Sends two emails via `https://api.resend.com/emails`:
-  1. **To support:** `to: support@efin.money`, `from: "efinsuite Contact <info@efinsuite.com>"` (matches existing `RESEND_FROM_EMAIL`), `reply_to: <submitter email>`, subject `"[Contact] <subject>"`, HTML body with name/email/subject/message (HTML-escaped).
-  2. **Auto-acknowledgement to submitter:** short branded "we received your message" HTML, subject `"We received your message — efinsuite Globe"`.
-- On Resend non-2xx, log status + body and return `{ error, status, details }` with the provider status.
-- Success response: `{ success: true }`.
+Editing a bank transaction (date, description, amount, reference, payee) via `EditTransactionDialog` currently calls `updateTransaction` in `useBankTransactions.ts`, which only patches the `bank_transactions` row. If the transaction was already posted to the GL (has `journal_entry_id`), the linked journal entry keeps the old amount/date/description, so the Trial Balance, Balance Sheet, and Income Statement never reflect the correction — exactly the $100,000 case in the screenshot.
 
-### 2. Wire the frontend form in `src/pages/Contact.tsx`
-- Replace the current `mailto:` handoff in `handleSubmit` with `supabase.functions.invoke('send-contact-message', { body: parsed.data })`.
-- Add hidden honeypot input `website` (visually hidden, `tabIndex={-1}`, `autoComplete="off"`) included in the payload.
-- On success: keep the existing toast (adjusted copy: "Message sent — we'll reply within one business day."), reset the form.
-- On error: read `FunctionsHttpError.context` for details, show destructive toast with a concise message.
-- Keep Zod client-side validation as-is.
+The same gap exists for `useCreditCardTransactions.ts` / `EditCreditCardTransactionDialog`.
 
-### 3. No config.toml change needed
-Lovable-managed functions default to `verify_jwt = false` in this project, so the public contact endpoint works out of the box; the function still validates input server-side.
+## Goal
 
-### Technical notes
-- `from` uses the already-verified `info@efinsuite.com` (per existing `resend-integration` defaults) so we don't require any new domain setup.
-- No new secrets required — `RESEND_API_KEY` is already present.
-- No DB tables, migrations, or RLS changes.
+Make bank & credit-card transaction edits GL-safe: when a posted transaction is edited, reverse and re-post the linked JE so ledgers, TB, and financial statements stay accurate — without forcing users into manual JEs.
+
+## Approach
+
+Reuse the existing `reverseLinkedJournalEntry` + `recalculateAndInvalidate` helpers in `useGLPropagation.ts` (already used by `categorizeTransaction` and delete flows) so the logic mirrors what happens when re-categorizing.
+
+### Fields that require GL re-post
+Any change to: `transaction_date`, `amount`, `description`, `reference`, `payee_payor`, `gl_account_id`, `category`, or the transaction "type" (deposit/withdrawal).
+
+Non-financial fields (notes, tags, memo-only) can update in place.
+
+### New `updateTransaction` flow (bank + credit card, symmetrical)
+
+1. Load current row (including `journal_entry_id`, `gl_account_id`, org id, current values).
+2. Detect whether any GL-relevant field changed.
+3. If not posted (`journal_entry_id` is null) → plain UPDATE, done.
+4. If posted and a GL-relevant field changed:
+   a. Call `reverseLinkedJournalEntry(...)` — creates the REV-* entry, marks original reversed, unlinks.
+   b. UPDATE the transaction row with the new values, set `status='pending'`, `journal_entry_id=null`.
+   c. If the transaction still has a `gl_account_id` (i.e. was previously categorized), immediately re-post a fresh JE with the corrected values, using the same debit/credit convention already in `categorizeTransaction` (deposit vs withdrawal based on amount sign, bank-side vs category-side lines, `BANK-<id>` reference, payee memo).
+   d. Link the new `journal_entry_id` back on the transaction.
+   e. Call `recalculateAndInvalidate(orgId, queryClient)` so TB / BS / IS refresh.
+5. If posted but only non-GL fields changed → plain UPDATE + invalidate `bank-transactions`.
+
+Wrap the reverse + update + re-post in try/catch; on failure toast and let the caller see the error. No SQL migrations — all logic is client-side and uses existing tables/RPCs.
+
+### Files to change
+
+- `src/hooks/useBankTransactions.ts` — replace the body of `updateTransaction` with the flow above; import the two helpers (already imported at top of file).
+- `src/hooks/useCreditCardTransactions.ts` — mirror the same flow (credit card sign convention: charge = debit expense/credit CC liability; payment = debit CC/credit bank-clearing). Reuse existing posting logic already present in `categorizeCC` there.
+- `src/components/banking/EditTransactionDialog.tsx` — no structural change; add a small inline notice "Editing will reverse and re-post the linked journal entry to keep the GL in sync." shown only when `journal_entry_id` is set.
+- `src/components/banking/EditCreditCardTransactionDialog.tsx` — same inline notice.
 
 ### Out of scope
-- Persisting submissions to a `contact_messages` table (can be added later if desired).
-- Rate limiting beyond the honeypot.
+
+- Editing an individual line of an already-posted manual JE (that path already exists via journal UI).
+- Bulk edit. Single-row edit only.
+- Schema changes.
+
+## Verification
+
+1. Open the JE from the screenshot's bank transaction, confirm original amount posted.
+2. Edit the bank transaction amount from $100,000 → $95,000 and save.
+3. Confirm: original JE marked `reversed`, a `REV-*` entry exists, a fresh JE with $95,000 is linked to the transaction, and Trial Balance / Balance Sheet / Operating Bank Account balance all reflect $95,000.
+4. Edit only the description → confirm no reversal happens (plain update).
+5. Repeat 2–4 for a credit card transaction.
