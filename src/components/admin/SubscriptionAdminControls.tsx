@@ -439,6 +439,24 @@ export function SetDiscountDialog({
     onError: (e: any) => toast.error(e.message || 'Failed'),
   });
 
+  const remove = useMutation({
+    mutationFn: async () => {
+      await callAdmin({
+        action: 'set-discount',
+        organization_id: sub.organization_id,
+        discount_percent: 0,
+        discount_expires_at: null,
+      });
+    },
+    onSuccess: () => {
+      toast.success('Discount removed');
+      onDone();
+      onOpenChange(false);
+    },
+    onError: (e: any) => toast.error(e.message || 'Failed'),
+  });
+
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
