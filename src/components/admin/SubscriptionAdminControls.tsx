@@ -58,6 +58,8 @@ export function SubscriptionDefaultsCard() {
   const [presetId, setPresetId] = useState<string>('custom');
   const [discountPercent, setDiscountPercent] = useState('0');
   const [discountExpires, setDiscountExpires] = useState('');
+  const [duration, setDuration] = useState<'once' | 'repeating' | 'forever'>('forever');
+  const [durationMonths, setDurationMonths] = useState('3');
   const [couponId, setCouponId] = useState('');
   const [note, setNote] = useState('');
 
@@ -68,6 +70,8 @@ export function SubscriptionDefaultsCard() {
     setPresetId(gd.preset_id || 'custom');
     setDiscountPercent(String(gd.percent ?? 0));
     setDiscountExpires(gd.expires_at ? gd.expires_at.slice(0, 10) : '');
+    setDuration((gd.duration as any) || (gd.expires_at ? 'once' : 'forever'));
+    setDurationMonths(String(gd.duration_in_months ?? 3));
     setCouponId(gd.stripe_coupon_id || '');
     setNote(gd.note || '');
   }, [settings]);
@@ -79,6 +83,8 @@ export function SubscriptionDefaultsCard() {
     if (usingPreset && selectedPreset) {
       setDiscountPercent(String(selectedPreset.percent));
       setDiscountExpires(selectedPreset.expires_at ? String(selectedPreset.expires_at).slice(0, 10) : '');
+      setDuration((selectedPreset.duration as any) || 'forever');
+      setDurationMonths(String(selectedPreset.duration_in_months ?? 3));
     }
   }, [presetId, selectedPreset, usingPreset]);
 
@@ -92,6 +98,8 @@ export function SubscriptionDefaultsCard() {
           : {
               percent: Number(discountPercent),
               expires_at: discountExpires ? new Date(discountExpires).toISOString() : null,
+              duration,
+              duration_in_months: duration === 'repeating' ? Number(durationMonths) : null,
               note: note || null,
             },
       });
@@ -156,6 +164,33 @@ export function SubscriptionDefaultsCard() {
             onChange={(e) => setDiscountExpires(e.target.value)}
           />
         </div>
+        <div className="space-y-2">
+          <Label>Duration</Label>
+          <Select
+            value={duration}
+            onValueChange={(v) => setDuration(v as any)}
+            disabled={!!usingPreset}
+          >
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="once">Once (first invoice)</SelectItem>
+              <SelectItem value="repeating">Repeating (N months)</SelectItem>
+              <SelectItem value="forever">Forever</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        {duration === 'repeating' && (
+          <div className="space-y-2">
+            <Label>Repeat for (months)</Label>
+            <Input
+              type="number"
+              min={1}
+              value={durationMonths}
+              disabled={!!usingPreset}
+              onChange={(e) => setDurationMonths(e.target.value)}
+            />
+          </div>
+        )}
         <div className="space-y-2 md:col-span-2">
           <Label>Stripe coupon</Label>
           <div className="text-sm text-muted-foreground px-3 py-2 border rounded-md bg-muted/30 font-mono truncate">
@@ -387,6 +422,8 @@ export function SetDiscountDialog({
   const [presetId, setPresetId] = useState<string>('custom');
   const [percent, setPercent] = useState('');
   const [expires, setExpires] = useState('');
+  const [duration, setDuration] = useState<'once' | 'repeating' | 'forever'>('forever');
+  const [durationMonths, setDurationMonths] = useState('3');
 
   const { data: presets } = useQuery({
     queryKey: ['discount_presets', 'active'],
@@ -406,6 +443,8 @@ export function SetDiscountDialog({
     setPresetId('custom');
     setPercent(sub.discount_percent != null ? String(sub.discount_percent) : '');
     setExpires(sub.discount_expires_at ? String(sub.discount_expires_at).slice(0, 10) : '');
+    setDuration(sub.discount_expires_at ? 'once' : 'forever');
+    setDurationMonths('3');
   }, [open, sub]);
 
   const usingPreset = presetId && presetId !== 'custom';
@@ -415,6 +454,8 @@ export function SetDiscountDialog({
     if (usingPreset && selectedPreset) {
       setPercent(String(selectedPreset.percent));
       setExpires(selectedPreset.expires_at ? String(selectedPreset.expires_at).slice(0, 10) : '');
+      setDuration((selectedPreset.duration as any) || 'forever');
+      setDurationMonths(String(selectedPreset.duration_in_months ?? 3));
     }
   }, [presetId, selectedPreset, usingPreset]);
 
@@ -428,6 +469,8 @@ export function SetDiscountDialog({
           : {
               discount_percent: Number(percent) || 0,
               discount_expires_at: expires ? new Date(expires).toISOString() : null,
+              duration,
+              duration_in_months: duration === 'repeating' ? Number(durationMonths) : null,
             }),
       });
     },
@@ -491,6 +534,33 @@ export function SetDiscountDialog({
               onChange={(e) => setPercent(e.target.value)}
             />
           </div>
+          <div className="space-y-1">
+            <Label>Duration</Label>
+            <Select
+              value={duration}
+              onValueChange={(v) => setDuration(v as any)}
+              disabled={!!usingPreset}
+            >
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="once">Once (first invoice)</SelectItem>
+                <SelectItem value="repeating">Repeating (N months)</SelectItem>
+                <SelectItem value="forever">Forever</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {duration === 'repeating' && (
+            <div className="space-y-1">
+              <Label>Repeat for (months)</Label>
+              <Input
+                type="number"
+                min={1}
+                value={durationMonths}
+                disabled={!!usingPreset}
+                onChange={(e) => setDurationMonths(e.target.value)}
+              />
+            </div>
+          )}
           <div className="space-y-1">
             <Label>Expires (optional)</Label>
             <Input

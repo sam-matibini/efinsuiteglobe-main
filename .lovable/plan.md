@@ -1,66 +1,32 @@
-# Auto-provision Stripe Coupons + Discounts Admin Tab
 
-Remove the "paste a Stripe coupon ID" step. Whenever an admin sets a discount (global or per-org), the backend creates the coupon in Stripe automatically and stores its ID. Add a new **Discounts** tab in Admin → Subscriptions to manage a library of reusable Stripe coupons.
+## 1. Duration field for global and per-org discounts
 
-## What changes for the admin
+Right now the admin edge function infers coupon duration (`once` when an expiry is set, otherwise `forever`) and never uses `repeating`. This adds an explicit duration selector to both flows, matching what the Discounts library already supports.
 
-**Global discount card (existing)**
-- Remove the "Stripe coupon ID" text input.
-- On save, if `percent > 0` and no coupon exists (or percent/duration changed), the backend creates a Stripe coupon (`percent_off`, optional `redeem_by = expires_at`, `duration = once|repeating|forever` based on expiry) and stores its ID in `platform_settings.subscription.global_discount.stripe_coupon_id`. If percent is 0, the coupon is cleared (and archived in Stripe).
+**UI — `src/components/admin/SubscriptionAdminControls.tsx`**
+- `SubscriptionDefaultsCard` (global discount): add a **Duration** `<Select>` with options *Once*, *Repeating (months)*, *Forever*. When *Repeating* is chosen, show a **Months** number input. Disable both fields when a saved preset is selected (preset already carries duration). Persist selection in `platform_settings.subscription.global_discount` as `duration` and `duration_in_months`.
+- `SetDiscountDialog` (per-org): same Duration + Months controls; disabled when a preset is chosen. Values are sent to the edge function alongside `discount_percent` / `discount_expires_at`.
 
-**Per-org "Set discount" dialog (existing)**
-- Same behavior: on save, backend creates/reuses a Stripe coupon for that org and stores its ID on the `subscriptions` row (new column `stripe_coupon_id`). Existing `discount_percent` / `discount_expires_at` still drive the UI.
-- Add a "Use saved discount…" selector that picks from the new discounts library (see below); selecting one copies its percent/expiry and reuses its coupon ID.
+**Backend — `supabase/functions/admin-subscription-override/index.ts`**
+- `update-defaults`: accept optional `duration` and `duration_in_months`. Store them in the `global_discount` platform setting. Pass them to `createStripeCoupon` when auto-provisioning the global coupon (replacing today's expiry-based inference).
+- `set-discount`: accept optional `duration` and `duration_in_months`. Pass to `createStripeCoupon` for the per-org one-off coupon. Preset path unchanged (preset's own coupon is reused).
+- Audit log entries include the new fields.
 
-**New: Discounts tab (`Admin → Subscriptions → Discounts`)**
-- Table of saved discount presets from a new `discount_presets` table: name, percent, duration (once / N months / forever), expiry (optional), Stripe coupon ID, status (active / archived), created by, created at.
-- Actions: **Create discount** (name, percent, duration, expiry, optional max redemptions) → creates the Stripe coupon and inserts the row. **Archive** → deletes the coupon in Stripe and marks the row archived. **Copy code** for the Stripe coupon ID.
-- These presets are what the global card and per-org dialog pick from.
+**Checkout — `supabase/functions/stripe-integration/index.ts`**
+- No coupon-attach logic changes needed (duration is baked into the coupon at creation). Just make sure the effective-discount payload continues to look up the stored `stripe_coupon_id`.
 
-## Data model
+## 2. Promo code entry on Stripe Checkout
 
-New migration:
-- `subscriptions.stripe_coupon_id text nullable` — coupon currently attached to this org.
-- New table `public.discount_presets`:
-  - `id uuid pk`, `name text not null`, `percent numeric not null check (percent > 0 and percent <= 100)`,
-  - `duration text not null check (duration in ('once','repeating','forever'))`,
-  - `duration_in_months int null`, `expires_at timestamptz null`, `max_redemptions int null`,
-  - `stripe_coupon_id text not null unique`, `status text not null default 'active'`,
-  - `created_by uuid`, `created_at`, `updated_at` timestamps.
-- GRANTs: `authenticated` SELECT (so admin UI can list), `service_role` ALL. RLS: only `has_role(auth.uid(),'admin')` can select; all writes go through the edge function.
-
-## Backend changes
-
-`supabase/functions/admin-subscription-override/index.ts`
-- Add Stripe helper `createCoupon({ percent, duration, duration_in_months, redeem_by, max_redemptions, name })` that calls `POST https://api.stripe.com/v1/coupons` with the existing `STRIPE_SECRET_KEY`.
-- Add helper `deleteCoupon(id)` (`DELETE /v1/coupons/{id}`).
-- New actions:
-  - `create-preset` → create Stripe coupon, insert `discount_presets` row.
-  - `archive-preset` → delete Stripe coupon, mark row `archived`.
-  - `list-presets` (or the UI reads the table directly via RLS).
-- Extend existing actions:
-  - `update-defaults` (global discount): if `global_discount.percent > 0`, create/replace the Stripe coupon and write its ID back into the setting. If `percent = 0`, delete the existing coupon.
-  - `set-discount` (per-org): accept either `preset_id` (reuse that coupon) or raw `discount_percent + discount_expires_at` (create a one-off coupon named `org:<id>`). Store `stripe_coupon_id` on the subscription row.
-- All coupon mutations are audit-logged (before/after including coupon id).
-
-`supabase/functions/stripe-integration/index.ts`
-- Effective-discount resolution stays the same, but the coupon ID now comes from:
-  1. `subscriptions.stripe_coupon_id` if the per-org discount is active, else
-  2. `platform_settings.subscription.global_discount.stripe_coupon_id`.
-- The "skip Stripe discount when no coupon id is configured" fallback is removed — a discount without a coupon ID is now impossible for new writes, and legacy rows are treated as inactive with a console warning.
-
-## Frontend changes
-
-`src/components/admin/SubscriptionAdminControls.tsx`
-- `SubscriptionDefaultsCard`: remove the coupon-ID input; show read-only "Stripe coupon: cpn_… (auto-managed)" once created. Save button triggers coupon provisioning via `update-defaults`.
-- `SetDiscountDialog`: add a "Use saved discount" `<Select>` populated from `discount_presets`; when a preset is chosen, percent/expiry inputs become read-only. A "Custom (one-off)" option keeps the current free-form flow.
-- New `DiscountsTab` component (list, create dialog, archive action). Uses the edge function for writes and `supabase.from('discount_presets').select()` for reads.
-
-`src/pages/admin/AdminSubscriptions.tsx`
-- Add a "Discounts" tab alongside the existing tabs and mount `DiscountsTab`.
+**`supabase/functions/stripe-integration/index.ts`**
+- In the `create-checkout` action's `sessionParams`, add `allow_promotion_codes: 'true'` so the Stripe Checkout page shows a "Add promotion code" field. Customers can then type any active Stripe **promotion code** (the human-readable code attached to a coupon in Stripe Dashboard → Products → Coupons → Promotion codes).
+- Stripe does not allow combining a customer-typed promotion code with an admin-attached coupon on the same session. To keep both paths working: when an admin discount coupon is being applied (per-org or global), attach it via `discounts[0][coupon]` as today and **omit** `allow_promotion_codes`. When no admin discount applies, set `allow_promotion_codes: 'true'` so the customer can enter one themselves.
 
 ## Out of scope
 
-- Coupon codes users type at checkout (promotion codes) — this ticket only handles admin-applied discounts. Can be a follow-up by wrapping the coupon in a Stripe `promotion_code`.
-- Amount-off (fixed currency) coupons — percent-off only for now.
-- Editing an existing preset's percent/duration (Stripe doesn't allow mutating those; UI offers Archive + Create new instead).
+- A UI for admins to create/manage Stripe **promotion codes** (the typeable string tied to a coupon). Admins can create these in the Stripe Dashboard for now; a follow-up can add a "Promotion codes" section to the Discounts tab that calls `POST /v1/promotion_codes`.
+- Editing duration on existing Stripe coupons — Stripe forbids it. The edge function already replaces (delete + create) the coupon when discount parameters change, so changing duration will trigger a rebuild of the coupon automatically.
+
+## Technical notes
+
+- Duration select values map 1:1 to Stripe's `duration` enum: `once | repeating | forever`. `duration_in_months` is required only when `duration = 'repeating'`; the UI enforces this and the backend validates it before calling Stripe.
+- Legacy rows with no stored duration continue to work: the backend falls back to today's behaviour (`once` if expiry set, else `forever`) when the field is absent.

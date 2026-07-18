@@ -340,8 +340,12 @@ serve(async (req) => {
         : (globalDiscountActive ? gd.stripe_coupon_id : null);
       if (couponId) {
         sessionParams['discounts[0][coupon]'] = String(couponId);
-      } else if ((subRow && Number(subRow.discount_percent) > 0) || Number(gd.percent) > 0) {
-        console.warn('Discount configured without a Stripe coupon id — skipping Stripe discount');
+      } else {
+        // No admin coupon attached — let the customer type a promotion code on the Stripe Checkout page.
+        sessionParams['allow_promotion_codes'] = 'true';
+        if ((subRow && Number(subRow.discount_percent) > 0) || Number(gd.percent) > 0) {
+          console.warn('Discount configured without a Stripe coupon id — skipping Stripe discount');
+        }
       }
 
       const session = await stripeRequest('/checkout/sessions', 'POST', sessionParams);
