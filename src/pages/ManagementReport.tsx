@@ -719,14 +719,27 @@ export default function ManagementReport() {
       </div>
 
       {/* Tabs for Ratio Categories */}
-      <Tabs defaultValue="all" className="space-y-4">
+      <Tabs defaultValue="statements" className="space-y-4">
         <TabsList className="print:hidden">
+          <TabsTrigger value="statements">Financial Statements</TabsTrigger>
           <TabsTrigger value="all">All Ratios</TabsTrigger>
           <TabsTrigger value="liquidity">Liquidity</TabsTrigger>
           <TabsTrigger value="efficiency">Efficiency</TabsTrigger>
           <TabsTrigger value="profitability">Profitability</TabsTrigger>
           <TabsTrigger value="leverage">Leverage</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="statements" className="space-y-4">
+          <StatementsPanel
+            organizationName={organization?.name || ''}
+            startDate={startDate}
+            endDate={endDate}
+            balanceSheet={balanceSheet}
+            incomeStatement={incomeStatement}
+            cashFlow={cashFlow}
+            fmt={fmtCurrency}
+          />
+        </TabsContent>
 
         <TabsContent value="all" className="space-y-4">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
