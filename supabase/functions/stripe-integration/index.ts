@@ -7,7 +7,8 @@ const corsHeaders = {
 };
 
 interface StripeRequest {
-  action: 'health-check' | 'test' | 'create-customer' | 'create-payment-intent' | 'create-wallet-payment' | 'sync-plans' | 'create-checkout-session' | 'manage-subscription' | 'preview-plan-change' | 'create-billing-portal-session' | 'get-payment-method' | 'list-invoices';
+  action: 'health-check' | 'test' | 'create-customer' | 'create-payment-intent' | 'create-wallet-payment' | 'sync-plans' | 'create-checkout-session' | 'manage-subscription' | 'preview-plan-change' | 'create-billing-portal-session' | 'get-payment-method' | 'list-invoices' | 'verify-checkout-session';
+  sessionId?: string;
   returnUrl?: string;
   portalFlow?: 'payment_method_update' | 'subscription_cancel';
   customerId?: string;
@@ -651,6 +652,130 @@ serve(async (req) => {
       }));
       return new Response(JSON.stringify({ success: true, invoices }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    // ===== VERIFY CHECKOUT SESSION =====
+    if (action === 'verify-checkout-session') {
+      if (!stripeSecretKey) {
+        return new Response(JSON.stringify({ success: false, error: 'Stripe not configured' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      const { sessionId, organizationId } = body;
+      if (!sessionId) {
+        return new Response(JSON.stringify({ success: false, error: 'sessionId required' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+
+      // Auth: require valid JWT
+      const authHeader = req.headers.get('Authorization');
+      if (!authHeader?.startsWith('Bearer ')) {
+        return new Response(JSON.stringify({ success: false, error: 'Unauthorized' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      const userClient = createClient(
+        Deno.env.get('SUPABASE_URL')!,
+        Deno.env.get('SUPABASE_ANON_KEY')!,
+        { global: { headers: { Authorization: authHeader } } }
+      );
+      const { data: claims, error: claimsErr } = await userClient.auth.getClaims(
+        authHeader.replace('Bearer ', '')
+      );
+      if (claimsErr || !claims?.claims?.sub) {
+        return new Response(JSON.stringify({ success: false, error: 'Unauthorized' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      const userId = claims.claims.sub;
+
+      const session = await stripeRequest(
+        `/checkout/sessions/${encodeURIComponent(sessionId)}?expand[]=subscription&expand[]=customer`,
+        'GET'
+      );
+      if (session.error) {
+        return new Response(JSON.stringify({ success: false, error: session.error.message }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+
+      const sessionOrgId = session.metadata?.organization_id || organizationId;
+      const supabaseAdmin = getSupabaseAdmin();
+
+      // Verify caller belongs to the org that owns this checkout session
+      if (sessionOrgId) {
+        const { data: membership } = await supabaseAdmin
+          .from('organization_members')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('organization_id', sessionOrgId)
+          .maybeSingle();
+        if (!membership) {
+          return new Response(JSON.stringify({ success: false, error: 'Session does not belong to your organization' }),
+            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+      }
+
+      const stripeSub = session.subscription && typeof session.subscription === 'object'
+        ? session.subscription
+        : null;
+
+      // If checkout is complete but our local subscription row hasn't been synced by the webhook yet,
+      // upsert now so the UI can reflect the new plan immediately. Idempotent w/ webhook.
+      if (session.status === 'complete' && stripeSub && sessionOrgId) {
+        const planId = session.metadata?.plan_id || stripeSub.metadata?.plan_id || null;
+        const billingCycle = session.metadata?.billing_cycle || null;
+        const periodEnd = stripeSub.current_period_end
+          ? new Date(stripeSub.current_period_end * 1000).toISOString()
+          : null;
+
+        const { data: existing } = await supabaseAdmin
+          .from('subscriptions')
+          .select('id')
+          .eq('organization_id', sessionOrgId)
+          .maybeSingle();
+
+        const row: Record<string, unknown> = {
+          organization_id: sessionOrgId,
+          status: stripeSub.status,
+          stripe_subscription_id: stripeSub.id,
+          stripe_customer_id: typeof session.customer === 'string' ? session.customer : session.customer?.id,
+          current_period_end: periodEnd,
+        };
+        if (planId) row.plan_id = planId;
+        if (billingCycle) row.billing_cycle = billingCycle;
+
+        if (existing?.id) {
+          await supabaseAdmin.from('subscriptions').update(row).eq('id', existing.id);
+        } else {
+          await supabaseAdmin.from('subscriptions').insert(row);
+        }
+      }
+
+      // Load plan name for display
+      let planName: string | null = null;
+      let currentPeriodEnd: string | null = null;
+      if (stripeSub) {
+        currentPeriodEnd = stripeSub.current_period_end
+          ? new Date(stripeSub.current_period_end * 1000).toISOString()
+          : null;
+        const planId = session.metadata?.plan_id || stripeSub.metadata?.plan_id;
+        if (planId) {
+          const { data: plan } = await supabaseAdmin
+            .from('pricing_plans')
+            .select('name')
+            .eq('id', planId)
+            .maybeSingle();
+          planName = plan?.name ?? null;
+        }
+      }
+
+      return new Response(JSON.stringify({
+        success: true,
+        status: session.status, // 'complete' | 'open' | 'expired'
+        payment_status: session.payment_status,
+        subscription_status: stripeSub?.status ?? null,
+        plan_name: planName,
+        current_period_end: currentPeriodEnd,
+        amount_total: session.amount_total,
+        currency: session.currency,
+      }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
     return new Response(JSON.stringify({ error: 'Invalid action' }),
