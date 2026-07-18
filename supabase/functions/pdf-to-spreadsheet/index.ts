@@ -570,8 +570,8 @@ serve(async (req) => {
     const result = {
       success: true,
       fileName,
-      totalPages: 0,
-      processedPages: 0,
+      totalPages,
+      processedPages: processedPages || totalPages,
       columns,
       rows,
       sheets: extractedSheets.length > 1 ? extractedSheets : undefined,
