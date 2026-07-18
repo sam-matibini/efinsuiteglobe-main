@@ -68,7 +68,7 @@ const reports: ReportItem[] = [
   { id: 'journal-entries', name: 'Journal Entries', description: 'All journal entries with status & amounts', category: 'Accounting', module: 'Accounting', icon: <FileText className="w-5 h-5" />, href: '/journal-entries' },
   { id: 'chart-of-accounts', name: 'Chart of Accounts', description: 'Complete account structure & hierarchy', category: 'Accounting', module: 'Accounting', icon: <FileSpreadsheet className="w-5 h-5" />, href: '/accounts' },
   { id: 'account-transactions', name: 'Account Transactions', description: 'Detailed transactions for specific accounts', category: 'Accounting', module: 'Accounting', icon: <ArrowRightLeft className="w-5 h-5" />, href: '/ledger' },
-  { id: 'budget-vs-actual', name: 'Budget vs Actual', description: 'Compare budgeted vs actual amounts', category: 'Accounting', module: 'Accounting', icon: <BarChart3 className="w-5 h-5" />, isPremium: true },
+  { id: 'budget-vs-actual', name: 'Budget vs Actual', description: 'Compare budgeted vs actual amounts', category: 'Accounting', module: 'Accounting', icon: <BarChart3 className="w-5 h-5" />, href: '/reports/management', isPremium: true },
   
   // Sales Reports (A/R)
   { id: 'sales-summary', name: 'Sales Summary', description: 'Revenue breakdown by customer & period', category: 'Sales', module: 'Sales', icon: <TrendingUp className="w-5 h-5" />, href: '/sales/invoices' },
