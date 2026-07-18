@@ -16,7 +16,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Check, CreditCard, Loader2 } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Check, CreditCard, Loader2, Tag, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface PricingPlan {
