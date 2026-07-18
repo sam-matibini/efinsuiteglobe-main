@@ -1171,9 +1171,16 @@ export function AISheets({
           sourceType: 'pdf',
         }]);
         setActiveSheetIndex(sheets.length);
-        toast.success(`Extracted ${result.rows.length} rows from ${result.processedPages} pages`);
+        const pageLabel = result.totalPages
+          ? `${result.processedPages}/${result.totalPages} pages`
+          : `${result.processedPages} pages`;
+        toast.success(`Extracted ${result.rows.length} rows from ${pageLabel}`);
+        if (result.validationWarnings?.length) {
+          toast.warning(result.validationWarnings.slice(0, 2).join(' '));
+        }
       } else {
-        toast.error(result?.message || 'No data extracted from PDF');
+        const warningText = result?.validationWarnings?.slice(0, 2).join(' ');
+        toast.error(warningText || result?.error || result?.message || 'No data extracted from PDF');
       }
     } catch (err) {
       toast.error('Failed to process PDF');
