@@ -68,6 +68,7 @@ function formatDate(ts: number | null | undefined) {
 export default function SubscriptionCheckout() {
   const { organization } = useCurrentOrganization();
   const { isAdmin } = useAuth();
+  const { userCount, employeeCount } = useUsageLimits();
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const highlightTier = searchParams.get('plan');
