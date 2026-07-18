@@ -52,6 +52,7 @@ import {
   SetDiscountDialog,
 } from '@/components/admin/SubscriptionAdminControls';
 import { DiscountsTab } from '@/components/admin/DiscountsTab';
+import { SubscriptionAuditLogTab } from '@/components/admin/SubscriptionAuditLogTab';
 
 interface Subscription {
   id: string;
@@ -654,7 +655,9 @@ export default function AdminSubscriptions() {
           <TabsTrigger value="subscriptions">Subscriptions</TabsTrigger>
           <TabsTrigger value="pricing">Pricing Plans</TabsTrigger>
           <TabsTrigger value="discounts">Discounts</TabsTrigger>
+          <TabsTrigger value="audit">Audit Log</TabsTrigger>
         </TabsList>
+        
         
         <TabsContent value="subscriptions" className="mt-4 space-y-4">
           <SubscriptionDefaultsCard />
@@ -922,6 +925,10 @@ export default function AdminSubscriptions() {
 
         <TabsContent value="discounts" className="mt-4">
           <DiscountsTab />
+        </TabsContent>
+
+        <TabsContent value="audit" className="mt-4">
+          <SubscriptionAuditLogTab />
         </TabsContent>
       </Tabs>
 

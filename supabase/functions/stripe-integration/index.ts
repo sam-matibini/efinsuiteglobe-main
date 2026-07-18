@@ -7,7 +7,7 @@ const corsHeaders = {
 };
 
 interface StripeRequest {
-  action: 'health-check' | 'test' | 'create-customer' | 'create-payment-intent' | 'create-wallet-payment' | 'sync-plans' | 'create-checkout-session' | 'manage-subscription' | 'preview-plan-change' | 'create-billing-portal-session' | 'get-payment-method' | 'list-invoices' | 'verify-checkout-session';
+  action: 'health-check' | 'test' | 'create-customer' | 'create-payment-intent' | 'create-wallet-payment' | 'sync-plans' | 'create-checkout-session' | 'manage-subscription' | 'preview-plan-change' | 'create-billing-portal-session' | 'get-payment-method' | 'list-invoices' | 'verify-checkout-session' | 'validate-promotion-code';
   sessionId?: string;
   returnUrl?: string;
   portalFlow?: 'payment_method_update' | 'subscription_cancel';
@@ -231,7 +231,7 @@ serve(async (req) => {
         return new Response(JSON.stringify({ success: false, error: 'Stripe not configured' }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
-      const { planId, billingCycle, organizationId, successUrl, cancelUrl } = body;
+      const { planId, billingCycle, organizationId, successUrl, cancelUrl, promotionCodeId } = body as any;
       if (!planId || !organizationId) {
         return new Response(JSON.stringify({ success: false, error: 'planId and organizationId are required' }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
@@ -341,6 +341,9 @@ serve(async (req) => {
         : (globalDiscountActive ? gd.stripe_coupon_id : null);
       if (couponId) {
         sessionParams['discounts[0][coupon]'] = String(couponId);
+      } else if (promotionCodeId) {
+        // User-supplied promotion code from our in-app field
+        sessionParams['discounts[0][promotion_code]'] = String(promotionCodeId);
       } else {
         // No admin coupon attached — let the customer type a promotion code on the Stripe Checkout page.
         sessionParams['allow_promotion_codes'] = 'true';
@@ -358,6 +361,123 @@ serve(async (req) => {
       return new Response(JSON.stringify({ success: true, sessionId: session.id, url: session.url }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
+
+    // ===== VALIDATE PROMOTION CODE =====
+    if (action === 'validate-promotion-code') {
+      if (!stripeSecretKey) {
+        return new Response(JSON.stringify({ success: false, error: 'Stripe not configured' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      const { code, planId, billingCycle, organizationId } = body as any;
+      if (!code || typeof code !== 'string') {
+        return new Response(JSON.stringify({ success: false, error: 'code is required' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+
+      const supabaseAdmin = getSupabaseAdmin();
+
+      // Refuse if org already has an admin-applied coupon (per-org or global)
+      if (organizationId) {
+        const { data: subRow } = await supabaseAdmin
+          .from('subscriptions')
+          .select('stripe_coupon_id, discount_percent, discount_expires_at')
+          .eq('organization_id', organizationId)
+          .in('status', ['active', 'trialing'])
+          .maybeSingle();
+        const { data: globalDiscount } = await supabaseAdmin
+          .from('platform_settings')
+          .select('setting_value')
+          .eq('setting_key', 'subscription.global_discount')
+          .maybeSingle();
+        const gd = (globalDiscount?.setting_value as any) || {};
+        const nowTs = new Date();
+        const orgActive = subRow && Number(subRow.discount_percent) > 0 &&
+          (!subRow.discount_expires_at || new Date(subRow.discount_expires_at) > nowTs) &&
+          !!subRow.stripe_coupon_id;
+        const globalActive = Number(gd.percent) > 0 &&
+          (!gd.expires_at || new Date(gd.expires_at) > nowTs) &&
+          !!gd.stripe_coupon_id;
+        if (orgActive || globalActive) {
+          return new Response(JSON.stringify({
+            success: false,
+            error: 'A discount is already applied to this subscription.',
+            adminDiscountActive: true,
+          }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+      }
+
+      // Look up promotion code
+      const qs = new URLSearchParams({ code: code.trim(), active: 'true', limit: '1' }).toString();
+      const listRes = await fetch(`https://api.stripe.com/v1/promotion_codes?${qs}&expand[]=data.coupon`, {
+        method: 'GET',
+        headers: { 'Authorization': `Bearer ${stripeSecretKey}` },
+      });
+      const list = await listRes.json();
+      if (list.error) {
+        return new Response(JSON.stringify({ success: false, error: list.error.message }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      const promo = (list.data && list.data[0]) || null;
+      if (!promo) {
+        return new Response(JSON.stringify({ success: false, error: 'Code not valid' }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+
+      const nowSec = Math.floor(Date.now() / 1000);
+      if (promo.expires_at && promo.expires_at < nowSec) {
+        return new Response(JSON.stringify({ success: false, error: 'Code has expired' }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      if (promo.max_redemptions && promo.times_redeemed >= promo.max_redemptions) {
+        return new Response(JSON.stringify({ success: false, error: 'Code has reached its redemption limit' }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+
+      const coupon = promo.coupon || {};
+
+      // Optional plan preview
+      let preview: any = null;
+      if (planId) {
+        const { data: plan } = await supabaseAdmin
+          .from('pricing_plans')
+          .select('price_monthly, price_yearly')
+          .eq('id', planId)
+          .maybeSingle();
+        if (plan) {
+          const baseDollars = billingCycle === 'yearly' ? Number(plan.price_yearly) : Number(plan.price_monthly);
+          const baseCents = Math.round(baseDollars * 100);
+          let savingsCents = 0;
+          if (coupon.percent_off) {
+            savingsCents = Math.round((baseCents * Number(coupon.percent_off)) / 100);
+          } else if (coupon.amount_off) {
+            savingsCents = Math.min(baseCents, Number(coupon.amount_off));
+          }
+          preview = {
+            currency: coupon.currency || 'usd',
+            base_amount: baseCents,
+            savings: savingsCents,
+            discounted_amount: Math.max(0, baseCents - savingsCents),
+          };
+        }
+      }
+
+      return new Response(JSON.stringify({
+        success: true,
+        valid: true,
+        promotion_code_id: promo.id,
+        code: promo.code,
+        coupon: {
+          id: coupon.id,
+          percent_off: coupon.percent_off || null,
+          amount_off: coupon.amount_off || null,
+          currency: coupon.currency || null,
+          duration: coupon.duration || 'once',
+          duration_in_months: coupon.duration_in_months || null,
+        },
+        preview,
+      }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
 
     // ===== PREVIEW PLAN CHANGE (proration) =====
     if (action === 'preview-plan-change') {
