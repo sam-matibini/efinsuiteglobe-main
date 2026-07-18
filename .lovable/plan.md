@@ -1,32 +1,34 @@
+# Optimize organization switching
 
-## 1. Duration field for global and per-org discounts
+## Goal
+Switching organizations should feel instant: land on the dashboard, refresh org-scoped data, and skip the current full-app reload (`window.location.assign('/')`) that re-boots React, re-runs auth, re-parses bundles, and refetches everything from scratch.
 
-Right now the admin edge function infers coupon duration (`once` when an expiry is set, otherwise `forever`) and never uses `repeating`. This adds an explicit duration selector to both flows, matching what the Discounts library already supports.
+## Approach
+Keep the app mounted. Update the current-org state, invalidate React Query caches, and navigate to `/` via React Router.
 
-**UI — `src/components/admin/SubscriptionAdminControls.tsx`**
-- `SubscriptionDefaultsCard` (global discount): add a **Duration** `<Select>` with options *Once*, *Repeating (months)*, *Forever*. When *Repeating* is chosen, show a **Months** number input. Disable both fields when a saved preset is selected (preset already carries duration). Persist selection in `platform_settings.subscription.global_discount` as `duration` and `duration_in_months`.
-- `SetDiscountDialog` (per-org): same Duration + Months controls; disabled when a preset is chosen. Values are sent to the edge function alongside `discount_percent` / `discount_expires_at`.
+### Changes
 
-**Backend — `supabase/functions/admin-subscription-override/index.ts`**
-- `update-defaults`: accept optional `duration` and `duration_in_months`. Store them in the `global_discount` platform setting. Pass them to `createStripeCoupon` when auto-provisioning the global coupon (replacing today's expiry-based inference).
-- `set-discount`: accept optional `duration` and `duration_in_months`. Pass to `createStripeCoupon` for the per-org one-off coupon. Preset path unchanged (preset's own coupon is reused).
-- Audit log entries include the new fields.
+1. **`src/hooks/useOrganizationContext.tsx`**
+   - Remove `window.location.assign('/')`.
+   - Replace `queryClient.clear()` with `queryClient.invalidateQueries()` so cached UI (shadcn state, layout, user profile) stays warm while org-scoped queries refetch. `clear()` throws away everything including non-org data; `invalidateQueries` is enough because every org-scoped query already keys on `currentOrganization.id`.
+   - Expose the switch as-is; navigation is handled by the caller so this hook stays router-agnostic.
 
-**Checkout — `supabase/functions/stripe-integration/index.ts`**
-- No coupon-attach logic changes needed (duration is baked into the coupon at creation). Just make sure the effective-discount payload continues to look up the stored `stripe_coupon_id`.
+2. **`src/components/layout/SearchableOrgSwitcher.tsx`** (the actual caller)
+   - After `onSwitch(org)`, call `navigate('/')` from `react-router-dom`'s `useNavigate`. Only navigate if not already on `/` to avoid a redundant transition.
 
-## 2. Promo code entry on Stripe Checkout
+3. **Sanity check org-scoped query keys**
+   - Quick pass over `src/hooks/**` to confirm queries that depend on the current org include `currentOrganization?.id` in their `queryKey`. Any that don't would show stale data after switch — those get the org id added to their key. (This is a targeted audit, not a rewrite.)
 
-**`supabase/functions/stripe-integration/index.ts`**
-- In the `create-checkout` action's `sessionParams`, add `allow_promotion_codes: 'true'` so the Stripe Checkout page shows a "Add promotion code" field. Customers can then type any active Stripe **promotion code** (the human-readable code attached to a coupon in Stripe Dashboard → Products → Coupons → Promotion codes).
-- Stripe does not allow combining a customer-typed promotion code with an admin-attached coupon on the same session. To keep both paths working: when an admin discount coupon is being applied (per-org or global), attach it via `discounts[0][coupon]` as today and **omit** `allow_promotion_codes`. When no admin discount applies, set `allow_promotion_codes: 'true'` so the customer can enter one themselves.
+### Why this is faster
+- No JS re-parse, no re-hydration, no re-auth round-trip, no re-fetch of already-cached global data (roles, feature flags, currencies, etc.).
+- Only org-scoped queries refetch, which is what actually needs to change.
+- Route transition to `/` is a client-side render, typically <100ms vs. a multi-second cold boot.
 
-## Out of scope
-
-- A UI for admins to create/manage Stripe **promotion codes** (the typeable string tied to a coupon). Admins can create these in the Stripe Dashboard for now; a follow-up can add a "Promotion codes" section to the Discounts tab that calls `POST /v1/promotion_codes`.
-- Editing duration on existing Stripe coupons — Stripe forbids it. The edge function already replaces (delete + create) the coupon when discount parameters change, so changing duration will trigger a rebuild of the coupon automatically.
+### Out of scope
+- No changes to auth, routing structure, or the org data model.
+- No visual changes to the switcher.
 
 ## Technical notes
-
-- Duration select values map 1:1 to Stripe's `duration` enum: `once | repeating | forever`. `duration_in_months` is required only when `duration = 'repeating'`; the UI enforces this and the backend validates it before calling Stripe.
-- Legacy rows with no stored duration continue to work: the backend falls back to today's behaviour (`once` if expiry set, else `forever`) when the field is absent.
+- `queryClient.invalidateQueries()` with no filter invalidates every query, triggering refetch on mount/observe. That's the desired behavior here.
+- Because `currentOrganization` lives in React state and every org-scoped query key includes its id, changing it already causes React Query to treat those as new queries — invalidation is belt-and-suspenders for any keys that were missed.
+- `localStorage` write stays so a hard refresh restores the last-selected org.
