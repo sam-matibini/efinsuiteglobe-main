@@ -149,7 +149,7 @@ const reports: ReportItem[] = [
   { id: 'executive-summary', name: 'Executive Summary', description: 'KPIs & financial highlights', category: 'Management', module: 'Dashboard', icon: <BarChart3 className="w-5 h-5" />, href: '/' },
   { id: 'comparative-balance', name: 'Comparative Balance Sheet', description: 'Period-over-period comparison', category: 'Management', module: 'Accounting', icon: <ArrowUpDown className="w-5 h-5" />, href: '/reports/balance-sheet' },
   { id: 'comparative-income', name: 'Comparative Income', description: 'P&L comparison across periods', category: 'Management', module: 'Accounting', icon: <BarChart3 className="w-5 h-5" />, href: '/reports/income-statement' },
-  { id: 'financial-ratios', name: 'Financial Ratios', description: 'Liquidity, profitability & efficiency', category: 'Management', module: 'Dashboard', icon: <Activity className="w-5 h-5" />, isPremium: true },
+  { id: 'financial-ratios', name: 'Financial Ratios', description: 'Liquidity, profitability & efficiency', category: 'Management', module: 'Dashboard', icon: <Activity className="w-5 h-5" />, href: '/reports/management', isPremium: true },
   { id: 'expense-analysis', name: 'Expense Analysis', description: 'Expense breakdown & trends', category: 'Management', module: 'Accounting', icon: <PieChart className="w-5 h-5" />, href: '/reports/income-statement' },
   { id: 'management-report', name: 'Management Report', description: 'Comprehensive financial overview', category: 'Management', module: 'Dashboard', icon: <TrendingUp className="w-5 h-5" />, href: '/reports/management' },
 ];
