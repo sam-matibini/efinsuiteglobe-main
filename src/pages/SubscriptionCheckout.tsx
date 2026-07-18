@@ -80,6 +80,17 @@ export default function SubscriptionCheckout() {
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [confirmLoading, setConfirmLoading] = useState(false);
 
+  // Promo code state
+  const [promoInput, setPromoInput] = useState('');
+  const [promoLoading, setPromoLoading] = useState(false);
+  const [promoError, setPromoError] = useState<string | null>(null);
+  const [appliedPromo, setAppliedPromo] = useState<{
+    id: string;
+    code: string;
+    label: string;
+    adminDiscountActive?: boolean;
+  } | null>(null);
+
   const { data: plans, isLoading } = useQuery({
     queryKey: ['active-pricing-plans'],
     queryFn: async () => {
