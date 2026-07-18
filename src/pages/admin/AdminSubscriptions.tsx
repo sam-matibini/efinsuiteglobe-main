@@ -655,7 +655,9 @@ export default function AdminSubscriptions() {
           <TabsTrigger value="subscriptions">Subscriptions</TabsTrigger>
           <TabsTrigger value="pricing">Pricing Plans</TabsTrigger>
           <TabsTrigger value="discounts">Discounts</TabsTrigger>
+          <TabsTrigger value="audit">Audit Log</TabsTrigger>
         </TabsList>
+        
         
         <TabsContent value="subscriptions" className="mt-4 space-y-4">
           <SubscriptionDefaultsCard />
