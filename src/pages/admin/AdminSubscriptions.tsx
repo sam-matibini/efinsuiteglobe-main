@@ -926,6 +926,10 @@ export default function AdminSubscriptions() {
         <TabsContent value="discounts" className="mt-4">
           <DiscountsTab />
         </TabsContent>
+
+        <TabsContent value="audit" className="mt-4">
+          <SubscriptionAuditLogTab />
+        </TabsContent>
       </Tabs>
 
       {/* Change Plan Dialog */}
