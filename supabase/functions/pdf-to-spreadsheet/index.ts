@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+import { PDFDocument } from 'https://esm.sh/pdf-lib@1.17.1';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -20,20 +21,46 @@ type Cell = string | number | null;
 interface ExtractedRow { [key: string]: Cell }
 interface Sheet { name: string; columns: string[]; rows: ExtractedRow[] }
 
-const MAX_PDF_SIZE_MB = 8;
+const MAX_PDF_SIZE_MB = 20;
 const MAX_PDF_SIZE_BYTES = MAX_PDF_SIZE_MB * 1024 * 1024;
-// Lovable AI Gateway enforces a ~75s upstream idle limit per request, so we
-// keep each AI call comfortably under it and rely on faster models + smaller
-// token budgets to fit within that window.
-const EDGE_RESPONSE_BUDGET_MS = 140_000;
-const AI_REQUEST_TIMEOUT_MS = 70_000;
+// Lovable AI Gateway enforces a ~75s upstream idle limit per request. We slice
+// the PDF into small page batches so each Gemini call fits comfortably under
+// that ceiling, then merge the batch results.
+const PAGES_PER_BATCH = 5;
+const EDGE_RESPONSE_BUDGET_MS = 220_000;
+const AI_REQUEST_TIMEOUT_MS = 65_000;
 const RESPONSE_BUFFER_MS = 10_000;
-const FALLBACK_CUTOFF_MS = 55_000;
-const MIN_AI_CALL_MS = 10_000;
+const MIN_AI_CALL_MS = 15_000;
 
 type AiCallResult =
   | { ok: true; args: any; raw: string }
   | { ok: false; reason: 'timeout' | 'failed' | 'empty'; message?: string };
+
+// Split a PDF into batches of N pages. Returns the base64 of each slice plus
+// the (1-indexed) page range it represents.
+async function sliceIntoBatches(
+  pdfBytes: Uint8Array,
+  pagesPerBatch: number,
+): Promise<Array<{ base64: string; from: number; to: number; totalPages: number }>> {
+  const src = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
+  const totalPages = src.getPageCount();
+  const batches: Array<{ base64: string; from: number; to: number; totalPages: number }> = [];
+  for (let start = 0; start < totalPages; start += pagesPerBatch) {
+    const end = Math.min(start + pagesPerBatch, totalPages);
+    const out = await PDFDocument.create();
+    const indices = Array.from({ length: end - start }, (_, i) => start + i);
+    const copied = await out.copyPages(src, indices);
+    for (const p of copied) out.addPage(p);
+    const bytes = await out.save();
+    batches.push({
+      base64: bytesToBase64(bytes),
+      from: start + 1,
+      to: end,
+      totalPages,
+    });
+  }
+  return batches;
+}
 
 // Regex for summary rows that must never appear as transactions
 const SUMMARY_ROW_PATTERNS = [
