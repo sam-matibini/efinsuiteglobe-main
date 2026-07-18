@@ -410,6 +410,84 @@ Deno.serve(async (req) => {
       return json({ success: true, preset: data });
     }
 
+    // ============ UPDATE PRESET ============
+    if (action === 'update-preset') {
+      const { preset_id, name, percent, duration, duration_in_months, expires_at, max_redemptions } = body;
+      if (!preset_id) return json({ error: 'preset_id required' }, 400);
+
+      const { data: preset } = await admin
+        .from('discount_presets')
+        .select('*')
+        .eq('id', preset_id)
+        .maybeSingle();
+      if (!preset) return json({ error: 'Not found' }, 404);
+
+      const newPercent = percent != null ? Number(percent) : Number(preset.percent);
+      const newDuration = (duration as any) || preset.duration || 'once';
+      const newDurationMonths = duration_in_months != null
+        ? Number(duration_in_months)
+        : preset.duration_in_months;
+      const newExpiresAt = expires_at !== undefined ? (expires_at || null) : preset.expires_at;
+      const newMaxRedemptions = max_redemptions !== undefined
+        ? (max_redemptions ? Number(max_redemptions) : null)
+        : preset.max_redemptions;
+      const newName = (name ?? preset.name) as string;
+
+      // Stripe coupons are immutable for percent/duration/redeem_by/max_redemptions.
+      // Only `name` can be updated safely.
+      const financialChanged =
+        newPercent !== Number(preset.percent) ||
+        newDuration !== preset.duration ||
+        (newDurationMonths || null) !== (preset.duration_in_months || null) ||
+        (newExpiresAt || null) !== (preset.expires_at || null) ||
+        (newMaxRedemptions || null) !== (preset.max_redemptions || null);
+
+      let newCouponId = preset.stripe_coupon_id;
+
+      if (financialChanged) {
+        // Create a new coupon; archive the old one
+        const coupon = await createStripeCoupon({
+          percent: newPercent,
+          duration: newDuration,
+          duration_in_months: newDuration === 'repeating' ? newDurationMonths : null,
+          redeem_by: newExpiresAt,
+          max_redemptions: newMaxRedemptions,
+          name: newName,
+        });
+        newCouponId = coupon.id;
+        if (preset.stripe_coupon_id) {
+          await deleteStripeCoupon(preset.stripe_coupon_id);
+        }
+      } else if (newName !== preset.name && preset.stripe_coupon_id) {
+        // Just rename in Stripe
+        try {
+          await stripe(`/coupons/${preset.stripe_coupon_id}`, 'POST', { name: newName });
+        } catch (e) {
+          console.warn('Rename Stripe coupon failed', (e as Error).message);
+        }
+      }
+
+      const patch = {
+        name: newName,
+        percent: newPercent,
+        duration: newDuration,
+        duration_in_months: newDuration === 'repeating' ? newDurationMonths : null,
+        expires_at: newExpiresAt,
+        max_redemptions: newMaxRedemptions,
+        stripe_coupon_id: newCouponId,
+      };
+      const { data: updated, error } = await admin
+        .from('discount_presets')
+        .update(patch)
+        .eq('id', preset_id)
+        .select()
+        .single();
+      if (error) return json({ error: error.message }, 500);
+
+      await audit(null, 'discount_preset.update', preset, updated);
+      return json({ success: true, preset: updated, coupon_replaced: financialChanged });
+    }
+
     // ============ ARCHIVE PRESET ============
     if (action === 'archive-preset') {
       const { preset_id } = body;
