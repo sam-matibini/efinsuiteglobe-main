@@ -22,7 +22,7 @@ export function useDonationForTransaction(bankTransactionId?: string) {
   const { organization } = useCurrentOrganization();
 
   return useQuery({
-    queryKey: ['donation-for-transaction', bankTransactionId],
+    queryKey: ['donation-for-transaction', organization?.id, bankTransactionId],
     queryFn: async () => {
       if (!bankTransactionId || !organization?.id) return null;
 

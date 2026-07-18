@@ -12,6 +12,12 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Switch } from '@/components/ui/switch';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
 import { CreditCard, ExternalLink, Loader2, Receipt, RefreshCw, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -66,6 +72,9 @@ export function BillingSettingsTab() {
   const orgId = currentOrganization?.id;
 
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancelFeedback, setCancelFeedback] = useState('');
+  const [cancelImmediate, setCancelImmediate] = useState(false);
   const [portalLoading, setPortalLoading] = useState<'manage' | 'card' | null>(null);
 
   const hasStripeCustomer = !!(subscription as any)?.stripe_customer_id;
@@ -97,15 +106,29 @@ export function BillingSettingsTab() {
   const cancelMutation = useMutation({
     mutationFn: async () => {
       const { data, error } = await supabase.functions.invoke('stripe-integration', {
-        body: { action: 'manage-subscription', organizationId: orgId, subscriptionAction: 'cancel' },
+        body: {
+          action: 'manage-subscription',
+          organizationId: orgId,
+          subscriptionAction: 'cancel',
+          immediate: cancelImmediate,
+          reason: cancelReason || null,
+          feedback: cancelFeedback || null,
+        },
       });
       if (error) throw error;
       if (!data?.success) throw new Error(data?.error || 'Cancel failed');
     },
     onSuccess: () => {
-      toast.success('Subscription will cancel at the end of the current period.');
+      toast.success(
+        cancelImmediate
+          ? 'Subscription canceled immediately.'
+          : 'Subscription will cancel at the end of the current period.'
+      );
       queryClient.invalidateQueries({ queryKey: ['subscription'] });
       setCancelOpen(false);
+      setCancelReason('');
+      setCancelFeedback('');
+      setCancelImmediate(false);
     },
     onError: (e: any) => toast.error(e.message || 'Failed to cancel'),
   });
@@ -370,11 +393,59 @@ export function BillingSettingsTab() {
           <AlertDialogHeader>
             <AlertDialogTitle>Cancel subscription?</AlertDialogTitle>
             <AlertDialogDescription>
-              Your subscription will remain active until{' '}
-              {periodEnd ? new Date(periodEnd).toLocaleDateString() : 'the end of the current period'}
-              , then it will be canceled. You can reactivate any time before that date.
+              {cancelImmediate
+                ? 'Your subscription will end immediately and access to paid features will be revoked right away. No refund is issued automatically.'
+                : `Your subscription will remain active until ${
+                    periodEnd ? new Date(periodEnd).toLocaleDateString() : 'the end of the current period'
+                  }, then it will be canceled. You can reactivate any time before that date.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="cancel-reason">Reason for canceling</Label>
+              <Select value={cancelReason} onValueChange={setCancelReason}>
+                <SelectTrigger id="cancel-reason">
+                  <SelectValue placeholder="Select a reason (optional)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="too_expensive">Too expensive</SelectItem>
+                  <SelectItem value="missing_features">Missing features</SelectItem>
+                  <SelectItem value="switched_service">Switched to another service</SelectItem>
+                  <SelectItem value="unused">Not using it enough</SelectItem>
+                  <SelectItem value="customer_service">Customer service issue</SelectItem>
+                  <SelectItem value="low_quality">Quality issues</SelectItem>
+                  <SelectItem value="other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="cancel-feedback">Additional feedback (optional)</Label>
+              <Textarea
+                id="cancel-feedback"
+                value={cancelFeedback}
+                onChange={(e) => setCancelFeedback(e.target.value)}
+                placeholder="Anything we could have done better?"
+                rows={3}
+              />
+            </div>
+            <div className="flex items-center justify-between rounded-md border p-3">
+              <div className="space-y-0.5">
+                <Label htmlFor="cancel-immediate" className="text-sm font-medium">
+                  Cancel immediately
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  End access now instead of at the end of the current period.
+                </p>
+              </div>
+              <Switch
+                id="cancel-immediate"
+                checked={cancelImmediate}
+                onCheckedChange={setCancelImmediate}
+              />
+            </div>
+          </div>
+
           <AlertDialogFooter>
             <AlertDialogCancel disabled={cancelMutation.isPending}>Keep subscription</AlertDialogCancel>
             <AlertDialogAction

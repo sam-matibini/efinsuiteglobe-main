@@ -7,7 +7,8 @@ const corsHeaders = {
 };
 
 interface StripeRequest {
-  action: 'health-check' | 'test' | 'create-customer' | 'create-payment-intent' | 'create-wallet-payment' | 'sync-plans' | 'create-checkout-session' | 'manage-subscription' | 'create-billing-portal-session' | 'get-payment-method' | 'list-invoices';
+  action: 'health-check' | 'test' | 'create-customer' | 'create-payment-intent' | 'create-wallet-payment' | 'sync-plans' | 'create-checkout-session' | 'manage-subscription' | 'preview-plan-change' | 'create-billing-portal-session' | 'get-payment-method' | 'list-invoices' | 'verify-checkout-session' | 'validate-promotion-code';
+  sessionId?: string;
   returnUrl?: string;
   portalFlow?: 'payment_method_update' | 'subscription_cancel';
   customerId?: string;
@@ -230,7 +231,7 @@ serve(async (req) => {
         return new Response(JSON.stringify({ success: false, error: 'Stripe not configured' }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
-      const { planId, billingCycle, organizationId, successUrl, cancelUrl } = body;
+      const { planId, billingCycle, organizationId, successUrl, cancelUrl, promotionCodeId } = body as any;
       if (!planId || !organizationId) {
         return new Response(JSON.stringify({ success: false, error: 'planId and organizationId are required' }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
@@ -298,7 +299,7 @@ serve(async (req) => {
         'subscription_data[metadata][plan_id]': planId,
       };
 
-      // Grant a 14-day free trial to organizations that have never subscribed before
+      // Grant a free trial (length from platform_settings) to orgs that have never subscribed
       const { data: priorSub } = await supabaseAdmin
         .from('subscriptions')
         .select('id')
@@ -306,7 +307,49 @@ serve(async (req) => {
         .limit(1)
         .maybeSingle();
       if (!priorSub) {
-        sessionParams['subscription_data[trial_period_days]'] = '14';
+        const { data: trialSetting } = await supabaseAdmin
+          .from('platform_settings')
+          .select('setting_value')
+          .eq('setting_key', 'subscription.trial_period_days')
+          .maybeSingle();
+        const trialDays = Number((trialSetting?.setting_value as any)?.days ?? 14);
+        sessionParams['subscription_data[trial_period_days]'] = String(trialDays);
+      }
+
+      // Apply discount coupon: per-org coupon takes precedence, else global.
+      const { data: subRow } = await supabaseAdmin
+        .from('subscriptions')
+        .select('discount_percent, discount_expires_at, stripe_coupon_id')
+        .eq('organization_id', organizationId)
+        .in('status', ['active', 'trialing'])
+        .maybeSingle();
+      const { data: globalDiscount } = await supabaseAdmin
+        .from('platform_settings')
+        .select('setting_value')
+        .eq('setting_key', 'subscription.global_discount')
+        .maybeSingle();
+      const gd = (globalDiscount?.setting_value as any) || {};
+      const nowTs = new Date();
+      const orgDiscountActive = subRow && Number(subRow.discount_percent) > 0 &&
+        (!subRow.discount_expires_at || new Date(subRow.discount_expires_at) > nowTs) &&
+        !!subRow.stripe_coupon_id;
+      const globalDiscountActive = Number(gd.percent) > 0 &&
+        (!gd.expires_at || new Date(gd.expires_at) > nowTs) &&
+        !!gd.stripe_coupon_id;
+      const couponId = orgDiscountActive
+        ? subRow!.stripe_coupon_id
+        : (globalDiscountActive ? gd.stripe_coupon_id : null);
+      if (couponId) {
+        sessionParams['discounts[0][coupon]'] = String(couponId);
+      } else if (promotionCodeId) {
+        // User-supplied promotion code from our in-app field
+        sessionParams['discounts[0][promotion_code]'] = String(promotionCodeId);
+      } else {
+        // No admin coupon attached — let the customer type a promotion code on the Stripe Checkout page.
+        sessionParams['allow_promotion_codes'] = 'true';
+        if ((subRow && Number(subRow.discount_percent) > 0) || Number(gd.percent) > 0) {
+          console.warn('Discount configured without a Stripe coupon id — skipping Stripe discount');
+        }
       }
 
       const session = await stripeRequest('/checkout/sessions', 'POST', sessionParams);
@@ -317,6 +360,222 @@ serve(async (req) => {
 
       return new Response(JSON.stringify({ success: true, sessionId: session.id, url: session.url }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    // ===== VALIDATE PROMOTION CODE =====
+    if (action === 'validate-promotion-code') {
+      if (!stripeSecretKey) {
+        return new Response(JSON.stringify({ success: false, error: 'Stripe not configured' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      const { code, planId, billingCycle, organizationId } = body as any;
+      if (!code || typeof code !== 'string') {
+        return new Response(JSON.stringify({ success: false, error: 'code is required' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+
+      const supabaseAdmin = getSupabaseAdmin();
+
+      // Refuse if org already has an admin-applied coupon (per-org or global)
+      if (organizationId) {
+        const { data: subRow } = await supabaseAdmin
+          .from('subscriptions')
+          .select('stripe_coupon_id, discount_percent, discount_expires_at')
+          .eq('organization_id', organizationId)
+          .in('status', ['active', 'trialing'])
+          .maybeSingle();
+        const { data: globalDiscount } = await supabaseAdmin
+          .from('platform_settings')
+          .select('setting_value')
+          .eq('setting_key', 'subscription.global_discount')
+          .maybeSingle();
+        const gd = (globalDiscount?.setting_value as any) || {};
+        const nowTs = new Date();
+        const orgActive = subRow && Number(subRow.discount_percent) > 0 &&
+          (!subRow.discount_expires_at || new Date(subRow.discount_expires_at) > nowTs) &&
+          !!subRow.stripe_coupon_id;
+        const globalActive = Number(gd.percent) > 0 &&
+          (!gd.expires_at || new Date(gd.expires_at) > nowTs) &&
+          !!gd.stripe_coupon_id;
+        if (orgActive || globalActive) {
+          return new Response(JSON.stringify({
+            success: false,
+            error: 'A discount is already applied to this subscription.',
+            adminDiscountActive: true,
+          }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+      }
+
+      // Look up promotion code
+      const qs = new URLSearchParams({ code: code.trim(), active: 'true', limit: '1' }).toString();
+      const listRes = await fetch(`https://api.stripe.com/v1/promotion_codes?${qs}`, {
+        method: 'GET',
+        headers: { 'Authorization': `Bearer ${stripeSecretKey}` },
+      });
+      const list = await listRes.json();
+      if (list.error) {
+        return new Response(JSON.stringify({ success: false, error: list.error.message }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      let promo = (list.data && list.data[0]) || null;
+      if (!promo) {
+        return new Response(JSON.stringify({ success: false, error: 'Code not valid' }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+
+      // Newer Stripe API versions expose the coupon under promotion.coupon.
+      const retRes = await fetch(`https://api.stripe.com/v1/promotion_codes/${promo.id}?expand[0]=promotion.coupon`, {
+        headers: { 'Authorization': `Bearer ${stripeSecretKey}` },
+      });
+      const retJson = await retRes.json();
+      if (!retJson.error) promo = retJson;
+      console.log('[validate-promotion-code] retrieved promo:', JSON.stringify(promo));
+
+      const nowSec = Math.floor(Date.now() / 1000);
+      if (promo.expires_at && promo.expires_at < nowSec) {
+        return new Response(JSON.stringify({ success: false, error: 'Code has expired' }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      if (promo.max_redemptions && promo.times_redeemed >= promo.max_redemptions) {
+        return new Response(JSON.stringify({ success: false, error: 'Code has reached its redemption limit' }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+
+      const promotionCoupon = promo.promotion?.type === 'coupon' ? promo.promotion.coupon : null;
+      let coupon: any =
+        (promotionCoupon && typeof promotionCoupon === 'object')
+          ? promotionCoupon
+          : ((promo.coupon && typeof promo.coupon === 'object') ? promo.coupon : {});
+      const couponId =
+        typeof promotionCoupon === 'string'
+          ? promotionCoupon
+          : (promotionCoupon?.id || (typeof promo.coupon === 'string' ? promo.coupon : coupon?.id));
+      const missingDiscount = coupon?.percent_off == null && coupon?.amount_off == null;
+      if (couponId && missingDiscount) {
+        const cRes = await fetch(`https://api.stripe.com/v1/coupons/${couponId}`, {
+          headers: { 'Authorization': `Bearer ${stripeSecretKey}` },
+        });
+        const cJson = await cRes.json();
+        if (!cJson.error) coupon = cJson;
+        console.log('[validate-promotion-code] fetched coupon directly:', JSON.stringify(cJson));
+      }
+      console.log('[validate-promotion-code] final coupon:', JSON.stringify(coupon));
+
+      // Optional plan preview
+      let preview: any = null;
+      if (planId) {
+        const { data: plan } = await supabaseAdmin
+          .from('pricing_plans')
+          .select('price_monthly, price_yearly')
+          .eq('id', planId)
+          .maybeSingle();
+        if (plan) {
+          const baseDollars = billingCycle === 'yearly' ? Number(plan.price_yearly) : Number(plan.price_monthly);
+          const baseCents = Math.round(baseDollars * 100);
+          let savingsCents = 0;
+          if (coupon.percent_off) {
+            savingsCents = Math.round((baseCents * Number(coupon.percent_off)) / 100);
+          } else if (coupon.amount_off) {
+            savingsCents = Math.min(baseCents, Number(coupon.amount_off));
+          }
+          preview = {
+            currency: coupon.currency || 'usd',
+            base_amount: baseCents,
+            savings: savingsCents,
+            discounted_amount: Math.max(0, baseCents - savingsCents),
+          };
+        }
+      }
+
+      return new Response(JSON.stringify({
+        success: true,
+        valid: true,
+        promotion_code_id: promo.id,
+        code: promo.code,
+        coupon: {
+          id: coupon.id,
+          percent_off: coupon.percent_off ?? null,
+          amount_off: coupon.amount_off ?? null,
+          currency: coupon.currency ?? null,
+          duration: coupon.duration || 'once',
+          duration_in_months: coupon.duration_in_months ?? null,
+        },
+        preview,
+      }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+
+    // ===== PREVIEW PLAN CHANGE (proration) =====
+    if (action === 'preview-plan-change') {
+      if (!stripeSecretKey) {
+        return new Response(JSON.stringify({ success: false, error: 'Stripe not configured' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      const { organizationId, newPlanId, billingCycle } = body;
+      if (!organizationId || !newPlanId) {
+        return new Response(JSON.stringify({ success: false, error: 'organizationId and newPlanId required' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      const supabaseAdmin = getSupabaseAdmin();
+      const { data: sub } = await supabaseAdmin
+        .from('subscriptions')
+        .select('*')
+        .eq('organization_id', organizationId)
+        .in('status', ['active', 'trialing'])
+        .maybeSingle();
+      if (!sub || !sub.stripe_subscription_id) {
+        return new Response(JSON.stringify({ success: false, error: 'No active subscription found' }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      const { data: newPlan } = await supabaseAdmin.from('pricing_plans').select('*').eq('id', newPlanId).single();
+      if (!newPlan) {
+        return new Response(JSON.stringify({ success: false, error: 'New plan not found' }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      const newPriceId = billingCycle === 'yearly' ? newPlan.stripe_price_id_yearly : newPlan.stripe_price_id_monthly;
+      if (!newPriceId) {
+        return new Response(JSON.stringify({ success: false, error: 'New plan not synced to Stripe' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      const stripeSub = await stripeRequest(`/subscriptions/${sub.stripe_subscription_id}`, 'GET');
+      if (stripeSub.error) {
+        return new Response(JSON.stringify({ success: false, error: stripeSub.error.message }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      const itemId = stripeSub.items?.data?.[0]?.id;
+      const customerId = stripeSub.customer;
+      if (!itemId || !customerId) {
+        return new Response(JSON.stringify({ success: false, error: 'Could not resolve subscription item' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      const params = new URLSearchParams({
+        customer: customerId,
+        subscription: sub.stripe_subscription_id,
+        'subscription_items[0][id]': itemId,
+        'subscription_items[0][price]': newPriceId,
+        subscription_proration_behavior: 'create_prorations',
+      });
+      const upcomingRes = await fetch(`https://api.stripe.com/v1/invoices/upcoming?${params.toString()}`, {
+        headers: { 'Authorization': `Bearer ${stripeSecretKey}` },
+      });
+      const upcoming = await upcomingRes.json();
+      if (upcoming.error) {
+        return new Response(JSON.stringify({ success: false, error: upcoming.error.message }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      // Sum only prorated line items to get "amount due today"
+      const prorationLines = (upcoming.lines?.data || []).filter((l: any) => l.proration);
+      const prorationAmount = prorationLines.reduce((s: number, l: any) => s + (l.amount || 0), 0);
+      return new Response(JSON.stringify({
+        success: true,
+        preview: {
+          currency: upcoming.currency,
+          amount_due_today: prorationAmount, // cents; can be negative (credit)
+          next_invoice_total: upcoming.total, // cents
+          next_invoice_date: upcoming.next_payment_attempt || upcoming.period_end,
+          period_end: upcoming.period_end,
+        },
+      }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
     // ===== MANAGE SUBSCRIPTION =====
@@ -345,16 +604,55 @@ serve(async (req) => {
       }
 
       if (subscriptionAction === 'cancel') {
-        const result = await stripeRequest(`/subscriptions/${sub.stripe_subscription_id}`, 'POST', {
-          cancel_at_period_end: 'true',
-        });
-        if (result.error) {
-          return new Response(JSON.stringify({ success: false, error: result.error.message }),
-            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        const immediate = body.immediate === true;
+        const reason = (body.reason || null) as string | null;
+        const feedback = (body.feedback || null) as string | null;
+
+        if (immediate) {
+          const result = await stripeRequest(`/subscriptions/${sub.stripe_subscription_id}`, 'DELETE');
+          if (result.error) {
+            return new Response(JSON.stringify({ success: false, error: result.error.message }),
+              { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+          }
+          await supabaseAdmin.from('subscriptions').update({
+            status: 'canceled',
+            cancel_at_period_end: false,
+            canceled_at: new Date().toISOString(),
+          }).eq('id', sub.id);
+        } else {
+          const result = await stripeRequest(`/subscriptions/${sub.stripe_subscription_id}`, 'POST', {
+            cancel_at_period_end: 'true',
+          });
+          if (result.error) {
+            return new Response(JSON.stringify({ success: false, error: result.error.message }),
+              { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+          }
+          await supabaseAdmin.from('subscriptions').update({ cancel_at_period_end: true }).eq('id', sub.id);
         }
-        await supabaseAdmin.from('subscriptions').update({ cancel_at_period_end: true }).eq('id', sub.id);
-        return new Response(JSON.stringify({ success: true, message: 'Subscription will cancel at period end' }),
-          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+
+        try {
+          const { data: userData } = await supabaseAdmin.auth.getUser(
+            (req.headers.get('Authorization') || '').replace('Bearer ', '')
+          );
+          await supabaseAdmin.from('audit_logs').insert({
+            organization_id: organizationId,
+            user_id: userData?.user?.id || null,
+            action: immediate ? 'subscription.cancel_immediate' : 'subscription.cancel_at_period_end',
+            entity_type: 'subscription',
+            entity_id: sub.id,
+            old_values: { status: sub.status, cancel_at_period_end: sub.cancel_at_period_end },
+            new_values: { reason, feedback, immediate },
+          });
+        } catch (e) {
+          console.warn('audit insert failed', (e as Error).message);
+        }
+
+        return new Response(JSON.stringify({
+          success: true,
+          message: immediate
+            ? 'Subscription canceled immediately'
+            : 'Subscription will cancel at period end',
+        }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
 
       if (subscriptionAction === 'reactivate') {
@@ -539,6 +837,130 @@ serve(async (req) => {
       }));
       return new Response(JSON.stringify({ success: true, invoices }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    // ===== VERIFY CHECKOUT SESSION =====
+    if (action === 'verify-checkout-session') {
+      if (!stripeSecretKey) {
+        return new Response(JSON.stringify({ success: false, error: 'Stripe not configured' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      const { sessionId, organizationId } = body;
+      if (!sessionId) {
+        return new Response(JSON.stringify({ success: false, error: 'sessionId required' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+
+      // Auth: require valid JWT
+      const authHeader = req.headers.get('Authorization');
+      if (!authHeader?.startsWith('Bearer ')) {
+        return new Response(JSON.stringify({ success: false, error: 'Unauthorized' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      const userClient = createClient(
+        Deno.env.get('SUPABASE_URL')!,
+        Deno.env.get('SUPABASE_ANON_KEY')!,
+        { global: { headers: { Authorization: authHeader } } }
+      );
+      const { data: claims, error: claimsErr } = await userClient.auth.getClaims(
+        authHeader.replace('Bearer ', '')
+      );
+      if (claimsErr || !claims?.claims?.sub) {
+        return new Response(JSON.stringify({ success: false, error: 'Unauthorized' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      const userId = claims.claims.sub;
+
+      const session = await stripeRequest(
+        `/checkout/sessions/${encodeURIComponent(sessionId)}?expand[]=subscription&expand[]=customer`,
+        'GET'
+      );
+      if (session.error) {
+        return new Response(JSON.stringify({ success: false, error: session.error.message }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+
+      const sessionOrgId = session.metadata?.organization_id || organizationId;
+      const supabaseAdmin = getSupabaseAdmin();
+
+      // Verify caller belongs to the org that owns this checkout session
+      if (sessionOrgId) {
+        const { data: membership } = await supabaseAdmin
+          .from('organization_members')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('organization_id', sessionOrgId)
+          .maybeSingle();
+        if (!membership) {
+          return new Response(JSON.stringify({ success: false, error: 'Session does not belong to your organization' }),
+            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+      }
+
+      const stripeSub = session.subscription && typeof session.subscription === 'object'
+        ? session.subscription
+        : null;
+
+      // If checkout is complete but our local subscription row hasn't been synced by the webhook yet,
+      // upsert now so the UI can reflect the new plan immediately. Idempotent w/ webhook.
+      if (session.status === 'complete' && stripeSub && sessionOrgId) {
+        const planId = session.metadata?.plan_id || stripeSub.metadata?.plan_id || null;
+        const billingCycle = session.metadata?.billing_cycle || null;
+        const periodEnd = stripeSub.current_period_end
+          ? new Date(stripeSub.current_period_end * 1000).toISOString()
+          : null;
+
+        const { data: existing } = await supabaseAdmin
+          .from('subscriptions')
+          .select('id')
+          .eq('organization_id', sessionOrgId)
+          .maybeSingle();
+
+        const row: Record<string, unknown> = {
+          organization_id: sessionOrgId,
+          status: stripeSub.status,
+          stripe_subscription_id: stripeSub.id,
+          stripe_customer_id: typeof session.customer === 'string' ? session.customer : session.customer?.id,
+          current_period_end: periodEnd,
+        };
+        if (planId) row.plan_id = planId;
+        if (billingCycle) row.billing_cycle = billingCycle;
+
+        if (existing?.id) {
+          await supabaseAdmin.from('subscriptions').update(row).eq('id', existing.id);
+        } else {
+          await supabaseAdmin.from('subscriptions').insert(row);
+        }
+      }
+
+      // Load plan name for display
+      let planName: string | null = null;
+      let currentPeriodEnd: string | null = null;
+      if (stripeSub) {
+        currentPeriodEnd = stripeSub.current_period_end
+          ? new Date(stripeSub.current_period_end * 1000).toISOString()
+          : null;
+        const planId = session.metadata?.plan_id || stripeSub.metadata?.plan_id;
+        if (planId) {
+          const { data: plan } = await supabaseAdmin
+            .from('pricing_plans')
+            .select('name')
+            .eq('id', planId)
+            .maybeSingle();
+          planName = plan?.name ?? null;
+        }
+      }
+
+      return new Response(JSON.stringify({
+        success: true,
+        status: session.status, // 'complete' | 'open' | 'expired'
+        payment_status: session.payment_status,
+        subscription_status: stripeSub?.status ?? null,
+        plan_name: planName,
+        current_period_end: currentPeriodEnd,
+        amount_total: session.amount_total,
+        currency: session.currency,
+      }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
     return new Response(JSON.stringify({ error: 'Invalid action' }),
