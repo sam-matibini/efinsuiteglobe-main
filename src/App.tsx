@@ -7,7 +7,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { AdminRoute } from "@/components/AdminRoute";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
-import { OrganizationProvider } from "@/hooks/useOrganizationContext";
+import { OrganizationProvider, useOrganizationContext } from "@/hooks/useOrganizationContext";
 import { ReportFiltersProvider } from "@/hooks/useReportFilters";
 
 // Eager: landing + auth pages (needed on first paint / pre-auth)
