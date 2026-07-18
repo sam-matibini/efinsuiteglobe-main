@@ -438,24 +438,25 @@ export default function SubscriptionCheckout() {
                 <CardContent className="flex-1 flex flex-col justify-between space-y-4">
                   <div>
                     {(() => {
-                      const discounted = appliedPromo
-                        ? appliedPromo.percent_off
-                          ? Math.max(0, price * (1 - appliedPromo.percent_off / 100))
-                          : appliedPromo.amount_off
-                            ? Math.max(0, price - appliedPromo.amount_off / 100)
-                            : price
-                        : price;
-                      const hasDiscount = appliedPromo && discounted < price;
+                      const basePrice = Number(price) || 0;
+                      let discounted = basePrice;
+                      if (appliedPromo?.percent_off) {
+                        discounted = Math.max(0, basePrice * (1 - Number(appliedPromo.percent_off) / 100));
+                      } else if (appliedPromo?.amount_off) {
+                        discounted = Math.max(0, basePrice - Number(appliedPromo.amount_off) / 100);
+                      }
+                      const hasDiscount = !!appliedPromo && discounted < basePrice;
+                      const fmt = (n: number) => n % 1 === 0 ? String(n) : n.toFixed(2);
                       return (
                         <>
                           <div className="text-3xl font-bold flex items-baseline gap-2 flex-wrap">
                             {hasDiscount && (
                               <span className="text-lg font-normal text-muted-foreground line-through">
-                                ${price}
+                                ${fmt(basePrice)}
                               </span>
                             )}
-                            <span>
-                              ${discounted % 1 === 0 ? discounted : discounted.toFixed(2)}
+                            <span className={hasDiscount ? 'text-primary' : ''}>
+                              ${fmt(discounted)}
                               <span className="text-sm font-normal text-muted-foreground">
                                 /{billingCycle === 'monthly' ? 'mo' : 'yr'}
                               </span>
@@ -465,10 +466,12 @@ export default function SubscriptionCheckout() {
                             <p className="text-xs text-primary mt-1">
                               With {appliedPromo!.code}
                               {appliedPromo!.duration === 'repeating' && appliedPromo!.duration_in_months
-                                ? ` for first ${appliedPromo!.duration_in_months} ${billingCycle === 'monthly' ? 'months' : 'months'}`
+                                ? ` for first ${appliedPromo!.duration_in_months} months`
                                 : appliedPromo!.duration === 'once'
                                   ? ' on first payment'
-                                  : ''}
+                                  : appliedPromo!.duration === 'forever'
+                                    ? ' forever'
+                                    : ''}
                             </p>
                           )}
                         </>
