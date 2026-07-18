@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { AdminRoute } from "@/components/AdminRoute";
+import { RouteAccessGuard } from "@/components/auth/RouteAccessGuard";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { OrganizationProvider, useOrganizationContext } from "@/hooks/useOrganizationContext";
 import { ReportFiltersProvider } from "@/hooks/useReportFilters";
@@ -213,7 +214,7 @@ const ProtectedRoute = forwardRef<HTMLDivElement, { children: React.ReactNode }>
 
     return (
       <div ref={ref} className="contents">
-        {children}
+        <RouteAccessGuard>{children}</RouteAccessGuard>
       </div>
     );
   }
