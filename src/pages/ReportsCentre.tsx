@@ -134,11 +134,11 @@ const reports: ReportItem[] = [
   
   // Payroll Reports
   { id: 'payroll-summary', name: 'Payroll Summary', description: 'Pay run totals & contributions', category: 'Payroll', module: 'Payroll', icon: <Users className="w-5 h-5" />, href: '/payroll/reports' },
-  { id: 'employee-earnings', name: 'Employee Earnings', description: 'YTD earnings by employee', category: 'Payroll', module: 'Payroll', icon: <DollarSign className="w-5 h-5" /> },
-  { id: 'payroll-register', name: 'Payroll Register', description: 'Detailed pay run breakdown', category: 'Payroll', module: 'Payroll', icon: <ClipboardList className="w-5 h-5" /> },
-  { id: 'deduction-report', name: 'Deduction Report', description: 'All payroll deductions by type', category: 'Payroll', module: 'Payroll', icon: <TrendingDown className="w-5 h-5" /> },
+  { id: 'employee-earnings', name: 'Employee Earnings', description: 'YTD earnings by employee', category: 'Payroll', module: 'Payroll', icon: <DollarSign className="w-5 h-5" />, href: '/payroll/reports' },
+  { id: 'payroll-register', name: 'Payroll Register', description: 'Detailed pay run breakdown', category: 'Payroll', module: 'Payroll', icon: <ClipboardList className="w-5 h-5" />, href: '/payroll/reports' },
+  { id: 'deduction-report', name: 'Deduction Report', description: 'All payroll deductions by type', category: 'Payroll', module: 'Payroll', icon: <TrendingDown className="w-5 h-5" />, href: '/payroll/reports' },
   { id: 'payroll-liability', name: 'Payroll Liabilities', description: 'CPP, EI & tax remittances owing', category: 'Payroll', module: 'Payroll', icon: <Calculator className="w-5 h-5" />, href: '/payroll/remittances', isNew: true },
-  { id: 'pd7a-report', name: 'PD7A Report', description: 'CRA remittance report', category: 'Payroll', module: 'Payroll', icon: <FileSpreadsheet className="w-5 h-5" /> },
+  { id: 'pd7a-report', name: 'PD7A Report', description: 'CRA remittance report', category: 'Payroll', module: 'Payroll', icon: <FileSpreadsheet className="w-5 h-5" />, href: '/payroll/remittances' },
   { id: 't4-summary', name: 'T4 Summary', description: 'T4 slip summary for tax year', category: 'Payroll', module: 'Payroll', icon: <FileText className="w-5 h-5" />, href: '/payroll/tax-slips' },
   { id: 'roe-report', name: 'ROE Report', description: 'Record of Employment listing', category: 'Payroll', module: 'Payroll', icon: <ClipboardList className="w-5 h-5" />, href: '/payroll/roe' },
   { id: 'employee-list', name: 'Employee List', description: 'Active & inactive employees', category: 'Payroll', module: 'Payroll', icon: <UserCheck className="w-5 h-5" />, href: '/payroll/employees' },
