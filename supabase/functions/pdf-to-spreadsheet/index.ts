@@ -570,6 +570,8 @@ serve(async (req) => {
         success: false,
         error: 'PDF extraction took too long. Try a smaller statement, fewer pages, or upload CSV/XLSX exported from the bank.',
         message: 'PDF extraction timed out before the backend idle limit.',
+        totalPages,
+        processedPages: processedPageNumbers.size || processedPages,
         validationWarnings: validationWarnings.length ? validationWarnings : undefined,
         processingTimeMs: Date.now() - startTime,
       }), { status: 408, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
