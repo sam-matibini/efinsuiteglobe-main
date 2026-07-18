@@ -6137,6 +6137,51 @@ export type Database = {
           },
         ]
       }
+      discount_presets: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          duration: string
+          duration_in_months: number | null
+          expires_at: string | null
+          id: string
+          max_redemptions: number | null
+          name: string
+          percent: number
+          status: string
+          stripe_coupon_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          duration: string
+          duration_in_months?: number | null
+          expires_at?: string | null
+          id?: string
+          max_redemptions?: number | null
+          name: string
+          percent: number
+          status?: string
+          stripe_coupon_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          duration?: string
+          duration_in_months?: number | null
+          expires_at?: string | null
+          id?: string
+          max_redemptions?: number | null
+          name?: string
+          percent?: number
+          status?: string
+          stripe_coupon_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       docsign_notifications: {
         Row: {
           channel: string | null
@@ -22095,6 +22140,7 @@ export type Database = {
           payment_method: string | null
           plan_id: string | null
           status: Database["public"]["Enums"]["subscription_status"]
+          stripe_coupon_id: string | null
           stripe_subscription_id: string | null
           trial_extended_at: string | null
           trial_extended_by: string | null
@@ -22115,6 +22161,7 @@ export type Database = {
           payment_method?: string | null
           plan_id?: string | null
           status?: Database["public"]["Enums"]["subscription_status"]
+          stripe_coupon_id?: string | null
           stripe_subscription_id?: string | null
           trial_extended_at?: string | null
           trial_extended_by?: string | null
@@ -22135,6 +22182,7 @@ export type Database = {
           payment_method?: string | null
           plan_id?: string | null
           status?: Database["public"]["Enums"]["subscription_status"]
+          stripe_coupon_id?: string | null
           stripe_subscription_id?: string | null
           trial_extended_at?: string | null
           trial_extended_by?: string | null

@@ -315,10 +315,10 @@ serve(async (req) => {
         sessionParams['subscription_data[trial_period_days]'] = String(trialDays);
       }
 
-      // Apply discount coupon (per-org override else global) if a Stripe coupon id is configured
+      // Apply discount coupon: per-org coupon takes precedence, else global.
       const { data: subRow } = await supabaseAdmin
         .from('subscriptions')
-        .select('discount_percent, discount_expires_at')
+        .select('discount_percent, discount_expires_at, stripe_coupon_id')
         .eq('organization_id', organizationId)
         .in('status', ['active', 'trialing'])
         .maybeSingle();
@@ -330,12 +330,18 @@ serve(async (req) => {
       const gd = (globalDiscount?.setting_value as any) || {};
       const nowTs = new Date();
       const orgDiscountActive = subRow && Number(subRow.discount_percent) > 0 &&
-        (!subRow.discount_expires_at || new Date(subRow.discount_expires_at) > nowTs);
+        (!subRow.discount_expires_at || new Date(subRow.discount_expires_at) > nowTs) &&
+        !!subRow.stripe_coupon_id;
       const globalDiscountActive = Number(gd.percent) > 0 &&
-        (!gd.expires_at || new Date(gd.expires_at) > nowTs);
-      const couponId = (orgDiscountActive || globalDiscountActive) ? gd.stripe_coupon_id : null;
+        (!gd.expires_at || new Date(gd.expires_at) > nowTs) &&
+        !!gd.stripe_coupon_id;
+      const couponId = orgDiscountActive
+        ? subRow!.stripe_coupon_id
+        : (globalDiscountActive ? gd.stripe_coupon_id : null);
       if (couponId) {
         sessionParams['discounts[0][coupon]'] = String(couponId);
+      } else if ((subRow && Number(subRow.discount_percent) > 0) || Number(gd.percent) > 0) {
+        console.warn('Discount configured without a Stripe coupon id — skipping Stripe discount');
       }
 
       const session = await stripeRequest('/checkout/sessions', 'POST', sessionParams);

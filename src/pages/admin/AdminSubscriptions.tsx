@@ -51,6 +51,7 @@ import {
   OverrideSubscriptionDialog,
   SetDiscountDialog,
 } from '@/components/admin/SubscriptionAdminControls';
+import { DiscountsTab } from '@/components/admin/DiscountsTab';
 
 interface Subscription {
   id: string;
@@ -652,6 +653,7 @@ export default function AdminSubscriptions() {
         <TabsList>
           <TabsTrigger value="subscriptions">Subscriptions</TabsTrigger>
           <TabsTrigger value="pricing">Pricing Plans</TabsTrigger>
+          <TabsTrigger value="discounts">Discounts</TabsTrigger>
         </TabsList>
         
         <TabsContent value="subscriptions" className="mt-4 space-y-4">
@@ -916,6 +918,10 @@ export default function AdminSubscriptions() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="discounts" className="mt-4">
+          <DiscountsTab />
         </TabsContent>
       </Tabs>
 
