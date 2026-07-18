@@ -33,6 +33,7 @@ async function callAdmin(payload: Record<string, unknown>) {
 export function DiscountsTab() {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<any | null>(null);
 
   const { data: presets, isLoading } = useQuery({
     queryKey: ['discount_presets', 'all'],
