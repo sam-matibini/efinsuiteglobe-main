@@ -29,6 +29,7 @@ import { useCurrentOrganization } from '@/hooks/useOrganization';
 import { useFinancialReports } from '@/hooks/useFinancialReports';
 import { useReportFilters } from '@/hooks/useReportFilters';
 import { ReportFilters } from '@/components/reports/ReportFilters';
+import { StatementsPanel } from '@/components/reports/StatementsPanel';
 import { toast } from 'sonner';
 import jsPDF from 'jspdf';
 import * as XLSX from 'xlsx';
@@ -77,7 +78,7 @@ export default function ManagementReport() {
     }
   }, [organization?.fiscal_year_end_month, setFiscalYearEndMonth]);
   
-  const { isLoading, getBalanceSheetData, getIncomeStatementData } = useFinancialReports({
+  const { isLoading, getBalanceSheetData, getIncomeStatementData, getCashFlowData } = useFinancialReports({
     startDate,
     endDate,
     period: 'custom'
@@ -91,6 +92,7 @@ export default function ManagementReport() {
   // These return objects with default empty arrays when data isn't loaded yet
   const balanceSheet = getBalanceSheetData();
   const incomeStatement = getIncomeStatementData();
+  const cashFlow = getCashFlowData();
 
   // Calculate financial metrics from real data
   // GAAP: Use actual calculated_balance values (not Math.abs) since balances are already normalized
@@ -423,6 +425,13 @@ export default function ManagementReport() {
     return `${value.toFixed(2)}x`;
   };
 
+  const fmtCurrency = (v: number) =>
+    new Intl.NumberFormat('en-CA', {
+      style: 'currency',
+      currency: (organization as any)?.base_currency || 'CAD',
+      maximumFractionDigits: 0,
+    }).format(Number.isFinite(v) ? v : 0);
+
   const getRatioStatus = (ratio: FinancialRatio): 'good' | 'warning' | 'poor' => {
     // Handle edge cases: NaN, Infinity, or missing values
     if (!Number.isFinite(ratio.value)) return 'warning';
@@ -711,14 +720,27 @@ export default function ManagementReport() {
       </div>
 
       {/* Tabs for Ratio Categories */}
-      <Tabs defaultValue="all" className="space-y-4">
+      <Tabs defaultValue="statements" className="space-y-4">
         <TabsList className="print:hidden">
+          <TabsTrigger value="statements">Financial Statements</TabsTrigger>
           <TabsTrigger value="all">All Ratios</TabsTrigger>
           <TabsTrigger value="liquidity">Liquidity</TabsTrigger>
           <TabsTrigger value="efficiency">Efficiency</TabsTrigger>
           <TabsTrigger value="profitability">Profitability</TabsTrigger>
           <TabsTrigger value="leverage">Leverage</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="statements" className="space-y-4">
+          <StatementsPanel
+            organizationName={organization?.name || ''}
+            startDate={startDate}
+            endDate={endDate}
+            balanceSheet={balanceSheet}
+            incomeStatement={incomeStatement}
+            cashFlow={cashFlow}
+            fmt={fmtCurrency}
+          />
+        </TabsContent>
 
         <TabsContent value="all" className="space-y-4">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
