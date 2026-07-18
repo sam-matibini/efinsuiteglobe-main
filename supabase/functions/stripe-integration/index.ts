@@ -231,7 +231,7 @@ serve(async (req) => {
         return new Response(JSON.stringify({ success: false, error: 'Stripe not configured' }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
-      const { planId, billingCycle, organizationId, successUrl, cancelUrl } = body;
+      const { planId, billingCycle, organizationId, successUrl, cancelUrl, promotionCodeId } = body as any;
       if (!planId || !organizationId) {
         return new Response(JSON.stringify({ success: false, error: 'planId and organizationId are required' }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
