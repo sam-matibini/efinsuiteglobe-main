@@ -52,6 +52,7 @@ import {
   SetDiscountDialog,
 } from '@/components/admin/SubscriptionAdminControls';
 import { DiscountsTab } from '@/components/admin/DiscountsTab';
+import { SubscriptionAuditLogTab } from '@/components/admin/SubscriptionAuditLogTab';
 
 interface Subscription {
   id: string;
