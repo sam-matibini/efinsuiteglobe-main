@@ -27,6 +27,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Skeleton } from '@/components/ui/skeleton';
 import { useCurrentOrganization } from '@/hooks/useOrganization';
 import { useFinancialReports } from '@/hooks/useFinancialReports';
+import { useRetainedEarningsStatement } from '@/hooks/useRetainedEarningsStatement';
 import { useReportFilters } from '@/hooks/useReportFilters';
 import { ReportFilters } from '@/components/reports/ReportFilters';
 import { StatementsPanel } from '@/components/reports/StatementsPanel';
