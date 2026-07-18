@@ -42,7 +42,20 @@ export function SubscriptionDefaultsCard() {
     },
   });
 
+  const { data: presets } = useQuery({
+    queryKey: ['discount_presets', 'active'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('discount_presets')
+        .select('*')
+        .eq('status', 'active')
+        .order('created_at', { ascending: false });
+      return data || [];
+    },
+  });
+
   const [trialDays, setTrialDays] = useState('14');
+  const [presetId, setPresetId] = useState<string>('custom');
   const [discountPercent, setDiscountPercent] = useState('0');
   const [discountExpires, setDiscountExpires] = useState('');
   const [couponId, setCouponId] = useState('');
@@ -52,22 +65,35 @@ export function SubscriptionDefaultsCard() {
     if (!settings) return;
     setTrialDays(String(settings['subscription.trial_period_days']?.days ?? 14));
     const gd = settings['subscription.global_discount'] || {};
+    setPresetId(gd.preset_id || 'custom');
     setDiscountPercent(String(gd.percent ?? 0));
     setDiscountExpires(gd.expires_at ? gd.expires_at.slice(0, 10) : '');
     setCouponId(gd.stripe_coupon_id || '');
     setNote(gd.note || '');
   }, [settings]);
 
+  const usingPreset = presetId && presetId !== 'custom';
+  const selectedPreset = (presets || []).find((p: any) => p.id === presetId);
+
+  useEffect(() => {
+    if (usingPreset && selectedPreset) {
+      setDiscountPercent(String(selectedPreset.percent));
+      setDiscountExpires(selectedPreset.expires_at ? String(selectedPreset.expires_at).slice(0, 10) : '');
+    }
+  }, [presetId, selectedPreset, usingPreset]);
+
   const save = useMutation({
     mutationFn: async () => {
       await callAdmin({
         action: 'update-defaults',
         trial_period_days: Number(trialDays),
-        global_discount: {
-          percent: Number(discountPercent),
-          expires_at: discountExpires ? new Date(discountExpires).toISOString() : null,
-          note: note || null,
-        },
+        global_discount: usingPreset
+          ? { preset_id: presetId, note: note || null }
+          : {
+              percent: Number(discountPercent),
+              expires_at: discountExpires ? new Date(discountExpires).toISOString() : null,
+              note: note || null,
+            },
       });
     },
     onSuccess: () => {
@@ -83,7 +109,7 @@ export function SubscriptionDefaultsCard() {
         <CardTitle>Subscription Defaults</CardTitle>
         <CardDescription>
           Global trial length and promotional discount applied to new checkouts.
-          Stripe coupons are created automatically when you save a discount.
+          Pick a saved discount or create a one-off — Stripe coupons are managed automatically.
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-4 md:grid-cols-2">
@@ -97,12 +123,27 @@ export function SubscriptionDefaultsCard() {
           />
         </div>
         <div className="space-y-2">
+          <Label>Use saved discount</Label>
+          <Select value={presetId} onValueChange={setPresetId}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="custom">Custom (one-off)</SelectItem>
+              {(presets || []).map((p: any) => (
+                <SelectItem key={p.id} value={p.id}>
+                  {p.name} — {p.percent}% ({p.duration})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
           <Label>Global discount (%)</Label>
           <Input
             type="number"
             min={0}
             max={100}
             value={discountPercent}
+            disabled={usingPreset}
             onChange={(e) => setDiscountPercent(e.target.value)}
           />
         </div>
@@ -111,10 +152,11 @@ export function SubscriptionDefaultsCard() {
           <Input
             type="date"
             value={discountExpires}
+            disabled={usingPreset}
             onChange={(e) => setDiscountExpires(e.target.value)}
           />
         </div>
-        <div className="space-y-2">
+        <div className="space-y-2 md:col-span-2">
           <Label>Stripe coupon</Label>
           <div className="text-sm text-muted-foreground px-3 py-2 border rounded-md bg-muted/30 font-mono truncate">
             {couponId ? couponId : 'Auto-managed — created on save'}
@@ -133,6 +175,7 @@ export function SubscriptionDefaultsCard() {
     </Card>
   );
 }
+
 
 // ============ Extend Trial ============
 export function ExtendTrialDialog({
