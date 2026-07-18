@@ -52,6 +52,11 @@ export const SearchableOrgSwitcher = forwardRef<HTMLDivElement, SearchableOrgSwi
     const handleSelect = (org: Organization) => {
       setOpen(false);
       setSearch('');
+      // Navigate to dashboard FIRST so we're not on a page (e.g. /journal-entries)
+      // whose own URL-sync effects would race with the post-switch redirect.
+      if (org.id !== currentOrg?.id && location.pathname !== '/') {
+        navigate('/', { replace: true });
+      }
       onSwitch(org);
     };
 
