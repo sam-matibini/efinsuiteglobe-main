@@ -314,10 +314,10 @@ async function handleSubscriptionDeleted(supabaseAdmin: SupabaseClient, event: a
     .maybeSingle();
   if (!sub) return; // already gone — nothing to do
 
-  await supabaseAdmin
-    .from('subscriptions')
-    .update({ status: 'canceled', cancel_at_period_end: false, stripe_coupon_id: null, discount_percent: null, discount_amount: null })
-    .eq('id', sub.id);
+    await supabaseAdmin
+      .from('subscriptions')
+      .update({ status: 'canceled', cancel_at_period_end: false, stripe_coupon_id: null, discount_percent: null })
+      .eq('id', sub.id);
 }
 
 async function handleTrialWillEnd(supabaseAdmin: SupabaseClient, event: any) {
