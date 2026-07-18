@@ -66,6 +66,9 @@ export function BillingSettingsTab() {
   const orgId = currentOrganization?.id;
 
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancelFeedback, setCancelFeedback] = useState('');
+  const [cancelImmediate, setCancelImmediate] = useState(false);
   const [portalLoading, setPortalLoading] = useState<'manage' | 'card' | null>(null);
 
   const hasStripeCustomer = !!(subscription as any)?.stripe_customer_id;
