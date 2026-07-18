@@ -164,6 +164,33 @@ export function SubscriptionDefaultsCard() {
             onChange={(e) => setDiscountExpires(e.target.value)}
           />
         </div>
+        <div className="space-y-2">
+          <Label>Duration</Label>
+          <Select
+            value={duration}
+            onValueChange={(v) => setDuration(v as any)}
+            disabled={!!usingPreset}
+          >
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="once">Once (first invoice)</SelectItem>
+              <SelectItem value="repeating">Repeating (N months)</SelectItem>
+              <SelectItem value="forever">Forever</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        {duration === 'repeating' && (
+          <div className="space-y-2">
+            <Label>Repeat for (months)</Label>
+            <Input
+              type="number"
+              min={1}
+              value={durationMonths}
+              disabled={!!usingPreset}
+              onChange={(e) => setDurationMonths(e.target.value)}
+            />
+          </div>
+        )}
         <div className="space-y-2 md:col-span-2">
           <Label>Stripe coupon</Label>
           <div className="text-sm text-muted-foreground px-3 py-2 border rounded-md bg-muted/30 font-mono truncate">
