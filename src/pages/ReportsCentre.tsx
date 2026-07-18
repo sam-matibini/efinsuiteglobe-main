@@ -109,9 +109,9 @@ const reports: ReportItem[] = [
   { id: 'inventory-summary', name: 'Inventory Summary', description: 'Stock levels, values & turnover', category: 'Inventory', module: 'Inventory', icon: <Boxes className="w-5 h-5" />, href: '/inventory' },
   { id: 'inventory-valuation', name: 'Inventory Valuation', description: 'Current inventory value by item', category: 'Inventory', module: 'Inventory', icon: <DollarSign className="w-5 h-5" />, href: '/inventory' },
   { id: 'products-services', name: 'Products & Services', description: 'Product catalog with pricing & costs', category: 'Inventory', module: 'Sales', icon: <Package className="w-5 h-5" />, href: '/sales/products' },
-  { id: 'stock-movement', name: 'Stock Movement', description: 'Inventory ins & outs over time', category: 'Inventory', module: 'Inventory', icon: <Activity className="w-5 h-5" /> },
-  { id: 'reorder-report', name: 'Reorder Report', description: 'Items at or below reorder point', category: 'Inventory', module: 'Inventory', icon: <AlertTriangle className="w-5 h-5" /> },
-  { id: 'inventory-adjustments', name: 'Inventory Adjustments', description: 'Stock adjustment history', category: 'Inventory', module: 'Inventory', icon: <ArrowUpDown className="w-5 h-5" /> },
+  { id: 'stock-movement', name: 'Stock Movement', description: 'Inventory ins & outs over time', category: 'Inventory', module: 'Inventory', icon: <Activity className="w-5 h-5" />, href: '/inventory' },
+  { id: 'reorder-report', name: 'Reorder Report', description: 'Items at or below reorder point', category: 'Inventory', module: 'Inventory', icon: <AlertTriangle className="w-5 h-5" />, href: '/inventory' },
+  { id: 'inventory-adjustments', name: 'Inventory Adjustments', description: 'Stock adjustment history', category: 'Inventory', module: 'Inventory', icon: <ArrowUpDown className="w-5 h-5" />, href: '/inventory' },
   
   // Fixed Assets Reports
   { id: 'fixed-asset-register', name: 'Fixed Asset Register', description: 'Complete list of all fixed assets', category: 'Fixed Assets', module: 'Assets', icon: <Building2 className="w-5 h-5" />, href: '/fixed-assets' },
