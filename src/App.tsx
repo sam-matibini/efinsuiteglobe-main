@@ -176,6 +176,7 @@ const Install = lazy(() => import("./pages/Install"));
 const AcceptInvite = lazy(() => import("./pages/AcceptInvite"));
 const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
 const Contact = lazy(() => import("./pages/Contact"));
+const About = lazy(() => import("./pages/About"));
 const TermsOfService = lazy(() => import("./pages/TermsOfService"));
 const SubscriptionCheckout = lazy(() => import("./pages/SubscriptionCheckout"));
 const SubscriptionSuccess = lazy(() => import("./pages/SubscriptionSuccess"));
@@ -253,6 +254,7 @@ const AppRoutes = () => (
     {/* Public routes */}
     <Route path="/landing" element={<Landing />} />
     <Route path="/contact" element={<Contact />} />
+    <Route path="/about" element={<About />} />
     <Route path="/install" element={<Install />} />
     <Route path="/privacy-policy" element={<PrivacyPolicy />} />
     <Route path="/terms-of-service" element={<TermsOfService />} />
