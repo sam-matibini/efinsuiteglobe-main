@@ -139,6 +139,15 @@ Deno.serve(async (req) => {
 
         let percent = Number(global_discount.percent) || 0;
         let expiresAt: string | null = global_discount.expires_at || null;
+        let duration: 'once' | 'repeating' | 'forever' =
+          (global_discount.duration as any) || (expiresAt ? 'once' : 'forever');
+        let durationInMonths: number | null =
+          duration === 'repeating' && global_discount.duration_in_months
+            ? Number(global_discount.duration_in_months)
+            : null;
+        if (duration === 'repeating' && !durationInMonths) {
+          return json({ error: 'duration_in_months required when duration is repeating' }, 400);
+        }
         let newCouponId: string | null = prev.stripe_coupon_id || null;
 
         if (presetId) {
@@ -150,7 +159,8 @@ Deno.serve(async (req) => {
           if (!preset) return json({ error: 'Preset not found' }, 404);
           percent = Number(preset.percent);
           expiresAt = preset.expires_at || null;
-          // Delete old auto-created coupon if it's not a preset
+          duration = preset.duration || 'forever';
+          durationInMonths = preset.duration_in_months || null;
           if (prev.stripe_coupon_id && !(await isPresetCoupon(admin, prev.stripe_coupon_id))) {
             await deleteStripeCoupon(prev.stripe_coupon_id);
           }
@@ -158,16 +168,18 @@ Deno.serve(async (req) => {
         } else {
           const changed =
             Number(prev.percent) !== percent ||
-            (prev.expires_at || null) !== (expiresAt || null);
+            (prev.expires_at || null) !== (expiresAt || null) ||
+            (prev.duration || null) !== duration ||
+            (prev.duration_in_months || null) !== durationInMonths;
 
           if (percent > 0 && (changed || !newCouponId || (newCouponId && await isPresetCoupon(admin, newCouponId)))) {
-            // Delete old auto-created coupon (not preset)
             if (prev.stripe_coupon_id && !(await isPresetCoupon(admin, prev.stripe_coupon_id))) {
               await deleteStripeCoupon(prev.stripe_coupon_id);
             }
             const coupon = await createStripeCoupon({
               percent,
-              duration: expiresAt ? 'once' : 'forever',
+              duration,
+              duration_in_months: durationInMonths,
               redeem_by: expiresAt,
               name: `Global ${percent}% off`,
             });
@@ -183,6 +195,8 @@ Deno.serve(async (req) => {
         const newValue = {
           percent,
           expires_at: expiresAt,
+          duration,
+          duration_in_months: durationInMonths,
           stripe_coupon_id: newCouponId,
           preset_id: presetId,
           note,
