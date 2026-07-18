@@ -18,7 +18,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import { toast } from 'sonner';
-import { Copy, Plus, Archive } from 'lucide-react';
+import { Copy, Plus, Archive, Pencil } from 'lucide-react';
 import { format } from 'date-fns';
 
 async function callAdmin(payload: Record<string, unknown>) {
