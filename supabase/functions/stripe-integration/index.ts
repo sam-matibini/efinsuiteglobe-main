@@ -341,6 +341,9 @@ serve(async (req) => {
         : (globalDiscountActive ? gd.stripe_coupon_id : null);
       if (couponId) {
         sessionParams['discounts[0][coupon]'] = String(couponId);
+      } else if (promotionCodeId) {
+        // User-supplied promotion code from our in-app field
+        sessionParams['discounts[0][promotion_code]'] = String(promotionCodeId);
       } else {
         // No admin coupon attached — let the customer type a promotion code on the Stripe Checkout page.
         sessionParams['allow_promotion_codes'] = 'true';
