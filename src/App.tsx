@@ -214,7 +214,7 @@ const ProtectedRoute = forwardRef<HTMLDivElement, { children: React.ReactNode }>
 
     return (
       <div ref={ref} className="contents">
-        {children}
+        <RouteAccessGuard>{children}</RouteAccessGuard>
       </div>
     );
   }
