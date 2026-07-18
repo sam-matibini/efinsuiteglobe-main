@@ -102,8 +102,8 @@ const reports: ReportItem[] = [
   { id: 'bank-transactions', name: 'Bank Transactions', description: 'Complete transaction history by account', category: 'Banking', module: 'Banking', icon: <ArrowRightLeft className="w-5 h-5" />, href: '/banking/transactions' },
   { id: 'bank-reconciliation', name: 'Bank Reconciliation', description: 'Reconciliation history & status', category: 'Banking', module: 'Banking', icon: <Shield className="w-5 h-5" />, href: '/banking/reconciliation' },
   { id: 'cc-reconciliation', name: 'Credit Card Reconciliation', description: 'Credit card statement reconciliation', category: 'Banking', module: 'Banking', icon: <CreditCard className="w-5 h-5" />, href: '/banking/credit-cards/reconcile' },
-  { id: 'uncleared-items', name: 'Outstanding Checks', description: 'Uncleared checks & deposits', category: 'Banking', module: 'Banking', icon: <AlertTriangle className="w-5 h-5" /> },
-  { id: 'cash-position', name: 'Cash Position', description: 'Current cash & near-cash balances', category: 'Banking', module: 'Banking', icon: <Wallet className="w-5 h-5" /> },
+  { id: 'uncleared-items', name: 'Outstanding Checks', description: 'Uncleared checks & deposits', category: 'Banking', module: 'Banking', icon: <AlertTriangle className="w-5 h-5" />, href: '/banking/accounts' },
+  { id: 'cash-position', name: 'Cash Position', description: 'Current cash & near-cash balances', category: 'Banking', module: 'Banking', icon: <Wallet className="w-5 h-5" />, href: '/banking/accounts' },
   
   // Inventory Reports
   { id: 'inventory-summary', name: 'Inventory Summary', description: 'Stock levels, values & turnover', category: 'Inventory', module: 'Inventory', icon: <Boxes className="w-5 h-5" />, href: '/inventory' },
