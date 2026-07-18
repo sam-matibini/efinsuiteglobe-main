@@ -334,9 +334,11 @@ function EditDiscountDialog({ preset, onClose }: { preset: any; onClose: () => v
           </div>
         </div>
         {financialChanged && (
-          <p className="text-xs text-muted-foreground rounded-md bg-muted p-2">
-            ⚠ These changes will archive the current Stripe coupon and create a new one. Existing subscriptions already using the old coupon keep their discount until it expires.
-          </p>
+          <div className="text-xs text-amber-600 dark:text-amber-400 rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-2 space-y-1">
+            <p className="font-medium">⚠ Coupon replacement warning</p>
+            <p>These changes will archive the current Stripe coupon and create a new one. Any promotion codes generated from the old coupon will be revoked immediately and can no longer be used.</p>
+            <p>Existing subscriptions already using the old coupon keep their discount until it expires.</p>
+          </div>
         )}
       </div>
       <DialogFooter>
