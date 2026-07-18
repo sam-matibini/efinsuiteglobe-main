@@ -77,7 +77,7 @@ export default function ManagementReport() {
     }
   }, [organization?.fiscal_year_end_month, setFiscalYearEndMonth]);
   
-  const { isLoading, getBalanceSheetData, getIncomeStatementData } = useFinancialReports({
+  const { isLoading, getBalanceSheetData, getIncomeStatementData, getCashFlowData } = useFinancialReports({
     startDate,
     endDate,
     period: 'custom'
@@ -91,6 +91,7 @@ export default function ManagementReport() {
   // These return objects with default empty arrays when data isn't loaded yet
   const balanceSheet = getBalanceSheetData();
   const incomeStatement = getIncomeStatementData();
+  const cashFlow = getCashFlowData();
 
   // Calculate financial metrics from real data
   // GAAP: Use actual calculated_balance values (not Math.abs) since balances are already normalized
