@@ -427,7 +427,7 @@ export default function ManagementReport() {
   const fmtCurrency = (v: number) =>
     new Intl.NumberFormat('en-CA', {
       style: 'currency',
-      currency: organization?.base_currency || 'CAD',
+      currency: (organization as any)?.base_currency || 'CAD',
       maximumFractionDigits: 0,
     }).format(Number.isFinite(v) ? v : 0);
 
