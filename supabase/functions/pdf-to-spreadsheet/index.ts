@@ -328,6 +328,7 @@ serve(async (req) => {
     let summary: Record<string, number | string | undefined> | undefined;
     let totalPages = 0;
     let processedPages = 0;
+    const processedPageNumbers = new Set<number>();
 
     let extractionTimedOut = false;
     const remainingAiBudget = () => Math.max(
@@ -336,6 +337,11 @@ serve(async (req) => {
     );
     const hasBudgetForAnotherCall = () =>
       EDGE_RESPONSE_BUDGET_MS - (Date.now() - startTime) - RESPONSE_BUFFER_MS > MIN_AI_CALL_MS;
+    const markBatchProcessed = (batch: PdfBatch) => {
+      if (!batch.totalPages || !batch.to) return;
+      for (let page = batch.from; page <= batch.to; page++) processedPageNumbers.add(page);
+      processedPages = Math.max(processedPages, batch.to);
+    };
 
     let batches: PdfBatch[];
     try {
@@ -376,7 +382,7 @@ serve(async (req) => {
             continue;
           }
           batchResults.push({ batch, args: result.args || {} });
-          processedPages = Math.max(processedPages, batch.to || processedPages);
+          markBatchProcessed(batch);
         }
 
         if (results.some(({ result }) => result.ok) && processedPages >= totalPages) {
@@ -524,7 +530,7 @@ serve(async (req) => {
           continue;
         }
         anyOk = true;
-        processedPages = batch.to || processedPages;
+        markBatchProcessed(batch);
         const sheets = (result.args?.sheets as Sheet[]) || [];
         for (const s of sheets) allSheets.push(s);
       }
@@ -597,7 +603,7 @@ serve(async (req) => {
       success: true,
       fileName,
       totalPages,
-      processedPages: processedPages || totalPages,
+      processedPages: processedPageNumbers.size || processedPages || totalPages,
       columns,
       rows,
       sheets: extractedSheets.length > 1 ? extractedSheets : undefined,
