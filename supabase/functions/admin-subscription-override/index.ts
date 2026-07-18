@@ -289,7 +289,7 @@ Deno.serve(async (req) => {
 
     // ============ SET DISCOUNT (per-org) ============
     if (action === 'set-discount') {
-      const { organization_id, discount_percent, discount_expires_at, preset_id } = body;
+      const { organization_id, discount_percent, discount_expires_at, preset_id, duration: durationIn, duration_in_months: durationMonthsIn } = body;
       if (!organization_id) return json({ error: 'organization_id required' }, 400);
 
       const { data: sub } = await admin
@@ -322,12 +322,20 @@ Deno.serve(async (req) => {
           await deleteStripeCoupon(prevCoupon);
         }
       } else if (percent > 0) {
+        const duration: 'once' | 'repeating' | 'forever' =
+          (durationIn as any) || (expiresAt ? 'once' : 'forever');
+        const durationInMonths: number | null =
+          duration === 'repeating' && durationMonthsIn ? Number(durationMonthsIn) : null;
+        if (duration === 'repeating' && !durationInMonths) {
+          return json({ error: 'duration_in_months required when duration is repeating' }, 400);
+        }
         if (prevCoupon && !(await isPresetCoupon(admin, prevCoupon))) {
           await deleteStripeCoupon(prevCoupon);
         }
         const coupon = await createStripeCoupon({
           percent,
-          duration: expiresAt ? 'once' : 'forever',
+          duration,
+          duration_in_months: durationInMonths,
           redeem_by: expiresAt,
           max_redemptions: 1,
           name: `Org ${organization_id.slice(0, 8)} ${percent}% off`,
