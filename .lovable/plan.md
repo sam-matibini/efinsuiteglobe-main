@@ -1,34 +1,77 @@
-# Optimize organization switching
+# Subscription Follow-ups — Batch 1
 
-## Goal
-Switching organizations should feel instant: land on the dashboard, refresh org-scoped data, and skip the current full-app reload (`window.location.assign('/')`) that re-boots React, re-runs auth, re-parses bundles, and refetches everything from scratch.
+Tackling **#1 Session verification** and **#5 Usage-limit enforcement UX** now. Later batches (#2+#4, then #6+#7, then discuss #3) are noted at the end but not built in this pass.
 
-## Approach
-Keep the app mounted. Update the current-org state, invalidate React Query caches, and navigate to `/` via React Router.
+---
 
-### Changes
+## #1 — Verify Stripe session on `SubscriptionSuccess`
 
-1. **`src/hooks/useOrganizationContext.tsx`**
-   - Remove `window.location.assign('/')`.
-   - Replace `queryClient.clear()` with `queryClient.invalidateQueries()` so cached UI (shadcn state, layout, user profile) stays warm while org-scoped queries refetch. `clear()` throws away everything including non-org data; `invalidateQueries` is enough because every org-scoped query already keys on `currentOrganization.id`.
-   - Expose the switch as-is; navigation is handled by the caller so this hook stays router-agnostic.
+**Problem:** The page renders "Subscription Activated!" purely from a URL param. A cancelled/failed/tampered `session_id` still shows success, and the local `subscriptions` row may not be refreshed yet if the webhook is slow.
 
-2. **`src/components/layout/SearchableOrgSwitcher.tsx`** (the actual caller)
-   - After `onSwitch(org)`, call `navigate('/')` from `react-router-dom`'s `useNavigate`. Only navigate if not already on `/` to avoid a redundant transition.
+**Backend — `supabase/functions/stripe-integration/index.ts**`
 
-3. **Sanity check org-scoped query keys**
-   - Quick pass over `src/hooks/**` to confirm queries that depend on the current org include `currentOrganization?.id` in their `queryKey`. Any that don't would show stale data after switch — those get the org id added to their key. (This is a targeted audit, not a rewrite.)
+- Add a new action `verify-checkout-session`:
+  - Input: `{ session_id }`.
+  - Auth: require a valid user JWT; resolve the caller's org.
+  - Call Stripe `GET /v1/checkout/sessions/{id}?expand[]=subscription&expand[]=customer`.
+  - Confirm `session.metadata.organization_id` matches caller's org (prevents cross-org probing).
+  - Return `{ status: 'complete'|'open'|'expired', payment_status, subscription_status, plan_name, current_period_end, amount_total, currency }`.
+  - If `status='complete'` but our `subscriptions` row is still stale, upsert from the Stripe subscription object so the UI doesn't have to wait for the webhook.
 
-### Why this is faster
-- No JS re-parse, no re-hydration, no re-auth round-trip, no re-fetch of already-cached global data (roles, feature flags, currencies, etc.).
-- Only org-scoped queries refetch, which is what actually needs to change.
-- Route transition to `/` is a client-side render, typically <100ms vs. a multi-second cold boot.
+**Frontend — `src/pages/SubscriptionSuccess.tsx**`
 
-### Out of scope
-- No changes to auth, routing structure, or the org data model.
-- No visual changes to the switcher.
+- Replace empty `useEffect` with a `useQuery` calling `verify-checkout-session`.
+- Three render states:
+  1. **Loading:** spinner + "Confirming your subscription…"
+  2. **Complete:** current success UI, plus plan name, next billing date, and amount charged pulled from the verify response.
+  3. **Pending / open / expired / mismatch:** warning card ("We couldn't confirm this checkout") with a retry button and a link back to `/subscription/checkout`.
+- On complete, call `useSubscription().refetch()` and `queryClient.invalidateQueries({ queryKey: ['subscription'] })` so the rest of the app sees the new plan immediately.
+- If `session_id` is missing entirely, show the mismatch state (don't fabricate success).
 
-## Technical notes
-- `queryClient.invalidateQueries()` with no filter invalidates every query, triggering refetch on mount/observe. That's the desired behavior here.
-- Because `currentOrganization` lives in React state and every org-scoped query key includes its id, changing it already causes React Query to treat those as new queries — invalidation is belt-and-suspenders for any keys that were missed.
-- `localStorage` write stays so a hard refresh restores the last-selected org.
+---
+
+## #5 — Usage-limit enforcement UX
+
+**Problem:** `useUsageLimits` already computes `isUsersAtLimit` / `isEmployeesAtLimit` with `canAddUser` / `canAddEmployee`, but no UI consumes them. Users on Starter can silently exceed seat/employee caps.
+
+**Shared piece**
+
+- Extend `SubscriptionUpgradeModal` to accept an optional `reason: 'limit_users' | 'limit_employees'` and render limit-specific copy ("You've reached your plan's user limit (X of Y)") instead of the module-lock copy when `reason` is set. `requiredModule` stays optional.
+
+**Add-user flow (invitations)**
+
+- Locate the "Invite user" / "Add member" entry point (organization settings / members page — will confirm during implementation).
+- Before opening the invite dialog, read `useUsageLimits()`. If `!canAddUser`, open `SubscriptionUpgradeModal` with `reason='limit_users'` and `requiredPlan` = next tier that raises `max_users`, instead of the invite dialog.
+- Also disable the invite submit button (with tooltip) if the check is bypassed by a deep link.
+- Add a check for when user has no subscription too
+
+**Add-employee flow**
+
+- Same treatment in the employees page's "New employee" action, gated by `canAddEmployee` with `reason='limit_employees'`.
+
+**Server-side safety net (defense in depth, no new endpoint)**
+
+- Add a DB trigger `enforce_org_usage_limits` on `organization_members` INSERT and `employees` INSERT that reads the active plan's `max_users` / `max_employees` and raises if the count would exceed. Skipped for platform admins (via `has_role(auth.uid(),'admin')`) so overrides still work.
+- This closes the gap where a determined user hits Supabase directly.
+
+**Admin bypass**
+
+- `useUsageLimits` already exempts `isAdmin`. The trigger mirrors this via `has_role`.
+
+---
+
+## Technical details (for the implementer)
+
+- `verify-checkout-session` uses the same Stripe key + CORS helper as other actions in `stripe-integration/index.ts`; no new secret needed.
+- Session ownership check: prefer `metadata.organization_id` (we already set it on create) over trusting the caller's default org, in case the user switched orgs between checkout and return.
+- The upsert-on-verify path must be idempotent with the webhook (match on `stripe_subscription_id`, don't duplicate rows).
+- Trigger uses `SECURITY DEFINER` + `SET search_path = public` and reads `pricing_plans.max_users` / `max_employees` via `subscriptions` join. Bypass condition: `NEW`-org has no active subscription row → allow (free tier decision stays app-side) OR the calling role is admin.
+- No changes to `useSubscription`, `planModuleAccess`, or the admin discount/override surfaces in this batch.
+
+---
+
+## Out of scope for this batch (queued)
+
+- **Next:** #2 in-app promo code field on `SubscriptionCheckout` + #4 admin audit log viewer.
+- **Then:** #6 cancel / downgrade-at-period-end flow + #7 preset editing in `DiscountsTab`.
+- **Discuss after:** #3 webhook hardening (needs a walkthrough of every event we handle).
