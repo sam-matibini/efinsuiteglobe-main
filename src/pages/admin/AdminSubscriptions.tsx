@@ -654,7 +654,8 @@ export default function AdminSubscriptions() {
           <TabsTrigger value="pricing">Pricing Plans</TabsTrigger>
         </TabsList>
         
-        <TabsContent value="subscriptions" className="mt-4">
+        <TabsContent value="subscriptions" className="mt-4 space-y-4">
+          <SubscriptionDefaultsCard />
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
