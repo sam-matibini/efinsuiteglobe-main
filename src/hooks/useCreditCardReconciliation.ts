@@ -174,7 +174,7 @@ export function useCreditCardReconciliation(creditCardId?: string, statementDate
   // Book balance as-of statement date (for GL-linked cards)
   const effectiveStatementDate = statementDate || currentReconciliation?.statement_date;
   const { data: bookBalanceAsOfStatementDate } = useQuery({
-    queryKey: ['cc-book-balance-at-date', creditCardId, selectedCard?.gl_account_id, effectiveStatementDate],
+    queryKey: ['cc-book-balance-at-date', organization?.id, creditCardId, selectedCard?.gl_account_id, effectiveStatementDate],
     queryFn: async () => {
       if (!organization?.id || !selectedCard?.gl_account_id || !effectiveStatementDate) return null;
 
