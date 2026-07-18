@@ -248,9 +248,24 @@ AuthRoute.displayName = "AuthRoute";
 
 const AppRoutes = () => {
   const { currentOrganization } = useOrganizationContext();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const prevOrgIdRef = React.useRef<string | null>(null);
+
+  React.useEffect(() => {
+    const newId = currentOrganization?.id ?? null;
+    const prevId = prevOrgIdRef.current;
+    // On a real switch (not initial hydrate), route to dashboard.
+    if (prevId && newId && prevId !== newId && location.pathname !== '/') {
+      navigate('/', { replace: true });
+    }
+    prevOrgIdRef.current = newId;
+  }, [currentOrganization?.id, location.pathname, navigate]);
+
   return (
   <Suspense fallback={<RouteFallback />}>
   <Routes key={currentOrganization?.id ?? 'no-org'}>
+
 
     {/* Public routes */}
     <Route path="/landing" element={<Landing />} />
