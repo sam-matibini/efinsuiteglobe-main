@@ -88,6 +88,11 @@ export default function SubscriptionCheckout() {
     id: string;
     code: string;
     label: string;
+    percent_off?: number | null;
+    amount_off?: number | null;
+    currency?: string | null;
+    duration?: string | null;
+    duration_in_months?: number | null;
     adminDiscountActive?: boolean;
   } | null>(null);
 
