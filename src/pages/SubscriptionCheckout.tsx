@@ -304,6 +304,23 @@ export default function SubscriptionCheckout() {
     }
   };
 
+  // Downgrade impact analysis
+  const currentTier = deriveTierFromName((currentSub as any)?.pricing_plans?.name);
+  const newTier = changePlan ? (changePlan.tier as PlanTier | null) || deriveTierFromName(changePlan.name) : null;
+  const isDowngrade =
+    !!currentTier && !!newTier &&
+    PLAN_TIER_ORDER.indexOf(newTier) < PLAN_TIER_ORDER.indexOf(currentTier);
+
+  const lostModules = (isDowngrade && currentTier && newTier)
+    ? PLAN_MODULE_ACCESS[currentTier].filter(m => !PLAN_MODULE_ACCESS[newTier].includes(m))
+    : [];
+
+  const newMaxUsers = changePlan?.max_users ?? null;
+  const newMaxEmployees = changePlan?.max_employees ?? null;
+  const usersOverLimit = isDowngrade && newMaxUsers !== null && userCount > newMaxUsers;
+  const employeesOverLimit = isDowngrade && newMaxEmployees !== null && employeeCount > newMaxEmployees;
+  const hasImpact = isDowngrade && (lostModules.length > 0 || usersOverLimit || employeesOverLimit);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
