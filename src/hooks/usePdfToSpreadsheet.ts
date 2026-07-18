@@ -49,6 +49,7 @@ export function usePdfToSpreadsheet() {
     setError(null);
     setProgress({ current: 0, total: 100 });
     let errorResult: Partial<PdfToSpreadsheetResult> | null = null;
+    let progressInterval: ReturnType<typeof setInterval> | null = null;
 
     try {
       const formData = new FormData();
@@ -58,7 +59,7 @@ export function usePdfToSpreadsheet() {
       formData.append('useAI', String(options.useAI !== false));
 
       // Simulate progress for UX
-      const progressInterval = setInterval(() => {
+      progressInterval = setInterval(() => {
         setProgress(prev => {
           if (!prev) return { current: 10, total: 100 };
           const next = Math.min(prev.current + Math.random() * 15, 90);
@@ -78,6 +79,7 @@ export function usePdfToSpreadsheet() {
       );
 
       clearInterval(progressInterval);
+      progressInterval = null;
       setProgress({ current: 100, total: 100 });
 
       if (!response.ok) {
@@ -106,6 +108,7 @@ export function usePdfToSpreadsheet() {
         validationWarnings: errorResult?.validationWarnings,
       };
     } finally {
+      if (progressInterval) clearInterval(progressInterval);
       setIsConverting(false);
       setProgress(null);
     }
