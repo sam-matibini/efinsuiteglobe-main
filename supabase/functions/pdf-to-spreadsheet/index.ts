@@ -24,13 +24,16 @@ interface Sheet { name: string; columns: string[]; rows: ExtractedRow[] }
 const MAX_PDF_SIZE_MB = 20;
 const MAX_PDF_SIZE_BYTES = MAX_PDF_SIZE_MB * 1024 * 1024;
 // Lovable AI Gateway enforces a ~75s upstream idle limit per request. We slice
-// the PDF into small page batches so each Gemini call fits comfortably under
-// that ceiling, then merge the batch results.
-const PAGES_PER_BATCH = 5;
+// the PDF into small page batches and process a few batches in parallel so
+// 20-page statements can complete inside the edge function wall-clock budget.
+const PAGES_PER_BATCH = 3;
+const MAX_PARALLEL_BATCHES = 3;
 const EDGE_RESPONSE_BUDGET_MS = 220_000;
 const AI_REQUEST_TIMEOUT_MS = 65_000;
 const RESPONSE_BUFFER_MS = 10_000;
 const MIN_AI_CALL_MS = 15_000;
+
+type PdfBatch = { base64: string; from: number; to: number; totalPages: number };
 
 type AiCallResult =
   | { ok: true; args: any; raw: string }
@@ -41,10 +44,10 @@ type AiCallResult =
 async function sliceIntoBatches(
   pdfBytes: Uint8Array,
   pagesPerBatch: number,
-): Promise<Array<{ base64: string; from: number; to: number; totalPages: number }>> {
+): Promise<PdfBatch[]> {
   const src = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
   const totalPages = src.getPageCount();
-  const batches: Array<{ base64: string; from: number; to: number; totalPages: number }> = [];
+  const batches: PdfBatch[] = [];
   for (let start = 0; start < totalPages; start += pagesPerBatch) {
     const end = Math.min(start + pagesPerBatch, totalPages);
     const out = await PDFDocument.create();
