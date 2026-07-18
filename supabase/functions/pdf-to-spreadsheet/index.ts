@@ -305,7 +305,7 @@ serve(async (req) => {
     const hasFallbackBudget = () => Date.now() - startTime < FALLBACK_CUTOFF_MS;
 
     const tryStatement = async () => {
-      const result = await callGemini(LOVABLE_API_KEY, pdfBase64, STATEMENT_PROMPT, STATEMENT_TOOL, 'google/gemini-2.5-flash', remainingAiBudget());
+      const result = await callGemini(LOVABLE_API_KEY, pdfBase64, STATEMENT_PROMPT, STATEMENT_TOOL, 'google/gemini-2.5-flash-lite', remainingAiBudget());
       if (!result.ok) {
         extractionTimedOut ||= result.reason === 'timeout';
         validationWarnings.push(result.message || 'Statement extraction did not return structured data.');
@@ -421,7 +421,7 @@ serve(async (req) => {
     };
 
     const tryGeneric = async () => {
-      const result = await callGemini(LOVABLE_API_KEY, pdfBase64, GENERIC_PROMPT, GENERIC_TOOL, 'google/gemini-2.5-flash', remainingAiBudget());
+      const result = await callGemini(LOVABLE_API_KEY, pdfBase64, GENERIC_PROMPT, GENERIC_TOOL, 'google/gemini-2.5-flash-lite', remainingAiBudget());
       if (!result.ok) {
         extractionTimedOut ||= result.reason === 'timeout';
         validationWarnings.push(result.message || 'Generic table extraction did not return structured data.');
