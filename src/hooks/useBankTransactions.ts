@@ -92,26 +92,123 @@ export function useBankTransactions(bankAccountId?: string) {
     },
   });
 
+  // GL-relevant fields — a change to any of these on a posted transaction requires
+  // reversing the linked journal entry and re-posting so TB / BS / IS stay accurate.
+  const GL_FIELDS: (keyof BankTransaction)[] = [
+    'transaction_date',
+    'amount',
+    'transaction_type',
+    'description',
+    'reference',
+    'payee_payor',
+    'gl_account_id',
+    'category',
+  ];
+
   const updateTransaction = useMutation({
     mutationFn: async ({ id, ...updates }: Partial<BankTransaction> & { id: string }) => {
-      const { data, error } = await supabase
+      // Load current row so we can detect GL-relevant changes and reverse the linked JE.
+      const { data: existing, error: existingErr } = await supabase
         .from('bank_transactions')
-        .update(updates)
+        .select('*, bank_accounts!inner(gl_account_id, organization_id)')
         .eq('id', id)
-        .select()
         .single();
-      
-      if (error) throw error;
-      return data;
+      if (existingErr) throw existingErr;
+
+      const orgId = (existing?.bank_accounts as any)?.organization_id as string | undefined;
+      const bankGLAccountId = (existing?.bank_accounts as any)?.gl_account_id as string | undefined;
+      const linkedJEId = (existing as any)?.journal_entry_id as string | null;
+
+      const glFieldChanged = GL_FIELDS.some(
+        (k) => (updates as any)[k] !== undefined && (updates as any)[k] !== (existing as any)[k]
+      );
+
+      // Simple path: not posted, or only non-GL fields changed.
+      if (!linkedJEId || !glFieldChanged) {
+        const { data, error } = await supabase
+          .from('bank_transactions')
+          .update(updates)
+          .eq('id', id)
+          .select()
+          .single();
+        if (error) throw error;
+        return data;
+      }
+
+      // Posted + GL-relevant change: reverse the linked JE, apply the update, then re-post.
+      if (orgId) {
+        try {
+          await reverseLinkedJournalEntry({
+            bankTransactionId: id,
+            journalEntryId: linkedJEId,
+            organizationId: orgId,
+          });
+        } catch (revErr) {
+          console.error('Failed to reverse prior journal entry:', revErr);
+        }
+      }
+
+      const { data: updated, error: updErr } = await supabase
+        .from('bank_transactions')
+        .update({
+          ...updates,
+          journal_entry_id: null,
+          status: 'pending',
+        })
+        .eq('id', id)
+        .select('*')
+        .single();
+      if (updErr) throw updErr;
+
+      // Re-post if we have the accounts we need.
+      const glAcct = (updated as any).gl_account_id as string | null;
+      if (orgId && bankGLAccountId && glAcct) {
+        const amount = Math.abs(Number(updated.amount));
+        const isDeposit = updated.transaction_type === 'deposit';
+        const payeeInfo = updated.payee_payor ? ` - ${updated.payee_payor}` : '';
+        const lines = isDeposit
+          ? [
+              { account_id: bankGLAccountId, debit: amount, credit: 0, memo: `Deposit${payeeInfo}: ${updated.description}` },
+              { account_id: glAcct, debit: 0, credit: amount, memo: updated.category || updated.description },
+            ]
+          : [
+              { account_id: glAcct, debit: amount, credit: 0, memo: updated.category || updated.description },
+              { account_id: bankGLAccountId, debit: 0, credit: amount, memo: `Payment${payeeInfo}: ${updated.description}` },
+            ];
+        try {
+          const newJEId = await createJournalEntry({
+            organizationId: orgId,
+            date: updated.transaction_date,
+            description: `${isDeposit ? 'Deposit' : 'Payment'}${payeeInfo}: ${updated.description}`,
+            reference: updated.reference || `BANK-${id.slice(0, 8).toUpperCase()}`,
+            lines,
+            status: 'posted',
+          });
+          await supabase
+            .from('bank_transactions')
+            .update({ journal_entry_id: newJEId, status: 'matched' })
+            .eq('id', id);
+        } catch (jeErr) {
+          console.error('Failed to re-post journal entry after edit:', jeErr);
+          toast.error('Transaction updated, but re-posting to GL failed. Please re-post manually.');
+        }
+      }
+
+      await recalculateAndInvalidate(orgId, queryClient);
+      return updated;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bank-transactions'] });
-      queryClient.invalidateQueries({ queryKey: ['bank-accounts'] }); // Refresh cumulative balance
+      queryClient.invalidateQueries({ queryKey: ['bank-accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['journal-entries'] });
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      toast.success('Transaction updated');
     },
     onError: (error) => {
       toast.error('Failed to update transaction: ' + error.message);
     },
   });
+
 
   const categorizeTransaction = useMutation({
     mutationFn: async ({ 
