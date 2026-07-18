@@ -31,6 +31,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrganization } from '@/hooks/useOrganization';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useAuditLog, AuditActions } from '@/hooks/useAuditLog';
+import { useUsageLimits } from '@/hooks/useUsageLimits';
+import { useSubscription } from '@/hooks/useSubscription';
+import { SubscriptionUpgradeModal } from '@/components/SubscriptionUpgradeModal';
 import { CreateOrganizationDialog } from '@/components/accounts/CreateOrganizationDialog';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -69,6 +72,7 @@ const ROLE_OPTIONS = [
 export function UsersSettingsTab() {
   const [createOrgOpen, setCreateOrgOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [editMember, setEditMember] = useState<OrganizationMember | null>(null);
   const [deleteMember, setDeleteMember] = useState<OrganizationMember | null>(null);
   const [inviteEmail, setInviteEmail] = useState('');
@@ -80,10 +84,20 @@ export function UsersSettingsTab() {
   const { hasPermission } = usePermissions();
   const { logEvent } = useAuditLog();
   const queryClient = useQueryClient();
-  
+  const { canAddUser, userCount, maxUsers } = useUsageLimits();
+  const { planTier, isActive } = useSubscription();
+
   // Permission checks for UI rendering
   const canInviteUsers = hasPermission('USER_INVITE');
   const canManageUsers = hasPermission('USER_MANAGE');
+
+  const handleInviteClick = () => {
+    if (!isActive || !canAddUser) {
+      setUpgradeOpen(true);
+      return;
+    }
+    setInviteOpen(true);
+  };
 
   // Fetch organization members using RPC function
   const { data: members, isLoading: membersLoading } = useQuery({
@@ -404,12 +418,20 @@ export function UsersSettingsTab() {
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-lg font-semibold text-foreground">Team Members</h2>
           {canInviteUsers && (
-            <Button onClick={() => setInviteOpen(true)}>
+            <Button onClick={handleInviteClick}>
               <UserPlus className="w-4 h-4 mr-2" />
               Invite User
             </Button>
           )}
         </div>
+        <SubscriptionUpgradeModal
+          open={upgradeOpen}
+          onOpenChange={setUpgradeOpen}
+          currentPlanTier={planTier ?? 'starter'}
+          reason={!isActive ? 'no_subscription' : 'limit_users'}
+          currentCount={userCount}
+          currentMax={maxUsers}
+        />
 
         {membersLoading ? (
           <div className="space-y-4">

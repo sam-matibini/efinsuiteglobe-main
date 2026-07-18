@@ -57,6 +57,15 @@ export function minimumPlanForModule(moduleCode: ModuleCode): PlanTier {
   return 'enterprise';
 }
 
+/** Next paid tier above the given tier (or 'professional' as a default upgrade target). */
+export function nextTierAbove(current: PlanTier | null): PlanTier {
+  const order: PlanTier[] = ['starter', 'professional', 'enterprise'];
+  if (!current || current === 'office_use') return 'professional';
+  const idx = order.indexOf(current);
+  if (idx < 0) return 'professional';
+  return order[Math.min(idx + 1, order.length - 1)];
+}
+
 /** Best-effort derivation of a plan tier from a plan name. */
 export function deriveTierFromName(name?: string | null): PlanTier | null {
   const n = (name || '').toLowerCase();
