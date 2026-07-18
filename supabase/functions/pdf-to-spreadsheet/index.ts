@@ -179,7 +179,7 @@ async function callGemini(
       body: JSON.stringify({
         model,
         temperature: 0,
-        max_tokens: 18000,
+        max_tokens: 8000,
         tools: [tool],
         tool_choice: { type: 'function', function: { name: tool.function.name } },
         messages: [{
