@@ -408,7 +408,7 @@ serve(async (req) => {
 
       // Look up promotion code
       const qs = new URLSearchParams({ code: code.trim(), active: 'true', limit: '1' }).toString();
-      const listRes = await fetch(`https://api.stripe.com/v1/promotion_codes?${qs}&expand[]=data.coupon`, {
+      const listRes = await fetch(`https://api.stripe.com/v1/promotion_codes?${qs}`, {
         method: 'GET',
         headers: { 'Authorization': `Bearer ${stripeSecretKey}` },
       });
@@ -417,11 +417,19 @@ serve(async (req) => {
         return new Response(JSON.stringify({ success: false, error: list.error.message }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
-      const promo = (list.data && list.data[0]) || null;
+      let promo = (list.data && list.data[0]) || null;
       if (!promo) {
         return new Response(JSON.stringify({ success: false, error: 'Code not valid' }),
           { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
+
+      // Retrieve individually with expanded coupon (list responses often omit nested objects)
+      const retRes = await fetch(`https://api.stripe.com/v1/promotion_codes/${promo.id}?expand[0]=coupon`, {
+        headers: { 'Authorization': `Bearer ${stripeSecretKey}` },
+      });
+      const retJson = await retRes.json();
+      if (!retJson.error) promo = retJson;
+      console.log('[validate-promotion-code] retrieved promo:', JSON.stringify(promo));
 
       const nowSec = Math.floor(Date.now() / 1000);
       if (promo.expires_at && promo.expires_at < nowSec) {
@@ -433,8 +441,7 @@ serve(async (req) => {
           { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
 
-      let coupon: any = promo.coupon || {};
-      // Fallback: if coupon wasn't inlined/expanded, or fields are missing, fetch it directly
+      let coupon: any = (promo.coupon && typeof promo.coupon === 'object') ? promo.coupon : {};
       const couponId = typeof promo.coupon === 'string' ? promo.coupon : coupon?.id;
       const missingDiscount = coupon?.percent_off == null && coupon?.amount_off == null;
       if (couponId && missingDiscount) {
