@@ -28,8 +28,11 @@ const MAX_PDF_SIZE_BYTES = MAX_PDF_SIZE_MB * 1024 * 1024;
 // 20-page statements can complete inside the edge function wall-clock budget.
 const PAGES_PER_BATCH = 3;
 const MAX_PARALLEL_BATCHES = 3;
-const EDGE_RESPONSE_BUDGET_MS = 220_000;
-const AI_REQUEST_TIMEOUT_MS = 65_000;
+// Supabase edge runtime enforces a 150s idle timeout. Stay well under it so we
+// can always emit a response (partial or full) before the platform kills the
+// request.
+const EDGE_RESPONSE_BUDGET_MS = 140_000;
+const AI_REQUEST_TIMEOUT_MS = 60_000;
 const RESPONSE_BUFFER_MS = 10_000;
 const MIN_AI_CALL_MS = 15_000;
 
