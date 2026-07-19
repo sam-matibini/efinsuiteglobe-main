@@ -694,11 +694,17 @@ export function TaxReportPreview({
         {isCanada && (
           <Tabs value={reportCategory} onValueChange={(v) => setReportCategory(v as ReportCategory)} className="mb-6">
             <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="gst" className="gap-2">
+              <TabsTrigger
+                value="gst"
+                className="gap-2 data-[state=active]:bg-emerald-500/10 data-[state=active]:text-emerald-700 dark:data-[state=active]:text-emerald-400 data-[state=active]:shadow-sm data-[state=active]:border-b-2 data-[state=active]:border-emerald-500"
+              >
                 <FileText className="w-4 h-4" />
                 CRA GST/HST
               </TabsTrigger>
-              <TabsTrigger value="pst" className="gap-2">
+              <TabsTrigger
+                value="pst"
+                className="gap-2 data-[state=active]:bg-sky-500/10 data-[state=active]:text-sky-700 dark:data-[state=active]:text-sky-400 data-[state=active]:shadow-sm data-[state=active]:border-b-2 data-[state=active]:border-sky-500"
+              >
                 <FileText className="w-4 h-4" />
                 Provincial (PST/QST)
               </TabsTrigger>
