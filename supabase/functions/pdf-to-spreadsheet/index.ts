@@ -21,6 +21,7 @@ type Cell = string | number | null;
 interface ExtractedRow { [key: string]: Cell }
 interface Sheet { name: string; columns: string[]; rows: ExtractedRow[] }
 interface PdfTextLine { page: number; text: string }
+interface PdfTextItem { str: string; x: number; y: number; width: number }
 
 const MAX_PDF_SIZE_MB = 20;
 const MAX_PDF_SIZE_BYTES = MAX_PDF_SIZE_MB * 1024 * 1024;
@@ -145,7 +146,7 @@ async function extractPdfTextLines(pdfBytes: Uint8Array): Promise<{ totalPages: 
     for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
       const page = await pdf.getPage(pageNum);
       const textContent = await page.getTextContent({ disableCombineTextItems: false });
-      const items = (textContent.items || [])
+      const items: PdfTextItem[] = (textContent.items || [])
         .map((item: any) => ({
           str: String(item.str || '').trim(),
           x: Number(item.transform?.[4] ?? 0),
@@ -157,14 +158,14 @@ async function extractPdfTextLines(pdfBytes: Uint8Array): Promise<{ totalPages: 
           Math.abs(b.y - a.y) > 2.5 ? b.y - a.y : a.x - b.x
         );
 
-      const grouped: Array<{ y: number; items: typeof items }> = [];
+      const grouped: Array<{ y: number; items: PdfTextItem[] }> = [];
       for (const item of items) {
         const last = grouped[grouped.length - 1];
         if (last && Math.abs(last.y - item.y) <= 2.5) {
           last.items.push(item);
           last.y = (last.y + item.y) / 2;
         } else {
-          grouped.push({ y: item.y, items: [item] as typeof items });
+          grouped.push({ y: item.y, items: [item] });
         }
       }
 
