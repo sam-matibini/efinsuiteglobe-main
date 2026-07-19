@@ -126,7 +126,7 @@ const MONTHS: Record<string, number> = {
 
 const MONTH_TOKEN = '(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t)?(?:ember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\\.?';
 const DATE_TOKEN = `(?:${MONTH_TOKEN}\\s+\\d{1,2}(?:,?\\s+\\d{2,4})?|\\d{1,2}[/-]\\d{1,2}(?:[/-]\\d{2,4})?)`;
-const MONEY_TOKEN = '(?:[-+]?\\s*\\(?\\$?\\s*(?:\\d{1,3}(?:,\\d{3})+|\\d+)(?:\\.\\d{2})\\)?\\s*-?)';
+const MONEY_TOKEN = '(?:[-+]?\\s*\\(?\\$?\\s*(?:\\d{1,3}(?:,\\d{3})+|\\d+)\\.\\d{2}\\)?\\s*-?)';
 const CREDIT_CARD_HINT_RE = /\b(visa|master\s*card|mastercard|amex|american\s+express|credit\s+card|avion|cardholder|payment\s+due|minimum\s+payment|credit\s+limit|previous\s+balance|new\s+balance)\b/i;
 const PAYMENT_KW = /(payment|paiement|thank\s*you|merci|autopay|bill\s*payment|transfer\s*to\s*card|\bpmt\b)/i;
 const REFUND_KW = /(refund|return\b|returned|credit\s*memo|reversal|chargeback|merchant\s*credit)/i;
