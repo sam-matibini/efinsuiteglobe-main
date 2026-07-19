@@ -563,7 +563,65 @@ serve(async (req) => {
       batches = [{ base64: pdfBase64, from: 1, to: 0, totalPages: 0 }];
     }
     totalPages = batches[0]?.totalPages ?? 0;
-    const wantsStatement = looksLikeStatement(fileName);
+    let textLayer: { totalPages: number; lines: PdfTextLine[]; text: string } | null = null;
+    try {
+      textLayer = await extractPdfTextLines(fileData);
+      if (textLayer.totalPages > 0) totalPages = textLayer.totalPages;
+      console.log(`PDF text layer: ${textLayer.lines.length} lines across ${textLayer.totalPages} pages`);
+    } catch (e) {
+      console.warn('PDF text-layer extraction unavailable, using AI vision only:', (e as Error).message);
+    }
+
+    const wantsStatement = looksLikeStatement(fileName) || !!(textLayer?.text && CREDIT_CARD_HINT_RE.test(textLayer.text));
+
+    const tryTextLayerStatement = (): boolean => {
+      if (!textLayer?.lines.length || !CREDIT_CARD_HINT_RE.test(textLayer.text)) return false;
+
+      const statementEnd = inferStatementEnd(textLayer.text);
+      const textRows = parseCreditCardTextRows(textLayer.lines, statementEnd);
+      if (textRows.length === 0) return false;
+
+      documentType = 'credit_card_statement';
+      columns = ['Date', 'Description', 'Payer/Payee', 'Reference', 'Charge', 'Payment', 'Balance'];
+      rows = textRows;
+      extractedSheets = [{ name: 'CC Transactions', columns, rows }];
+      for (let page = 1; page <= (textLayer.totalPages || totalPages); page++) processedPageNumbers.add(page);
+      processedPages = textLayer.totalPages || totalPages;
+
+      const totalCharges = rows.reduce((sum, row) => sum + Math.abs(parseNum(row.Charge)), 0);
+      const totalPayments = rows.reduce((sum, row) => sum + Math.abs(parseNum(row.Payment)), 0);
+      const printedCharges = extractLabeledMoney(textLayer.text, [
+        /total\s+(?:new\s+)?(?:charges|purchases|fees|debits)/i,
+        /(?:charges|purchases)\s+(?:for\s+)?(?:this\s+)?period/i,
+      ]);
+      const printedPayments = extractLabeledMoney(textLayer.text, [
+        /total\s+(?:payments|credits|refunds)/i,
+        /(?:payments|credits)\s+(?:for\s+)?(?:this\s+)?period/i,
+      ]);
+
+      if (printedCharges && Math.abs(totalCharges - printedCharges) > 0.02) {
+        validationWarnings.push(`Text-layer charges don't reconcile: extracted ${totalCharges.toFixed(2)} vs printed ${printedCharges.toFixed(2)}.`);
+      }
+      if (printedPayments && Math.abs(totalPayments - printedPayments) > 0.02) {
+        validationWarnings.push(`Text-layer payments don't reconcile: extracted ${totalPayments.toFixed(2)} vs printed ${printedPayments.toFixed(2)}.`);
+      }
+      reconciled = !!(
+        (!printedCharges || Math.abs(totalCharges - printedCharges) <= 0.02) &&
+        (!printedPayments || Math.abs(totalPayments - printedPayments) <= 0.02)
+      );
+
+      summary = {
+        openingBalance: extractLabeledMoney(textLayer.text, [/previous\s+(?:statement\s+)?balance/i, /opening\s+balance/i]),
+        closingBalance: extractLabeledMoney(textLayer.text, [/new\s+balance/i, /closing\s+balance/i]),
+        totalDebits: printedCharges || totalCharges || undefined,
+        totalCredits: printedPayments || totalPayments || undefined,
+        periodStart: statementEnd.periodStart,
+        periodEnd: statementEnd.periodEnd,
+      };
+
+      validationWarnings.push('Used embedded PDF text extraction for this credit-card statement to avoid AI vision timeout.');
+      return true;
+    };
 
     const tryStatementBatched = async (): Promise<boolean> => {
       const model = 'google/gemini-2.5-flash';
@@ -756,7 +814,7 @@ serve(async (req) => {
 
     try {
       if (wantsStatement) {
-        if (!(await tryStatementBatched()) && !extractionTimedOut && hasBudgetForAnotherCall()) {
+        if (!tryTextLayerStatement() && !(await tryStatementBatched()) && !extractionTimedOut && hasBudgetForAnotherCall()) {
           await tryGenericBatched();
         }
       } else {
