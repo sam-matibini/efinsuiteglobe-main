@@ -1,38 +1,50 @@
 ## Problem
 
-On `/reports/changes-in-equity` the badge shows `Difference: ($23,976.29)` (Y2026 net loss). The mismatch is a source-of-truth divergence, not a real accounting imbalance:
+The **Statement of Changes in Equity** shows `Balance at January 1, 2024` Retained Earnings = "-" (0), but the Balance Sheet's Statement of Retained Earnings correctly shows the same opening as **$(8,428.00)**.
 
-- **Balance Sheet** derives Retained Earnings from `useRetainedEarningsStatement` → RPC `calculate_retained_earnings_statement` (per memory `balance-sheet-re-statement-integration.md`). Its closing RE already includes current-year net income.
-- **Statement of Changes in Equity** derives closing RE from `useZohoEquityData` → RPC `get_retained_earnings_rollforward_series`. In this org that series is not including the current (unclosed) year's net income in `closing_re`, so SOCE closing equity = Share Capital + Opening RE only (matches the $2,631.71 shown on the card, and misses the $23,976.29 loss).
+## Root cause (verified via DB)
 
-The tie-out compares these two different sources and will always alert whenever the current fiscal year is still open.
+Both reports pull opening RE for the earliest fiscal year (2024) from `public.calculate_opening_retained_earnings`, which — by design — returns `0` for the first data year. In this organization there is a direct journal entry posted to the Retained Earnings account inside FY2024 that represents the accumulated deficit brought forward (-$8,428.00).
 
-## Fix
+The two RPCs treat that direct RE posting **differently**:
 
-Make the SOCE agree with the Balance Sheet by re-using `useRetainedEarningsStatement` as the authoritative closing-RE for the current period, exactly like the Balance Sheet does.
+- `calculate_retained_earnings_statement` (used by the Balance Sheet) folds the direct RE adjustment into `opening_balance`, so it correctly shows opening = $(8,428.00).
+- `get_retained_earnings_rollforward_series` (used by the Statement of Changes in Equity) folds the direct RE adjustment only into `closing_re`, leaving `opening_re` at 0.
 
-### Changes (frontend only, presentation logic)
+Result: SOCE reports opening 2024 = 0, closing 2024 = $(14,633.96), so the $8,428.00 "disappears" from the opening line even though the closing balance ties. This is a data-source inconsistency, not a UI bug — and it affects every organization/country whose earliest fiscal year contains a direct RE opening adjustment (all localizations share this RPC).
 
-1. **`src/pages/ChangesInEquity.tsx`**
-   - Call `useRetainedEarningsStatement({ startDate, endDate }, [])` alongside the existing hooks.
-   - Compute `authoritativeClosingRE = reCurrentStatement.data.closingBalance` for the current year.
-   - Use `authoritativeClosingEquity = totals.shareCapital + authoritativeClosingRE` for:
-     - the "Retained Earnings" summary card,
-     - the "Total Equity" summary card,
-     - the `tiesToBalanceSheet` comparison and the "Difference" badge.
-   - Keep the existing rollforward-based `rows` unchanged for the table body, but override the final-year closing row's RE and Total columns with the authoritative values so the table foot ties to the badge and to the Balance Sheet.
+## Fix (single migration, global to all orgs / countries)
 
-2. **`src/hooks/useZohoEquityData.ts`** — no signature changes. Only add an optional override consumed by the page (or handle the override entirely in the page without touching the hook). Prefer no hook changes.
+Update `public.get_retained_earnings_rollforward_series` so the direct RE adjustment (non‑`CLOSE-*` postings hitting the RE account within the period) is added to `opening_re` instead of `closing_re`. This matches `calculate_retained_earnings_statement` and preserves the roll-forward identity:
 
-### Verification
+```
+closing_re = opening_re + net_income − dividends
+```
 
-- Load `/reports/changes-in-equity` for a period where the current fiscal year is still open and confirm:
-  - Total Equity card = Balance Sheet's Total Equity.
-  - Badge switches to green "Ties to Balance Sheet".
-  - Closing row in the table equals the card.
-- Load a prior closed year and confirm no regression (closing RE from the RE statement equals rollforward closing).
+Closing values remain unchanged; only the opening line moves from `0` to `(8,428.00)` for FY2024 on this org, and analogously for any org whose earliest year contains a brought-forward RE adjustment.
 
-### Out of scope
+### SQL sketch (technical)
 
-- No DB / RPC changes. The underlying rollforward RPC discrepancy for open fiscal years can be addressed separately if desired.
-- No changes to Balance Sheet, Income Statement, or Cash Flow.
+```sql
+CREATE OR REPLACE FUNCTION public.get_retained_earnings_rollforward_series(...)
+...
+-- inside the FOR v_loop_year loop:
+v_opening_re := COALESCE(calculate_opening_retained_earnings(p_organization_id, v_loop_year), 0)
+              + COALESCE(v_direct_adj, 0);           -- NEW: fold brought-forward RE adj into opening
+v_closing_re := v_opening_re + v_ni - COALESCE(v_div, 0);   -- direct_adj no longer added again
+```
+
+All other logic (fiscal-year-end month handling, dividend detection, SECURITY DEFINER, grants) is preserved.
+
+## Verification steps after migration
+
+1. Re-run `SELECT * FROM get_retained_earnings_rollforward_series('909a7954-…', 2024, 2025)` — expect `opening_re = -8428.00, closing_re = -14633.96` for 2024 and `opening_re = -14633.96, closing_re = 143206.98` for 2025.
+2. Confirm the SOCE page shows `Balance at January 1, 2024` RE = `(8,428.00)` and the "Difference" badge stays green.
+3. Confirm the Balance Sheet Statement of RE section still shows the same numbers (no regression) since it uses a separate function.
+4. Confirm NPO orgs (Unrestricted Net Assets), and non‑CAD locales (US, ZM, KE, BI) render identically — the RPC is org-agnostic.
+
+## Scope
+
+- One SQL migration touching only `get_retained_earnings_rollforward_series`.
+- No frontend changes required — `useZohoEquityData` already binds `opening_re` to the opening rows.
+- No changes to Balance Sheet, Income Statement, TB, or GL.
