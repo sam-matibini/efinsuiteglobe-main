@@ -161,6 +161,7 @@ export default function ChangesInEquity() {
   const handleRunReport = () => {
     refetch();
     refetchEquity();
+    refetchREStatement();
   };
 
   // Build report data for export
