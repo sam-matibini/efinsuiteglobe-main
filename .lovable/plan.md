@@ -1,29 +1,38 @@
-## Goal
-Give each Financial Statement tab a distinct, subtle color identity so users can instantly recognize which statement they're viewing.
+## Problem
 
-## Color mapping
-| Statement | Color | Active bg | Active text | Bottom accent |
-|---|---|---|---|---|
-| Balance Sheet | Blue | `bg-blue-500/10` | `text-blue-700` / `dark:text-blue-400` | `border-blue-500` |
-| Income Statement | Green | `bg-emerald-500/10` | `text-emerald-700` / `dark:text-emerald-400` | `border-emerald-500` |
-| Cash Flow | Teal | `bg-teal-500/10` | `text-teal-700` / `dark:text-teal-400` | `border-teal-500` |
-| Changes in Equity | Purple | `bg-violet-500/10` | `text-violet-700` / `dark:text-violet-400` | `border-violet-500` |
+On `/reports/changes-in-equity` the badge shows `Difference: ($23,976.29)` (Y2026 net loss). The mismatch is a source-of-truth divergence, not a real accounting imbalance:
 
-Inactive tabs remain neutral (`text-muted-foreground`, transparent bg) with hover raising to `text-foreground`. Active tabs get the tinted background, colored text, a 2px bottom accent border in the matching color, and a subtle shadow.
+- **Balance Sheet** derives Retained Earnings from `useRetainedEarningsStatement` → RPC `calculate_retained_earnings_statement` (per memory `balance-sheet-re-statement-integration.md`). Its closing RE already includes current-year net income.
+- **Statement of Changes in Equity** derives closing RE from `useZohoEquityData` → RPC `get_retained_earnings_rollforward_series`. In this org that series is not including the current (unclosed) year's net income in `closing_re`, so SOCE closing equity = Share Capital + Opening RE only (matches the $2,631.71 shown on the card, and misses the $23,976.29 loss).
 
-## File to update
-`src/components/reports/ReportsTabs.tsx` — the shared statement navigator used by `/reports/balance-sheet`, `/reports/income-statement`, `/reports/cash-flow`, `/reports/changes-in-equity`.
+The tie-out compares these two different sources and will always alert whenever the current fiscal year is still open.
 
-## Implementation
-1. Add a `colorClasses` map keyed by tab `id` returning `{ active, indicator }` Tailwind class strings for the four colors above.
-2. In the `.map`, compose the button `className` from:
-   - base layout classes (unchanged spacing/typography/radius),
-   - active branch → `colorClasses[tab.id].active` + `border-b-2` + `colorClasses[tab.id].indicator` + `shadow-sm`,
-   - inactive branch → existing `text-muted-foreground hover:text-foreground` + `border-b-2 border-transparent` (so height doesn't jump when the accent appears).
-3. Keep the outer container (`bg-muted/50 rounded-lg p-1`) and tab order untouched — no layout, routing, or logic changes.
-4. All colors go through Tailwind's built-in palette (blue/emerald/teal/violet) which already ship in the compiled CSS; no `tailwind.config.ts` or `index.css` edits required. Light + dark variants are handled via `dark:` prefixes for WCAG contrast.
+## Fix
 
-## Out of scope
-- Page headers, section headings, chart colors, and any other tab groups (Management Report tabs, Tax tabs, etc.).
-- Layout, spacing, typography, or routing changes.
-- Icons (current tabs have no icons; not adding any).
+Make the SOCE agree with the Balance Sheet by re-using `useRetainedEarningsStatement` as the authoritative closing-RE for the current period, exactly like the Balance Sheet does.
+
+### Changes (frontend only, presentation logic)
+
+1. **`src/pages/ChangesInEquity.tsx`**
+   - Call `useRetainedEarningsStatement({ startDate, endDate }, [])` alongside the existing hooks.
+   - Compute `authoritativeClosingRE = reCurrentStatement.data.closingBalance` for the current year.
+   - Use `authoritativeClosingEquity = totals.shareCapital + authoritativeClosingRE` for:
+     - the "Retained Earnings" summary card,
+     - the "Total Equity" summary card,
+     - the `tiesToBalanceSheet` comparison and the "Difference" badge.
+   - Keep the existing rollforward-based `rows` unchanged for the table body, but override the final-year closing row's RE and Total columns with the authoritative values so the table foot ties to the badge and to the Balance Sheet.
+
+2. **`src/hooks/useZohoEquityData.ts`** — no signature changes. Only add an optional override consumed by the page (or handle the override entirely in the page without touching the hook). Prefer no hook changes.
+
+### Verification
+
+- Load `/reports/changes-in-equity` for a period where the current fiscal year is still open and confirm:
+  - Total Equity card = Balance Sheet's Total Equity.
+  - Badge switches to green "Ties to Balance Sheet".
+  - Closing row in the table equals the card.
+- Load a prior closed year and confirm no regression (closing RE from the RE statement equals rollforward closing).
+
+### Out of scope
+
+- No DB / RPC changes. The underlying rollforward RPC discrepancy for open fiscal years can be addressed separately if desired.
+- No changes to Balance Sheet, Income Statement, or Cash Flow.

@@ -16,6 +16,7 @@ import { useReportFilters } from '@/hooks/useReportFilters';
 import { usePopulateEquityMovements } from '@/hooks/useASPEEquityData';
 import { useNpoTerminology } from '@/hooks/useNpoTerminology';
 import { useZohoEquityData } from '@/hooks/useZohoEquityData';
+import { useRetainedEarningsStatement } from '@/hooks/useRetainedEarningsStatement';
 import { ZohoEquityTable } from '@/components/reports/ZohoEquityTable';
 import { toast } from 'sonner';
 import { ExecutiveSignatureBlock } from '@/components/reports/ExecutiveSignatureBlock';
@@ -91,7 +92,46 @@ export default function ChangesInEquity() {
   }, [currentYear, numberOfPeriods]);
 
   // Fetch Zoho-style equity data
-  const { rows, totals, isLoading: equityLoading, hasData, refetch: refetchEquity } = useZohoEquityData(years);
+  const { rows: rawRows, totals: rawTotals, isLoading: equityLoading, hasData, refetch: refetchEquity } = useZohoEquityData(years);
+
+  // Authoritative RE source (matches Balance Sheet — see balance-sheet-re-statement-integration memory)
+  const { currentStatement: reCurrentStatement, refetch: refetchREStatement } = useRetainedEarningsStatement(
+    { startDate, endDate },
+    []
+  );
+
+  const authoritativeClosingRE = reCurrentStatement?.data.closingBalance ?? rawTotals.retainedEarnings;
+  const authoritativeNetIncome = reCurrentStatement?.data.netIncomeLoss ?? rawTotals.netIncome;
+
+  const totals = useMemo(() => ({
+    ...rawTotals,
+    retainedEarnings: authoritativeClosingRE,
+    netIncome: authoritativeNetIncome,
+    closingEquity: rawTotals.shareCapital + authoritativeClosingRE,
+  }), [rawTotals, authoritativeClosingRE, authoritativeNetIncome]);
+
+  // Override the current (latest) year's closing row + profit/loss row so the table foot ties to the badge
+  const rows = useMemo(() => {
+    if (!reCurrentStatement) return rawRows;
+    const latestYear = years[years.length - 1];
+    return rawRows.map(r => {
+      if (r.id === `closing-${latestYear}`) {
+        return {
+          ...r,
+          retainedEarnings: authoritativeClosingRE,
+          totalEquity: r.shareCapital + authoritativeClosingRE,
+        };
+      }
+      if (r.id === `profit-loss-${latestYear}`) {
+        return {
+          ...r,
+          retainedEarnings: authoritativeNetIncome,
+          totalEquity: authoritativeNetIncome,
+        };
+      }
+      return r;
+    });
+  }, [rawRows, reCurrentStatement, years, authoritativeClosingRE, authoritativeNetIncome]);
 
   // Populate equity movements from journal entries
   const handlePopulateMovements = async () => {
@@ -121,6 +161,7 @@ export default function ChangesInEquity() {
   const handleRunReport = () => {
     refetch();
     refetchEquity();
+    refetchREStatement();
   };
 
   // Build report data for export
@@ -167,9 +208,17 @@ export default function ChangesInEquity() {
     };
   }, [rows, years, organization, formatCurrency, totals, soceTitle, isNpo]);
 
-  // Verify tie-out with Balance Sheet
+  // Verify tie-out with Balance Sheet.
+  // The Balance Sheet page uses useRetainedEarningsStatement as the authoritative RE source
+  // (see memory: balance-sheet-re-statement-integration). useFinancialReports.getBalanceSheetData()
+  // returns RE at fiscal-year opening plus a separate netIncome bucket. The true displayed
+  // total equity on the Balance Sheet is: totalEquity + netIncome - dividends, which
+  // algebraically equals shareCapital + closingRE — matching SOCE closingEquity.
   const balanceSheetData = getBalanceSheetData();
-  const tiesToBalanceSheet = Math.abs(totals.closingEquity - balanceSheetData.totalEquity) < 0.01;
+  const authoritativeDividends = reCurrentStatement?.data.dividendsDeclared ?? 0;
+  const balanceSheetDisplayedEquity =
+    balanceSheetData.totalEquity + balanceSheetData.netIncome - authoritativeDividends;
+  const tiesToBalanceSheet = Math.abs(totals.closingEquity - balanceSheetDisplayedEquity) < 0.01;
 
   // Loading state
   const isLoading = orgLoading || reportsLoading || equityLoading;
@@ -315,7 +364,7 @@ export default function ChangesInEquity() {
                 ) : (
                   <Badge className="bg-warning/20 text-warning border-warning/30">
                     <AlertTriangle className="w-3 h-3 mr-1" />
-                    Difference: {formatCurrency(totals.closingEquity - balanceSheetData.totalEquity)}
+                    Difference: {formatCurrency(totals.closingEquity - balanceSheetDisplayedEquity)}
                   </Badge>
                 )}
               </div>
