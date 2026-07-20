@@ -170,7 +170,7 @@ serve(async (req) => {
 
         // Create monthly price if needed
         let monthlyPriceId = plan.stripe_price_id_monthly;
-        if (!monthlyPriceId && plan.price_monthly > 0) {
+        if (!monthlyPriceId) {
           const price = await stripeRequest('/prices', 'POST', {
             product: stripeProductId,
             unit_amount: Math.round(plan.price_monthly * 100).toString(),
@@ -188,7 +188,7 @@ serve(async (req) => {
 
         // Create yearly price if needed
         let yearlyPriceId = plan.stripe_price_id_yearly;
-        if (!yearlyPriceId && plan.price_yearly > 0) {
+        if (!yearlyPriceId) {
           const price = await stripeRequest('/prices', 'POST', {
             product: stripeProductId,
             unit_amount: Math.round(plan.price_yearly * 100).toString(),
