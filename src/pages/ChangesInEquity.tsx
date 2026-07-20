@@ -92,7 +92,46 @@ export default function ChangesInEquity() {
   }, [currentYear, numberOfPeriods]);
 
   // Fetch Zoho-style equity data
-  const { rows, totals, isLoading: equityLoading, hasData, refetch: refetchEquity } = useZohoEquityData(years);
+  const { rows: rawRows, totals: rawTotals, isLoading: equityLoading, hasData, refetch: refetchEquity } = useZohoEquityData(years);
+
+  // Authoritative RE source (matches Balance Sheet — see balance-sheet-re-statement-integration memory)
+  const { currentStatement: reCurrentStatement, refetch: refetchREStatement } = useRetainedEarningsStatement(
+    { startDate, endDate },
+    []
+  );
+
+  const authoritativeClosingRE = reCurrentStatement?.data.closingBalance ?? rawTotals.retainedEarnings;
+  const authoritativeNetIncome = reCurrentStatement?.data.netIncomeLoss ?? rawTotals.netIncome;
+
+  const totals = useMemo(() => ({
+    ...rawTotals,
+    retainedEarnings: authoritativeClosingRE,
+    netIncome: authoritativeNetIncome,
+    closingEquity: rawTotals.shareCapital + authoritativeClosingRE,
+  }), [rawTotals, authoritativeClosingRE, authoritativeNetIncome]);
+
+  // Override the current (latest) year's closing row + profit/loss row so the table foot ties to the badge
+  const rows = useMemo(() => {
+    if (!reCurrentStatement) return rawRows;
+    const latestYear = years[years.length - 1];
+    return rawRows.map(r => {
+      if (r.id === `closing-${latestYear}`) {
+        return {
+          ...r,
+          retainedEarnings: authoritativeClosingRE,
+          totalEquity: r.shareCapital + authoritativeClosingRE,
+        };
+      }
+      if (r.id === `profit-loss-${latestYear}`) {
+        return {
+          ...r,
+          retainedEarnings: authoritativeNetIncome,
+          totalEquity: authoritativeNetIncome,
+        };
+      }
+      return r;
+    });
+  }, [rawRows, reCurrentStatement, years, authoritativeClosingRE, authoritativeNetIncome]);
 
   // Populate equity movements from journal entries
   const handlePopulateMovements = async () => {
