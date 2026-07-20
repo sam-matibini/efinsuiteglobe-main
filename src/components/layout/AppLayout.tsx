@@ -1,7 +1,7 @@
 import { ReactNode, useState, useEffect } from 'react';
 import { ReadOnlyProvider } from '@/hooks/useIsReadOnly';
 import { ReadOnlyBanner } from '@/components/ui/ReadOnlyBanner';
-import { UpdateBanner } from '@/components/ui/UpdateBanner';
+
 import { useEnabledModules } from '@/hooks/useEnabledModules';
 import { useNavigate } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
@@ -164,8 +164,6 @@ export function AppLayout({ children }: AppLayoutProps) {
       
       {/* Main Content */}
       <div className={`transition-all duration-300 ${isMobile ? 'ml-0' : sidebarCollapsed ? 'ml-16' : 'ml-64'}`}>
-        {/* Update Available Banner */}
-        <UpdateBanner />
         {/* Top Header */}
         <header className="sticky top-0 z-30 h-14 md:h-16 bg-card/80 backdrop-blur-sm border-b border-border flex items-center justify-between px-3 md:px-6">
           <div className="flex items-center gap-2 md:gap-4">

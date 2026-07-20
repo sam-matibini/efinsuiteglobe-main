@@ -20,7 +20,7 @@ if ('serviceWorker' in navigator) {
     if (refreshing) return;
     refreshing = true;
     // Dynamic import to avoid circular dependency
-    const { clearAllCaches } = await import('@/components/ui/UpdateBanner');
+    const { clearAllCaches } = await import('@/lib/clearAllCaches');
     await clearAllCaches();
     window.location.reload();
   });
