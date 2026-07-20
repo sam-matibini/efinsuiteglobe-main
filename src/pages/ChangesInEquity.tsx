@@ -16,6 +16,7 @@ import { useReportFilters } from '@/hooks/useReportFilters';
 import { usePopulateEquityMovements } from '@/hooks/useASPEEquityData';
 import { useNpoTerminology } from '@/hooks/useNpoTerminology';
 import { useZohoEquityData } from '@/hooks/useZohoEquityData';
+import { useRetainedEarningsStatement } from '@/hooks/useRetainedEarningsStatement';
 import { ZohoEquityTable } from '@/components/reports/ZohoEquityTable';
 import { toast } from 'sonner';
 import { ExecutiveSignatureBlock } from '@/components/reports/ExecutiveSignatureBlock';
