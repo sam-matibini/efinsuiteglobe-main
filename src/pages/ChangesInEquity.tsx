@@ -208,9 +208,17 @@ export default function ChangesInEquity() {
     };
   }, [rows, years, organization, formatCurrency, totals, soceTitle, isNpo]);
 
-  // Verify tie-out with Balance Sheet
+  // Verify tie-out with Balance Sheet.
+  // The Balance Sheet page uses useRetainedEarningsStatement as the authoritative RE source
+  // (see memory: balance-sheet-re-statement-integration). useFinancialReports.getBalanceSheetData()
+  // returns RE at fiscal-year opening plus a separate netIncome bucket. The true displayed
+  // total equity on the Balance Sheet is: totalEquity + netIncome - dividends, which
+  // algebraically equals shareCapital + closingRE — matching SOCE closingEquity.
   const balanceSheetData = getBalanceSheetData();
-  const tiesToBalanceSheet = Math.abs(totals.closingEquity - balanceSheetData.totalEquity) < 0.01;
+  const authoritativeDividends = reCurrentStatement?.data.dividendsDeclared ?? 0;
+  const balanceSheetDisplayedEquity =
+    balanceSheetData.totalEquity + balanceSheetData.netIncome - authoritativeDividends;
+  const tiesToBalanceSheet = Math.abs(totals.closingEquity - balanceSheetDisplayedEquity) < 0.01;
 
   // Loading state
   const isLoading = orgLoading || reportsLoading || equityLoading;
