@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { clearAllCaches } from '@/components/ui/UpdateBanner';
+import { clearAllCaches } from '@/lib/clearAllCaches';
 
 /**
  * Standalone cache-clear page. Navigate to /clear-cache to force a full
