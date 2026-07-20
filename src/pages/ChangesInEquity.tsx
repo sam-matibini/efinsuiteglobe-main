@@ -364,7 +364,7 @@ export default function ChangesInEquity() {
                 ) : (
                   <Badge className="bg-warning/20 text-warning border-warning/30">
                     <AlertTriangle className="w-3 h-3 mr-1" />
-                    Difference: {formatCurrency(totals.closingEquity - balanceSheetData.totalEquity)}
+                    Difference: {formatCurrency(totals.closingEquity - balanceSheetDisplayedEquity)}
                   </Badge>
                 )}
               </div>
