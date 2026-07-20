@@ -70,7 +70,7 @@ export function LandingNav() {
     <nav className="bg-background/75 backdrop-blur-md border-b border-border/60 supports-[backdrop-filter]:bg-background/60">
       <div className="container mx-auto px-6 py-3.5 flex items-center justify-between gap-6">
         <Link to="/landing" className="flex items-center gap-3 shrink-0">
-          <img src={landingLogo} alt="efinsuite Globe" className="w-9 h-9 object-contain" />
+          <img src={landingLogo} alt="efinsuite Globe" className="w-14 h-14 object-contain" />
           <span className="text-lg font-bold tracking-tight text-foreground">efinsuite Globe</span>
         </Link>
 

@@ -117,7 +117,7 @@ export default function ResetPassword() {
         <Card className="relative w-full max-w-md shadow-xl">
           <CardHeader className="text-center">
             <Link to="/landing" className="inline-flex items-center justify-center gap-2 mb-4">
-              <img src={efinsuiteLogo} alt="efinsuite Globe" className="w-10 h-10 object-contain" />
+              <img src={efinsuiteLogo} alt="efinsuite Globe" className="w-16 h-16 object-contain" />
               <span className="text-xl font-bold text-foreground">efinsuite Globe</span>
             </Link>
             <CardTitle className="text-2xl">Invalid or expired link</CardTitle>
@@ -149,7 +149,7 @@ export default function ResetPassword() {
         <Card className="relative w-full max-w-md shadow-xl">
           <CardHeader className="text-center">
             <Link to="/landing" className="inline-flex items-center justify-center gap-2 mb-4">
-              <img src={efinsuiteLogo} alt="efinsuite Globe" className="w-10 h-10 object-contain" />
+              <img src={efinsuiteLogo} alt="efinsuite Globe" className="w-16 h-16 object-contain" />
               <span className="text-xl font-bold text-foreground">efinsuite Globe</span>
             </Link>
             <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
@@ -180,7 +180,7 @@ export default function ResetPassword() {
       <Card className="relative w-full max-w-md shadow-xl">
         <CardHeader className="text-center">
           <Link to="/landing" className="inline-flex items-center justify-center gap-2 mb-4">
-            <img src={efinsuiteLogo} alt="efinsuite Globe" className="w-10 h-10 object-contain" />
+            <img src={efinsuiteLogo} alt="efinsuite Globe" className="w-16 h-16 object-contain" />
             <span className="text-xl font-bold text-foreground">efinsuite Globe</span>
           </Link>
           <CardTitle className="text-2xl">Create new password</CardTitle>

@@ -359,7 +359,7 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
       <div className="flex flex-col h-full">
         <div className="p-4 border-b border-sidebar-border">
           <div className="flex items-center gap-3 mb-4">
-            <img src={logo} alt="efinsuite Globe" className="w-9 h-9 object-contain" />
+            <img src={logo} alt="efinsuite Globe" className="w-14 h-14 object-contain" />
             {!collapsed && (
               <div>
                 <h1 className="text-lg font-bold text-sidebar-foreground">efinsuite Globe</h1>
