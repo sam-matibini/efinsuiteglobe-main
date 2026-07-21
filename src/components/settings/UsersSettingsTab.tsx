@@ -73,6 +73,7 @@ const ROLE_OPTIONS = [
 export function UsersSettingsTab() {
   const [createOrgOpen, setCreateOrgOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [bulkInviteOpen, setBulkInviteOpen] = useState(false);
   const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [editMember, setEditMember] = useState<OrganizationMember | null>(null);
   const [deleteMember, setDeleteMember] = useState<OrganizationMember | null>(null);
