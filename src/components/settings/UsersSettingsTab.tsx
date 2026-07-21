@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Pencil, Trash2, UserPlus, Loader2, Mail, Clock, X, XCircle, ShieldCheck } from 'lucide-react';
+import { Pencil, Trash2, UserPlus, Loader2, Mail, Clock, X, XCircle, ShieldCheck, Users } from 'lucide-react';
+import { BulkInviteDialog } from './BulkInviteDialog';
 import { getModulesForRole, ROLE_MODULE_DESCRIPTIONS, MODULE_DISPLAY_NAMES, OrgRole } from '@/config/roleModuleAccess';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
