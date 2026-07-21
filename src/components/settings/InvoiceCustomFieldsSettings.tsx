@@ -196,7 +196,7 @@ export function InvoiceCustomFieldsSettings() {
                     variant="ghost"
                     size="icon"
                     className="text-destructive h-8 w-8 hover:bg-destructive/10"
-                    onClick={() => confirmDelete(() => deleteTemplate.mutate(template.id), { itemName: template.name, title: 'Delete template?' })}
+                    onClick={() => confirmDelete(() => deleteTemplate.mutate(template.id), { title: 'Delete template?' })}
                     disabled={deleteTemplate.isPending}
                   >
                     <Trash2 className="w-4 h-4" />

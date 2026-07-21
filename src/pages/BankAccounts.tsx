@@ -607,7 +607,7 @@ export default function BankAccounts() {
                         <DropdownMenuSeparator />
                         <DropdownMenuItem 
                           className="text-destructive"
-                          onClick={() => confirmDelete(() => handleDelete(account.id), { itemName: account.account_name, title: 'Remove bank account?' })}
+                          onClick={() => confirmDelete(() => handleDelete(account.id), { itemName: account.name, title: 'Remove bank account?' })}
                         >
                           Remove Account
                         </DropdownMenuItem>
