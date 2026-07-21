@@ -418,7 +418,7 @@ Deno.serve(async (req) => {
 
     // ============ UPDATE PRESET ============
     if (action === 'update-preset') {
-      const { preset_id, name, percent, duration, duration_in_months, expires_at, max_redemptions } = body;
+      const { preset_id, name, percent, duration, duration_in_months, expires_at, max_redemptions, scope, country_id } = body;
       if (!preset_id) return json({ error: 'preset_id required' }, 400);
 
       const { data: preset } = await admin
@@ -438,9 +438,15 @@ Deno.serve(async (req) => {
         ? (max_redemptions ? Number(max_redemptions) : null)
         : preset.max_redemptions;
       const newName = (name ?? preset.name) as string;
+      const newScope = scope !== undefined ? (scope === 'country' ? 'country' : 'global') : (preset.scope || 'global');
+      const newCountryId = newScope === 'country'
+        ? (country_id !== undefined ? country_id : preset.country_id)
+        : null;
+      if (newScope === 'country' && !newCountryId) {
+        return json({ error: 'country_id required for country-scoped preset' }, 400);
+      }
 
       // Stripe coupons are immutable for percent/duration/redeem_by/max_redemptions.
-      // Only `name` can be updated safely.
       const financialChanged =
         newPercent !== Number(preset.percent) ||
         newDuration !== preset.duration ||
@@ -451,7 +457,6 @@ Deno.serve(async (req) => {
       let newCouponId = preset.stripe_coupon_id;
 
       if (financialChanged) {
-        // Create a new coupon; archive the old one
         const coupon = await createStripeCoupon({
           percent: newPercent,
           duration: newDuration,
@@ -465,7 +470,6 @@ Deno.serve(async (req) => {
           await deleteStripeCoupon(preset.stripe_coupon_id);
         }
       } else if (newName !== preset.name && preset.stripe_coupon_id) {
-        // Just rename in Stripe
         try {
           await stripe(`/coupons/${preset.stripe_coupon_id}`, 'POST', { name: newName });
         } catch (e) {
@@ -481,6 +485,8 @@ Deno.serve(async (req) => {
         expires_at: newExpiresAt,
         max_redemptions: newMaxRedemptions,
         stripe_coupon_id: newCouponId,
+        scope: newScope,
+        country_id: newCountryId,
       };
       const { data: updated, error } = await admin
         .from('discount_presets')
