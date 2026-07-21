@@ -75,8 +75,7 @@ export function PMBillingTab({ onAddInvoice }: PMBillingTabProps) {
   };
 
   const handleDelete = async (id: string) => {
-      await deleteInvoice.mutateAsync(id);
-    }
+    await deleteInvoice.mutateAsync(id);
   };
 
   // Calculate summary stats
