@@ -566,7 +566,9 @@ export default function AdminSubscriptions() {
       max_employees: planForm.max_employees,
       features: featuresArray,
       is_active: planForm.is_active,
-      sort_order: planForm.sort_order
+      sort_order: planForm.sort_order,
+      country_id: planForm.country_id || null,
+      currency: planForm.currency,
     });
   };
 
