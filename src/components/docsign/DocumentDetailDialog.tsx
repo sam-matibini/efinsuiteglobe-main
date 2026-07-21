@@ -37,6 +37,8 @@ export function DocumentDetailDialog({ documentId, open, onOpenChange, onPrepare
   const { data: document, isLoading: documentLoading } = useDocument(documentId || undefined);
   const { data: signers = [], isLoading: signersLoading } = useDocumentSigners(documentId || undefined);
   const addSigner = useAddSigner();
+  const refreshStatus = useRefreshDocumentStatus();
+  const getSigningUrl = useSignerSigningUrl();
 
   const handleAddSigner = async () => {
     if (!newSigner.email || !documentId) {
