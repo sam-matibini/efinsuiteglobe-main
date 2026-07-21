@@ -496,9 +496,11 @@ const App = () => (
         <AuthProvider>
           <OrganizationProvider>
             <ReportFiltersProvider>
-              <Toaster />
-              <Sonner />
-              <AppRoutes />
+              <ConfirmDeleteProvider>
+                <Toaster />
+                <Sonner />
+                <AppRoutes />
+              </ConfirmDeleteProvider>
             </ReportFiltersProvider>
           </OrganizationProvider>
         </AuthProvider>
