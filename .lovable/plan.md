@@ -1,38 +1,50 @@
-# Perfect Globe Coordinate Grid
+## Bulk User Invitations
 
-## Goal
-Replace the current logo with a mathematically precise wireframe globe — clean latitude parallels and longitude meridians rendered with true spherical projection — transparent background, then propagate to every logo/favicon asset.
+Add a "Bulk Invite" action to the Users settings tab that lets admins invite many users at once, either by uploading a CSV/Excel file or pasting a list.
 
-## Approach
+### UI (frontend only additions)
 
-Draw the globe programmatically (not via image generation) so coordinates are geometrically exact and perfectly symmetric.
+New `BulkInviteDialog` component opened from a "Bulk Invite" button next to the existing single-invite button in `UsersSettingsTab.tsx`.
 
-### 1. Generate master PNG with Python (Pillow, preinstalled)
-- 1024×1024 fully transparent canvas, sphere radius R centered.
-- **Parallels (latitude):** lines at −60°, −30°, 0°, +30°, +60°. Each is an ellipse with height `2R·cos(lat)` and vertical offset `R·sin(lat)`. Equator slightly thicker.
-- **Meridians (longitude):** 12 lines every 30°. Each is an ellipse with width `2R·|cos(lon)|`, height `2R`, centered — thin near ±90°, full circle at 0°.
-- **Outer silhouette:** stroked circle at exact radius R.
-- Stroke color `#1e88e5` (brand blue), anti-aliased, 3–4px, equator/prime meridian slightly heavier for readability.
-- Save master to `/tmp/globe-master.png`.
+Two tabs inside the dialog:
+1. **Upload file** — accepts `.csv`, `.xlsx`. Shows a "Download template" link (email,role). Parsed with existing `xlsx`/CSV utilities already used by the import engine.
+2. **Paste list** — textarea, one entry per line: `email` or `email,role`. Also accepts comma/semicolon-separated emails with a single role dropdown applied to all.
 
-### 2. Fan out to all asset paths (ImageMagick resize from master)
-- `src/assets/landing-logo.png`, `efinsuite-globe-logo.png`, `efinsuite-logo.png`, `brand-logo.png`, `logo.png` — 512×512
-- `public/brand-logo.png` — 512×512
-- `public/favicon-16x16.png`, `favicon-32x32.png`, `favicon-192x192.png`, `favicon-512x512.png`
-- `public/apple-touch-icon.png` — 180×180
-- `public/favicon.ico` — multi-size 16/32/48/64
-- `public/favicon.png` — 32×32
+After parsing, a preview table shows every row with:
+- email, role (editable per row via dropdown), status badge
 
-### 3. No markup changes
-`index.html` and every component import already point at these paths from prior work.
+Row validation runs client-side and marks each row as:
+- **Valid** — well-formed email, valid role, not already a member, no pending invite
+- **Invalid** — bad email format, unknown role, duplicate within the batch
+- **Skipped** — already a member / already has a pending invitation (fetched from `organization_members` + `organization_invitations`)
 
-## Why programmatic
-Image generation produced uneven meridian spacing and slightly ovalized shapes. Formula-driven rendering guarantees:
-- Exact 30° angular spacing on meridians
-- Correct spherical foreshortening on parallels
-- Perfectly round silhouette
-- Native PNG transparency (no background-removal artifacts)
+### Seat-cap enforcement
 
-## Out of scope
-- No layout, sizing, or `index.html` changes
-- No changes to any other visuals in the app
+Uses `useUsageLimits` to read `maxUsers` and current `userCount`. Valid rows are counted against remaining seats:
+
+- If `validRows > remainingSeats` → **block sending entirely**, show a red banner: "This batch would exceed your plan limit (X seats remaining, Y valid invites). Remove rows or upgrade your plan." The Send button is disabled.
+- Invalid/skipped rows are always shown in a report section but never block; they're simply not sent.
+
+Admins (`isAdmin`) bypass the cap, matching existing behavior in `useUsageLimits`.
+
+### Sending
+
+On confirm, iterate valid rows and call the existing `send-invitation` edge function once per row (sequential with small concurrency, e.g. 3 at a time, to avoid Resend rate limits). Progress bar updates as each completes.
+
+Final results screen shows:
+- ✅ Sent (count + emails)
+- ⚠️ Skipped (already member / already invited)
+- ❌ Failed (with error message per row)
+- CSV export button for the failed list so admins can fix and retry
+
+### Files to add
+- `src/components/settings/BulkInviteDialog.tsx`
+- `src/components/settings/bulkInviteTemplate.ts` (template CSV generator + row parser/validator)
+
+### Files to modify
+- `src/components/settings/UsersSettingsTab.tsx` — add "Bulk Invite" button and wire dialog
+
+### Out of scope
+- No changes to the `send-invitation` edge function; reused as-is.
+- No new database tables — `organization_invitations` already handles idempotency.
+- No changes to role definitions.
