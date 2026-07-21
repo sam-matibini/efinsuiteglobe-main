@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { FileText, Users, Clock, Plus, Mail, Phone, Loader2, PenTool } from 'lucide-react';
+
+import { FileText, Users, Clock, Plus, Mail, Phone, Loader2, PenTool, RefreshCw, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -19,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useDocument, useDocumentSigners, useAddSigner } from '@/hooks/useDocuments';
+import { useDocument, useDocumentSigners, useAddSigner, useRefreshDocumentStatus, useSignerSigningUrl } from '@/hooks/useDocuments';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 
@@ -36,6 +37,8 @@ export function DocumentDetailDialog({ documentId, open, onOpenChange, onPrepare
   const { data: document, isLoading: documentLoading } = useDocument(documentId || undefined);
   const { data: signers = [], isLoading: signersLoading } = useDocumentSigners(documentId || undefined);
   const addSigner = useAddSigner();
+  const refreshStatus = useRefreshDocumentStatus();
+  const getSigningUrl = useSignerSigningUrl();
 
   const handleAddSigner = async () => {
     if (!newSigner.email || !documentId) {
@@ -132,6 +135,20 @@ export function DocumentDetailDialog({ documentId, open, onOpenChange, onPrepare
                   Prepare & Send
                 </Button>
               )}
+
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => refreshStatus.mutate(documentId!)}
+                disabled={refreshStatus.isPending}
+              >
+                {refreshStatus.isPending ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                )}
+                Refresh status from eFinSign
+              </Button>
             </TabsContent>
 
             <TabsContent value="signers" className="space-y-4 mt-4">
@@ -159,6 +176,20 @@ export function DocumentDetailDialog({ documentId, open, onOpenChange, onPrepare
                               <Phone className="w-4 h-4 text-muted-foreground" />
                             ) : (
                               <Mail className="w-4 h-4 text-muted-foreground" />
+                            )}
+                            {signer.status !== 'signed' && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                disabled={getSigningUrl.isPending}
+                                onClick={async () => {
+                                  const res = await getSigningUrl.mutateAsync(signer.id);
+                                  const url = res?.signing_url || res?.url;
+                                  if (url) window.open(url, '_blank', 'noopener,noreferrer');
+                                }}
+                              >
+                                <ExternalLink className="w-4 h-4" />
+                              </Button>
                             )}
                           </div>
                         </div>
