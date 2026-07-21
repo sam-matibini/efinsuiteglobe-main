@@ -90,6 +90,7 @@ const STEPS_BASE = [
 ];
 
 export function SigningWorkflow({
+  const confirmDelete = useConfirmDelete();
   documentId: _documentId,
   documentTitle,
   fileUrl,
@@ -149,7 +150,6 @@ export function SigningWorkflow({
   ];
 
   const handleAddRecipient = (recipient: Recipient) => {
-  const confirmDelete = useConfirmDelete();
     setRecipients(prev => [...prev, { ...recipient, signingOrder: prev.length + 1 }]);
   };
 

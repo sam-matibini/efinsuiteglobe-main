@@ -63,6 +63,7 @@ const RuleItem = memo(({
   onRefresh: (id: string) => void;
   isRefreshing: boolean;
 }) => {
+  const confirmDelete = useConfirmDelete();
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return '-';
     return new Intl.DateTimeFormat('en-CA', {

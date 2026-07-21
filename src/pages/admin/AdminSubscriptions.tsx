@@ -172,6 +172,7 @@ function SyncToStripeButton() {
 }
 
 export default function AdminSubscriptions() {
+  const confirmDelete = useConfirmDelete();
   const { isAdmin, isLoading: authLoading } = useAuth();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');

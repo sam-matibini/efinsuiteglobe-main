@@ -202,6 +202,7 @@ export default function AllocationRules() {
 // Phase 6 — Allocation Schedules card (automated cron-driven allocations)
 // ----------------------------------------------------------------------
 function SchedulesCard({ ruleOptions }: { ruleOptions: Array<{ id: string; name: string }> }) {
+  const confirmDelete = useConfirmDelete();
   const { data: schedules = [], upsert, toggleActive, remove } = useAllocationSchedules();
   const [open, setOpen] = useState(false);
   const [ruleId, setRuleId] = useState<string>('');

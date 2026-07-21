@@ -31,6 +31,7 @@ interface PMBillingTabProps {
 }
 
 export function PMBillingTab({ onAddInvoice }: PMBillingTabProps) {
+  const confirmDelete = useConfirmDelete();
   const { data: invoices, isLoading } = usePMInvoices();
   const updateStatus = useUpdatePMInvoiceStatus();
   const deleteInvoice = useDeletePMInvoice();
@@ -39,7 +40,6 @@ export function PMBillingTab({ onAddInvoice }: PMBillingTabProps) {
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
   const filteredInvoices = invoices?.filter(invoice => {
-  const confirmDelete = useConfirmDelete();
     const matchesSearch = 
       invoice.invoice_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
       invoice.client?.legal_name?.toLowerCase().includes(searchTerm.toLowerCase());

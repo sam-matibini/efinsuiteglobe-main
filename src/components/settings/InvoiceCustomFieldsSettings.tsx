@@ -41,6 +41,7 @@ const PRESET_TEMPLATES = [
 ];
 
 export function InvoiceCustomFieldsSettings() {
+  const confirmDelete = useConfirmDelete();
   const { 
     templates, 
     isLoading, 
@@ -56,7 +57,6 @@ export function InvoiceCustomFieldsSettings() {
   const [newFieldDocType, setNewFieldDocType] = useState<DocumentType>('all');
 
   const handleAddField = () => {
-  const confirmDelete = useConfirmDelete();
     if (!newFieldLabel.trim()) return;
 
     createTemplate.mutate({

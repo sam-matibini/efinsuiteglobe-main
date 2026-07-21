@@ -40,6 +40,7 @@ interface InvoiceDetailPanelProps {
 }
 
 export function InvoiceDetailPanel({
+  const confirmDelete = useConfirmDelete();
   invoice,
   onEdit,
   onShare,
@@ -63,7 +64,6 @@ export function InvoiceDetailPanel({
   const { create: createPaymentLink } = usePaymentLinks();
 
   const handlePayOnline = async (method: 'cc' | 'ach' | 'interac') => {
-  const confirmDelete = useConfirmDelete();
     if (!invoice.id) return;
     const amount = Number(invoice.balance_due ?? invoice.total ?? 0);
     if (!(amount > 0)) {
