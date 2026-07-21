@@ -420,12 +420,19 @@ export function UsersSettingsTab() {
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-lg font-semibold text-foreground">Team Members</h2>
           {canInviteUsers && (
-            <Button onClick={handleInviteClick}>
-              <UserPlus className="w-4 h-4 mr-2" />
-              Invite User
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setBulkInviteOpen(true)}>
+                <Users className="w-4 h-4 mr-2" />
+                Bulk Invite
+              </Button>
+              <Button onClick={handleInviteClick}>
+                <UserPlus className="w-4 h-4 mr-2" />
+                Invite User
+              </Button>
+            </div>
           )}
         </div>
+        <BulkInviteDialog open={bulkInviteOpen} onOpenChange={setBulkInviteOpen} />
         <SubscriptionUpgradeModal
           open={upgradeOpen}
           onOpenChange={setUpgradeOpen}
