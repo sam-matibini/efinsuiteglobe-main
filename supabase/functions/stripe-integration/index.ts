@@ -169,12 +169,13 @@ serve(async (req) => {
         }
 
         // Create monthly price if needed
+        const planCurrency = (plan.currency || 'usd').toLowerCase();
         let monthlyPriceId = plan.stripe_price_id_monthly;
         if (!monthlyPriceId && plan.price_monthly > 0) {
           const price = await stripeRequest('/prices', 'POST', {
             product: stripeProductId,
             unit_amount: Math.round(plan.price_monthly * 100).toString(),
-            currency: 'usd',
+            currency: planCurrency,
             'recurring[interval]': 'month',
             'metadata[plan_id]': plan.id,
             'metadata[cycle]': 'monthly',
@@ -192,7 +193,7 @@ serve(async (req) => {
           const price = await stripeRequest('/prices', 'POST', {
             product: stripeProductId,
             unit_amount: Math.round(plan.price_yearly * 100).toString(),
-            currency: 'usd',
+            currency: planCurrency,
             'recurring[interval]': 'year',
             'metadata[plan_id]': plan.id,
             'metadata[cycle]': 'yearly',
