@@ -100,8 +100,10 @@ export default function SubscriptionCheckout() {
     adminDiscountActive?: boolean;
   } | null>(null);
 
+  const orgCountryId = (organization as any)?.country_id || null;
+
   const { data: plans, isLoading } = useQuery({
-    queryKey: ['active-pricing-plans'],
+    queryKey: ['active-pricing-plans', orgCountryId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('pricing_plans')
@@ -109,7 +111,24 @@ export default function SubscriptionCheckout() {
         .eq('is_active', true)
         .order('sort_order');
       if (error) throw error;
-      return data as PricingPlan[];
+      const all = (data as PricingPlan[]) || [];
+      // Prefer country-specific plans for the org's country; if none exist for a tier,
+      // fall back to the global (country_id = null) plan of the same tier.
+      const countryPlans = orgCountryId ? all.filter(p => p.country_id === orgCountryId) : [];
+      const globalPlans = all.filter(p => !p.country_id);
+      const countryTiers = new Set(
+        countryPlans
+          .map(p => (p.tier || deriveTierFromName(p.name)))
+          .filter(Boolean) as string[]
+      );
+      const filtered = [
+        ...countryPlans,
+        ...globalPlans.filter(p => {
+          const t = p.tier || deriveTierFromName(p.name);
+          return !t || !countryTiers.has(t);
+        }),
+      ];
+      return filtered;
     },
   });
 
