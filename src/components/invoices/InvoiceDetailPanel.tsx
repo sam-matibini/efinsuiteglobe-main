@@ -24,6 +24,7 @@ import { useDefaultSignature } from '@/hooks/useUserSignatures';
 import { usePaymentLinks } from '@/hooks/usePaymentLinks';
 import { toast } from 'sonner';
 import { differenceInDays } from 'date-fns';
+import { useConfirmDelete } from '@/hooks/useConfirmDelete';
 
 interface InvoiceDetailPanelProps {
   invoice: Invoice;
@@ -39,6 +40,7 @@ interface InvoiceDetailPanelProps {
 }
 
 export function InvoiceDetailPanel({
+  const confirmDelete = useConfirmDelete();
   invoice,
   onEdit,
   onShare,
@@ -284,7 +286,7 @@ export function InvoiceDetailPanel({
               {!isReadOnly && (invoice.status === 'void' || invoice.status === 'issued') && (
                 <>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem className="text-destructive" onClick={onDeleteInvoice}>
+                  <DropdownMenuItem className="text-destructive" onClick={() => confirmDelete(() => onDeleteInvoice?.(), { title: 'Delete invoice?' })}>
                     <Trash2 className="w-4 h-4 mr-2" />
                     Delete Invoice
                   </DropdownMenuItem>

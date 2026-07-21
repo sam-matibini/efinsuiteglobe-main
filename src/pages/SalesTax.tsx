@@ -22,8 +22,10 @@ import { useForm } from 'react-hook-form';
 import { getCountryLocalization } from '@/data/countryLocalizations';
 import { COUNTRY_LOCALIZATIONS } from '@/data/countryLocalizations';
 import { useIsReadOnly } from '@/hooks/useIsReadOnly';
+import { useConfirmDelete } from '@/hooks/useConfirmDelete';
 
 export default function SalesTax() {
+  const confirmDelete = useConfirmDelete();
   const { organization } = useCurrentOrganization();
   const isReadOnly = useIsReadOnly();
   const { data: taxCodes = [], isLoading: codesLoading } = useTaxCodes(organization?.id);
@@ -543,7 +545,7 @@ export default function SalesTax() {
                                 variant="ghost"
                                 size="sm"
                                 className="text-destructive"
-                                onClick={() => handleDeleteTaxCode(code.id)}
+                                onClick={() => confirmDelete(() => handleDeleteTaxCode(code.id), { itemName: code.code, title: 'Delete tax code?' })}
                               >
                                 <Trash2 className="w-4 h-4" />
                               </Button>

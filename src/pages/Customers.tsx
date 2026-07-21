@@ -29,8 +29,10 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { getCountryLocalization } from '@/data/countryLocalizations';
 import { getLocaleForCountry } from '@/lib/localizedCurrencyFormatter';
 import { useIsReadOnly } from '@/hooks/useIsReadOnly';
+import { useConfirmDelete } from '@/hooks/useConfirmDelete';
 
 export default function Customers() {
+  const confirmDelete = useConfirmDelete();
   const navigate = useNavigate();
   const { organization, isLoading: orgLoading } = useCurrentOrganization();
   const isReadOnly = useIsReadOnly();
@@ -72,9 +74,7 @@ export default function Customers() {
   }, [customers, searchQuery, showInactive, showWithBalance]);
 
   const handleDelete = async (id: string) => {
-    if (confirm('Are you sure you want to deactivate this customer?')) {
-      await deleteCustomer.mutateAsync(id);
-    }
+    await deleteCustomer.mutateAsync(id);
   };
 
   const handleCreateInvoice = (customer: Customer) => {
@@ -108,7 +108,7 @@ export default function Customers() {
         </DropdownMenuItem>
         <DropdownMenuItem 
           className="text-destructive"
-          onClick={() => handleDelete(customer.id)}
+          onClick={() => confirmDelete(() => handleDelete(customer.id), { itemName: customer.name, title: 'Deactivate customer?', confirmLabel: 'Deactivate' })}
         >
           Deactivate
         </DropdownMenuItem>

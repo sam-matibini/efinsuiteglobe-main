@@ -26,8 +26,10 @@ import { isNpoIndustry } from '@/data/industries';
 import { AICategorizeLinesDialog } from '@/components/ai/AICategorizeLinesDialog';
 import { AICategorizationHealth } from '@/components/banking/AICategorizationHealth';
 import { Sparkles } from 'lucide-react';
+import { useConfirmDelete } from '@/hooks/useConfirmDelete';
 
 export default function Invoices() {
+  const confirmDelete = useConfirmDelete();
   const { organization, isLoading: orgLoading } = useCurrentOrganization();
   const isReadOnly = useIsReadOnly();
   const { 
@@ -394,9 +396,10 @@ export default function Invoices() {
               onStatusChange={(status) => updateInvoiceStatus.mutate({ id: selectedInvoice.id, status: status as Invoice['status'] })}
               onVoidInvoice={() => voidInvoice.mutate(selectedInvoice.id)}
               onDeleteInvoice={() => {
-                if (confirm(`Are you sure you want to delete invoice ${selectedInvoice.invoice_number}?`)) {
-                  deleteInvoice.mutate(selectedInvoice.id);
-                }
+                confirmDelete(() => deleteInvoice.mutate(selectedInvoice.id), {
+                  itemName: `invoice ${selectedInvoice.invoice_number}`,
+                  title: 'Delete invoice?',
+                });
               }}
               isReadOnly={isReadOnly}
             />
