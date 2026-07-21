@@ -82,6 +82,15 @@ interface Plan {
   features: string[] | null;
   is_active: boolean;
   sort_order: number;
+  country_id?: string | null;
+  currency?: string | null;
+}
+
+interface CountryOption {
+  id: string;
+  name: string;
+  code: string;
+  default_currency: string;
 }
 
 // Default plan features for reference
