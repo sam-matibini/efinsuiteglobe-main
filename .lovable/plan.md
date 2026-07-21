@@ -1,97 +1,78 @@
 ## Goal
 
-Have all DocSign operations (create document, add/remove signers, place/update/remove fields, send, remind, void, download, audit log) executed against the **eFinSign API** while continuing to persist a mirror in the current `documents` / `document_signers` / `document_fields` / `document_audit_logs` tables. Signers will sign on **eFinSign's hosted page** (no embedded widget). One platform-wide API key is used for all orgs.
+Replace the manual **Refresh status from eFinSign** button flow with a push-based sync: eFinSign posts events to a public edge function, we verify the HMAC signature, and update the local `documents` / `document_signers` rows.
 
-## Approach
+## 1. Secret
 
-Introduce a single Supabase edge function `efinsign-proxy` that:
-- Reads the `EFINSIGN_API_KEY` secret.
-- Accepts an `{ action, payload }` body from the frontend.
-- Calls the matching eFinSign REST endpoint.
-- Writes the returned entity into our existing tables (so listings, detail dialogs and audit UI keep working unchanged).
-- Returns the mirrored row(s) to the caller.
+Add a new secret `EFINSIGN_WEBHOOK_SECRET`. This is the value eFinSign returns once when a webhook is registered — the user pastes it into the secure form. It's separate from `EFINSIGN_API_KEY`.
 
-The frontend hooks in `src/hooks/useDocuments.ts` are switched from raw `supabase.from(...)` writes to `supabase.functions.invoke('efinsign-proxy', ...)`. Reads stay as direct table selects (fast, RLS-scoped). This satisfies "operations from eFinSign, DB stays as current DB".
+## 2. New edge function `efinsign-webhook` (public, `verify_jwt = false`)
 
-## Secrets
+Path: `supabase/functions/efinsign-webhook/index.ts`, wired in `supabase/config.toml` with `verify_jwt = false`.
 
-- `EFINSIGN_API_KEY` — added via `add_secret` (user pastes the `efsk_live_...` or `efsk_test_...` key). Nothing else needed.
+Responsibilities:
 
-## Schema changes (single migration)
+- Read raw request body as text (needed for HMAC).
+- Parse `X-Efinsign-Signature` header (`t=…,v1=…`).
+- Verify HMAC-SHA256 of `${t}.${rawBody}` against `EFINSIGN_WEBHOOK_SECRET` using `crypto.subtle` and constant-time comparison; reject > 300s skew or bad signature with 401.
+- Parse JSON body → `{ event, document_id, signer_id?, completed_at?, signed_at?, declined_at?, reason? }`.
+- Idempotency: use header `X-Efinsign-Delivery-Id` if present, else hash of `(event + document_id + (signer_id||'') + timestamp)`; insert into a small `efinsign_webhook_events(id text primary key, event text, received_at timestamptz default now())` table; on unique-violation return 200 immediately.
+- Dispatch on `event`:
+  - `document.sent` → `documents.status = 'sent'`, set `sent_at` if column exists.
+  - `document.completed` → `documents.status = 'completed'`, `completed_at = payload.completed_at ?? now()`.
+  - `document.voided` → `documents.status = 'voided'`.
+  - `document.signer_signed` → `document_signers` row matched by `efinsign_signer_id` (fallback `id`) → `status='signed'`, `signed_at = payload.signed_at ?? now()`. After update, if all signers for that document are `signed`, also mark the document `completed`.
+  - `document.signer_declined` → signer `status='declined'`, `declined_at`, `decline_reason`; document `status='voided'`.
+- All DB writes use service-role client (`SUPABASE_SERVICE_ROLE_KEY`) so RLS doesn't block.
+- Append an entry to `document_audit_logs` for each processed event.
+- Always return 200 after successful processing; 4xx only for signature/parse errors so eFinSign doesn't retry those.
+- Standard CORS headers on responses.
 
-Add columns to link local rows to their eFinSign counterparts. No table renames, no destructive changes.
+## 3. Migration
 
-```
-alter table public.documents        add column efinsign_document_id uuid;
-alter table public.document_signers add column efinsign_signer_id   uuid;
-alter table public.document_fields  add column efinsign_field_id    uuid;
-```
+Single migration:
 
-Indexes on each new column. No RLS/GRANT changes — existing policies stay.
+- `create table public.efinsign_webhook_events (id text primary key, event text not null, received_at timestamptz not null default now());`
+- GRANTs (`service_role` all; no anon/authenticated — this table is internal).
+- Enable RLS with no policies (service role bypasses RLS).
 
-## Edge function: `supabase/functions/efinsign-proxy/index.ts`
+No schema changes to `documents` / `document_signers` — the existing columns (`status`, `completed_at`, `signed_at`, `efinsign_signer_id`, etc. added in the prior turn) cover it.
 
-One handler, dispatches on `action`. Each action calls eFinSign, then upserts locally.
+## 4. Registration helper (one-off)
 
-Actions and mapping:
+Add an action `register_webhook` to the existing `efinsign-proxy` edge function:
 
-```text
-create_document   POST /documents (multipart)              → insert into documents
-list_documents    GET  /documents                          → (optional) reconcile
-get_document      GET  /documents/{id}                     → refresh local row + signers + fields
-update_document   PATCH /documents/{id}                    → update documents.title
-delete_document   DELETE /documents/{id}                   → delete documents row
-download          GET  /documents/{id}/download?type=...   → return signed URL / bytes
-audit_log         GET  /documents/{id}/audit-log           → mirror into document_audit_logs
-send              POST /documents/{id}/send                → update documents.status='pending'
-void              POST /documents/{id}/void                → update documents.status='voided'
-remind            POST /documents/{id}/remind              → no-op mirror
-add_signer        POST /documents/{id}/signers             → insert document_signers
-update_signer     PATCH .../signers/{signerId}             → update row
-delete_signer     DELETE .../signers/{signerId}            → delete row
-add_field         POST .../signers/{signerId}/fields       → insert document_fields
-update_field      PATCH .../fields/{fieldId}               → update row
-delete_field      DELETE .../fields/{fieldId}              → delete row
-```
+- Admin-only (checks caller is platform admin via `has_role`).
+- Calls `POST https://cavdivfhszrnhliyafze.supabase.co/functions/v1/api/webhooks` on eFinSign with the project's public webhook URL (`${SUPABASE_URL}/functions/v1/efinsign-webhook`) and the five event names.
+- Returns the `secret` from the response to the admin UI **once**, with copy button + instructions to save it as `EFINSIGN_WEBHOOK_SECRET`.
 
-Status/field-type/auth-method values are translated between eFinSign's vocabulary and the existing local enums (e.g. eFinSign `initials` ↔ local `initial`, eFinSign `pending`/`viewed`/`signed`/`declined` map into our wider set). Translation lives in a `map.ts` helper next to the function.
+Small UI hook in `AdminSubscriptions` isn't needed — add a compact "Register eFinSign webhook" button in an existing DocSign settings surface. If there isn't a clean spot, expose it via a minimal admin page section (open question below).
 
-CORS + zod validation on every action; provider errors surfaced with status + body per gateway guidance.
+## 5. Frontend
 
-## Frontend changes
-
-`src/hooks/useDocuments.ts`
-- Replace direct table writes in the mutation hooks with `supabase.functions.invoke('efinsign-proxy', { body: { action, payload } })`. Affected hooks: `useCreateDocument`, `useUpdateDocument`, `useDeleteDocument`, `useAddSigner`, `useUpdateSigner`, `useRemoveSigner`, `useAddField`, `useUpdateField`, `useRemoveField`, `useSendDocument` (new/updated), `useVoidDocument`, `useRemindDocument`.
-- Reads (`useDocuments`, `useDocument`, `useDocumentSigners`, `useDocumentFields`) continue to hit local tables.
-
-`src/pages/DocSignSign.tsx`
-- Signing happens on eFinSign's hosted page. Replace this route with a lightweight "opening signer page…" redirect that calls `efinsign-proxy` action `get_signing_url` (which hits `POST /embed/signing-url` and returns the hosted `signing_url`) and does `window.location.href = signing_url`. The in-app signing UI is no longer used for eFinSign-backed documents.
-
-`src/components/docsign/*`
-- Buttons that previously called local mutations continue to work unchanged — they use the same hooks.
-- Add a "Sign on eFinSign" button in `DocumentDetailDialog.tsx` that resolves the current signer's hosted URL for testing.
-
-## Completion / status sync
-
-Because signing happens off-platform, add a "Refresh status" button in the document detail dialog that invokes `efinsign-proxy` action `get_document`, which pulls the latest document + signer statuses from eFinSign and updates the local rows. (A webhook-based sync can be added later if eFinSign exposes one — not in scope now.)
-
-## Out of scope for this change
-
-- Templates, clients, and organization endpoints from the eFinSign spec (no matching UI today).
-- Embedded signing widget.
-- Per-org API keys.
-- Automatic background polling / webhook sync.
+- Keep the existing **Refresh status** button as a manual fallback for stale rows.
+- Rely on existing React Query invalidation via realtime — no code change needed since `documents` list already re-queries on focus / after mutations. Optionally add a `postgres_changes` subscription in `useDocuments` for the current org to live-refresh; leaving that for a follow-up unless you want it now.
 
 ## Technical details
 
-- File upload: `useCreateDocument` currently uploads to Supabase Storage. New flow: upload the PDF blob to `efinsign-proxy` as multipart (edge function forwards to `POST /documents`). We keep the Supabase Storage copy as a local cache so existing PDF viewers keep working; `efinsign_document_id` is stored on the row.
-- All eFinSign calls go through `https://api.efinsign.ca/functions/v1/api` with `Authorization: Bearer ${EFINSIGN_API_KEY}`.
-- Errors from eFinSign are returned to the client with the provider status and body so `toast.error` surfaces the real reason.
-- No changes to RLS. The edge function uses the service role internally for mirror writes; user identity is verified via the JWT before every action.
+- HMAC verification with Web Crypto (no Node `crypto`):
+  ```ts
+  const key = await crypto.subtle.importKey("raw", enc.encode(secret),
+    { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const sig = new Uint8Array(await crypto.subtle.sign("HMAC", key, enc.encode(`${t}.${rawBody}`)));
+  ```
+  Compare hex output with `v1` via constant-time loop.
+- Match signers by `efinsign_signer_id` first (populated when the proxy created them); fall back to `document_signers.id` because eFinSign may send our local ID depending on registration.
+- Auto-complete rule: after a `signer_signed` update, `select count(*) filter (where status <> 'signed') from document_signers where document_id = $1` — if zero, flip the document.
 
-## Files touched
+## Open question
 
-- New: `supabase/functions/efinsign-proxy/index.ts`, `supabase/functions/efinsign-proxy/map.ts`
-- New migration: add `efinsign_*_id` columns + indexes
-- Edited: `src/hooks/useDocuments.ts`, `src/pages/DocSignSign.tsx`, `src/components/docsign/DocumentDetailDialog.tsx`
-- Secret: `EFINSIGN_API_KEY` (via `add_secret`)
+Where should the "Register eFinSign webhook" admin button live? Options:
+
+1. New card on the existing **Admin → Integrations / Subscriptions** area.
+2. A DocSign-specific admin settings page (doesn't exist yet — would need a small new route).
+3. Skip the UI and register the webhook once via a manual `curl` from you; only ship the receiver + secret.
+
+Default if you don't answer: option 3 (ship receiver + secret, you register once with curl).  
+  
+Pick Option 3 and provide for me the url and events needed in the curl to create the secret
