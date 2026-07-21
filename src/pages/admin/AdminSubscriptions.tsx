@@ -1105,7 +1105,7 @@ export default function AdminSubscriptions() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Monthly Price ($)</Label>
+                <Label>Monthly Price ({planForm.currency || 'USD'})</Label>
                 <Input 
                   type="number"
                   value={planForm.price_monthly}
@@ -1113,13 +1113,14 @@ export default function AdminSubscriptions() {
                 />
               </div>
               <div className="space-y-2">
-                <Label>Yearly Price ($)</Label>
+                <Label>Yearly Price ({planForm.currency || 'USD'})</Label>
                 <Input 
                   type="number"
                   value={planForm.price_yearly}
                   onChange={e => setPlanForm(prev => ({ ...prev, price_yearly: parseFloat(e.target.value) || 0 }))}
                 />
               </div>
+
             </div>
             
             {/* Operating Costs Section */}
@@ -1128,7 +1129,7 @@ export default function AdminSubscriptions() {
               <p className="text-sm text-muted-foreground mb-4">Track costs to calculate profitability per plan</p>
               <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-2">
-                  <Label>Monthly Cost ($)</Label>
+                  <Label>Monthly Cost ({planForm.currency || 'USD'})</Label>
                   <Input 
                     type="number"
                     value={planForm.cost_monthly}
@@ -1143,7 +1144,7 @@ export default function AdminSubscriptions() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Yearly Cost ($)</Label>
+                  <Label>Yearly Cost ({planForm.currency || 'USD'})</Label>
                   <Input 
                     type="number"
                     value={planForm.cost_yearly}
@@ -1151,6 +1152,7 @@ export default function AdminSubscriptions() {
                     placeholder="0.00"
                   />
                 </div>
+
                 <div className="space-y-2">
                   <Label>Margin (%)</Label>
                   <Input 
