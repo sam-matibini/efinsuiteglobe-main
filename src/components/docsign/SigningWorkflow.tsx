@@ -112,7 +112,7 @@ export function SigningWorkflow({
   const [placedFields, setPlacedFields] = useState<PlacedField[]>(initialFields);
   const [selectedField, setSelectedField] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages] = useState(pageCount);
+  const [totalPages, setTotalPages] = useState(pageCount);
   const [zoom, setZoom] = useState(100);
   const [pdfPageSizes, setPdfPageSizes] = useState<Record<number, { width: number; height: number }>>({});
   const [assignToSigner, setAssignToSigner] = useState<string>(SENDER_SIGNER_ID);
@@ -567,7 +567,7 @@ export function SigningWorkflow({
                             }));
                           }}
                           onTotalPages={(total) => {
-                            // Update total pages if needed
+                            if (total > 0) setTotalPages(total);
                           }}
                         />
                       );
@@ -994,6 +994,9 @@ export function SigningWorkflow({
                               ...prev,
                               [currentPage]: { width: pageWidthPt, height: pageHeightPt },
                             }));
+                          }}
+                          onTotalPages={(total) => {
+                            if (total > 0) setTotalPages(total);
                           }}
                         />
                       );
