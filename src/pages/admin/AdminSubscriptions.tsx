@@ -538,7 +538,9 @@ export default function AdminSubscriptions() {
         max_employees: plan.max_employees || 25,
         features: (plan.features || []).join('\n'),
         is_active: plan.is_active,
-        sort_order: plan.sort_order
+        sort_order: plan.sort_order,
+        country_id: plan.country_id || '',
+        currency: plan.currency || 'USD',
       });
     } else {
       resetPlanForm();
