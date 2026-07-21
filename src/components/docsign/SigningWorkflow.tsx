@@ -112,7 +112,7 @@ export function SigningWorkflow({
   const [placedFields, setPlacedFields] = useState<PlacedField[]>(initialFields);
   const [selectedField, setSelectedField] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages] = useState(pageCount);
+  const [totalPages, setTotalPages] = useState(pageCount);
   const [zoom, setZoom] = useState(100);
   const [pdfPageSizes, setPdfPageSizes] = useState<Record<number, { width: number; height: number }>>({});
   const [assignToSigner, setAssignToSigner] = useState<string>(SENDER_SIGNER_ID);
