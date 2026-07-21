@@ -9,7 +9,7 @@ import {
   mapFieldTypeToEfinsign,
 } from './map.ts';
 
-const EFINSIGN_BASE = 'https://api.efinsign.ca/functions/v1/api';
+const EFINSIGN_BASE = 'https://cavdivfhszrnhliyafze.supabase.co/functions/v1/api';
 const API_KEY = Deno.env.get('EFINSIGN_API_KEY');
 
 const admin = createClient(
