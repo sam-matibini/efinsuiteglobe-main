@@ -35,6 +35,8 @@ interface PricingPlan {
   stripe_price_id_monthly: string | null;
   stripe_price_id_yearly: string | null;
   tier?: string | null;
+  country_id?: string | null;
+  currency?: string | null;
 }
 
 interface ProrationPreview {
@@ -98,8 +100,10 @@ export default function SubscriptionCheckout() {
     adminDiscountActive?: boolean;
   } | null>(null);
 
+  const orgCountryId = (organization as any)?.country_id || null;
+
   const { data: plans, isLoading } = useQuery({
-    queryKey: ['active-pricing-plans'],
+    queryKey: ['active-pricing-plans', orgCountryId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('pricing_plans')
@@ -107,7 +111,24 @@ export default function SubscriptionCheckout() {
         .eq('is_active', true)
         .order('sort_order');
       if (error) throw error;
-      return data as PricingPlan[];
+      const all = (data as PricingPlan[]) || [];
+      // Prefer country-specific plans for the org's country; if none exist for a tier,
+      // fall back to the global (country_id = null) plan of the same tier.
+      const countryPlans = orgCountryId ? all.filter(p => p.country_id === orgCountryId) : [];
+      const globalPlans = all.filter(p => !p.country_id);
+      const countryTiers = new Set(
+        countryPlans
+          .map(p => (p.tier || deriveTierFromName(p.name)))
+          .filter(Boolean) as string[]
+      );
+      const filtered = [
+        ...countryPlans,
+        ...globalPlans.filter(p => {
+          const t = p.tier || deriveTierFromName(p.name);
+          return !t || !countryTiers.has(t);
+        }),
+      ];
+      return filtered;
     },
   });
 
@@ -465,17 +486,28 @@ export default function SubscriptionCheckout() {
                         discounted = Math.max(0, basePrice - Number(appliedPromo.amount_off) / 100);
                       }
                       const hasDiscount = !!appliedPromo && discounted < basePrice;
-                      const fmt = (n: number) => n % 1 === 0 ? String(n) : n.toFixed(2);
+                      const planCurrency = (plan.currency || 'USD').toUpperCase();
+                      const fmtCur = (n: number) => {
+                        try {
+                          return new Intl.NumberFormat(undefined, {
+                            style: 'currency',
+                            currency: planCurrency,
+                            maximumFractionDigits: n % 1 === 0 ? 0 : 2,
+                          }).format(n);
+                        } catch {
+                          return `${n.toFixed(2)} ${planCurrency}`;
+                        }
+                      };
                       return (
                         <>
                           <div className="text-3xl font-bold flex items-baseline gap-2 flex-wrap">
                             {hasDiscount && (
                               <span className="text-lg font-normal text-muted-foreground line-through">
-                                ${fmt(basePrice)}
+                                {fmtCur(basePrice)}
                               </span>
                             )}
                             <span className={hasDiscount ? 'text-primary' : ''}>
-                              ${fmt(discounted)}
+                              {fmtCur(discounted)}
                               <span className="text-sm font-normal text-muted-foreground">
                                 /{billingCycle === 'monthly' ? 'mo' : 'yr'}
                               </span>
@@ -493,14 +525,14 @@ export default function SubscriptionCheckout() {
                                     : ''}
                             </p>
                           )}
+                          {billingCycle === 'yearly' && (
+                            <p className="text-sm text-muted-foreground">
+                              Save {fmtCur(plan.price_monthly * 12 - plan.price_yearly)}/year
+                            </p>
+                          )}
                         </>
                       );
                     })()}
-                    {billingCycle === 'yearly' && (
-                      <p className="text-sm text-muted-foreground">
-                        Save ${(plan.price_monthly * 12 - plan.price_yearly).toFixed(0)}/year
-                      </p>
-                    )}
                     <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
                       {(plan.features || []).map((feature, i) => (
                         <li key={i} className="flex items-start gap-2">

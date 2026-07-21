@@ -21,6 +21,12 @@ import { toast } from 'sonner';
 import { Copy, Plus, Archive, Pencil } from 'lucide-react';
 import { format } from 'date-fns';
 
+interface CountryOption {
+  id: string;
+  name: string;
+  code: string;
+}
+
 async function callAdmin(payload: Record<string, unknown>) {
   const { data, error } = await supabase.functions.invoke('admin-subscription-override', {
     body: payload,
@@ -30,10 +36,26 @@ async function callAdmin(payload: Record<string, unknown>) {
   return data;
 }
 
+function useCountries() {
+  return useQuery({
+    queryKey: ['countries-active'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('countries')
+        .select('id, name, code')
+        .eq('is_active', true)
+        .order('name');
+      if (error) throw error;
+      return (data || []) as CountryOption[];
+    },
+  });
+}
+
 export function DiscountsTab() {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<any | null>(null);
+  const { data: countries } = useCountries();
 
   const { data: presets, isLoading } = useQuery({
     queryKey: ['discount_presets', 'all'],
@@ -56,20 +78,23 @@ export function DiscountsTab() {
     onError: (e: any) => toast.error(e.message || 'Failed'),
   });
 
+  const countryName = (id?: string | null) =>
+    id ? (countries?.find(c => c.id === id)?.name || 'Country') : '—';
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-start justify-between space-y-0">
         <div>
           <CardTitle>Discount Library</CardTitle>
           <CardDescription>
-            Reusable Stripe coupons. Creating a discount here provisions a coupon in Stripe automatically.
+            Reusable Stripe coupons. Set a scope to apply globally or only to organizations in a specific country.
           </CardDescription>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button size="sm"><Plus className="w-4 h-4 mr-1" /> New discount</Button>
           </DialogTrigger>
-          <CreateDiscountDialog onOpenChange={setOpen} />
+          <CreateDiscountDialog onOpenChange={setOpen} countries={countries || []} />
         </Dialog>
       </CardHeader>
       <CardContent>
@@ -77,6 +102,7 @@ export function DiscountsTab() {
           <TableHeader>
             <TableRow>
               <TableHead>Name</TableHead>
+              <TableHead>Scope</TableHead>
               <TableHead>Percent</TableHead>
               <TableHead>Duration</TableHead>
               <TableHead>Expires</TableHead>
@@ -87,14 +113,19 @@ export function DiscountsTab() {
           </TableHeader>
           <TableBody>
             {isLoading && (
-              <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground">Loading…</TableCell></TableRow>
+              <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground">Loading…</TableCell></TableRow>
             )}
             {!isLoading && (presets || []).length === 0 && (
-              <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground">No discounts yet.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground">No discounts yet.</TableCell></TableRow>
             )}
             {(presets || []).map((p: any) => (
               <TableRow key={p.id}>
                 <TableCell className="font-medium">{p.name}</TableCell>
+                <TableCell>
+                  {p.scope === 'country'
+                    ? <Badge variant="outline">Country: {countryName(p.country_id)}</Badge>
+                    : <Badge variant="outline">Global</Badge>}
+                </TableCell>
                 <TableCell>{p.percent}%</TableCell>
                 <TableCell>
                   {p.duration === 'repeating'
@@ -147,13 +178,51 @@ export function DiscountsTab() {
       </CardContent>
 
       <Dialog open={!!editing} onOpenChange={(v) => !v && setEditing(null)}>
-        {editing && <EditDiscountDialog preset={editing} onClose={() => setEditing(null)} />}
+        {editing && <EditDiscountDialog preset={editing} onClose={() => setEditing(null)} countries={countries || []} />}
       </Dialog>
     </Card>
   );
 }
 
-function CreateDiscountDialog({ onOpenChange }: { onOpenChange: (v: boolean) => void }) {
+function ScopeFields({
+  scope, setScope, countryId, setCountryId, countries,
+}: {
+  scope: 'global' | 'country';
+  setScope: (v: 'global' | 'country') => void;
+  countryId: string;
+  setCountryId: (v: string) => void;
+  countries: CountryOption[];
+}) {
+  return (
+    <div className="grid grid-cols-2 gap-3">
+      <div className="space-y-1">
+        <Label>Scope</Label>
+        <Select value={scope} onValueChange={(v) => setScope(v as any)}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="global">Global</SelectItem>
+            <SelectItem value="country">Country</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      {scope === 'country' && (
+        <div className="space-y-1">
+          <Label>Country</Label>
+          <Select value={countryId} onValueChange={setCountryId}>
+            <SelectTrigger><SelectValue placeholder="Select country" /></SelectTrigger>
+            <SelectContent>
+              {countries.map(c => (
+                <SelectItem key={c.id} value={c.id}>{c.name} ({c.code})</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CreateDiscountDialog({ onOpenChange, countries }: { onOpenChange: (v: boolean) => void; countries: CountryOption[] }) {
   const qc = useQueryClient();
   const [name, setName] = useState('');
   const [percent, setPercent] = useState('10');
@@ -161,6 +230,8 @@ function CreateDiscountDialog({ onOpenChange }: { onOpenChange: (v: boolean) => 
   const [months, setMonths] = useState('3');
   const [expiresAt, setExpiresAt] = useState('');
   const [maxRedemptions, setMaxRedemptions] = useState('');
+  const [scope, setScope] = useState<'global' | 'country'>('global');
+  const [countryId, setCountryId] = useState('');
 
   const create = useMutation({
     mutationFn: async () => {
@@ -172,6 +243,8 @@ function CreateDiscountDialog({ onOpenChange }: { onOpenChange: (v: boolean) => 
         duration_in_months: duration === 'repeating' ? Number(months) : null,
         expires_at: expiresAt ? new Date(expiresAt).toISOString() : null,
         max_redemptions: maxRedemptions ? Number(maxRedemptions) : null,
+        scope,
+        country_id: scope === 'country' ? countryId : null,
       });
     },
     onSuccess: () => {
@@ -195,6 +268,7 @@ function CreateDiscountDialog({ onOpenChange }: { onOpenChange: (v: boolean) => 
           <Label>Name</Label>
           <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Launch promo" />
         </div>
+        <ScopeFields scope={scope} setScope={setScope} countryId={countryId} setCountryId={setCountryId} countries={countries} />
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
             <Label>Percent off</Label>
@@ -233,7 +307,7 @@ function CreateDiscountDialog({ onOpenChange }: { onOpenChange: (v: boolean) => 
         <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
         <Button
           onClick={() => create.mutate()}
-          disabled={create.isPending || !name || !percent}
+          disabled={create.isPending || !name || !percent || (scope === 'country' && !countryId)}
         >
           {create.isPending ? 'Creating…' : 'Create'}
         </Button>
@@ -242,7 +316,7 @@ function CreateDiscountDialog({ onOpenChange }: { onOpenChange: (v: boolean) => 
   );
 }
 
-function EditDiscountDialog({ preset, onClose }: { preset: any; onClose: () => void }) {
+function EditDiscountDialog({ preset, onClose, countries }: { preset: any; onClose: () => void; countries: CountryOption[] }) {
   const qc = useQueryClient();
   const [name, setName] = useState(preset.name || '');
   const [percent, setPercent] = useState(String(preset.percent ?? '10'));
@@ -254,6 +328,8 @@ function EditDiscountDialog({ preset, onClose }: { preset: any; onClose: () => v
   const [maxRedemptions, setMaxRedemptions] = useState(
     preset.max_redemptions ? String(preset.max_redemptions) : ''
   );
+  const [scope, setScope] = useState<'global' | 'country'>((preset.scope as any) || 'global');
+  const [countryId, setCountryId] = useState<string>(preset.country_id || '');
 
   const financialChanged =
     Number(percent) !== Number(preset.percent) ||
@@ -273,6 +349,8 @@ function EditDiscountDialog({ preset, onClose }: { preset: any; onClose: () => v
         duration_in_months: duration === 'repeating' ? Number(months) : null,
         expires_at: expiresAt ? new Date(expiresAt).toISOString() : null,
         max_redemptions: maxRedemptions ? Number(maxRedemptions) : null,
+        scope,
+        country_id: scope === 'country' ? countryId : null,
       });
     },
     onSuccess: (res: any) => {
@@ -300,6 +378,7 @@ function EditDiscountDialog({ preset, onClose }: { preset: any; onClose: () => v
           <Label>Name</Label>
           <Input value={name} onChange={(e) => setName(e.target.value)} />
         </div>
+        <ScopeFields scope={scope} setScope={setScope} countryId={countryId} setCountryId={setCountryId} countries={countries} />
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
             <Label>Percent off</Label>
@@ -345,7 +424,7 @@ function EditDiscountDialog({ preset, onClose }: { preset: any; onClose: () => v
         <Button variant="outline" onClick={onClose}>Cancel</Button>
         <Button
           onClick={() => update.mutate()}
-          disabled={update.isPending || !name || !percent}
+          disabled={update.isPending || !name || !percent || (scope === 'country' && !countryId)}
         >
           {update.isPending ? 'Saving…' : 'Save changes'}
         </Button>

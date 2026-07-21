@@ -82,6 +82,15 @@ interface Plan {
   features: string[] | null;
   is_active: boolean;
   sort_order: number;
+  country_id?: string | null;
+  currency?: string | null;
+}
+
+interface CountryOption {
+  id: string;
+  name: string;
+  code: string;
+  default_currency: string;
 }
 
 // Default plan features for reference
@@ -250,7 +259,23 @@ export default function AdminSubscriptions() {
     max_employees: 25,
     features: '',
     is_active: true,
-    sort_order: 0
+    sort_order: 0,
+    country_id: '' as string,
+    currency: 'USD' as string,
+  });
+
+  const { data: countries } = useQuery({
+    queryKey: ['countries-active'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('countries')
+        .select('id, name, code, default_currency')
+        .eq('is_active', true)
+        .order('name');
+      if (error) throw error;
+      return (data || []) as CountryOption[];
+    },
+    enabled: isAdmin,
   });
 
   const { data: subscriptions, isLoading } = useQuery({
@@ -419,7 +444,7 @@ export default function AdminSubscriptions() {
   
   const savePlan = useMutation({
     mutationFn: async (plan: Partial<Plan> & { id?: string }) => {
-      const planData = {
+      const planData: Record<string, unknown> = {
         name: plan.name,
         description: plan.description,
         price_monthly: plan.price_monthly,
@@ -428,19 +453,21 @@ export default function AdminSubscriptions() {
         max_employees: plan.max_employees,
         features: plan.features,
         is_active: plan.is_active,
-        sort_order: plan.sort_order
+        sort_order: plan.sort_order,
+        country_id: plan.country_id || null,
+        currency: (plan.currency || 'USD').toUpperCase(),
       };
       
       if (plan.id) {
         const { error } = await supabase
           .from('pricing_plans')
-          .update(planData)
+          .update(planData as any)
           .eq('id', plan.id);
         if (error) throw error;
       } else {
         const { error } = await supabase
           .from('pricing_plans')
-          .insert(planData);
+          .insert(planData as any);
         if (error) throw error;
       }
     },
@@ -488,7 +515,9 @@ export default function AdminSubscriptions() {
       max_employees: 25,
       features: '',
       is_active: true,
-      sort_order: 0
+      sort_order: 0,
+      country_id: '',
+      currency: 'USD',
     });
   };
   
@@ -511,7 +540,9 @@ export default function AdminSubscriptions() {
         max_employees: plan.max_employees || 25,
         features: (plan.features || []).join('\n'),
         is_active: plan.is_active,
-        sort_order: plan.sort_order
+        sort_order: plan.sort_order,
+        country_id: plan.country_id || '',
+        currency: plan.currency || 'USD',
       });
     } else {
       resetPlanForm();
@@ -535,7 +566,9 @@ export default function AdminSubscriptions() {
       max_employees: planForm.max_employees,
       features: featuresArray,
       is_active: planForm.is_active,
-      sort_order: planForm.sort_order
+      sort_order: planForm.sort_order,
+      country_id: planForm.country_id || null,
+      currency: planForm.currency,
     });
   };
 
@@ -856,12 +889,21 @@ export default function AdminSubscriptions() {
                           </DropdownMenu>
                         </div>
                         <CardDescription>{plan.description}</CardDescription>
+                        <div className="flex flex-wrap gap-1 pt-1">
+                          <Badge variant="outline" className="text-xs">
+                            {plan.country_id
+                              ? (countries?.find(c => c.id === plan.country_id)?.name || 'Country')
+                              : 'Global / US'}
+                          </Badge>
+                          <Badge variant="outline" className="text-xs">{(plan.currency || 'USD').toUpperCase()}</Badge>
+                        </div>
                       </CardHeader>
                       <CardContent className="space-y-4">
                         <div className="space-y-1">
-                          <div className="text-3xl font-bold">${plan.price_monthly}<span className="text-sm font-normal text-muted-foreground">/mo</span></div>
-                          <div className="text-sm text-muted-foreground">${plan.price_yearly}/yr (save ${(plan.price_monthly * 12 - plan.price_yearly).toFixed(0)})</div>
+                          <div className="text-3xl font-bold">{plan.price_monthly} <span className="text-sm font-normal text-muted-foreground">{(plan.currency || 'USD').toUpperCase()}/mo</span></div>
+                          <div className="text-sm text-muted-foreground">{plan.price_yearly} {(plan.currency || 'USD').toUpperCase()}/yr (save {(plan.price_monthly * 12 - plan.price_yearly).toFixed(0)})</div>
                         </div>
+                        
                         
                         {/* Cost & Margin Section */}
                         {(plan.cost_monthly || plan.margin_percent) && (
@@ -1018,6 +1060,48 @@ export default function AdminSubscriptions() {
                 onChange={e => setPlanForm(prev => ({ ...prev, description: e.target.value }))}
                 placeholder="e.g. For growing businesses with advanced needs"
               />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Country</Label>
+                <Select
+                  value={planForm.country_id || 'global'}
+                  onValueChange={(v) => {
+                    if (v === 'global') {
+                      setPlanForm(prev => ({ ...prev, country_id: '', currency: prev.currency || 'USD' }));
+                    } else {
+                      const c = countries?.find(x => x.id === v);
+                      setPlanForm(prev => ({
+                        ...prev,
+                        country_id: v,
+                        currency: (c?.default_currency || prev.currency || 'USD').toUpperCase(),
+                      }));
+                    }
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select country" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="global">Global / Default (US)</SelectItem>
+                    {countries?.map(c => (
+                      <SelectItem key={c.id} value={c.id}>{c.name} ({c.code})</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Plans without a country act as the global fallback.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label>Currency</Label>
+                <Input
+                  value={planForm.currency}
+                  onChange={e => setPlanForm(prev => ({ ...prev, currency: e.target.value.toUpperCase().slice(0, 3) }))}
+                  placeholder="USD"
+                  maxLength={3}
+                />
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
