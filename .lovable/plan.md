@@ -1,47 +1,76 @@
-## Answer to your question
+## Goal
 
-**Yes — Gemini is fully capable of extracting this statement.** The 20-page RBC PDF is well within Gemini 2.5 Pro/Flash's vision limits. The failure is not a model limitation — it's an architectural limit in our edge function:
+Localize subscription pricing and discounts per country. Existing plans become the **US default**; admins can add country-specific variants (own currency + own Stripe prices), and country-level discounts slot between global and per-org.
 
-- The Lovable AI Gateway enforces a **~75s hard idle timeout** per request.
-- Our current `pdf-to-spreadsheet` function sends the **entire PDF in one call**, so a 20-page statement can't finish inside 75s even on `flash-lite`.
-- Copilot succeeds because it isn't bound by that per-request ceiling and internally page-chunks.
+## Model changes
 
-## Fix: page-chunked extraction
+**1. `pricing_plans` — add country scoping**
+- `country_id uuid null` references `countries(id)` (null = US/global default).
+- `currency text` (derived from country's `default_currency`, editable).
+- Unique index on `(tier, billing_cycle_context, country_id)` so each country has at most one plan per tier. `NULL country_id` = fallback.
+- Keep existing rows as `country_id = NULL` (acts as US default; US orgs also match NULL if no explicit US row).
 
-Rework `supabase/functions/pdf-to-spreadsheet/index.ts` so it splits large PDFs into small page batches, each fitting comfortably inside the 75s window, then merges the results.
+**2. `discount_presets` — add scope**
+- `scope text` in `('global','country','organization')`, default `'global'`.
+- `country_id uuid null` references `countries(id)` (required when `scope='country'`).
+- Enforce via CHECK: `scope='country' ⇒ country_id IS NOT NULL`.
+- Existing rows migrated to `scope='global'`.
 
-### Changes
+**3. Resolution order (documented + implemented in code)**
+For an org with `country_id = X`:
+- **Plans**: prefer `pricing_plans` where `country_id=X`; else fall back to `country_id IS NULL`.
+- **Discount**: per-org override > country preset for X > global preset. Applied at checkout and in `admin-subscription-override`.
 
-1. **Split PDF by page range before AI calls**
-   - Use `pdf-lib` (already available via `npm:`) to slice the source PDF into batches of ~3–5 pages.
-   - Base64-encode each slice and send it as its own Gemini call.
+## Backend
 
-2. **Run batches sequentially with a per-call budget**
-   - Keep per-call timeout at 65s (safe under the 75s gateway ceiling).
-   - Use `gemini-2.5-flash` (upgrade back from `flash-lite`) since each call now processes only a handful of pages — accuracy improves without breaching the ceiling.
-   - Track total elapsed time; abort remaining batches if the outer edge budget (still 220s) is close to exhausted and return partial results with a warning.
+**Edge functions**
+- `stripe-integration`
+  - `list-plans`: accept `organizationId`, resolve org's `country_id`, return the country-scoped plan set (or NULL fallback) with correct `currency`.
+  - `create-checkout-session`: use the country-resolved plan's `stripe_price_id_*` and pass `currency` accordingly.
+  - `validate-promotion-code` / `preview-plan-change`: unchanged (Stripe handles currency via the price).
+- `admin-subscription-override`
+  - When applying a discount without explicit `preset_id`, auto-select the country preset for the target org's country before falling back to global.
+  - When creating Stripe coupons for country presets, keep them currency-agnostic (percent-off) unless amount-off is used — in which case the coupon `currency` must match the plan currency (validate and reject mismatches).
 
-3. **Merge and reconcile across batches**
-   - Concatenate `transactions[]` from each batch in page order.
-   - Take `opening_balance` from the first batch, `closing_balance` from the last.
-   - Recompute `totalDebits` / `totalCredits` and re-run existing reconciliation.
-   - Deduplicate rows on the (date, description, amount) tuple in case a transaction spans a page break and appears in two consecutive batches.
+**No change** to webhook handlers — they already key off `stripe_subscription_id`.
 
-4. **Progress + error surfacing**
-   - Return `processedPages` / `totalPages` so the UI progress bar reflects real batch completion.
-   - If any single batch fails, include a `validationWarnings` entry naming the page range but still return successful batches.
+## Admin UI
 
-### Files touched
+**Pricing plans page (existing create/edit flow)**
+- Add a **Country** selector (searchable, from `countries`) with a **"Default (US / fallback)"** option that stores `country_id = NULL`.
+- On country select, prefill `currency` from `countries.default_currency` (editable).
+- Plans list groups by country; a **country filter** at the top switches which country's plans you see.
+- Duplicating a plan copies its tier/features and lets admin pick a new country to create a localized variant.
+- Stripe product/price creation uses the selected currency.
 
-- `supabase/functions/pdf-to-spreadsheet/index.ts` — add PDF slicing, batch loop, merge logic.
-- No client changes required; `usePdfToSpreadsheet.ts` already handles the same response shape.
+**Discounts tab (`DiscountsTab.tsx`)**
+- Add a **Scope** field: Global / Country / (Organization stays implicit via per-org apply flow).
+- When Scope = Country, show country selector. List view shows scope column and filters.
+- `SubscriptionAdminControls` "Set discount" for a specific org shows the resolved effective discount (org > country > global) with a badge indicating which tier is active.
 
-### Out of scope
+## Customer-facing UI
 
-- No change to `ai-extract-bank-statement` (Alice path). That function already accepts smaller inputs; if you want the same chunking there too, say so and I'll extend it in the same pass.
-- No change to the AI Sheets → Post to Banking flow.
+**`SubscriptionCheckout.tsx`**
+- Fetch plans via `list-plans` (country-resolved). Prices render in the plan's `currency` using `Intl.NumberFormat`.
+- Promo-code preview and discount math unchanged (already percent-based).
+- Show a small "Prices shown in {CURRENCY} for {Country}" note.
 
-### Verification
+**`useSubscription` / `useUsageLimits`**
+- No behavioral change; resolution happens server-side + in the list query.
 
-- Upload the attached 20-page RBC statement through the AI Sheets / PDF-to-Spreadsheet path.
-- Confirm all rows extract (no 408), balances reconcile, and `payer_payee` is populated.
+## Out of scope
+- No IP-based detection or manual country override on checkout (org country is source of truth).
+- No automatic FX conversion — admins set each country's price explicitly.
+- Existing subscriptions aren't repriced on country change; only new subscriptions/plan changes pick up the country-scoped price.
+
+## Technical details
+
+- Migration order: add columns → backfill NULLs → add unique index → add CHECK → GRANTs unchanged (tables already accessible).
+- `pricing_plans` unique index uses `COALESCE(country_id, '00000000-0000-0000-0000-000000000000'::uuid)` to allow one NULL fallback per tier.
+- Query pattern for resolution:
+  ```sql
+  SELECT DISTINCT ON (tier) * FROM pricing_plans
+  WHERE is_active AND (country_id = $org_country OR country_id IS NULL)
+  ORDER BY tier, country_id NULLS LAST;
+  ```
+- Discount resolver (server-side helper in `admin-subscription-override` + shared in checkout): org preset → country preset (active, not expired) → global preset.
