@@ -53,8 +53,9 @@ export function PdfPageRenderer({
 
         // Load PDF document (cache it)
         if (!pdfDocRef.current) {
+          const resolvedUrl = (await resolveDocSignFileUrl(fileUrl)) ?? fileUrl;
           const loadingTask = pdfjsLib.getDocument({
-            url: fileUrl,
+            url: resolvedUrl,
             cMapUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/',
             cMapPacked: true,
           });
