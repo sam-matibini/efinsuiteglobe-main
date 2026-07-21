@@ -20,17 +20,25 @@ function bytesToBase64(bytes: Uint8Array): string {
 type Cell = string | number | null;
 interface ExtractedRow { [key: string]: Cell }
 interface Sheet { name: string; columns: string[]; rows: ExtractedRow[] }
+interface PdfTextLine { page: number; text: string }
+interface PdfTextItem { str: string; x: number; y: number; width: number }
 
 const MAX_PDF_SIZE_MB = 20;
 const MAX_PDF_SIZE_BYTES = MAX_PDF_SIZE_MB * 1024 * 1024;
 // Lovable AI Gateway enforces a ~75s upstream idle limit per request. We slice
-// the PDF into small page batches so each Gemini call fits comfortably under
-// that ceiling, then merge the batch results.
-const PAGES_PER_BATCH = 5;
-const EDGE_RESPONSE_BUDGET_MS = 220_000;
-const AI_REQUEST_TIMEOUT_MS = 65_000;
+// the PDF into small page batches and process a few batches in parallel so
+// 20-page statements can complete inside the edge function wall-clock budget.
+const PAGES_PER_BATCH = 3;
+const MAX_PARALLEL_BATCHES = 3;
+// Supabase edge runtime enforces a 150s idle timeout. Stay well under it so we
+// can always emit a response (partial or full) before the platform kills the
+// request.
+const EDGE_RESPONSE_BUDGET_MS = 140_000;
+const AI_REQUEST_TIMEOUT_MS = 60_000;
 const RESPONSE_BUFFER_MS = 10_000;
 const MIN_AI_CALL_MS = 15_000;
+
+type PdfBatch = { base64: string; from: number; to: number; totalPages: number };
 
 type AiCallResult =
   | { ok: true; args: any; raw: string }
@@ -41,10 +49,10 @@ type AiCallResult =
 async function sliceIntoBatches(
   pdfBytes: Uint8Array,
   pagesPerBatch: number,
-): Promise<Array<{ base64: string; from: number; to: number; totalPages: number }>> {
+): Promise<PdfBatch[]> {
   const src = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
   const totalPages = src.getPageCount();
-  const batches: Array<{ base64: string; from: number; to: number; totalPages: number }> = [];
+  const batches: PdfBatch[] = [];
   for (let start = 0; start < totalPages; start += pagesPerBatch) {
     const end = Math.min(start + pagesPerBatch, totalPages);
     const out = await PDFDocument.create();
@@ -90,11 +98,219 @@ function parseNum(v: unknown): number {
   // (123.45) -> -123.45
   let neg = false;
   if (/^\(.*\)$/.test(s)) { neg = true; s = s.slice(1, -1); }
+  if (/\bCR$/i.test(s)) { neg = true; s = s.replace(/\bCR$/i, ''); }
+  if (/\bDR$/i.test(s)) { s = s.replace(/\bDR$/i, ''); }
   s = s.replace(/[$£€¥,\s]/g, '');
   if (s.startsWith('-')) { neg = !neg; s = s.slice(1); }
+  if (s.startsWith('+')) s = s.slice(1);
+  if (s.endsWith('-')) { neg = !neg; s = s.slice(0, -1); }
   const n = parseFloat(s);
   if (!isFinite(n)) return 0;
   return neg ? -n : n;
+}
+
+const MONTHS: Record<string, number> = {
+  jan: 1, january: 1,
+  feb: 2, february: 2,
+  mar: 3, march: 3,
+  apr: 4, april: 4,
+  may: 5,
+  jun: 6, june: 6,
+  jul: 7, july: 7,
+  aug: 8, august: 8,
+  sep: 9, sept: 9, september: 9,
+  oct: 10, october: 10,
+  nov: 11, november: 11,
+  dec: 12, december: 12,
+};
+
+const MONTH_TOKEN = '(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t)?(?:ember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\\.?';
+const DATE_TOKEN = `(?:${MONTH_TOKEN}\\s+\\d{1,2}(?:,?\\s+\\d{2,4})?|\\d{1,2}[/-]\\d{1,2}(?:[/-]\\d{2,4})?)`;
+const MONEY_TOKEN = '(?:[-+]?\\s*\\(?\\$?\\s*(?:\\d{1,3}(?:,\\d{3})+|\\d+)\\.\\d{2}\\)?\\s*-?)';
+const CREDIT_CARD_HINT_RE = /\b(visa|master\s*card|mastercard|amex|american\s+express|credit\s+card|avion|cardholder|payment\s+due|minimum\s+payment|credit\s+limit|previous\s+balance|new\s+balance)\b/i;
+const PAYMENT_KW = /(payment|paiement|thank\s*you|merci|autopay|bill\s*payment|transfer\s*to\s*card|\bpmt\b)/i;
+const REFUND_KW = /(refund|return\b|returned|credit\s*memo|reversal|chargeback|merchant\s*credit)/i;
+
+async function extractPdfTextLines(pdfBytes: Uint8Array): Promise<{ totalPages: number; lines: PdfTextLine[]; text: string }> {
+  const pdfjsLib: any = await import('npm:pdfjs-dist@4.7.76/legacy/build/pdf.mjs');
+  const loadingTask = pdfjsLib.getDocument({
+    data: pdfBytes,
+    useWorkerFetch: false,
+    isEvalSupported: false,
+    disableFontFace: true,
+  });
+  const pdf = await loadingTask.promise;
+  const lines: PdfTextLine[] = [];
+
+  try {
+    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+      const page = await pdf.getPage(pageNum);
+      const textContent = await page.getTextContent({ disableCombineTextItems: false });
+      const items: PdfTextItem[] = (textContent.items || [])
+        .map((item: any) => ({
+          str: String(item.str || '').trim(),
+          x: Number(item.transform?.[4] ?? 0),
+          y: Number(item.transform?.[5] ?? 0),
+          width: Number(item.width ?? 0),
+        }))
+        .filter((item: { str: string }) => item.str.length > 0)
+        .sort((a: { x: number; y: number }, b: { x: number; y: number }) =>
+          Math.abs(b.y - a.y) > 2.5 ? b.y - a.y : a.x - b.x
+        );
+
+      const grouped: Array<{ y: number; items: PdfTextItem[] }> = [];
+      for (const item of items) {
+        const last = grouped[grouped.length - 1];
+        if (last && Math.abs(last.y - item.y) <= 2.5) {
+          last.items.push(item);
+          last.y = (last.y + item.y) / 2;
+        } else {
+          grouped.push({ y: item.y, items: [item] });
+        }
+      }
+
+      for (const group of grouped) {
+        group.items.sort((a, b) => a.x - b.x);
+        let line = '';
+        let lastEnd: number | null = null;
+        for (const item of group.items) {
+          if (lastEnd !== null) {
+            const gap = item.x - lastEnd;
+            line += gap > 10 ? ' ' : ' ';
+          }
+          line += item.str;
+          lastEnd = item.x + Math.max(item.width, item.str.length * 4);
+        }
+        const cleaned = line.replace(/\s+/g, ' ').trim();
+        if (cleaned) lines.push({ page: pageNum, text: cleaned });
+      }
+    }
+  } finally {
+    await pdf.destroy?.();
+  }
+
+  return { totalPages: pdf.numPages, lines, text: lines.map((line) => line.text).join('\n') };
+}
+
+function inferStatementEnd(text: string): { year: number; month?: number; periodStart?: string; periodEnd?: string } {
+  const dateWithYear = new RegExp(`(${MONTH_TOKEN})\\s+(\\d{1,2}),?\\s+(20\\d{2})`, 'gi');
+  const dates: Array<{ iso: string; year: number; month: number; index: number }> = [];
+  let match: RegExpExecArray | null;
+  while ((match = dateWithYear.exec(text)) !== null) {
+    const month = MONTHS[match[1].toLowerCase().replace('.', '')] || 1;
+    const day = Number(match[2]);
+    const year = Number(match[3]);
+    dates.push({ iso: formatDate(year, month, day), year, month, index: match.index });
+  }
+
+  if (dates.length === 0) return { year: new Date().getFullYear() };
+
+  const periodRange = new RegExp(`(${MONTH_TOKEN}\\s+\\d{1,2},?\\s+20\\d{2}).{0,40}(?:to|through|-|–).{0,40}(${MONTH_TOKEN}\\s+\\d{1,2},?\\s+20\\d{2})`, 'i');
+  const range = text.match(periodRange);
+  if (range) {
+    const start = parseDateToken(range[1], dates[dates.length - 1].year);
+    const end = parseDateToken(range[2], start?.year ?? dates[dates.length - 1].year);
+    if (end) return { year: end.year, month: end.month, periodStart: start?.iso, periodEnd: end.iso };
+  }
+
+  const last = dates[dates.length - 1];
+  return { year: last.year, month: last.month, periodStart: dates[0]?.iso, periodEnd: last.iso };
+}
+
+function formatDate(year: number, month: number, day: number): string {
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+function parseDateToken(token: string, fallbackYear: number, statementEndMonth?: number): { iso: string; year: number; month: number; day: number } | null {
+  const clean = token.trim().replace(/,/g, '').replace(/\s+/g, ' ');
+  const monthMatch = clean.match(new RegExp(`^(${MONTH_TOKEN})\\s+(\\d{1,2})(?:\\s+(\\d{2,4}))?$`, 'i'));
+  if (monthMatch) {
+    const month = MONTHS[monthMatch[1].toLowerCase().replace('.', '')];
+    const day = Number(monthMatch[2]);
+    let year = monthMatch[3] ? Number(monthMatch[3]) : fallbackYear;
+    if (year < 100) year += 2000;
+    if (!monthMatch[3] && statementEndMonth && statementEndMonth <= 2 && month >= 11) year -= 1;
+    return { iso: formatDate(year, month, day), year, month, day };
+  }
+
+  const numericMatch = clean.match(/^(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?$/);
+  if (numericMatch) {
+    const month = Number(numericMatch[1]);
+    const day = Number(numericMatch[2]);
+    let year = numericMatch[3] ? Number(numericMatch[3]) : fallbackYear;
+    if (year < 100) year += 2000;
+    if (!numericMatch[3] && statementEndMonth && statementEndMonth <= 2 && month >= 11) year -= 1;
+    return { iso: formatDate(year, month, day), year, month, day };
+  }
+
+  return null;
+}
+
+function cleanCounterparty(description: string, isPayment: boolean): string {
+  if (isPayment) return 'Cardholder Payment';
+  let value = description
+    .replace(/\b(POS|PURCHASE|AUTH|PRE[- ]?AUTH|DEBIT|CREDIT)\b/gi, ' ')
+    .replace(/\b(VISA|MASTERCARD|AMEX|CARD)\s*(ENDING|NO\.?|#)?\s*\d{2,4}\b/gi, ' ')
+    .replace(/\b[A-Z]?\d{6,}\b/g, ' ')
+    .replace(/\b(ON|QC|BC|AB|MB|SK|NS|NB|NL|PE|YT|NT|NU|CA|USA|US)\b\s*$/i, ' ')
+    .replace(/[*/#]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  value = value.replace(/\s+\d{2,4}$/g, '').trim();
+  return value || description.trim();
+}
+
+function extractLabeledMoney(text: string, labels: RegExp[]): number | undefined {
+  for (const label of labels) {
+    const match = text.match(new RegExp(`${label.source}.{0,80}?(${MONEY_TOKEN})`, label.flags.includes('i') ? 'i' : ''));
+    const value = match?.[1] ? Math.abs(parseNum(match[1])) : 0;
+    if (value > 0) return value;
+  }
+  return undefined;
+}
+
+function parseCreditCardTextRows(lines: PdfTextLine[], statementEnd: { year: number; month?: number }): ExtractedRow[] {
+  const txRegex = new RegExp(`^\\s*(${DATE_TOKEN})(?:\\s+(${DATE_TOKEN}))?\\s+(.+?)\\s+(${MONEY_TOKEN})\\s*$`, 'i');
+  const rows: ExtractedRow[] = [];
+  const seen = new Set<string>();
+
+  for (const line of lines) {
+    const text = line.text.replace(/\s+/g, ' ').trim();
+    if (!text || isSummaryRow(text)) continue;
+    if (/\b(transaction|posting|post|date|description|amount|balance|cardholder|page\s+\d+|continued|minimum\s+payment|payment\s+due|credit\s+limit)\b/i.test(text)) continue;
+
+    const match = text.match(txRegex);
+    if (!match) continue;
+
+    const date = parseDateToken(match[1], statementEnd.year, statementEnd.month);
+    if (!date) continue;
+
+    const rawDescription = String(match[3] || '').trim();
+    if (!rawDescription || isSummaryRow(rawDescription)) continue;
+
+    const amount = parseNum(match[4]);
+    if (amount === 0) continue;
+
+    const isPaymentLike = PAYMENT_KW.test(rawDescription) || REFUND_KW.test(rawDescription);
+    const payment = amount < 0 || isPaymentLike ? Math.abs(amount) : 0;
+    const charge = payment > 0 ? 0 : Math.abs(amount);
+    const key = `${date.iso}|${rawDescription}|${charge.toFixed(2)}|${payment.toFixed(2)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    rows.push({
+      Date: date.iso,
+      Description: rawDescription,
+      'Payer/Payee': cleanCounterparty(rawDescription, payment > 0),
+      Reference: '',
+      Charge: charge,
+      Payment: payment,
+      Balance: null,
+    });
+  }
+
+  return rows;
 }
 
 const STATEMENT_TOOL = {
@@ -325,6 +541,7 @@ serve(async (req) => {
     let summary: Record<string, number | string | undefined> | undefined;
     let totalPages = 0;
     let processedPages = 0;
+    const processedPageNumbers = new Set<number>();
 
     let extractionTimedOut = false;
     const remainingAiBudget = () => Math.max(
@@ -333,8 +550,13 @@ serve(async (req) => {
     );
     const hasBudgetForAnotherCall = () =>
       EDGE_RESPONSE_BUDGET_MS - (Date.now() - startTime) - RESPONSE_BUFFER_MS > MIN_AI_CALL_MS;
+    const markBatchProcessed = (batch: PdfBatch) => {
+      if (!batch.totalPages || !batch.to) return;
+      for (let page = batch.from; page <= batch.to; page++) processedPageNumbers.add(page);
+      processedPages = Math.max(processedPages, batch.to);
+    };
 
-    let batches: Array<{ base64: string; from: number; to: number; totalPages: number }>;
+    let batches: PdfBatch[];
     try {
       batches = await sliceIntoBatches(fileData, PAGES_PER_BATCH);
     } catch (e) {
@@ -342,40 +564,115 @@ serve(async (req) => {
       batches = [{ base64: pdfBase64, from: 1, to: 0, totalPages: 0 }];
     }
     totalPages = batches[0]?.totalPages ?? 0;
-    const wantsStatement = looksLikeStatement(fileName);
+    let textLayer: { totalPages: number; lines: PdfTextLine[]; text: string } | null = null;
+    try {
+      textLayer = await extractPdfTextLines(fileData);
+      if (textLayer.totalPages > 0) totalPages = textLayer.totalPages;
+      console.log(`PDF text layer: ${textLayer.lines.length} lines across ${textLayer.totalPages} pages`);
+    } catch (e) {
+      console.warn('PDF text-layer extraction unavailable, using AI vision only:', (e as Error).message);
+    }
+
+    const wantsStatement = looksLikeStatement(fileName) || !!(textLayer?.text && CREDIT_CARD_HINT_RE.test(textLayer.text));
+
+    const tryTextLayerStatement = (): boolean => {
+      if (!textLayer?.lines.length || !CREDIT_CARD_HINT_RE.test(textLayer.text)) return false;
+
+      const statementEnd = inferStatementEnd(textLayer.text);
+      const textRows = parseCreditCardTextRows(textLayer.lines, statementEnd);
+      if (textRows.length === 0) return false;
+
+      documentType = 'credit_card_statement';
+      columns = ['Date', 'Description', 'Payer/Payee', 'Reference', 'Charge', 'Payment', 'Balance'];
+      rows = textRows;
+      extractedSheets = [{ name: 'CC Transactions', columns, rows }];
+      for (let page = 1; page <= (textLayer.totalPages || totalPages); page++) processedPageNumbers.add(page);
+      processedPages = textLayer.totalPages || totalPages;
+
+      const totalCharges = rows.reduce((sum, row) => sum + Math.abs(parseNum(row.Charge)), 0);
+      const totalPayments = rows.reduce((sum, row) => sum + Math.abs(parseNum(row.Payment)), 0);
+      const printedCharges = extractLabeledMoney(textLayer.text, [
+        /total\s+(?:new\s+)?(?:charges|purchases|fees|debits)/i,
+        /(?:charges|purchases)\s+(?:for\s+)?(?:this\s+)?period/i,
+      ]);
+      const printedPayments = extractLabeledMoney(textLayer.text, [
+        /total\s+(?:payments|credits|refunds)/i,
+        /(?:payments|credits)\s+(?:for\s+)?(?:this\s+)?period/i,
+      ]);
+
+      if (printedCharges && Math.abs(totalCharges - printedCharges) > 0.02) {
+        validationWarnings.push(`Text-layer charges don't reconcile: extracted ${totalCharges.toFixed(2)} vs printed ${printedCharges.toFixed(2)}.`);
+      }
+      if (printedPayments && Math.abs(totalPayments - printedPayments) > 0.02) {
+        validationWarnings.push(`Text-layer payments don't reconcile: extracted ${totalPayments.toFixed(2)} vs printed ${printedPayments.toFixed(2)}.`);
+      }
+      reconciled = !!(
+        (!printedCharges || Math.abs(totalCharges - printedCharges) <= 0.02) &&
+        (!printedPayments || Math.abs(totalPayments - printedPayments) <= 0.02)
+      );
+
+      summary = {
+        openingBalance: extractLabeledMoney(textLayer.text, [/previous\s+(?:statement\s+)?balance/i, /opening\s+balance/i]),
+        closingBalance: extractLabeledMoney(textLayer.text, [/new\s+balance/i, /closing\s+balance/i]),
+        totalDebits: printedCharges || totalCharges || undefined,
+        totalCredits: printedPayments || totalPayments || undefined,
+        periodStart: statementEnd.periodStart,
+        periodEnd: statementEnd.periodEnd,
+      };
+
+      validationWarnings.push('Used embedded PDF text extraction for this credit-card statement to avoid AI vision timeout.');
+      return true;
+    };
 
     const tryStatementBatched = async (): Promise<boolean> => {
       const model = 'google/gemini-2.5-flash';
-      const merged: ExtractedRow[] = [];
+      const batchResults: Array<{ batch: PdfBatch; args: any }> = [];
       let firstArgs: any = null;
       let lastArgs: any = null;
-      let anyOk = false;
 
-      for (const batch of batches) {
+      for (let i = 0; i < batches.length; i += MAX_PARALLEL_BATCHES) {
+        const group = batches.slice(i, i + MAX_PARALLEL_BATCHES);
         if (!hasBudgetForAnotherCall()) {
-          validationWarnings.push(`Skipped pages ${batch.from}-${batch.to}: edge time budget exhausted.`);
+          validationWarnings.push(`Skipped pages ${group[0]?.from}-${batches[batches.length - 1]?.to}: edge time budget exhausted.`);
           extractionTimedOut = true;
           break;
         }
-        const rangeLabel = batch.totalPages ? ` (pages ${batch.from}-${batch.to} of ${batch.totalPages})` : '';
-        const prompt = STATEMENT_PROMPT + `\n\nThis input covers${rangeLabel}. Return every transaction visible on THESE pages only.`;
-        const result = await callGemini(LOVABLE_API_KEY, batch.base64, prompt, STATEMENT_TOOL, model, remainingAiBudget());
-        if (!result.ok) {
-          extractionTimedOut ||= result.reason === 'timeout';
-          validationWarnings.push(`Pages ${batch.from}-${batch.to}: ${result.message || 'no structured result'}.`);
-          continue;
+
+        const timeoutMs = remainingAiBudget();
+        const results = await Promise.all(group.map(async (batch) => {
+          const rangeLabel = batch.totalPages ? ` (pages ${batch.from}-${batch.to} of ${batch.totalPages})` : '';
+          const prompt = STATEMENT_PROMPT + `\n\nThis input covers${rangeLabel}. Return every transaction visible on THESE pages only.`;
+          const result = await callGemini(LOVABLE_API_KEY, batch.base64, prompt, STATEMENT_TOOL, model, timeoutMs);
+          return { batch, result };
+        }));
+
+        for (const { batch, result } of results) {
+          if (!result.ok) {
+            extractionTimedOut ||= result.reason === 'timeout';
+            validationWarnings.push(`Pages ${batch.from}-${batch.to}: ${result.message || 'no structured result'}.`);
+            continue;
+          }
+          batchResults.push({ batch, args: result.args || {} });
+          markBatchProcessed(batch);
         }
-        anyOk = true;
-        processedPages = batch.to || processedPages;
-        const args = result.args || {};
-        if (!firstArgs) firstArgs = args;
-        lastArgs = args;
-        if (Array.isArray(args.transactions)) {
-          for (const t of args.transactions) merged.push(t as ExtractedRow);
+
+        if (results.some(({ result }) => result.ok) && processedPages >= totalPages) {
+          break;
         }
       }
 
-      if (!anyOk) return false;
+      if (batchResults.length === 0) return false;
+
+      batchResults.sort((a, b) => a.batch.from - b.batch.from);
+      firstArgs = batchResults[0]?.args || null;
+      lastArgs = batchResults[batchResults.length - 1]?.args || null;
+
+      const merged: ExtractedRow[] = [];
+      for (const item of batchResults) {
+        if (Array.isArray(item.args.transactions)) {
+          for (const t of item.args.transactions) merged.push(t as ExtractedRow);
+        }
+      }
 
       documentType = (firstArgs?.documentType || lastArgs?.documentType || 'bank_statement') as string;
       const isCC = documentType === 'credit_card_statement';
@@ -427,11 +724,17 @@ serve(async (req) => {
         validationWarnings.push(`Reclassified ${swapped} payment/refund row(s) from debit to credit based on description.`);
       }
 
-      // Reconcile against printed totals from the LAST batch (statement totals live on the summary page).
+      // Reconcile against printed totals from the latest successful batch with totals
+      // (statement totals usually live on the summary page, but page batches can return
+      // partial metadata if a late page fails).
       const sumDebit = cleaned.reduce((s, r) => s + (r.Debit as number), 0);
       const sumCredit = cleaned.reduce((s, r) => s + (r.Credit as number), 0);
-      const printedDebit = parseNum(lastArgs?.totalDebits ?? firstArgs?.totalDebits);
-      const printedCredit = parseNum(lastArgs?.totalCredits ?? firstArgs?.totalCredits);
+      const totalsArgs = [...batchResults].reverse().find(({ args }) =>
+        parseNum(args?.totalDebits) > 0 || parseNum(args?.totalCredits) > 0 ||
+        parseNum(args?.closingBalance) !== 0
+      )?.args || lastArgs || firstArgs;
+      const printedDebit = parseNum(totalsArgs?.totalDebits ?? firstArgs?.totalDebits);
+      const printedCredit = parseNum(totalsArgs?.totalCredits ?? firstArgs?.totalCredits);
       const tol = 0.02;
 
       let needsSwap = false;
@@ -459,11 +762,11 @@ serve(async (req) => {
 
       summary = {
         openingBalance: parseNum(firstArgs?.openingBalance) || undefined,
-        closingBalance: parseNum(lastArgs?.closingBalance ?? firstArgs?.closingBalance) || undefined,
+        closingBalance: parseNum(totalsArgs?.closingBalance ?? lastArgs?.closingBalance ?? firstArgs?.closingBalance) || undefined,
         totalDebits: printedDebit || undefined,
         totalCredits: printedCredit || undefined,
         periodStart: firstArgs?.statementPeriodStart ?? lastArgs?.statementPeriodStart,
-        periodEnd: lastArgs?.statementPeriodEnd ?? firstArgs?.statementPeriodEnd,
+        periodEnd: totalsArgs?.statementPeriodEnd ?? lastArgs?.statementPeriodEnd ?? firstArgs?.statementPeriodEnd,
       };
 
       columns = isCC
@@ -498,7 +801,7 @@ serve(async (req) => {
           continue;
         }
         anyOk = true;
-        processedPages = batch.to || processedPages;
+        markBatchProcessed(batch);
         const sheets = (result.args?.sheets as Sheet[]) || [];
         for (const s of sheets) allSheets.push(s);
       }
@@ -512,7 +815,7 @@ serve(async (req) => {
 
     try {
       if (wantsStatement) {
-        if (!(await tryStatementBatched()) && !extractionTimedOut && hasBudgetForAnotherCall()) {
+        if (!tryTextLayerStatement() && !(await tryStatementBatched()) && !extractionTimedOut && hasBudgetForAnotherCall()) {
           await tryGenericBatched();
         }
       } else {
@@ -538,6 +841,8 @@ serve(async (req) => {
         success: false,
         error: 'PDF extraction took too long. Try a smaller statement, fewer pages, or upload CSV/XLSX exported from the bank.',
         message: 'PDF extraction timed out before the backend idle limit.',
+        totalPages,
+        processedPages: processedPageNumbers.size || processedPages,
         validationWarnings: validationWarnings.length ? validationWarnings : undefined,
         processingTimeMs: Date.now() - startTime,
       }), { status: 408, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
@@ -571,7 +876,7 @@ serve(async (req) => {
       success: true,
       fileName,
       totalPages,
-      processedPages: processedPages || totalPages,
+      processedPages: processedPageNumbers.size || processedPages || totalPages,
       columns,
       rows,
       sheets: extractedSheets.length > 1 ? extractedSheets : undefined,

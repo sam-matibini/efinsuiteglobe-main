@@ -48,6 +48,8 @@ export function usePdfToSpreadsheet() {
     setIsConverting(true);
     setError(null);
     setProgress({ current: 0, total: 100 });
+    let errorResult: Partial<PdfToSpreadsheetResult> | null = null;
+    let progressInterval: ReturnType<typeof setInterval> | null = null;
 
     try {
       const formData = new FormData();
@@ -57,7 +59,7 @@ export function usePdfToSpreadsheet() {
       formData.append('useAI', String(options.useAI !== false));
 
       // Simulate progress for UX
-      const progressInterval = setInterval(() => {
+      progressInterval = setInterval(() => {
         setProgress(prev => {
           if (!prev) return { current: 10, total: 100 };
           const next = Math.min(prev.current + Math.random() * 15, 90);
@@ -76,13 +78,14 @@ export function usePdfToSpreadsheet() {
         }
       );
 
-      clearInterval(progressInterval);
+      if (progressInterval) clearInterval(progressInterval);
+      progressInterval = null;
       setProgress({ current: 100, total: 100 });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
-        console.error('PDF conversion response error:', response.status, errorData);
-        throw new Error(errorData.error || `Conversion failed (${response.status})`);
+        errorResult = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
+        console.error('PDF conversion response error:', response.status, errorResult);
+        throw new Error(errorResult.error || `Conversion failed (${response.status})`);
       }
 
       const result = await response.json();
@@ -92,8 +95,20 @@ export function usePdfToSpreadsheet() {
       const message = err instanceof Error ? err.message : 'Conversion failed';
       setError(message);
       console.error('PDF to spreadsheet error:', err);
-      return null;
+      return {
+        success: false,
+        fileName: file.name,
+        totalPages: errorResult?.totalPages || 0,
+        processedPages: errorResult?.processedPages || 0,
+        columns: [],
+        rows: [],
+        message: errorResult?.message || message,
+        error: message,
+        processingTimeMs: 0,
+        validationWarnings: errorResult?.validationWarnings,
+      };
     } finally {
+      if (progressInterval) clearInterval(progressInterval);
       setIsConverting(false);
       setProgress(null);
     }
