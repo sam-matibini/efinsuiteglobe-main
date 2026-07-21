@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useDocument, useDocumentSigners, useAddSigner } from '@/hooks/useDocuments';
+import { useDocument, useDocumentSigners, useAddSigner, useRefreshDocumentStatus, useSignerSigningUrl } from '@/hooks/useDocuments';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 
