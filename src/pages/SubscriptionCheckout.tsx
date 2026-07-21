@@ -486,17 +486,28 @@ export default function SubscriptionCheckout() {
                         discounted = Math.max(0, basePrice - Number(appliedPromo.amount_off) / 100);
                       }
                       const hasDiscount = !!appliedPromo && discounted < basePrice;
-                      const fmt = (n: number) => n % 1 === 0 ? String(n) : n.toFixed(2);
+                      const planCurrency = (plan.currency || 'USD').toUpperCase();
+                      const fmtCur = (n: number) => {
+                        try {
+                          return new Intl.NumberFormat(undefined, {
+                            style: 'currency',
+                            currency: planCurrency,
+                            maximumFractionDigits: n % 1 === 0 ? 0 : 2,
+                          }).format(n);
+                        } catch {
+                          return `${n.toFixed(2)} ${planCurrency}`;
+                        }
+                      };
                       return (
                         <>
                           <div className="text-3xl font-bold flex items-baseline gap-2 flex-wrap">
                             {hasDiscount && (
                               <span className="text-lg font-normal text-muted-foreground line-through">
-                                ${fmt(basePrice)}
+                                {fmtCur(basePrice)}
                               </span>
                             )}
                             <span className={hasDiscount ? 'text-primary' : ''}>
-                              ${fmt(discounted)}
+                              {fmtCur(discounted)}
                               <span className="text-sm font-normal text-muted-foreground">
                                 /{billingCycle === 'monthly' ? 'mo' : 'yr'}
                               </span>
@@ -514,14 +525,14 @@ export default function SubscriptionCheckout() {
                                     : ''}
                             </p>
                           )}
+                          {billingCycle === 'yearly' && (
+                            <p className="text-sm text-muted-foreground">
+                              Save {fmtCur(plan.price_monthly * 12 - plan.price_yearly)}/year
+                            </p>
+                          )}
                         </>
                       );
                     })()}
-                    {billingCycle === 'yearly' && (
-                      <p className="text-sm text-muted-foreground">
-                        Save ${(plan.price_monthly * 12 - plan.price_yearly).toFixed(0)}/year
-                      </p>
-                    )}
                     <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
                       {(plan.features || []).map((feature, i) => (
                         <li key={i} className="flex items-start gap-2">
