@@ -10,6 +10,7 @@ import { RouteAccessGuard } from "@/components/auth/RouteAccessGuard";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { OrganizationProvider, useOrganizationContext } from "@/hooks/useOrganizationContext";
 import { ReportFiltersProvider } from "@/hooks/useReportFilters";
+import { ConfirmDeleteProvider } from "@/hooks/useConfirmDelete";
 
 // Eager: landing + auth pages (needed on first paint / pre-auth)
 import Landing from "./pages/Landing";
