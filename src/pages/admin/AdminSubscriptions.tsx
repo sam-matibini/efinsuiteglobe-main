@@ -259,7 +259,23 @@ export default function AdminSubscriptions() {
     max_employees: 25,
     features: '',
     is_active: true,
-    sort_order: 0
+    sort_order: 0,
+    country_id: '' as string,
+    currency: 'USD' as string,
+  });
+
+  const { data: countries } = useQuery({
+    queryKey: ['countries-active'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('countries')
+        .select('id, name, code, default_currency')
+        .eq('is_active', true)
+        .order('name');
+      if (error) throw error;
+      return (data || []) as CountryOption[];
+    },
+    enabled: isAdmin,
   });
 
   const { data: subscriptions, isLoading } = useQuery({
