@@ -377,10 +377,14 @@ Deno.serve(async (req) => {
 
     // ============ CREATE PRESET ============
     if (action === 'create-preset') {
-      const { name, percent, duration, duration_in_months, expires_at, max_redemptions } = body;
+      const { name, percent, duration, duration_in_months, expires_at, max_redemptions, scope, country_id } = body;
       if (!name || !percent) return json({ error: 'name and percent required' }, 400);
       const p = Number(percent);
       if (p <= 0 || p > 100) return json({ error: 'percent must be 1-100' }, 400);
+      const presetScope = (scope === 'country' ? 'country' : 'global');
+      if (presetScope === 'country' && !country_id) {
+        return json({ error: 'country_id required for country-scoped preset' }, 400);
+      }
 
       const coupon = await createStripeCoupon({
         percent: p,
@@ -400,6 +404,8 @@ Deno.serve(async (req) => {
         max_redemptions: max_redemptions ? Number(max_redemptions) : null,
         stripe_coupon_id: coupon.id,
         created_by: actorId,
+        scope: presetScope,
+        country_id: presetScope === 'country' ? country_id : null,
       }).select().single();
 
       if (error) {
