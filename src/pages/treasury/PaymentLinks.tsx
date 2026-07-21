@@ -17,6 +17,7 @@ import { useInvoices } from '@/hooks/useInvoices';
 import { useCustomers } from '@/hooks/useCustomers';
 import { useIsReadOnly } from '@/hooks/useIsReadOnly';
 import { toast } from 'sonner';
+import { useConfirmDelete } from '@/hooks/useConfirmDelete';
 
 const METHOD_LABEL: Record<PaymentLinkMethod, string> = {
   all: 'Card + EFT',
@@ -29,6 +30,7 @@ const METHOD_LABEL: Record<PaymentLinkMethod, string> = {
 
 
 export default function PaymentLinks() {
+  const confirmDelete = useConfirmDelete();
   const { links, isLoading, create, cancel, remove, resendEmail } = usePaymentLinks();
   const { accounts: bankAccounts = [] } = useBankAccounts();
   const { invoices = [] } = useInvoices() as { invoices?: Array<{ id: string; invoice_number: string; balance_due: number; status: string; customer_id?: string; total: number }> };
@@ -339,14 +341,14 @@ export default function PaymentLinks() {
                             </Button>
                           )}
                           {!isReadOnly && (
-                            <Button size="sm" variant="outline" onClick={() => cancel.mutate(l.id)} title="Cancel">
+                            <Button size="sm" variant="outline" onClick={() => confirmDelete(() => cancel.mutate(l.id), { title: 'Cancel payment link?', confirmLabel: 'Cancel link' })} title="Cancel">
                               <X className="h-3.5 w-3.5" />
                             </Button>
                           )}
                         </>
                       )}
                       {!isReadOnly && l.status !== 'paid' && (
-                        <Button size="sm" variant="destructive" onClick={() => remove.mutate(l.id)} title="Delete">
+                        <Button size="sm" variant="destructive" onClick={() => confirmDelete(() => remove.mutate(l.id), { title: 'Delete payment link?' })} title="Delete">
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
                       )}

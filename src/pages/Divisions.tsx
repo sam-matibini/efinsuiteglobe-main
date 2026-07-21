@@ -10,8 +10,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Building2, Plus, Trash2 } from 'lucide-react';
 import { useDepartments } from '@/hooks/useDimensions';
 import { Badge } from '@/components/ui/badge';
+import { useConfirmDelete } from '@/hooks/useConfirmDelete';
 
 export default function Divisions() {
+  const confirmDelete = useConfirmDelete();
   const { data: divisions = [], createDepartment, updateDepartment, deleteDepartment } = useDepartments();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({
@@ -78,7 +80,7 @@ export default function Divisions() {
                   </TableCell>
                   <TableCell><Switch checked={d.allow_postings ?? true} onCheckedChange={(v) => updateDepartment.mutate({ id: d.id, allow_postings: v } as any)} /></TableCell>
                   <TableCell><Switch checked={d.is_active} onCheckedChange={(v) => updateDepartment.mutate({ id: d.id, is_active: v } as any)} /></TableCell>
-                  <TableCell><Button size="sm" variant="ghost" onClick={() => deleteDepartment.mutate(d.id)}><Trash2 className="w-4 h-4" /></Button></TableCell>
+                  <TableCell><Button size="sm" variant="ghost" onClick={() => confirmDelete(() => deleteDepartment.mutate(d.id), { itemName: d.name, title: 'Delete department?' })}><Trash2 className="w-4 h-4" /></Button></TableCell>
                 </TableRow>
               ))}
               {divisions.length === 0 && (

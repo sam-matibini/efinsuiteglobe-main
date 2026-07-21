@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useInvoiceCustomFieldTemplates, InvoiceCustomFieldTemplate, DocumentType } from '@/hooks/useInvoiceCustomFieldTemplates';
+import { useConfirmDelete } from '@/hooks/useConfirmDelete';
 
 const DOCUMENT_TYPE_OPTIONS: { value: DocumentType; label: string }[] = [
   { value: 'all', label: 'All Documents' },
@@ -40,6 +41,7 @@ const PRESET_TEMPLATES = [
 ];
 
 export function InvoiceCustomFieldsSettings() {
+  const confirmDelete = useConfirmDelete();
   const { 
     templates, 
     isLoading, 
@@ -194,7 +196,7 @@ export function InvoiceCustomFieldsSettings() {
                     variant="ghost"
                     size="icon"
                     className="text-destructive h-8 w-8 hover:bg-destructive/10"
-                    onClick={() => deleteTemplate.mutate(template.id)}
+                    onClick={() => confirmDelete(() => deleteTemplate.mutate(template.id), { title: 'Delete template?' })}
                     disabled={deleteTemplate.isPending}
                   >
                     <Trash2 className="w-4 h-4" />

@@ -24,12 +24,14 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { usePMInvoices, useUpdatePMInvoiceStatus, useDeletePMInvoice } from '@/hooks/usePracticeManagement';
 import { useCurrencyFormatter } from '@/hooks/useCurrencyFormatter';
 import type { PMInvoice } from '@/types/practiceManagement';
+import { useConfirmDelete } from '@/hooks/useConfirmDelete';
 
 interface PMBillingTabProps {
   onAddInvoice: () => void;
 }
 
 export function PMBillingTab({ onAddInvoice }: PMBillingTabProps) {
+  const confirmDelete = useConfirmDelete();
   const { data: invoices, isLoading } = usePMInvoices();
   const updateStatus = useUpdatePMInvoiceStatus();
   const deleteInvoice = useDeletePMInvoice();
@@ -73,9 +75,7 @@ export function PMBillingTab({ onAddInvoice }: PMBillingTabProps) {
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm('Are you sure you want to delete this invoice? Time entries will be unbilled.')) {
-      await deleteInvoice.mutateAsync(id);
-    }
+    await deleteInvoice.mutateAsync(id);
   };
 
   // Calculate summary stats
@@ -219,7 +219,7 @@ export function PMBillingTab({ onAddInvoice }: PMBillingTabProps) {
                           {invoice.status === 'draft' && (
                             <DropdownMenuItem 
                               className="text-destructive"
-                              onClick={() => handleDelete(invoice.id)}
+                              onClick={() => confirmDelete(() => handleDelete(invoice.id), { title: 'Delete invoice?', description: 'Time entries will be unbilled. This action cannot be undone.' })}
                             >
                               Delete
                             </DropdownMenuItem>

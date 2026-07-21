@@ -11,11 +11,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Workflow, Plus, Trash2 } from 'lucide-react';
 import { useApprovalRules, type CraApprovalRule } from '@/hooks/useApprovalRules';
 import { useCurrencyFormatter } from '@/hooks/useCurrencyFormatter';
+import { useConfirmDelete } from '@/hooks/useConfirmDelete';
 
 const ROLES = ['admin', 'controller', 'cfo', 'owner'];
 const PROGRAMS = ['RP', 'RT', 'RC', 'RC_INSTALLMENT', 'RE', 'NR', 'RZ'];
 
 export default function ApprovalRules() {
+  const confirmDelete = useConfirmDelete();
   const { rules, isLoading, upsertRule, deleteRule } = useApprovalRules();
   const fmt = useCurrencyFormatter();
   const [open, setOpen] = useState(false);
@@ -130,7 +132,7 @@ export default function ApprovalRules() {
                       >
                         Edit
                       </Button>
-                      <Button size="sm" variant="ghost" onClick={() => deleteRule.mutate(r.id)}>
+                      <Button size="sm" variant="ghost" onClick={() => confirmDelete(() => deleteRule.mutate(r.id), { title: 'Delete approval rule?' })}>
                         <Trash2 className="h-3 w-3" />
                       </Button>
                     </TableCell>

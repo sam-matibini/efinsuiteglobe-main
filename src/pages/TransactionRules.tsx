@@ -62,10 +62,12 @@ import { CreateOrganizationDialog } from '@/components/accounts/CreateOrganizati
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 import { TransactionRule as UITransactionRule, RuleCondition, RuleAction } from '@/types/bankingRules';
+import { useConfirmDelete } from '@/hooks/useConfirmDelete';
 
 type AnalysisSource = 'bank' | 'credit-card';
 
 export default function TransactionRules() {
+  const confirmDelete = useConfirmDelete();
   const { organization, isLoading: orgLoading } = useCurrentOrganization();
   const { accounts } = useBankAccounts();
   const { rules, activeRules, isLoading, createRule, updateRule, deleteRule, toggleRuleActive } = useTransactionRules();
@@ -603,7 +605,7 @@ export default function TransactionRules() {
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
-                              onClick={() => handleDeleteRule(rule.id)}
+                              onClick={() => confirmDelete(() => handleDeleteRule(rule.id), { itemName: rule.name, title: 'Delete rule?' })}
                               className="text-destructive"
                             >
                               <Trash2 className="w-4 h-4 mr-2" />
