@@ -44,7 +44,36 @@ async function efinsign(path: string, init: RequestInit = {}) {
 
 // ---- helpers -------------------------------------------------------------
 
+const DOCSIGN_BUCKET = 'docsign-documents';
+
+function extractStoragePath(fileUrl: string): string | null {
+  const markers = [
+    `/storage/v1/object/public/${DOCSIGN_BUCKET}/`,
+    `/storage/v1/object/sign/${DOCSIGN_BUCKET}/`,
+    `/storage/v1/object/authenticated/${DOCSIGN_BUCKET}/`,
+  ];
+  for (const m of markers) {
+    const idx = fileUrl.indexOf(m);
+    if (idx !== -1) {
+      return decodeURIComponent(fileUrl.slice(idx + m.length).split('?')[0]);
+    }
+  }
+  // Bare storage path fallback (no scheme)
+  if (!/^https?:\/\//i.test(fileUrl) && !fileUrl.startsWith('/')) {
+    return fileUrl.split('?')[0];
+  }
+  return null;
+}
+
 async function fetchPdfBlob(fileUrl: string): Promise<Blob> {
+  const path = extractStoragePath(fileUrl);
+  if (path) {
+    const { data, error } = await admin.storage.from(DOCSIGN_BUCKET).download(path);
+    if (error || !data) {
+      throw new Error(`Failed to download document from storage: ${error?.message || 'unknown error'} (path: ${path})`);
+    }
+    return data;
+  }
   const r = await fetch(fileUrl);
   if (!r.ok) throw new Error(`Failed to fetch document file (${r.status})`);
   return await r.blob();
