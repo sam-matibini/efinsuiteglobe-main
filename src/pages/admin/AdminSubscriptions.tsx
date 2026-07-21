@@ -284,16 +284,23 @@ export default function AdminSubscriptions() {
   const { data: subscriptions, isLoading } = useQuery({
     queryKey: ['admin-subscriptions'],
     queryFn: async () => {
-      const [subsRes, orgsRes, plansRes] = await Promise.all([
+      const [subsRes, orgsRes, plansRes, countriesRes] = await Promise.all([
         supabase.from('subscriptions').select('*').order('created_at', { ascending: false }),
         supabase.from('organizations').select('id, name'),
         supabase.from('pricing_plans').select('*'),
+        supabase.from('countries').select('id, name'),
       ]);
 
       if (subsRes.error) throw subsRes.error;
 
       const orgs = orgsRes.data || [];
-      const plans = plansRes.data || [];
+      const countries = countriesRes.data || [];
+      const countryMap = new Map(countries.map((c: any) => [c.id, c.name]));
+      const plans = (plansRes.data || []).map((p: any) => ({
+        ...p,
+        country_name: p.country_id ? countryMap.get(p.country_id) || null : null,
+      }));
+
 
       return subsRes.data.map(sub => {
         const org = orgs.find(o => o.id === sub.organization_id);
