@@ -35,6 +35,8 @@ interface PricingPlan {
   stripe_price_id_monthly: string | null;
   stripe_price_id_yearly: string | null;
   tier?: string | null;
+  country_id?: string | null;
+  currency?: string | null;
 }
 
 interface ProrationPreview {
