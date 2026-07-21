@@ -317,12 +317,17 @@ serve(async (req) => {
         sessionParams['subscription_data[trial_period_days]'] = String(trialDays);
       }
 
-      // Apply discount coupon: per-org coupon takes precedence, else global.
+      // Apply discount coupon: per-org > country > global.
       const { data: subRow } = await supabaseAdmin
         .from('subscriptions')
         .select('discount_percent, discount_expires_at, stripe_coupon_id')
         .eq('organization_id', organizationId)
         .in('status', ['active', 'trialing'])
+        .maybeSingle();
+      const { data: orgRow } = await supabaseAdmin
+        .from('organizations')
+        .select('country_id')
+        .eq('id', organizationId)
         .maybeSingle();
       const { data: globalDiscount } = await supabaseAdmin
         .from('platform_settings')
@@ -331,6 +336,24 @@ serve(async (req) => {
         .maybeSingle();
       const gd = (globalDiscount?.setting_value as any) || {};
       const nowTs = new Date();
+
+      // Look up an active country-scoped preset for this org's country
+      let countryCouponId: string | null = null;
+      if (orgRow?.country_id) {
+        const { data: countryPreset } = await supabaseAdmin
+          .from('discount_presets')
+          .select('stripe_coupon_id, expires_at')
+          .eq('scope', 'country')
+          .eq('country_id', orgRow.country_id)
+          .eq('status', 'active')
+          .order('created_at', { ascending: false })
+          .maybeSingle();
+        if (countryPreset?.stripe_coupon_id &&
+            (!countryPreset.expires_at || new Date(countryPreset.expires_at) > nowTs)) {
+          countryCouponId = countryPreset.stripe_coupon_id;
+        }
+      }
+
       const orgDiscountActive = subRow && Number(subRow.discount_percent) > 0 &&
         (!subRow.discount_expires_at || new Date(subRow.discount_expires_at) > nowTs) &&
         !!subRow.stripe_coupon_id;
@@ -339,7 +362,7 @@ serve(async (req) => {
         !!gd.stripe_coupon_id;
       const couponId = orgDiscountActive
         ? subRow!.stripe_coupon_id
-        : (globalDiscountActive ? gd.stripe_coupon_id : null);
+        : (countryCouponId || (globalDiscountActive ? gd.stripe_coupon_id : null));
       if (couponId) {
         sessionParams['discounts[0][coupon]'] = String(couponId);
       } else if (promotionCodeId) {
