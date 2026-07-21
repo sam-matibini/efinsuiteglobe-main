@@ -1054,6 +1054,48 @@ export default function AdminSubscriptions() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
+                <Label>Country</Label>
+                <Select
+                  value={planForm.country_id || 'global'}
+                  onValueChange={(v) => {
+                    if (v === 'global') {
+                      setPlanForm(prev => ({ ...prev, country_id: '', currency: prev.currency || 'USD' }));
+                    } else {
+                      const c = countries?.find(x => x.id === v);
+                      setPlanForm(prev => ({
+                        ...prev,
+                        country_id: v,
+                        currency: (c?.default_currency || prev.currency || 'USD').toUpperCase(),
+                      }));
+                    }
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select country" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="global">Global / Default (US)</SelectItem>
+                    {countries?.map(c => (
+                      <SelectItem key={c.id} value={c.id}>{c.name} ({c.code})</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Plans without a country act as the global fallback.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label>Currency</Label>
+                <Input
+                  value={planForm.currency}
+                  onChange={e => setPlanForm(prev => ({ ...prev, currency: e.target.value.toUpperCase().slice(0, 3) }))}
+                  placeholder="USD"
+                  maxLength={3}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
                 <Label>Monthly Price ($)</Label>
                 <Input 
                   type="number"
