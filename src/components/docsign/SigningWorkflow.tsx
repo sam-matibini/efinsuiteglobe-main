@@ -101,6 +101,7 @@ export function SigningWorkflow({
   onComplete,
   onBack,
 }: SigningWorkflowProps) {
+  const confirmDelete = useConfirmDelete();
   const [activeStep, setActiveStep] = useState(0);
   
   // Recipients state
