@@ -177,6 +177,20 @@ export function DocumentDetailDialog({ documentId, open, onOpenChange, onPrepare
                             ) : (
                               <Mail className="w-4 h-4 text-muted-foreground" />
                             )}
+                            {signer.status !== 'signed' && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                disabled={getSigningUrl.isPending}
+                                onClick={async () => {
+                                  const res = await getSigningUrl.mutateAsync(signer.id);
+                                  const url = res?.signing_url || res?.url;
+                                  if (url) window.open(url, '_blank', 'noopener,noreferrer');
+                                }}
+                              >
+                                <ExternalLink className="w-4 h-4" />
+                              </Button>
+                            )}
                           </div>
                         </div>
                       </CardContent>
