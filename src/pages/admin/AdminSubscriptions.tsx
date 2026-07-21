@@ -1170,7 +1170,7 @@ export default function AdminSubscriptions() {
                   <div className="flex items-center justify-between text-sm">
                     <span>Net Profit per Month:</span>
                     <span className={`font-bold ${(planForm.price_monthly - planForm.cost_monthly) > 0 ? 'text-success' : 'text-destructive'}`}>
-                      ${(planForm.price_monthly - planForm.cost_monthly).toFixed(2)}
+                      {planForm.currency || 'USD'} {(planForm.price_monthly - planForm.cost_monthly).toFixed(2)}
                     </span>
                   </div>
                 </div>
