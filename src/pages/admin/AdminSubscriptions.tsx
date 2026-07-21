@@ -513,7 +513,9 @@ export default function AdminSubscriptions() {
       max_employees: 25,
       features: '',
       is_active: true,
-      sort_order: 0
+      sort_order: 0,
+      country_id: '',
+      currency: 'USD',
     });
   };
   
