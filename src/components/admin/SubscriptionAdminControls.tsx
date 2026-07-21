@@ -351,9 +351,17 @@ export function OverrideSubscriptionDialog({
             <Select value={planId} onValueChange={setPlanId}>
               <SelectTrigger><SelectValue placeholder="Select plan" /></SelectTrigger>
               <SelectContent>
-                {plans?.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                ))}
+                {plans?.map((p) => {
+                  const region = p.country_name || p.country?.name || (p.country_id ? p.country_id : 'Global');
+                  const currency = p.currency || 'USD';
+                  const price = p.price_monthly ?? p.monthly_price ?? p.price;
+                  const priceLabel = price != null ? `${currency} ${Number(price).toFixed(2)}` : currency;
+                  return (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name} — {region} · {priceLabel}
+                    </SelectItem>
+                  );
+                })}
               </SelectContent>
             </Select>
           </div>
