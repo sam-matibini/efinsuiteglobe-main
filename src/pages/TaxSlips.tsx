@@ -39,8 +39,10 @@ import { downloadT4Pdf } from '@/lib/generateT4Pdf';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { getPayrollLocalization } from '@/data/payrollLocalization';
 import { COUNTRY_LOCALIZATIONS } from '@/data/countryLocalizations';
+import { useConfirmDelete } from '@/hooks/useConfirmDelete';
 
 export default function TaxSlips() {
+  const confirmDelete = useConfirmDelete();
   const currentYear = new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState(currentYear - 1);
   const [generateDialogOpen, setGenerateDialogOpen] = useState(false);
@@ -227,7 +229,7 @@ export default function TaxSlips() {
                         )}
                         {slip.status === 'draft' && (
                           <DropdownMenuItem 
-                            onClick={() => deleteSlip.mutate(slip.id)}
+                            onClick={() => confirmDelete(() => deleteSlip.mutate(slip.id), { title: 'Delete tax slip?' })}
                             className="text-destructive"
                           >
                             <Trash2 className="w-4 h-4 mr-2" />

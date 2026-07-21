@@ -14,6 +14,7 @@ import { useAllocationSchedules } from '@/hooks/useAllocationSchedules';
 import { useDepartments } from '@/hooks/useDimensions';
 import { useAccounts } from '@/hooks/useAccounts';
 import { DivisionSelect } from '@/components/dimensions/DivisionSelect';
+import { useConfirmDelete } from '@/hooks/useConfirmDelete';
 
 const METHOD_LABELS: Record<AllocationMethod, string> = {
   revenue_pct: 'Revenue %',
@@ -25,6 +26,7 @@ const METHOD_LABELS: Record<AllocationMethod, string> = {
 };
 
 export default function AllocationRules() {
+  const confirmDelete = useConfirmDelete();
   const { data: rules = [], createRule, toggleRule, deleteRule } = useAllocationRules();
   const { data: runs = [], runRule } = useAllocationRuns();
   const { data: divisions = [] } = useDepartments();
@@ -140,7 +142,7 @@ export default function AllocationRules() {
                   <TableCell><Switch checked={r.is_active} onCheckedChange={(v) => toggleRule.mutate({ id: r.id, is_active: v })} /></TableCell>
                   <TableCell className="text-right space-x-2">
                     <Button size="sm" variant="outline" onClick={() => { setRunRuleId(r.id); setRunOpen(true); }}><Play className="w-3 h-3 mr-1" /> Run</Button>
-                    <Button size="sm" variant="ghost" onClick={() => deleteRule.mutate(r.id)}><Trash2 className="w-4 h-4" /></Button>
+                    <Button size="sm" variant="ghost" onClick={() => confirmDelete(() => deleteRule.mutate(r.id), { itemName: r.name, title: 'Delete rule?' })}><Trash2 className="w-4 h-4" /></Button>
                   </TableCell>
                 </TableRow>
               ))}
@@ -284,7 +286,7 @@ function SchedulesCard({ ruleOptions }: { ruleOptions: Array<{ id: string; name:
                 <TableCell>{s.last_run_status ? <Badge>{s.last_run_status}</Badge> : <span className="text-muted-foreground">—</span>}</TableCell>
                 <TableCell><Switch checked={s.active} onCheckedChange={(v) => toggleActive.mutate({ id: s.id, active: v })} /></TableCell>
                 <TableCell className="text-right">
-                  <Button size="sm" variant="ghost" onClick={() => remove.mutate(s.id)}><Trash2 className="w-4 h-4" /></Button>
+                  <Button size="sm" variant="ghost" onClick={() => confirmDelete(() => remove.mutate(s.id), { title: 'Delete schedule?' })}><Trash2 className="w-4 h-4" /></Button>
                 </TableCell>
               </TableRow>
             ))}

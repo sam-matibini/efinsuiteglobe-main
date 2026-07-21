@@ -27,8 +27,10 @@ import { toast } from 'sonner';
 import { useLocalizedCurrency } from '@/hooks/useLocalizedCurrency';
 import { useIsReadOnly } from '@/hooks/useIsReadOnly';
 import { useCreditCardPlaidSync } from '@/hooks/useCreditCardPlaidSync';
+import { useConfirmDelete } from '@/hooks/useConfirmDelete';
 
 export default function CreditCards() {
+  const confirmDelete = useConfirmDelete();
   const { organization, isLoading: orgLoading } = useCurrentOrganization();
   const isReadOnly = useIsReadOnly();
   const { 
@@ -289,7 +291,7 @@ export default function CreditCards() {
                         Edit Card
                       </DropdownMenuItem>
                       <DropdownMenuItem 
-                        onClick={() => handleDelete(card.id)}
+                        onClick={() => confirmDelete(() => handleDelete(card.id), { itemName: card.card_name, title: 'Remove credit card?' })}
                         className="text-destructive"
                       >
                         <Trash2 className="w-4 h-4 mr-2" />

@@ -35,6 +35,7 @@ import { cn } from '@/lib/utils';
 import { TransactionRule as UITransactionRule } from '@/types/bankingRules';
 import { useTransactionRules, TransactionRule, CreateRuleInput } from '@/hooks/useTransactionRules';
 import TransactionRuleDialog from './TransactionRuleDialog';
+import { useConfirmDelete } from '@/hooks/useConfirmDelete';
 
 interface TransactionRulesPanelProps {
   onApplyRules?: () => void;
@@ -156,7 +157,7 @@ const RuleItem = memo(({
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
-                    onClick={() => onDelete(rule.id)}
+                    onClick={() => confirmDelete(() => onDelete(rule.id), { itemName: rule.name, title: 'Delete rule?' })}
                     className="text-destructive"
                   >
                     <Trash2 className="w-4 h-4 mr-2" />
@@ -200,6 +201,7 @@ const RuleItem = memo(({
 RuleItem.displayName = 'RuleItem';
 
 export default function TransactionRulesPanel({ onApplyRules }: TransactionRulesPanelProps) {
+  const confirmDelete = useConfirmDelete();
   const { rules, activeRules, isLoading, createRule, updateRule, deleteRule, toggleRuleActive, refreshRule } = useTransactionRules();
   const [refreshingRuleId, setRefreshingRuleId] = useState<string | null>(null);
   const [expandedRules, setExpandedRules] = useState<Set<string>>(new Set());

@@ -32,8 +32,10 @@ import { CreateOrganizationDialog } from '@/components/accounts/CreateOrganizati
 import { Skeleton } from '@/components/ui/skeleton';
 import { getCountryLocalization } from '@/data/countryLocalizations';
 import { getLocaleForCountry } from '@/lib/localizedCurrencyFormatter';
+import { useConfirmDelete } from '@/hooks/useConfirmDelete';
 
 export default function Expenses() {
+  const confirmDelete = useConfirmDelete();
   const isReadOnly = useIsReadOnly();
   const { organization, isLoading: orgLoading } = useCurrentOrganization();
   const { 
@@ -310,7 +312,7 @@ export default function Expenses() {
                         <DropdownMenuSeparator />
                         <DropdownMenuItem 
                           className="text-destructive"
-                          onClick={() => deleteExpense.mutate(expense.id)}
+                          onClick={() => confirmDelete(() => deleteExpense.mutate(expense.id), { title: 'Delete expense?' })}
                         >
                           <Trash2 className="w-4 h-4 mr-2" />
                           Delete

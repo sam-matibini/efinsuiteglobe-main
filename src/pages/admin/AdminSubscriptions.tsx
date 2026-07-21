@@ -53,6 +53,7 @@ import {
 } from '@/components/admin/SubscriptionAdminControls';
 import { DiscountsTab } from '@/components/admin/DiscountsTab';
 import { SubscriptionAuditLogTab } from '@/components/admin/SubscriptionAuditLogTab';
+import { useConfirmDelete } from '@/hooks/useConfirmDelete';
 
 interface Subscription {
   id: string;
@@ -132,6 +133,7 @@ const DEFAULT_PLAN_FEATURES = {
 };
 
 function SyncToStripeButton() {
+  const confirmDelete = useConfirmDelete();
   const [syncing, setSyncing] = useState(false);
   const queryClient = useQueryClient();
 
@@ -879,7 +881,7 @@ export default function AdminSubscriptions() {
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem 
-                                onClick={() => deletePlan.mutate(plan.id)}
+                                onClick={() => confirmDelete(() => deletePlan.mutate(plan.id), { itemName: plan.name, title: 'Delete plan?' })}
                                 className="text-destructive"
                               >
                                 <Trash2 className="w-4 h-4 mr-2" />

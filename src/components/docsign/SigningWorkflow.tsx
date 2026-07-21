@@ -39,6 +39,7 @@ import { FieldToolsSidebar, FIELD_TOOLS } from './FieldToolsSidebar';
 import { FieldInteractionDialog } from './FieldInteractionDialog';
 import { PdfPageRenderer } from './PdfPageRenderer';
 import { format } from 'date-fns';
+import { useConfirmDelete } from '@/hooks/useConfirmDelete';
 
 // Special signer ID for "Me (Sender)"
 const SENDER_SIGNER_ID = 'sender';
@@ -148,6 +149,7 @@ export function SigningWorkflow({
   ];
 
   const handleAddRecipient = (recipient: Recipient) => {
+  const confirmDelete = useConfirmDelete();
     setRecipients(prev => [...prev, { ...recipient, signingOrder: prev.length + 1 }]);
   };
 
@@ -744,7 +746,7 @@ export function SigningWorkflow({
                   <CardContent className="py-3">
                     <div className="flex items-center justify-between mb-2">
                       <p className="text-sm font-medium">Field Properties</p>
-                      <Button variant="ghost" size="icon" onClick={deleteSelectedField} className="h-7 w-7 text-destructive">
+                      <Button variant="ghost" size="icon" onClick={() => confirmDelete(() => deleteSelectedField(), { title: 'Delete field?' })} className="h-7 w-7 text-destructive">
                         <Trash2 className="w-4 h-4" />
                       </Button>
                     </div>

@@ -59,6 +59,7 @@ import { useEmployees } from '@/hooks/useEmployees';
 import { usePayrollLocalization } from '@/hooks/usePayrollLocalization';
 import { EditTimesheetEntryDialog } from '@/components/payroll/EditTimesheetEntryDialog';
 import { toast } from 'sonner';
+import { useConfirmDelete } from '@/hooks/useConfirmDelete';
 
 const statusConfig: Record<TimesheetStatus, { label: string; color: string; icon: React.ElementType }> = {
   draft: { label: 'Draft', color: 'bg-muted text-muted-foreground', icon: FileText },
@@ -81,6 +82,7 @@ const sampleProjects = [
 ];
 
 export default function TimesheetDetail() {
+  const confirmDelete = useConfirmDelete();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { timesheets, isLoading, submitTimesheet, approveTimesheet, rejectTimesheet } = useTimesheets();
@@ -642,7 +644,7 @@ export default function TimesheetDetail() {
                             variant="ghost" 
                             size="icon" 
                             className="text-destructive"
-                            onClick={() => deleteEntry.mutate(entry.id)}
+                            onClick={() => confirmDelete(() => deleteEntry.mutate(entry.id), { title: 'Delete time entry?' })}
                           >
                             <Trash2 className="w-4 h-4" />
                           </Button>

@@ -50,8 +50,10 @@ import { useLocalizedCurrency, getAllLocalizedCurrencies } from '@/hooks/useLoca
 import { getCountryLocalization } from '@/data/countryLocalizations';
 import { useIsReadOnly } from '@/hooks/useIsReadOnly';
 import { usePlaidSync } from '@/hooks/usePlaidSync';
+import { useConfirmDelete } from '@/hooks/useConfirmDelete';
 
 export default function BankAccounts() {
+  const confirmDelete = useConfirmDelete();
   const { organization, isLoading: orgLoading } = useCurrentOrganization();
   const { accounts, isLoading, totalBalance, createAccount, updateAccount, deleteAccount } = useBankAccounts();
   const isReadOnly = useIsReadOnly();
@@ -300,9 +302,7 @@ export default function BankAccounts() {
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm('Are you sure you want to remove this bank account?')) {
-      await deleteAccount.mutateAsync(id);
-    }
+    await deleteAccount.mutateAsync(id);
   };
 
   const handleEditAccount = (account: BankAccount) => {
@@ -607,7 +607,7 @@ export default function BankAccounts() {
                         <DropdownMenuSeparator />
                         <DropdownMenuItem 
                           className="text-destructive"
-                          onClick={() => handleDelete(account.id)}
+                          onClick={() => confirmDelete(() => handleDelete(account.id), { itemName: account.account_name, title: 'Remove bank account?' })}
                         >
                           Remove Account
                         </DropdownMenuItem>

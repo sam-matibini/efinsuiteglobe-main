@@ -46,10 +46,12 @@ import { parseLocalDate } from '@/lib/utils';
 import { getPayrollLocalization } from '@/data/payrollLocalization';
 import { COUNTRY_LOCALIZATIONS } from '@/data/countryLocalizations';
 import type { Database } from '@/integrations/supabase/types';
+import { useConfirmDelete } from '@/hooks/useConfirmDelete';
 
 type RoEReasonCode = Database['public']['Enums']['roe_reason'];
 
 export default function RoeRecords() {
+  const confirmDelete = useConfirmDelete();
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [formData, setFormData] = useState<Partial<CreateRoEInput>>({});
 
@@ -251,7 +253,7 @@ export default function RoeRecords() {
                         )}
                         {roe.status === 'draft' && (
                           <DropdownMenuItem 
-                            onClick={() => deleteRoE.mutate(roe.id)}
+                            onClick={() => confirmDelete(() => deleteRoE.mutate(roe.id), { title: 'Delete ROE record?' })}
                             className="text-destructive"
                           >
                             <Trash2 className="w-4 h-4 mr-2" />

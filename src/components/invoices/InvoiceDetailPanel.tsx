@@ -24,6 +24,7 @@ import { useDefaultSignature } from '@/hooks/useUserSignatures';
 import { usePaymentLinks } from '@/hooks/usePaymentLinks';
 import { toast } from 'sonner';
 import { differenceInDays } from 'date-fns';
+import { useConfirmDelete } from '@/hooks/useConfirmDelete';
 
 interface InvoiceDetailPanelProps {
   invoice: Invoice;
@@ -62,6 +63,7 @@ export function InvoiceDetailPanel({
   const { create: createPaymentLink } = usePaymentLinks();
 
   const handlePayOnline = async (method: 'cc' | 'ach' | 'interac') => {
+  const confirmDelete = useConfirmDelete();
     if (!invoice.id) return;
     const amount = Number(invoice.balance_due ?? invoice.total ?? 0);
     if (!(amount > 0)) {
@@ -284,7 +286,7 @@ export function InvoiceDetailPanel({
               {!isReadOnly && (invoice.status === 'void' || invoice.status === 'issued') && (
                 <>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem className="text-destructive" onClick={onDeleteInvoice}>
+                  <DropdownMenuItem className="text-destructive" onClick={() => confirmDelete(() => onDeleteInvoice?.(), { title: 'Delete invoice?' })}>
                     <Trash2 className="w-4 h-4 mr-2" />
                     Delete Invoice
                   </DropdownMenuItem>
