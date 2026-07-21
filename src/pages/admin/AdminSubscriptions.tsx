@@ -1068,7 +1068,7 @@ export default function AdminSubscriptions() {
                   value={planForm.country_id || 'global'}
                   onValueChange={(v) => {
                     if (v === 'global') {
-                      setPlanForm(prev => ({ ...prev, country_id: '', currency: prev.currency || 'USD' }));
+                      setPlanForm(prev => ({ ...prev, country_id: '', currency: 'USD' }));
                     } else {
                       const c = countries?.find(x => x.id === v);
                       setPlanForm(prev => ({
