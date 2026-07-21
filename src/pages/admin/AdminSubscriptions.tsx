@@ -319,13 +319,17 @@ export default function AdminSubscriptions() {
   const { data: plans, isLoading: plansLoading } = useQuery({
     queryKey: ['pricing-plans-all'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('pricing_plans')
-        .select('*')
-        .order('sort_order');
+      const [plansRes, countriesRes] = await Promise.all([
+        supabase.from('pricing_plans').select('*').order('sort_order'),
+        supabase.from('countries').select('id, name'),
+      ]);
 
-      if (error) throw error;
-      return data as Plan[];
+      if (plansRes.error) throw plansRes.error;
+      const countryMap = new Map((countriesRes.data || []).map((c: any) => [c.id, c.name]));
+      return (plansRes.data || []).map((p: any) => ({
+        ...p,
+        country_name: p.country_id ? countryMap.get(p.country_id) || null : null,
+      })) as Plan[];
     },
     enabled: isAdmin,
   });
