@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Pencil, Trash2, UserPlus, Loader2, Mail, Clock, X, XCircle, ShieldCheck } from 'lucide-react';
+import { Pencil, Trash2, UserPlus, Loader2, Mail, Clock, X, XCircle, ShieldCheck, Users } from 'lucide-react';
+import { BulkInviteDialog } from './BulkInviteDialog';
 import { getModulesForRole, ROLE_MODULE_DESCRIPTIONS, MODULE_DISPLAY_NAMES, OrgRole } from '@/config/roleModuleAccess';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -72,6 +73,7 @@ const ROLE_OPTIONS = [
 export function UsersSettingsTab() {
   const [createOrgOpen, setCreateOrgOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [bulkInviteOpen, setBulkInviteOpen] = useState(false);
   const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [editMember, setEditMember] = useState<OrganizationMember | null>(null);
   const [deleteMember, setDeleteMember] = useState<OrganizationMember | null>(null);
@@ -418,12 +420,19 @@ export function UsersSettingsTab() {
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-lg font-semibold text-foreground">Team Members</h2>
           {canInviteUsers && (
-            <Button onClick={handleInviteClick}>
-              <UserPlus className="w-4 h-4 mr-2" />
-              Invite User
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setBulkInviteOpen(true)}>
+                <Users className="w-4 h-4 mr-2" />
+                Bulk Invite
+              </Button>
+              <Button onClick={handleInviteClick}>
+                <UserPlus className="w-4 h-4 mr-2" />
+                Invite User
+              </Button>
+            </div>
           )}
         </div>
+        <BulkInviteDialog open={bulkInviteOpen} onOpenChange={setBulkInviteOpen} />
         <SubscriptionUpgradeModal
           open={upgradeOpen}
           onOpenChange={setUpgradeOpen}
