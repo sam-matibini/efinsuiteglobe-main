@@ -51,6 +51,7 @@ export function InvoiceDetailPanel({
   onDeleteInvoice,
   isReadOnly,
 }: InvoiceDetailPanelProps) {
+  const confirmDelete = useConfirmDelete();
   const { organization } = useCurrentOrganization();
   const { customers } = useCustomers();
   const { lines: invoiceLines } = useInvoiceLines(invoice.id);
