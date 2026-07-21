@@ -998,11 +998,16 @@ export default function AdminSubscriptions() {
                   <SelectValue placeholder="Select a plan" />
                 </SelectTrigger>
                 <SelectContent>
-                  {activePlans?.map(plan => (
-                    <SelectItem key={plan.id} value={plan.id}>
-                      {plan.name} - ${plan.price_monthly}/mo
-                    </SelectItem>
-                  ))}
+                  {activePlans?.map(plan => {
+                    const countryLabel = plan.country_id
+                      ? (countries?.find(c => c.id === plan.country_id)?.code || countries?.find(c => c.id === plan.country_id)?.name || 'Country')
+                      : 'Global';
+                    return (
+                      <SelectItem key={plan.id} value={plan.id}>
+                        {plan.name} · {countryLabel} — {plan.currency || 'USD'} {plan.price_monthly}/mo
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
             </div>
@@ -1266,11 +1271,17 @@ export default function AdminSubscriptions() {
                     <SelectValue placeholder="Select plan..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {activePlans?.map(plan => (
-                      <SelectItem key={plan.id} value={plan.id}>
-                        {plan.name} — ${assignBillingCycle === 'yearly' ? plan.price_yearly : plan.price_monthly}/{assignBillingCycle === 'yearly' ? 'yr' : 'mo'}
-                      </SelectItem>
-                    ))}
+                    {activePlans?.map(plan => {
+                      const countryLabel = plan.country_id
+                        ? (countries?.find(c => c.id === plan.country_id)?.code || countries?.find(c => c.id === plan.country_id)?.name || 'Country')
+                        : 'Global';
+                      const price = assignBillingCycle === 'yearly' ? plan.price_yearly : plan.price_monthly;
+                      return (
+                        <SelectItem key={plan.id} value={plan.id}>
+                          {plan.name} · {countryLabel} — {plan.currency || 'USD'} {price}/{assignBillingCycle === 'yearly' ? 'yr' : 'mo'}
+                        </SelectItem>
+                      );
+                    })}
                     <SelectItem value="custom">
                       <span className="font-medium">Custom Subscription</span>
                     </SelectItem>
