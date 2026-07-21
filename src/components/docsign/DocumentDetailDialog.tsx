@@ -135,6 +135,20 @@ export function DocumentDetailDialog({ documentId, open, onOpenChange, onPrepare
                   Prepare & Send
                 </Button>
               )}
+
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => refreshStatus.mutate(documentId!)}
+                disabled={refreshStatus.isPending}
+              >
+                {refreshStatus.isPending ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                )}
+                Refresh status from eFinSign
+              </Button>
             </TabsContent>
 
             <TabsContent value="signers" className="space-y-4 mt-4">
