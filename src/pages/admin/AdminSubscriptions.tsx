@@ -444,7 +444,7 @@ export default function AdminSubscriptions() {
   
   const savePlan = useMutation({
     mutationFn: async (plan: Partial<Plan> & { id?: string }) => {
-      const planData = {
+      const planData: Record<string, unknown> = {
         name: plan.name,
         description: plan.description,
         price_monthly: plan.price_monthly,
@@ -453,7 +453,9 @@ export default function AdminSubscriptions() {
         max_employees: plan.max_employees,
         features: plan.features,
         is_active: plan.is_active,
-        sort_order: plan.sort_order
+        sort_order: plan.sort_order,
+        country_id: plan.country_id || null,
+        currency: (plan.currency || 'USD').toUpperCase(),
       };
       
       if (plan.id) {
