@@ -6139,6 +6139,7 @@ export type Database = {
       }
       discount_presets: {
         Row: {
+          country_id: string | null
           created_at: string
           created_by: string | null
           duration: string
@@ -6148,11 +6149,13 @@ export type Database = {
           max_redemptions: number | null
           name: string
           percent: number
+          scope: string
           status: string
           stripe_coupon_id: string
           updated_at: string
         }
         Insert: {
+          country_id?: string | null
           created_at?: string
           created_by?: string | null
           duration: string
@@ -6162,11 +6165,13 @@ export type Database = {
           max_redemptions?: number | null
           name: string
           percent: number
+          scope?: string
           status?: string
           stripe_coupon_id: string
           updated_at?: string
         }
         Update: {
+          country_id?: string | null
           created_at?: string
           created_by?: string | null
           duration?: string
@@ -6176,11 +6181,20 @@ export type Database = {
           max_redemptions?: number | null
           name?: string
           percent?: number
+          scope?: string
           status?: string
           stripe_coupon_id?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "discount_presets_country_id_fkey"
+            columns: ["country_id"]
+            isOneToOne: false
+            referencedRelation: "countries"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       docsign_notifications: {
         Row: {
@@ -16664,7 +16678,9 @@ export type Database = {
       }
       pricing_plans: {
         Row: {
+          country_id: string | null
           created_at: string
+          currency: string
           description: string | null
           features: Json | null
           id: string
@@ -16682,7 +16698,9 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          country_id?: string | null
           created_at?: string
+          currency?: string
           description?: string | null
           features?: Json | null
           id?: string
@@ -16700,7 +16718,9 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          country_id?: string | null
           created_at?: string
+          currency?: string
           description?: string | null
           features?: Json | null
           id?: string
@@ -16717,7 +16737,15 @@ export type Database = {
           tier?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "pricing_plans_country_id_fkey"
+            columns: ["country_id"]
+            isOneToOne: false
+            referencedRelation: "countries"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       print_audit_log: {
         Row: {
