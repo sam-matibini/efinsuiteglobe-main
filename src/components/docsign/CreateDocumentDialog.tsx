@@ -153,11 +153,19 @@ export function CreateDocumentDialog({ open, onOpenChange }: CreateDocumentDialo
             return;
           }
 
-          const { data: urlData } = supabase.storage
+          // Bucket is private — mint a long-lived signed URL (1 year).
+          const { data: signedData, error: signedErr } = await supabase.storage
             .from('docsign-documents')
-            .getPublicUrl(filePath);
+            .createSignedUrl(filePath, 60 * 60 * 24 * 365);
 
-          fileUrl = urlData.publicUrl;
+          if (signedErr || !signedData?.signedUrl) {
+            console.error('Signed URL error:', signedErr);
+            toast.error('Failed to generate document URL');
+            setIsUploading(false);
+            return;
+          }
+
+          fileUrl = signedData.signedUrl;
           mimeType = 'application/pdf';
         } else {
           toast.info('Converting document to PDF...');
