@@ -567,7 +567,7 @@ export function SigningWorkflow({
                             }));
                           }}
                           onTotalPages={(total) => {
-                            // Update total pages if needed
+                            if (total > 0) setTotalPages(total);
                           }}
                         />
                       );
