@@ -889,12 +889,21 @@ export default function AdminSubscriptions() {
                           </DropdownMenu>
                         </div>
                         <CardDescription>{plan.description}</CardDescription>
+                        <div className="flex flex-wrap gap-1 pt-1">
+                          <Badge variant="outline" className="text-xs">
+                            {plan.country_id
+                              ? (countries?.find(c => c.id === plan.country_id)?.name || 'Country')
+                              : 'Global / US'}
+                          </Badge>
+                          <Badge variant="outline" className="text-xs">{(plan.currency || 'USD').toUpperCase()}</Badge>
+                        </div>
                       </CardHeader>
                       <CardContent className="space-y-4">
                         <div className="space-y-1">
-                          <div className="text-3xl font-bold">${plan.price_monthly}<span className="text-sm font-normal text-muted-foreground">/mo</span></div>
-                          <div className="text-sm text-muted-foreground">${plan.price_yearly}/yr (save ${(plan.price_monthly * 12 - plan.price_yearly).toFixed(0)})</div>
+                          <div className="text-3xl font-bold">{plan.price_monthly} <span className="text-sm font-normal text-muted-foreground">{(plan.currency || 'USD').toUpperCase()}/mo</span></div>
+                          <div className="text-sm text-muted-foreground">{plan.price_yearly} {(plan.currency || 'USD').toUpperCase()}/yr (save {(plan.price_monthly * 12 - plan.price_yearly).toFixed(0)})</div>
                         </div>
+                        
                         
                         {/* Cost & Margin Section */}
                         {(plan.cost_monthly || plan.margin_percent) && (
