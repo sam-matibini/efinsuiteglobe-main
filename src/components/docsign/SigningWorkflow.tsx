@@ -995,6 +995,9 @@ export function SigningWorkflow({
                               [currentPage]: { width: pageWidthPt, height: pageHeightPt },
                             }));
                           }}
+                          onTotalPages={(total) => {
+                            if (total > 0) setTotalPages(total);
+                          }}
                         />
                       );
                     }
