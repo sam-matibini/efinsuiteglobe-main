@@ -396,9 +396,10 @@ export default function Invoices() {
               onStatusChange={(status) => updateInvoiceStatus.mutate({ id: selectedInvoice.id, status: status as Invoice['status'] })}
               onVoidInvoice={() => voidInvoice.mutate(selectedInvoice.id)}
               onDeleteInvoice={() => {
-                confirmDelete(() => {
-                  deleteInvoice.mutate(selectedInvoice.id);
-                }
+                confirmDelete(() => deleteInvoice.mutate(selectedInvoice.id), {
+                  itemName: `invoice ${selectedInvoice.invoice_number}`,
+                  title: 'Delete invoice?',
+                });
               }}
               isReadOnly={isReadOnly}
             />
