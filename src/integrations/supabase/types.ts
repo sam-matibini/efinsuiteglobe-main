@@ -8309,6 +8309,24 @@ export type Database = {
           },
         ]
       }
+      efinsign_webhook_events: {
+        Row: {
+          event: string
+          id: string
+          received_at: string
+        }
+        Insert: {
+          event: string
+          id: string
+          received_at?: string
+        }
+        Update: {
+          event?: string
+          id?: string
+          received_at?: string
+        }
+        Relationships: []
+      }
       employee_banking_profiles: {
         Row: {
           account_number: string | null
