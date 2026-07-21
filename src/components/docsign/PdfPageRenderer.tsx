@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+import { resolveDocSignFileUrl } from '@/lib/docsign/resolveFileUrl';
 
 // Configure pdf.js worker (bundled by Vite to match installed pdfjs-dist version)
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
