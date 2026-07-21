@@ -461,13 +461,13 @@ export default function AdminSubscriptions() {
       if (plan.id) {
         const { error } = await supabase
           .from('pricing_plans')
-          .update(planData)
+          .update(planData as any)
           .eq('id', plan.id);
         if (error) throw error;
       } else {
         const { error } = await supabase
           .from('pricing_plans')
-          .insert(planData);
+          .insert(planData as any);
         if (error) throw error;
       }
     },
