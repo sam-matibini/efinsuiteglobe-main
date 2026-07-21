@@ -40,7 +40,6 @@ interface InvoiceDetailPanelProps {
 }
 
 export function InvoiceDetailPanel({
-  const confirmDelete = useConfirmDelete();
   invoice,
   onEdit,
   onShare,

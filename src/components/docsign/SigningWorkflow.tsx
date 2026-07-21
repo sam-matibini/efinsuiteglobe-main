@@ -90,7 +90,6 @@ const STEPS_BASE = [
 ];
 
 export function SigningWorkflow({
-  const confirmDelete = useConfirmDelete();
   documentId: _documentId,
   documentTitle,
   fileUrl,
