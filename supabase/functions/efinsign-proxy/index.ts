@@ -118,8 +118,37 @@ async function getEfinsignIds(localDocId: string, localSignerId?: string, localF
 // ---- action handlers -----------------------------------------------------
 
 type Payload = Record<string, unknown>;
+type Ctx = { userId: string; orgId: string | null; isAdmin: boolean };
 
-const handlers: Record<string, (payload: Payload, userId: string) => Promise<unknown>> = {
+async function assertDocumentInOrg(localDocId: string, orgId: string | null) {
+  if (!orgId) {
+    const err = new Error('organization_id is required');
+    (err as { status?: number }).status = 400;
+    throw err;
+  }
+  const { data, error } = await admin
+    .from('documents')
+    .select('organization_id')
+    .eq('id', localDocId)
+    .single();
+  if (error) throw error;
+  if ((data as { organization_id: string | null }).organization_id !== orgId) {
+    const err = new Error('Document does not belong to the current organization');
+    (err as { status?: number }).status = 403;
+    throw err;
+  }
+}
+
+function requireAdmin(ctx: Ctx) {
+  if (!ctx.isAdmin) {
+    const err = new Error('Platform admin role required');
+    (err as { status?: number }).status = 403;
+    throw err;
+  }
+}
+
+const handlers: Record<string, (payload: Payload, ctx: Ctx) => Promise<unknown>> = {
+
   async create_document(payload, userId) {
     const { title, file_url, mime_type, file_size, document_type, organization_id } = payload as {
       title: string; file_url?: string; mime_type?: string; file_size?: number;
