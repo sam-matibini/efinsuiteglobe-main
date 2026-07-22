@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-import { FileText, Users, Clock, Plus, Mail, Phone, Loader2, PenTool, RefreshCw, ExternalLink } from 'lucide-react';
+import { FileText, Users, Clock, Plus, Mail, Phone, Loader2, PenTool, RefreshCw, ExternalLink, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useDocument, useDocumentSigners, useAddSigner, useRefreshDocumentStatus, useSignerSigningUrl } from '@/hooks/useDocuments';
+import { useDocument, useDocumentSigners, useAddSigner, useRefreshDocumentStatus, useSignerSigningUrl, useDownloadSignedDocument } from '@/hooks/useDocuments';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 
@@ -39,6 +39,21 @@ export function DocumentDetailDialog({ documentId, open, onOpenChange, onPrepare
   const addSigner = useAddSigner();
   const refreshStatus = useRefreshDocumentStatus();
   const getSigningUrl = useSignerSigningUrl();
+  const downloadSigned = useDownloadSignedDocument();
+
+  const handleDownload = async (kind: 'signed' | 'certificate') => {
+    if (!documentId) return;
+    try {
+      const { url, filename } = await downloadSigned.mutateAsync({ documentId, kind });
+      const a = window.document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      window.document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch { /* toast handled in hook */ }
+  };
 
   const handleAddSigner = async () => {
     if (!newSigner.email || !documentId) {
@@ -149,6 +164,29 @@ export function DocumentDetailDialog({ documentId, open, onOpenChange, onPrepare
                 )}
                 Refresh status from eFinSign
               </Button>
+
+              {document.status === 'completed' && (
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => handleDownload('signed')}
+                    disabled={downloadSigned.isPending}
+                  >
+                    {downloadSigned.isPending
+                      ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      : <Download className="w-4 h-4 mr-2" />}
+                    Signed PDF
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => handleDownload('certificate')}
+                    disabled={downloadSigned.isPending}
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Certificate
+                  </Button>
+                </div>
+              )}
             </TabsContent>
 
             <TabsContent value="signers" className="space-y-4 mt-4">
