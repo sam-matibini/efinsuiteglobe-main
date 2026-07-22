@@ -353,3 +353,31 @@ export function useSignerSigningUrl() {
     onError: (error) => toast.error('Failed to get signing URL: ' + error.message),
   });
 }
+
+// Downloads the signed PDF (or certificate) from eFinSign via the proxy.
+// Returns a browser Blob URL that callers can open or save.
+export function useDownloadSignedDocument() {
+  return useMutation({
+    mutationFn: async ({ documentId, kind = 'signed' }: { documentId: string; kind?: 'signed' | 'certificate' }) => {
+      const res = await invokeEfinsign<{ content_type: string; base64: string; filename: string }>(
+        'download_signed',
+        { id: documentId, kind },
+      );
+      const binary = atob(res.base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      const blob = new Blob([bytes], { type: res.content_type });
+      return { url: URL.createObjectURL(blob), filename: res.filename };
+    },
+    onError: (error) => toast.error('Failed to download document: ' + error.message),
+  });
+}
+
+export function useEfinsignUsage() {
+  return useQuery({
+    queryKey: ['efinsign-usage'],
+    queryFn: async () =>
+      invokeEfinsign<{ documents_used?: number; documents_limit?: number; signers_used?: number } & Record<string, unknown>>('usage'),
+    staleTime: 5 * 60 * 1000,
+  });
+}
