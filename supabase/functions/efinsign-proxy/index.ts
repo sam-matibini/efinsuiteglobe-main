@@ -611,8 +611,27 @@ Deno.serve(async (req) => {
     const handler = handlers[action];
     if (!handler) return json({ error: `Unknown action: ${action}` }, 400);
 
-    const data = await handler(payload || {}, userId);
+    // Resolve caller's local org (from payload) and validate membership.
+    const rawOrgId = (payload as { organization_id?: string } | null)?.organization_id ?? null;
+    let orgId: string | null = null;
+    if (rawOrgId) {
+      const { data: mem } = await admin
+        .from('organization_members')
+        .select('organization_id')
+        .eq('user_id', userId)
+        .eq('organization_id', rawOrgId)
+        .maybeSingle();
+      if (!mem) return json({ error: 'Not a member of the specified organization' }, 403);
+      orgId = rawOrgId;
+    }
+
+    // Resolve platform-admin flag for admin-only actions.
+    const { data: isAdminRes } = await admin.rpc('has_role', { _user_id: userId, _role: 'admin' });
+    const isAdmin = isAdminRes === true;
+
+    const data = await handler(payload || {}, { userId, orgId, isAdmin });
     return json({ data });
+
   } catch (e) {
     const err = e as { message?: string; status?: number; body?: unknown };
     console.error('efinsign-proxy error:', err);
