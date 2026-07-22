@@ -149,22 +149,23 @@ function requireAdmin(ctx: Ctx) {
 
 const handlers: Record<string, (payload: Payload, ctx: Ctx) => Promise<unknown>> = {
 
-  async create_document(payload, userId) {
-    const { title, file_url, mime_type, file_size, document_type, organization_id } = payload as {
+  async create_document(payload, ctx) {
+    const { title, file_url, mime_type, file_size, document_type } = payload as {
       title: string; file_url?: string; mime_type?: string; file_size?: number;
-      document_type?: string; organization_id?: string | null;
+      document_type?: string;
     };
     if (!title) throw new Error('title is required');
+    if (!ctx.orgId) throw Object.assign(new Error('organization_id is required'), { status: 400 });
 
-    // Insert local row first so we have an id.
+    // Insert local row first so we have an id. Ignore any client-supplied org id.
     const { data: local, error: insErr } = await admin.from('documents').insert({
       title,
       document_type: document_type || 'contract',
       file_url: file_url ?? null,
       mime_type: mime_type ?? null,
       file_size: file_size ?? null,
-      owner_id: userId,
-      organization_id: organization_id ?? null,
+      owner_id: ctx.userId,
+      organization_id: ctx.orgId,
     }).select().single();
     if (insErr) throw insErr;
 
@@ -187,8 +188,9 @@ const handlers: Record<string, (payload: Payload, ctx: Ctx) => Promise<unknown>>
     return local;
   },
 
-  async update_document(payload) {
+  async update_document(payload, ctx) {
     const { id, title } = payload as { id: string; title?: string };
+    await assertDocumentInOrg(id, ctx.orgId);
     const efId = await ensureEfinsignDocument(id).catch(() => null);
     if (efId && title) await efinsign(`/documents/${efId}`, {
       method: 'PATCH',
@@ -202,8 +204,9 @@ const handlers: Record<string, (payload: Payload, ctx: Ctx) => Promise<unknown>>
     return data;
   },
 
-  async delete_document(payload) {
+  async delete_document(payload, ctx) {
     const { id } = payload as { id: string };
+    await assertDocumentInOrg(id, ctx.orgId);
     const { data: doc } = await admin.from('documents').select('efinsign_document_id').eq('id', id).single();
     const efId = (doc as { efinsign_document_id?: string } | null)?.efinsign_document_id;
     if (efId) {
@@ -215,8 +218,9 @@ const handlers: Record<string, (payload: Payload, ctx: Ctx) => Promise<unknown>>
     return { success: true };
   },
 
-  async send(payload) {
+  async send(payload, ctx) {
     const { id } = payload as { id: string };
+    await assertDocumentInOrg(id, ctx.orgId);
     const efId = await ensureEfinsignDocument(id);
     await efinsign(`/documents/${efId}/send`, { method: 'POST' });
     await admin.from('documents').update({ status: 'sent' }).eq('id', id);
@@ -228,24 +232,28 @@ const handlers: Record<string, (payload: Payload, ctx: Ctx) => Promise<unknown>>
     return { success: true };
   },
 
-  async void(payload) {
+  async void(payload, ctx) {
     const { id } = payload as { id: string };
+    await assertDocumentInOrg(id, ctx.orgId);
     const efId = await ensureEfinsignDocument(id);
     await efinsign(`/documents/${efId}/void`, { method: 'POST' });
     await admin.from('documents').update({ status: 'voided' }).eq('id', id);
     return { success: true };
   },
 
-  async remind(payload) {
+  async remind(payload, ctx) {
     const { id } = payload as { id: string };
+    await assertDocumentInOrg(id, ctx.orgId);
     const efId = await ensureEfinsignDocument(id);
     await efinsign(`/documents/${efId}/remind`, { method: 'POST' });
     return { success: true };
   },
 
-  async refresh_status(payload) {
+  async refresh_status(payload, ctx) {
     const { id } = payload as { id: string };
+    await assertDocumentInOrg(id, ctx.orgId);
     const { docId } = await getEfinsignIds(id);
+
     if (!docId) throw new Error('Document has not been uploaded to eFinSign yet');
     const res = await efinsign(`/documents/${docId}`);
     const remote = res.data as {
