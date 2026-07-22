@@ -68,11 +68,16 @@ function extractStoragePath(fileUrl: string): string | null {
 async function fetchPdfBlob(fileUrl: string): Promise<Blob> {
   const path = extractStoragePath(fileUrl);
   if (path) {
-    const { data, error } = await admin.storage.from(DOCSIGN_BUCKET).download(path);
-    if (error || !data) {
-      throw new Error(`Failed to download document from storage: ${error?.message || 'unknown error'} (path: ${path})`);
+    const { data, error } = await admin
+      .storage
+      .from('docsign-documents')
+      .createSignedUrl(path, 60 * 60); // expires in 1 hour
+    if (error || !data?.signedUrl) {
+      throw new Error(`Failed to sign document URL: ${error?.message || 'unknown error'} (path: ${path})`);
     }
-    return data;
+    const r = await fetch(data.signedUrl);
+    if (!r.ok) throw new Error(`Failed to fetch signed document (${r.status})`);
+    return await r.blob();
   }
   const r = await fetch(fileUrl);
   if (!r.ok) throw new Error(`Failed to fetch document file (${r.status})`);
