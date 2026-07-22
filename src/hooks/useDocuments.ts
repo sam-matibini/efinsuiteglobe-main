@@ -139,8 +139,14 @@ export function useDocumentFields(documentId: string | undefined) {
 }
 
 async function invokeEfinsign<T = unknown>(action: string, payload: Record<string, unknown> = {}): Promise<T> {
+  // Auto-inject caller's current organization id if not already present.
+  const withOrg = { ...payload };
+  if (!('organization_id' in withOrg) && typeof window !== 'undefined') {
+    const currentOrgId = window.localStorage.getItem('current_organization_id');
+    if (currentOrgId) withOrg.organization_id = currentOrgId;
+  }
   const { data, error } = await supabase.functions.invoke('efinsign-proxy', {
-    body: { action, payload },
+    body: { action, payload: withOrg },
   });
   if (error) {
     let msg = error.message || 'eFinSign request failed';
@@ -156,6 +162,7 @@ async function invokeEfinsign<T = unknown>(action: string, payload: Record<strin
   if ((data as { error?: string })?.error) throw new Error((data as { error: string }).error);
   return (data as { data: T }).data;
 }
+
 
 export function useCreateDocument() {
   const queryClient = useQueryClient();
