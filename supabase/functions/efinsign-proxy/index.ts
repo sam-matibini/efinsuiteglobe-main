@@ -277,11 +277,12 @@ const handlers: Record<string, (payload: Payload, ctx: Ctx) => Promise<unknown>>
     return { success: true };
   },
 
-  async add_signer(payload) {
+  async add_signer(payload, ctx) {
     const { document_id, email, name, signing_order, auth_method, phone_number, role } = payload as {
       document_id: string; email: string; name?: string | null;
       signing_order?: number; auth_method?: string; phone_number?: string | null; role?: string;
     };
+    await assertDocumentInOrg(document_id, ctx.orgId);
     const efDocId = await ensureEfinsignDocument(document_id);
     const res = await efinsign(`/documents/${efDocId}/signers`, {
       method: 'POST',
@@ -304,10 +305,11 @@ const handlers: Record<string, (payload: Payload, ctx: Ctx) => Promise<unknown>>
     return data;
   },
 
-  async update_signer(payload) {
+  async update_signer(payload, ctx) {
     const { id, document_id, name, email, signing_order } = payload as {
       id: string; document_id: string; name?: string; email?: string; signing_order?: number;
     };
+    await assertDocumentInOrg(document_id, ctx.orgId);
     const { docId, signerId } = await getEfinsignIds(document_id, id);
     if (docId && signerId) {
       const body: Record<string, unknown> = {};
@@ -331,8 +333,9 @@ const handlers: Record<string, (payload: Payload, ctx: Ctx) => Promise<unknown>>
     return data;
   },
 
-  async delete_signer(payload) {
+  async delete_signer(payload, ctx) {
     const { id, document_id } = payload as { id: string; document_id: string };
+    await assertDocumentInOrg(document_id, ctx.orgId);
     const { docId, signerId } = await getEfinsignIds(document_id, id);
     if (docId && signerId) {
       try { await efinsign(`/documents/${docId}/signers/${signerId}`, { method: 'DELETE' }); }
@@ -343,7 +346,7 @@ const handlers: Record<string, (payload: Payload, ctx: Ctx) => Promise<unknown>>
     return { success: true };
   },
 
-  async add_field(payload) {
+  async add_field(payload, ctx) {
     const {
       document_id, assigned_signer_id, field_type, page_number,
       position_x, position_y, width, height, label, is_required,
@@ -353,6 +356,7 @@ const handlers: Record<string, (payload: Payload, ctx: Ctx) => Promise<unknown>>
       position_x: number; position_y: number; width: number; height: number;
       label?: string | null; is_required?: boolean;
     };
+    await assertDocumentInOrg(document_id, ctx.orgId);
     const { docId, signerId } = await getEfinsignIds(document_id, assigned_signer_id);
     let efFieldId: string | null = null;
     if (docId && signerId) {
@@ -382,11 +386,12 @@ const handlers: Record<string, (payload: Payload, ctx: Ctx) => Promise<unknown>>
     return data;
   },
 
-  async update_field(payload) {
+  async update_field(payload, ctx) {
     const { id, document_id, assigned_signer_id, updates } = payload as {
       id: string; document_id: string; assigned_signer_id?: string;
       updates: Record<string, unknown>;
     };
+    await assertDocumentInOrg(document_id, ctx.orgId);
     const { docId, signerId, fieldId } = await getEfinsignIds(document_id, assigned_signer_id, id);
     if (docId && signerId && fieldId) {
       const body: Record<string, unknown> = {};
@@ -410,10 +415,11 @@ const handlers: Record<string, (payload: Payload, ctx: Ctx) => Promise<unknown>>
     return data;
   },
 
-  async delete_field(payload) {
+  async delete_field(payload, ctx) {
     const { id, document_id, assigned_signer_id } = payload as {
       id: string; document_id: string; assigned_signer_id?: string;
     };
+    await assertDocumentInOrg(document_id, ctx.orgId);
     const { docId, signerId, fieldId } = await getEfinsignIds(document_id, assigned_signer_id, id);
     if (docId && signerId && fieldId) {
       try { await efinsign(`/documents/${docId}/signers/${signerId}/fields/${fieldId}`, { method: 'DELETE' }); }
@@ -424,16 +430,25 @@ const handlers: Record<string, (payload: Payload, ctx: Ctx) => Promise<unknown>>
     return { success: true };
   },
 
-  async get_signing_url(payload) {
+  async get_signing_url(payload, ctx) {
+    // Signer-scoped action: resolve signer's document, then enforce ownership
+    // (the signing page itself calls this without an org context — allow when
+    // the caller is the signer's owning org, OR skip the check for public
+    // signing links by falling back to signer.document ownership check only
+    // when an org is provided).
     const { signer_id } = payload as { signer_id: string };
     const { data: signer, error } = await admin.from('document_signers')
       .select('id, email, efinsign_signer_id, document_id')
       .eq('id', signer_id).single();
     if (error) throw error;
+    const docLocalId = (signer as { document_id: string }).document_id;
+    if (ctx.orgId) {
+      await assertDocumentInOrg(docLocalId, ctx.orgId);
+    }
     let efSignerId = (signer as { efinsign_signer_id: string | null }).efinsign_signer_id;
     if (!efSignerId) {
       // Attempt refresh to backfill.
-      await handlers.refresh_status({ id: (signer as { document_id: string }).document_id }, '');
+      await handlers.refresh_status({ id: docLocalId }, { ...ctx, orgId: ctx.orgId ?? (await admin.from('documents').select('organization_id').eq('id', docLocalId).single()).data?.organization_id ?? null });
       const { data: s2 } = await admin.from('document_signers')
         .select('efinsign_signer_id').eq('id', signer_id).single();
       efSignerId = (s2 as { efinsign_signer_id: string | null } | null)?.efinsign_signer_id ?? null;
@@ -447,8 +462,9 @@ const handlers: Record<string, (payload: Payload, ctx: Ctx) => Promise<unknown>>
     return res.data;
   },
 
-  async audit_log(payload) {
+  async audit_log(payload, ctx) {
     const { id } = payload as { id: string };
+    await assertDocumentInOrg(id, ctx.orgId);
     const efId = await ensureEfinsignDocument(id).catch(() => null);
     if (!efId) return { data: [] };
     const res = await efinsign(`/documents/${efId}/audit-log`);
@@ -458,8 +474,9 @@ const handlers: Record<string, (payload: Payload, ctx: Ctx) => Promise<unknown>>
   // Return a short-lived download URL for the signed PDF (and certificate if available).
   // eFinSign's /documents/:id/download returns the signed file bytes; we forward it as
   // a base64 payload so the client can trigger a download without exposing the API key.
-  async download_signed(payload) {
+  async download_signed(payload, ctx) {
     const { id, kind = 'signed' } = payload as { id: string; kind?: 'signed' | 'certificate' };
+    await assertDocumentInOrg(id, ctx.orgId);
     const efId = await ensureEfinsignDocument(id);
     if (!API_KEY) throw new Error('EFINSIGN_API_KEY is not configured');
     const url = kind === 'certificate'
@@ -483,22 +500,28 @@ const handlers: Record<string, (payload: Payload, ctx: Ctx) => Promise<unknown>>
     return { content_type: contentType, base64: btoa(binary), filename: `${kind}-${efId}.pdf` };
   },
 
-  // ---- Templates ---------------------------------------------------------
-  async list_templates() {
+  // ---- Templates (eFinSign-org-wide; platform-admin only) ---------------
+  async list_templates(_payload, ctx) {
+    requireAdmin(ctx);
     const res = await efinsign('/templates');
     return res.data ?? [];
   },
-  async get_template(payload) {
+  async get_template(payload, ctx) {
+    requireAdmin(ctx);
     const { id } = payload as { id: string };
     const res = await efinsign(`/templates/${id}`);
     return res.data;
   },
-  async delete_template(payload) {
+  async delete_template(payload, ctx) {
+    requireAdmin(ctx);
     const { id } = payload as { id: string };
     await efinsign(`/templates/${id}`, { method: 'DELETE' });
     return { success: true };
   },
-  async create_from_template(payload) {
+  // Any org member can instantiate a template — the resulting document is
+  // tagged with their org id so subsequent per-document actions are scoped.
+  async create_from_template(payload, ctx) {
+    if (!ctx.orgId) throw Object.assign(new Error('organization_id is required'), { status: 400 });
     const { template_id, title, signers } = payload as {
       template_id: string; title?: string; signers?: Array<Record<string, unknown>>;
     };
@@ -507,25 +530,39 @@ const handlers: Record<string, (payload: Payload, ctx: Ctx) => Promise<unknown>>
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ title, signers }),
     });
+    const created = res.data as { id: string; title?: string } | null;
+    if (created?.id) {
+      await admin.from('documents').insert({
+        title: created.title || title || 'Untitled',
+        document_type: 'contract',
+        owner_id: ctx.userId,
+        organization_id: ctx.orgId,
+        efinsign_document_id: created.id,
+      });
+    }
     return res.data;
   },
 
-  // ---- Organization ------------------------------------------------------
-  async usage() {
+  // ---- Organization (eFinSign-org-level; platform-admin only) -----------
+  async usage(_payload, ctx) {
+    requireAdmin(ctx);
     const res = await efinsign('/organization/usage');
     return res.data;
   },
-  async organization() {
+  async organization(_payload, ctx) {
+    requireAdmin(ctx);
     const res = await efinsign('/organization');
     return res.data;
   },
 
-  // ---- Webhooks ----------------------------------------------------------
-  async list_webhooks() {
+  // ---- Webhooks (platform-admin only) -----------------------------------
+  async list_webhooks(_payload, ctx) {
+    requireAdmin(ctx);
     const res = await efinsign('/webhooks');
     return res.data ?? [];
   },
-  async register_webhook(payload) {
+  async register_webhook(payload, ctx) {
+    requireAdmin(ctx);
     const { url, events, secret, description } = payload as {
       url: string; events?: string[]; secret?: string; description?: string;
     };
@@ -536,17 +573,20 @@ const handlers: Record<string, (payload: Payload, ctx: Ctx) => Promise<unknown>>
     });
     return res.data;
   },
-  async delete_webhook(payload) {
+  async delete_webhook(payload, ctx) {
+    requireAdmin(ctx);
     const { id } = payload as { id: string };
     await efinsign(`/webhooks/${id}`, { method: 'DELETE' });
     return { success: true };
   },
-  async test_webhook(payload) {
+  async test_webhook(payload, ctx) {
+    requireAdmin(ctx);
     const { id } = payload as { id: string };
     const res = await efinsign(`/webhooks/${id}/test`, { method: 'POST' });
     return res.data ?? { success: true };
   },
 };
+
 
 // ---- HTTP entrypoint -----------------------------------------------------
 
