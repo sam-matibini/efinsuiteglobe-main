@@ -417,6 +417,98 @@ const handlers: Record<string, (payload: Payload, userId: string) => Promise<unk
     const res = await efinsign(`/documents/${efId}/audit-log`);
     return res.data;
   },
+
+  // Return a short-lived download URL for the signed PDF (and certificate if available).
+  // eFinSign's /documents/:id/download returns the signed file bytes; we forward it as
+  // a base64 payload so the client can trigger a download without exposing the API key.
+  async download_signed(payload) {
+    const { id, kind = 'signed' } = payload as { id: string; kind?: 'signed' | 'certificate' };
+    const efId = await ensureEfinsignDocument(id);
+    if (!API_KEY) throw new Error('EFINSIGN_API_KEY is not configured');
+    const url = kind === 'certificate'
+      ? `${EFINSIGN_BASE}/documents/${efId}/download?type=certificate`
+      : `${EFINSIGN_BASE}/documents/${efId}/download`;
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${API_KEY}` } });
+    if (!res.ok) {
+      const text = await res.text();
+      const err = new Error(`[${res.status}] eFinSign download failed: ${text}`);
+      (err as { status?: number }).status = res.status;
+      throw err;
+    }
+    const contentType = res.headers.get('content-type') || 'application/pdf';
+    const buf = new Uint8Array(await res.arrayBuffer());
+    // Base64-encode in chunks to avoid stack overflow on large PDFs.
+    let binary = '';
+    const chunk = 0x8000;
+    for (let i = 0; i < buf.length; i += chunk) {
+      binary += String.fromCharCode(...buf.subarray(i, i + chunk));
+    }
+    return { content_type: contentType, base64: btoa(binary), filename: `${kind}-${efId}.pdf` };
+  },
+
+  // ---- Templates ---------------------------------------------------------
+  async list_templates() {
+    const res = await efinsign('/templates');
+    return res.data ?? [];
+  },
+  async get_template(payload) {
+    const { id } = payload as { id: string };
+    const res = await efinsign(`/templates/${id}`);
+    return res.data;
+  },
+  async delete_template(payload) {
+    const { id } = payload as { id: string };
+    await efinsign(`/templates/${id}`, { method: 'DELETE' });
+    return { success: true };
+  },
+  async create_from_template(payload) {
+    const { template_id, title, signers } = payload as {
+      template_id: string; title?: string; signers?: Array<Record<string, unknown>>;
+    };
+    const res = await efinsign(`/templates/${template_id}/documents`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, signers }),
+    });
+    return res.data;
+  },
+
+  // ---- Organization ------------------------------------------------------
+  async usage() {
+    const res = await efinsign('/organization/usage');
+    return res.data;
+  },
+  async organization() {
+    const res = await efinsign('/organization');
+    return res.data;
+  },
+
+  // ---- Webhooks ----------------------------------------------------------
+  async list_webhooks() {
+    const res = await efinsign('/webhooks');
+    return res.data ?? [];
+  },
+  async register_webhook(payload) {
+    const { url, events, secret, description } = payload as {
+      url: string; events?: string[]; secret?: string; description?: string;
+    };
+    const res = await efinsign('/webhooks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url, events, secret, description }),
+    });
+    return res.data;
+  },
+  async delete_webhook(payload) {
+    const { id } = payload as { id: string };
+    await efinsign(`/webhooks/${id}`, { method: 'DELETE' });
+    return { success: true };
+  },
+  async test_webhook(payload) {
+    const { id } = payload as { id: string };
+    const res = await efinsign(`/webhooks/${id}/test`, { method: 'POST' });
+    return res.data ?? { success: true };
+  },
 };
 
 // ---- HTTP entrypoint -----------------------------------------------------
