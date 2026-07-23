@@ -1,50 +1,53 @@
-## Bulk User Invitations
+# Add mailing addresses to pay stub PDFs
 
-Add a "Bulk Invite" action to the Users settings tab that lets admins invite many users at once, either by uploading a CSV/Excel file or pasting a list.
+Match the reference layout: employer name and mailing address in the top-right of the pay stub header, employee name and mailing address in a left block underneath.
 
-### UI (frontend only additions)
+## 1. Extend `PayStubData` (`src/lib/generatePayStubPdf.ts`)
 
-New `BulkInviteDialog` component opened from a "Bulk Invite" button next to the existing single-invite button in `UsersSettingsTab.tsx`.
+Add optional fields:
+- `companyAddressLine1`, `companyAddressLine2`
+- `companyCity`, `companyProvince`, `companyPostalCode`, `companyCountry`
 
-Two tabs inside the dialog:
-1. **Upload file** — accepts `.csv`, `.xlsx`. Shows a "Download template" link (email,role). Parsed with existing `xlsx`/CSV utilities already used by the import engine.
-2. **Paste list** — textarea, one entry per line: `email` or `email,role`. Also accepts comma/semicolon-separated emails with a single role dropdown applied to all.
+Keep existing `employeeAddress` string; also accept structured employee fields (`employeeAddressLine1`, `employeeAddressLine2`, `employeeCity`, `employeeProvince`, `employeePostalCode`) so the PDF can render the address on multiple lines like the picture.
 
-After parsing, a preview table shows every row with:
-- email, role (editable per row via dropdown), status badge
+## 2. Redesign header block in `generatePayStubPdf`
 
-Row validation runs client-side and marks each row as:
-- **Valid** — well-formed email, valid role, not already a member, no pending invite
-- **Invalid** — bad email format, unknown role, duplicate within the batch
-- **Skipped** — already a member / already has a pending invitation (fetched from `organization_members` + `organization_invitations`)
+Replace the current centered company title + single-line "Address:" row with a two-column header:
 
-### Seat-cap enforcement
+```text
+[Company Name]                          [Company Name]
+                                        [Street]
+                                        [City, Province Postal]
 
-Uses `useUsageLimits` to read `maxUsers` and current `userCount`. Valid rows are counted against remaining seats:
+EMPLOYEE PAY STUB (centered, small)
 
-- If `validRows > remainingSeats` → **block sending entirely**, show a red banner: "This batch would exceed your plan limit (X seats remaining, Y valid invites). Remove rows or upgrade your plan." The Send button is disabled.
-- Invalid/skipped rows are always shown in a report section but never block; they're simply not sent.
+Employee:                               PAY PERIOD
+  Name                                    Period / Pay Date / etc.
+  Street
+  City, Province Postal
+  Employee # / Province / Department
+```
 
-Admins (`isAdmin`) bypass the cap, matching existing behavior in `useUsageLimits`.
+- Employer address: right-aligned, stacked, small font, gray.
+- Employee address: left column, stacked under the name.
+- Fall back gracefully when fields are missing (skip empty lines).
+- Preserve existing sections (Earnings, Deductions, Net Pay, YTD, footer) unchanged.
 
-### Sending
+## 3. Pass addresses from callers
 
-On confirm, iterate valid rows and call the existing `send-invitation` edge function once per row (sequential with small concurrency, e.g. 3 at a time, to avoid Resend rate limits). Progress bar updates as each completes.
+Update the three call sites to populate the new employer address fields from `organization` and structured employee address fields:
 
-Final results screen shows:
-- ✅ Sent (count + emails)
-- ⚠️ Skipped (already member / already invited)
-- ❌ Failed (with error message per row)
-- CSV export button for the failed list so admins can fix and retry
+- `src/pages/PayRuns.tsx` (bulk stub download)
+- `src/pages/payroll/EmployeeSelfService.tsx` (self-serve download)
+- `src/lib/communicationAttachments.ts` (email attachments)
 
-### Files to add
-- `src/components/settings/BulkInviteDialog.tsx`
-- `src/components/settings/bulkInviteTemplate.ts` (template CSV generator + row parser/validator)
+All three already read the org (`address_line1`, `city`, `province`, `postal_code`, `country`) and employee address parts, so this is just extra fields on the `PayStubData` object — no new queries.
 
-### Files to modify
-- `src/components/settings/UsersSettingsTab.tsx` — add "Bulk Invite" button and wire dialog
+`EmployeePayHistoryDialog.tsx` has its own local PDF builder (not using `generatePayStubPdf`); apply the same header layout there so the in-app preview and download match.
 
-### Out of scope
-- No changes to the `send-invitation` edge function; reused as-is.
-- No new database tables — `organization_invitations` already handles idempotency.
-- No changes to role definitions.
+## Technical notes
+
+- No schema or backend changes.
+- No new dependencies.
+- Layout uses existing jsPDF calls; only text placement changes.
+- All new fields optional, so existing behavior is preserved when address data is missing.
