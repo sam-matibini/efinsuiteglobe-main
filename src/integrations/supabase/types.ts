@@ -6539,6 +6539,7 @@ export type Database = {
           assigned_signer_id: string | null
           created_at: string
           document_id: string
+          efinsign_field_id: string | null
           field_config: Json | null
           field_type: string
           filled_at: string | null
@@ -6560,6 +6561,7 @@ export type Database = {
           assigned_signer_id?: string | null
           created_at?: string
           document_id: string
+          efinsign_field_id?: string | null
           field_config?: Json | null
           field_type: string
           filled_at?: string | null
@@ -6581,6 +6583,7 @@ export type Database = {
           assigned_signer_id?: string | null
           created_at?: string
           document_id?: string
+          efinsign_field_id?: string | null
           field_config?: Json | null
           field_type?: string
           filled_at?: string | null
@@ -6960,6 +6963,7 @@ export type Database = {
           delegation_allowed: boolean | null
           device_info: Json | null
           document_id: string
+          efinsign_signer_id: string | null
           email: string
           email_sent_at: string | null
           id: string
@@ -7003,6 +7007,7 @@ export type Database = {
           delegation_allowed?: boolean | null
           device_info?: Json | null
           document_id: string
+          efinsign_signer_id?: string | null
           email: string
           email_sent_at?: string | null
           id?: string
@@ -7046,6 +7051,7 @@ export type Database = {
           delegation_allowed?: boolean | null
           device_info?: Json | null
           document_id?: string
+          efinsign_signer_id?: string | null
           email?: string
           email_sent_at?: string | null
           id?: string
@@ -7244,6 +7250,7 @@ export type Database = {
           custom_email_subject: string | null
           document_hash: string | null
           document_type: string | null
+          efinsign_document_id: string | null
           envelope_id: string | null
           expires_at: string | null
           file_size: number | null
@@ -7285,6 +7292,7 @@ export type Database = {
           custom_email_subject?: string | null
           document_hash?: string | null
           document_type?: string | null
+          efinsign_document_id?: string | null
           envelope_id?: string | null
           expires_at?: string | null
           file_size?: number | null
@@ -7326,6 +7334,7 @@ export type Database = {
           custom_email_subject?: string | null
           document_hash?: string | null
           document_type?: string | null
+          efinsign_document_id?: string | null
           envelope_id?: string | null
           expires_at?: string | null
           file_size?: number | null
@@ -8299,6 +8308,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      efinsign_webhook_events: {
+        Row: {
+          event: string
+          id: string
+          received_at: string
+        }
+        Insert: {
+          event: string
+          id: string
+          received_at?: string
+        }
+        Update: {
+          event?: string
+          id?: string
+          received_at?: string
+        }
+        Relationships: []
       }
       employee_banking_profiles: {
         Row: {
