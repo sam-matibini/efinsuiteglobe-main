@@ -330,7 +330,7 @@ export default function PayRuns() {
         .from('pay_stubs')
         .select(`
           *,
-          employee:employees(id, first_name, last_name, employee_number, department, province)
+          employee:employees(id, first_name, last_name, employee_number, department, province, address_line1, address_line2, city, postal_code, country)
         `)
         .eq('pay_run_id', payRun.id);
 
@@ -339,6 +339,8 @@ export default function PayRuns() {
         toast.error('No pay stubs found for this pay run');
         return;
       }
+
+      const org = organization as any;
 
       // Generate PDF for each employee
       for (const stub of payStubs) {
@@ -350,7 +352,12 @@ export default function PayRuns() {
           employeeNumber: employee.employee_number,
           department: employee.department || undefined,
           province: employee.province || 'ON',
-          employeeAddress: [employee.address_line1, employee.address_line2, [employee.city, employee.province, employee.postal_code].filter(Boolean).join(', ')].filter(Boolean).join(', ') || undefined,
+          employeeAddressLine1: employee.address_line1 || undefined,
+          employeeAddressLine2: employee.address_line2 || undefined,
+          employeeCity: employee.city || undefined,
+          employeeProvince: employee.province || undefined,
+          employeePostalCode: employee.postal_code || undefined,
+          employeeCountry: employee.country || undefined,
           payPeriodStart: payRun.pay_period_start,
           payPeriodEnd: payRun.pay_period_end,
           payDate: payRun.pay_date,
@@ -377,6 +384,13 @@ export default function PayRuns() {
           ytdEi: stub.ytd_ei || 0,
           ytdFederalTax: stub.ytd_federal_tax || 0,
           ytdProvincialTax: stub.ytd_provincial_tax || 0,
+          companyName: org?.name || undefined,
+          companyAddressLine1: org?.address_line1 || undefined,
+          companyAddressLine2: org?.address_line2 || undefined,
+          companyCity: org?.city || undefined,
+          companyProvince: org?.province || undefined,
+          companyPostalCode: org?.postal_code || undefined,
+          companyCountry: typeof org?.country === 'string' ? org.country : org?.country?.name || undefined,
         };
 
         downloadPayStubPdf(stubData);
