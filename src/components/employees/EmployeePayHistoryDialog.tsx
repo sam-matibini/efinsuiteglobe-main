@@ -139,44 +139,79 @@ export default function EmployeePayHistoryDialog({ open, onOpenChange, employee 
     const payRun = payStub.pay_runs;
     let y = 20;
     
-    // Header with company name
+    const leftMargin = 15;
+    const rightMargin = pageWidth - 15;
+    const org = organization as any;
+
+    // Header: company name (left) + employer mailing address (right)
     doc.setFontSize(16);
     doc.setFont('helvetica', 'bold');
-    doc.text(companyName, pageWidth / 2, y, { align: 'center' });
-    y += 8;
-    
-    doc.setFontSize(11);
+    doc.text(companyName, leftMargin, y);
+
+    const employerAddrLines = [
+      org?.address_line1,
+      org?.address_line2,
+      [org?.city, org?.province, org?.postal_code].filter(Boolean).join(', '),
+      typeof org?.country === 'string' ? org.country : org?.country?.name,
+    ].filter((v: any) => !!v && String(v).trim().length > 0) as string[];
+
+    doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
+    doc.setTextColor(80, 80, 80);
+    doc.text(companyName, rightMargin, y - 6, { align: 'right' });
+    let addrY = y - 1;
+    employerAddrLines.forEach((line) => {
+      doc.text(line, rightMargin, addrY, { align: 'right' });
+      addrY += 4.5;
+    });
+    doc.setTextColor(0, 0, 0);
+
+    y = Math.max(y + 8, addrY + 2);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
     doc.text('EMPLOYEE PAY STUB', pageWidth / 2, y, { align: 'center' });
-    y += 10;
-    
+    y += 4;
+
     doc.setDrawColor(200, 200, 200);
-    doc.line(15, y, pageWidth - 15, y);
+    doc.line(leftMargin, y, pageWidth - leftMargin, y);
     y += 8;
-    
-    // Employee Info
+
+    // Employee Info (left, stacked address) + Pay Period (right)
     doc.setFontSize(9);
     doc.setFont('helvetica', 'bold');
-    doc.text('EMPLOYEE', 15, y);
+    doc.text('EMPLOYEE', leftMargin, y);
     doc.text('PAY PERIOD', pageWidth / 2 + 10, y);
-    y += 6;
-    
+
+    const empAddrLines = [
+      employee.address_line1,
+      employee.address_line2,
+      [employee.city, employee.province, employee.postal_code].filter(Boolean).join(', '),
+    ].filter((v: any) => !!v && String(v).trim().length > 0) as string[];
+
+    const leftLines: Array<{ text: string; bold?: boolean }> = [
+      { text: `${employee.first_name} ${employee.last_name}`, bold: true },
+      ...empAddrLines.map((t) => ({ text: t })),
+      { text: `Employee #: ${employee.employee_number}` },
+      { text: `Province: ${employee.province}` },
+    ];
+    const rightLines = [
+      `Period: ${format(parseLocalDate(payRun.pay_period_start), 'MMM d')} - ${format(parseLocalDate(payRun.pay_period_end), 'MMM d, yyyy')}`,
+      `Pay Date: ${format(new Date(payRun.pay_date), 'MMM d, yyyy')}`,
+    ];
+
+    let leftY = y + 5;
+    let rightY = y + 5;
+    leftLines.forEach((l) => {
+      doc.setFont('helvetica', l.bold ? 'bold' : 'normal');
+      doc.text(l.text, leftMargin, leftY);
+      leftY += 5;
+    });
     doc.setFont('helvetica', 'normal');
-    doc.text(`Name: ${employee.first_name} ${employee.last_name}`, 15, y);
-    doc.text(`Period: ${format(parseLocalDate(payRun.pay_period_start), 'MMM d')} - ${format(parseLocalDate(payRun.pay_period_end), 'MMM d, yyyy')}`, pageWidth / 2 + 10, y);
-    y += 5;
-    doc.text(`Employee #: ${employee.employee_number}`, 15, y);
-    doc.text(`Pay Date: ${format(new Date(payRun.pay_date), 'MMM d, yyyy')}`, pageWidth / 2 + 10, y);
-    y += 5;
-    doc.text(`Province: ${employee.province}`, 15, y);
-    
-    // Employee address
-    const empAddr = [employee.address_line1, employee.address_line2, [employee.city, employee.province, employee.postal_code].filter(Boolean).join(', ')].filter(Boolean).join(', ');
-    if (empAddr) {
-      y += 5;
-      doc.text(`Address: ${empAddr.substring(0, 80)}`, 15, y);
-    }
-    y += 10;
+    rightLines.forEach((l) => {
+      doc.text(l, pageWidth / 2 + 10, rightY);
+      rightY += 5;
+    });
+    y = Math.max(leftY, rightY) + 4;
     
     // Earnings Section
     doc.setFillColor(240, 240, 240);
