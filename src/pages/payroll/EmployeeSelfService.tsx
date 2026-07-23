@@ -102,12 +102,18 @@ export default function EmployeeSelfService() {
       return null;
     }
 
+    const org = organization as any;
     return {
       employeeName: `${currentEmployee.first_name} ${currentEmployee.last_name}`,
       employeeNumber: currentEmployee.employee_number,
       department: currentEmployee.department || undefined,
       province: currentEmployee.province || 'ON',
-      employeeAddress: [currentEmployee.address_line1, currentEmployee.address_line2, [currentEmployee.city, currentEmployee.province, currentEmployee.postal_code].filter(Boolean).join(', ')].filter(Boolean).join(', ') || undefined,
+      employeeAddressLine1: currentEmployee.address_line1 || undefined,
+      employeeAddressLine2: currentEmployee.address_line2 || undefined,
+      employeeCity: currentEmployee.city || undefined,
+      employeeProvince: currentEmployee.province || undefined,
+      employeePostalCode: currentEmployee.postal_code || undefined,
+      employeeCountry: (currentEmployee as any).country || undefined,
 
       payPeriodStart: stub.pay_runs.pay_period_start,
       payPeriodEnd: stub.pay_runs.pay_period_end,
@@ -140,7 +146,13 @@ export default function EmployeeSelfService() {
       ytdFederalTax: stub.ytd_federal_tax || 0,
       ytdProvincialTax: stub.ytd_provincial_tax || 0,
 
-      companyName: organization?.name || undefined,
+      companyName: org?.name || undefined,
+      companyAddressLine1: org?.address_line1 || undefined,
+      companyAddressLine2: org?.address_line2 || undefined,
+      companyCity: org?.city || undefined,
+      companyProvince: org?.province || undefined,
+      companyPostalCode: org?.postal_code || undefined,
+      companyCountry: typeof org?.country === 'string' ? org.country : org?.country?.name || undefined,
     };
   };
 
