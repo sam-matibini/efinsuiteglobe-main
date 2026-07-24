@@ -431,6 +431,9 @@ const AppRoutes = () => {
     <Route path="/payroll/employees/list" element={<ProtectedRoute><PageWrapper><EmployeesList /></PageWrapper></ProtectedRoute>} />
     <Route path="/payroll/employees/:id" element={<ProtectedRoute><PageWrapper><EmployeeProfile /></PageWrapper></ProtectedRoute>} />
     <Route path="/payroll/employees/onboarding" element={<ProtectedRoute><PageWrapper><EmployeeOnboarding /></PageWrapper></ProtectedRoute>} />
+    <Route path="/payroll/employees/bulk-upload" element={<ProtectedRoute><PageWrapper><BulkEmployeeUpload /></PageWrapper></ProtectedRoute>} />
+    <Route path="/payroll/employees/bulk-upload/history" element={<ProtectedRoute><PageWrapper><BulkEmployeeUploadHistory /></PageWrapper></ProtectedRoute>} />
+
     <Route path="/payroll/timesheets" element={<ProtectedRoute><PageWrapper><EmployeeTimesheets /></PageWrapper></ProtectedRoute>} />
     <Route path="/payroll/timesheets/:id" element={<ProtectedRoute><PageWrapper><TimesheetDetail /></PageWrapper></ProtectedRoute>} />
     <Route path="/payroll/self-service" element={<ProtectedRoute><PageWrapper><EmployeeSelfService /></PageWrapper></ProtectedRoute>} />
