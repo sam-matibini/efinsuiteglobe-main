@@ -522,6 +522,23 @@ export default function EmployeePayHistoryDialog({ open, onOpenChange, employee 
   // View individual paystub
   if (selectedPayStub) {
     const payRun = selectedPayStub.pay_runs;
+    const org = organization as any;
+    const employerAddressLines = buildAddressLines({
+      line1: selectedPayStub.employer_mailing_address_line1 || org?.address_line1 || undefined,
+      line2: selectedPayStub.employer_mailing_address_line2 || org?.address_line2 || undefined,
+      city: selectedPayStub.employer_mailing_city || org?.city || undefined,
+      region: selectedPayStub.employer_mailing_region || org?.province || undefined,
+      postalCode: selectedPayStub.employer_mailing_postal_code || org?.postal_code || undefined,
+      country: selectedPayStub.employer_mailing_country || (typeof org?.country === 'string' ? org.country : org?.country?.name) || undefined,
+    });
+    const employeeAddressLines = buildAddressLines({
+      line1: selectedPayStub.employee_mailing_address_line1 || employee.address_line1 || undefined,
+      line2: selectedPayStub.employee_mailing_address_line2 || employee.address_line2 || undefined,
+      city: selectedPayStub.employee_mailing_city || employee.city || undefined,
+      region: selectedPayStub.employee_mailing_region || employee.mailing_province || employee.province || undefined,
+      postalCode: selectedPayStub.employee_mailing_postal_code || employee.postal_code || undefined,
+      country: selectedPayStub.employee_mailing_country || employee.country || undefined,
+    });
     return (
       <Dialog open={open} onOpenChange={(isOpen) => {
         if (!isOpen) setSelectedPayStub(null);
@@ -541,9 +558,17 @@ export default function EmployeePayHistoryDialog({ open, onOpenChange, employee 
           
           <Card className="p-6">
             {/* Company Header */}
-            <div className="text-center mb-6">
-              <h2 className="text-xl font-bold">{companyName}</h2>
-              <p className="text-sm text-muted-foreground">EMPLOYEE PAY STUB</p>
+            <div className="flex items-start justify-between gap-6 mb-6">
+              <div>
+                <h2 className="text-xl font-bold">{companyName}</h2>
+                <p className="text-sm text-muted-foreground">EMPLOYEE PAY STUB</p>
+              </div>
+              <div className="text-right text-sm text-muted-foreground leading-relaxed">
+                <p className="font-medium text-foreground">{companyName}</p>
+                {employerAddressLines.map((line) => (
+                  <p key={line}>{line}</p>
+                ))}
+              </div>
             </div>
             
             <Separator className="my-4" />
@@ -553,7 +578,11 @@ export default function EmployeePayHistoryDialog({ open, onOpenChange, employee 
               <div>
                 <h3 className="font-semibold mb-2">Employee Information</h3>
                 <p className="text-sm">Name: {employee.first_name} {employee.last_name}</p>
+                {employeeAddressLines.map((line) => (
+                  <p key={line} className="text-sm text-muted-foreground">{line}</p>
+                ))}
                 <p className="text-sm">Employee #: {employee.employee_number}</p>
+                <p className="text-sm">Province: {selectedPayStub.employee_mailing_region || employee.mailing_province || employee.province}</p>
                 <p className="text-sm">Department: {employee.department || '-'}</p>
               </div>
               <div>
