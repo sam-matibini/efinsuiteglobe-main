@@ -36,6 +36,7 @@ import { toast } from 'sonner';
 import eFinSuiteGlobeLogo from '@/assets/efinsuite-globe-logo.png';
 import { copyTextToClipboard, tryOpenInNewTab } from '@/lib/share';
 import { useTwilioShare } from '@/hooks/useTwilioShare';
+import { buildAddressLines } from '@/lib/generatePayStubPdf';
 
 type Employee = Database['public']['Tables']['employees']['Row'];
 
@@ -64,6 +65,18 @@ interface PayStubWithPayRun {
   ytd_ei: number | null;
   ytd_federal_tax: number | null;
   ytd_provincial_tax: number | null;
+  employee_mailing_address_line1?: string | null;
+  employee_mailing_address_line2?: string | null;
+  employee_mailing_city?: string | null;
+  employee_mailing_region?: string | null;
+  employee_mailing_postal_code?: string | null;
+  employee_mailing_country?: string | null;
+  employer_mailing_address_line1?: string | null;
+  employer_mailing_address_line2?: string | null;
+  employer_mailing_city?: string | null;
+  employer_mailing_region?: string | null;
+  employer_mailing_postal_code?: string | null;
+  employer_mailing_country?: string | null;
   created_at: string;
   pay_runs: {
     pay_period_start: string;
@@ -85,7 +98,7 @@ export default function EmployeePayHistoryDialog({ open, onOpenChange, employee 
       
       const { data: stubsData, error: stubsError } = await supabase
         .from('pay_stubs')
-        .select('id, pay_run_id, gross_pay, total_deductions, net_pay, regular_hours, overtime_hours, federal_tax, provincial_tax, cpp_contribution, ei_premium, regular_earnings, overtime_earnings, vacation_pay, ytd_gross, ytd_cpp, ytd_ei, ytd_federal_tax, ytd_provincial_tax, created_at')
+        .select('id, pay_run_id, gross_pay, total_deductions, net_pay, regular_hours, overtime_hours, federal_tax, provincial_tax, cpp_contribution, ei_premium, regular_earnings, overtime_earnings, vacation_pay, ytd_gross, ytd_cpp, ytd_ei, ytd_federal_tax, ytd_provincial_tax, employee_mailing_address_line1, employee_mailing_address_line2, employee_mailing_city, employee_mailing_region, employee_mailing_postal_code, employee_mailing_country, employer_mailing_address_line1, employer_mailing_address_line2, employer_mailing_city, employer_mailing_region, employer_mailing_postal_code, employer_mailing_country, created_at')
         .eq('employee_id', employee.id)
         .order('created_at', { ascending: false });
       
@@ -128,7 +141,7 @@ export default function EmployeePayHistoryDialog({ open, onOpenChange, employee 
     }).format(amount);
   };
 
-  const companyName = organization?.name || 'Company';
+  const companyName = organization?.legal_name || organization?.name || 'Company';
   const companyLogo = organization?.payroll_show_logo === false ? undefined : (organization?.payroll_logo_url || organization?.logo_url);
 
   const generatePayStubPdf = async (payStub: PayStubWithPayRun): Promise<jsPDF> => {
@@ -149,10 +162,14 @@ export default function EmployeePayHistoryDialog({ open, onOpenChange, employee 
     doc.text(companyName, leftMargin, y);
 
     const employerAddrLines = [
-      org?.address_line1,
-      org?.address_line2,
-      [org?.city, org?.province, org?.postal_code].filter(Boolean).join(', '),
-      typeof org?.country === 'string' ? org.country : org?.country?.name,
+      payStub.employer_mailing_address_line1 || org?.address_line1,
+      payStub.employer_mailing_address_line2 || org?.address_line2,
+      [
+        payStub.employer_mailing_city || org?.city,
+        payStub.employer_mailing_region || org?.province,
+        payStub.employer_mailing_postal_code || org?.postal_code,
+      ].filter(Boolean).join(', '),
+      payStub.employer_mailing_country || (typeof org?.country === 'string' ? org.country : org?.country?.name),
     ].filter((v: any) => !!v && String(v).trim().length > 0) as string[];
 
     doc.setFontSize(9);
@@ -183,16 +200,21 @@ export default function EmployeePayHistoryDialog({ open, onOpenChange, employee 
     doc.text('PAY PERIOD', pageWidth / 2 + 10, y);
 
     const empAddrLines = [
-      employee.address_line1,
-      employee.address_line2,
-      [employee.city, employee.province, employee.postal_code].filter(Boolean).join(', '),
+      payStub.employee_mailing_address_line1 || employee.address_line1,
+      payStub.employee_mailing_address_line2 || employee.address_line2,
+      [
+        payStub.employee_mailing_city || employee.city,
+        payStub.employee_mailing_region || employee.mailing_province || employee.province,
+        payStub.employee_mailing_postal_code || employee.postal_code,
+      ].filter(Boolean).join(', '),
+      payStub.employee_mailing_country || employee.country,
     ].filter((v: any) => !!v && String(v).trim().length > 0) as string[];
 
     const leftLines: Array<{ text: string; bold?: boolean }> = [
       { text: `${employee.first_name} ${employee.last_name}`, bold: true },
       ...empAddrLines.map((t) => ({ text: t })),
       { text: `Employee #: ${employee.employee_number}` },
-      { text: `Province: ${employee.province}` },
+      { text: `Province: ${payStub.employee_mailing_region || employee.mailing_province || employee.province}` },
     ];
     const rightLines = [
       `Period: ${format(parseLocalDate(payRun.pay_period_start), 'MMM d')} - ${format(parseLocalDate(payRun.pay_period_end), 'MMM d, yyyy')}`,
@@ -500,6 +522,23 @@ export default function EmployeePayHistoryDialog({ open, onOpenChange, employee 
   // View individual paystub
   if (selectedPayStub) {
     const payRun = selectedPayStub.pay_runs;
+    const org = organization as any;
+    const employerAddressLines = buildAddressLines({
+      line1: selectedPayStub.employer_mailing_address_line1 || org?.address_line1 || undefined,
+      line2: selectedPayStub.employer_mailing_address_line2 || org?.address_line2 || undefined,
+      city: selectedPayStub.employer_mailing_city || org?.city || undefined,
+      region: selectedPayStub.employer_mailing_region || org?.province || undefined,
+      postalCode: selectedPayStub.employer_mailing_postal_code || org?.postal_code || undefined,
+      country: selectedPayStub.employer_mailing_country || (typeof org?.country === 'string' ? org.country : org?.country?.name) || undefined,
+    });
+    const employeeAddressLines = buildAddressLines({
+      line1: selectedPayStub.employee_mailing_address_line1 || employee.address_line1 || undefined,
+      line2: selectedPayStub.employee_mailing_address_line2 || employee.address_line2 || undefined,
+      city: selectedPayStub.employee_mailing_city || employee.city || undefined,
+      region: selectedPayStub.employee_mailing_region || employee.mailing_province || employee.province || undefined,
+      postalCode: selectedPayStub.employee_mailing_postal_code || employee.postal_code || undefined,
+      country: selectedPayStub.employee_mailing_country || employee.country || undefined,
+    });
     return (
       <Dialog open={open} onOpenChange={(isOpen) => {
         if (!isOpen) setSelectedPayStub(null);
@@ -519,9 +558,17 @@ export default function EmployeePayHistoryDialog({ open, onOpenChange, employee 
           
           <Card className="p-6">
             {/* Company Header */}
-            <div className="text-center mb-6">
-              <h2 className="text-xl font-bold">{companyName}</h2>
-              <p className="text-sm text-muted-foreground">EMPLOYEE PAY STUB</p>
+            <div className="flex items-start justify-between gap-6 mb-6">
+              <div>
+                <h2 className="text-xl font-bold">{companyName}</h2>
+                <p className="text-sm text-muted-foreground">EMPLOYEE PAY STUB</p>
+              </div>
+              <div className="text-right text-sm text-muted-foreground leading-relaxed">
+                <p className="font-medium text-foreground">{companyName}</p>
+                {employerAddressLines.map((line) => (
+                  <p key={line}>{line}</p>
+                ))}
+              </div>
             </div>
             
             <Separator className="my-4" />
@@ -531,7 +578,11 @@ export default function EmployeePayHistoryDialog({ open, onOpenChange, employee 
               <div>
                 <h3 className="font-semibold mb-2">Employee Information</h3>
                 <p className="text-sm">Name: {employee.first_name} {employee.last_name}</p>
+                {employeeAddressLines.map((line) => (
+                  <p key={line} className="text-sm text-muted-foreground">{line}</p>
+                ))}
                 <p className="text-sm">Employee #: {employee.employee_number}</p>
+                <p className="text-sm">Province: {selectedPayStub.employee_mailing_region || employee.mailing_province || employee.province}</p>
                 <p className="text-sm">Department: {employee.department || '-'}</p>
               </div>
               <div>

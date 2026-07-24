@@ -22,6 +22,7 @@ export interface Employee {
   address_line2?: string;
   city?: string;
   province: ProvinceCode;
+  mailing_province?: string;
   postal_code?: string;
   country?: string;
   hire_date: string;

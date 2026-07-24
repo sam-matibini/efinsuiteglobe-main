@@ -330,7 +330,7 @@ export default function PayRuns() {
         .from('pay_stubs')
         .select(`
           *,
-          employee:employees(id, first_name, last_name, employee_number, department, province, address_line1, address_line2, city, postal_code, country)
+          employee:employees(id, first_name, last_name, employee_number, department, province, mailing_province, address_line1, address_line2, city, postal_code, country)
         `)
         .eq('pay_run_id', payRun.id);
 
@@ -352,12 +352,12 @@ export default function PayRuns() {
           employeeNumber: employee.employee_number,
           department: employee.department || undefined,
           province: employee.province || 'ON',
-          employeeAddressLine1: employee.address_line1 || undefined,
-          employeeAddressLine2: employee.address_line2 || undefined,
-          employeeCity: employee.city || undefined,
-          employeeProvince: employee.province || undefined,
-          employeePostalCode: employee.postal_code || undefined,
-          employeeCountry: employee.country || undefined,
+          employeeAddressLine1: (stub as any).employee_mailing_address_line1 || employee.address_line1 || undefined,
+          employeeAddressLine2: (stub as any).employee_mailing_address_line2 || employee.address_line2 || undefined,
+          employeeCity: (stub as any).employee_mailing_city || employee.city || undefined,
+          employeeProvince: (stub as any).employee_mailing_region || employee.mailing_province || employee.province || undefined,
+          employeePostalCode: (stub as any).employee_mailing_postal_code || employee.postal_code || undefined,
+          employeeCountry: (stub as any).employee_mailing_country || employee.country || undefined,
           payPeriodStart: payRun.pay_period_start,
           payPeriodEnd: payRun.pay_period_end,
           payDate: payRun.pay_date,
@@ -384,13 +384,13 @@ export default function PayRuns() {
           ytdEi: stub.ytd_ei || 0,
           ytdFederalTax: stub.ytd_federal_tax || 0,
           ytdProvincialTax: stub.ytd_provincial_tax || 0,
-          companyName: org?.name || undefined,
-          companyAddressLine1: org?.address_line1 || undefined,
-          companyAddressLine2: org?.address_line2 || undefined,
-          companyCity: org?.city || undefined,
-          companyProvince: org?.province || undefined,
-          companyPostalCode: org?.postal_code || undefined,
-          companyCountry: typeof org?.country === 'string' ? org.country : org?.country?.name || undefined,
+          companyName: org?.legal_name || org?.name || undefined,
+          companyAddressLine1: (stub as any).employer_mailing_address_line1 || org?.address_line1 || undefined,
+          companyAddressLine2: (stub as any).employer_mailing_address_line2 || org?.address_line2 || undefined,
+          companyCity: (stub as any).employer_mailing_city || org?.city || undefined,
+          companyProvince: (stub as any).employer_mailing_region || org?.province || undefined,
+          companyPostalCode: (stub as any).employer_mailing_postal_code || org?.postal_code || undefined,
+          companyCountry: (stub as any).employer_mailing_country || (typeof org?.country === 'string' ? org.country : org?.country?.name) || undefined,
         };
 
         downloadPayStubPdf(stubData);
