@@ -111,10 +111,17 @@ export default function EmployeesList() {
           <h1 className="text-2xl font-bold text-foreground">Employees</h1>
           <p className="text-muted-foreground">Manage employee records and HR information</p>
         </div>
-        <Button onClick={() => navigate('/payroll/employees/new')}>
-          <Plus className="w-4 h-4 mr-2" />
-          Add Employee
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => navigate('/payroll/employees/bulk-upload')}>
+            <FileText className="w-4 h-4 mr-2" />
+            Bulk Upload
+          </Button>
+          <Button onClick={() => navigate('/payroll/employees/new')}>
+            <Plus className="w-4 h-4 mr-2" />
+            Add Employee
+          </Button>
+        </div>
+
       </div>
 
       {/* Stats Cards */}
