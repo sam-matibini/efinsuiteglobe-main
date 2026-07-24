@@ -1,53 +1,29 @@
-# Add mailing addresses to pay stub PDFs
+Plan to permanently add employee and employer mailing addresses to rendered pay stubs:
 
-Match the reference layout: employer name and mailing address in the top-right of the pay stub header, employee name and mailing address in a left block underneath.
+1. **Persist address snapshots in the database**
+   - Add address snapshot columns to `pay_stubs` for:
+     - employee mailing address: line 1, line 2, city, province/state/region, postal/ZIP code, country
+     - employer mailing address: line 1, line 2, city, province/state/region, postal/ZIP code, country
+   - Backfill existing pay stubs from current `employees` and `organizations` records through `pay_runs`.
+   - Include the proper grants/policies compatibility by only altering the existing `pay_stubs` table, not creating a new table.
 
-## 1. Extend `PayStubData` (`src/lib/generatePayStubPdf.ts`)
+2. **Capture addresses when payroll is processed**
+   - Update pay run processing so every newly generated pay stub stores the employee and employer mailing address at the time of payroll processing.
+   - Use `employees.mailing_province` when present; otherwise fall back to `employees.province`.
+   - Use organization legal/name and existing organization address fields for employer details.
 
-Add optional fields:
-- `companyAddressLine1`, `companyAddressLine2`
-- `companyCity`, `companyProvince`, `companyPostalCode`, `companyCountry`
+3. **Render addresses in every pay stub PDF path**
+   - Update the shared PDF generator to prefer the new `pay_stubs` address snapshots, falling back to live employee/organization address fields for older records.
+   - Update the in-app rendered pay stub viewer/exporter, which currently uses a separate PDF generator, so the PDF shown from `/payroll/runs` includes:
+     - employer name/address in the top-right/header area
+     - employee name/address stacked on the left, matching the uploaded reference layout
+   - Update bulk download, employee self-service, employee pay history, and communication attachment pay stub exports to pass the snapshot fields.
 
-Keep existing `employeeAddress` string; also accept structured employee fields (`employeeAddressLine1`, `employeeAddressLine2`, `employeeCity`, `employeeProvince`, `employeePostalCode`) so the PDF can render the address on multiple lines like the picture.
+4. **Make it country-neutral for all localized countries**
+   - Use a shared address-line builder that works with any localized country instead of hard-coding Canadian-only formatting.
+   - Format city + province/state/region + postal/ZIP consistently and omit blank parts cleanly.
+   - Keep country display from the organization/employee country value or localized country metadata when available.
 
-## 2. Redesign header block in `generatePayStubPdf`
-
-Replace the current centered company title + single-line "Address:" row with a two-column header:
-
-```text
-[Company Name]                          [Company Name]
-                                        [Street]
-                                        [City, Province Postal]
-
-EMPLOYEE PAY STUB (centered, small)
-
-Employee:                               PAY PERIOD
-  Name                                    Period / Pay Date / etc.
-  Street
-  City, Province Postal
-  Employee # / Province / Department
-```
-
-- Employer address: right-aligned, stacked, small font, gray.
-- Employee address: left column, stacked under the name.
-- Fall back gracefully when fields are missing (skip empty lines).
-- Preserve existing sections (Earnings, Deductions, Net Pay, YTD, footer) unchanged.
-
-## 3. Pass addresses from callers
-
-Update the three call sites to populate the new employer address fields from `organization` and structured employee address fields:
-
-- `src/pages/PayRuns.tsx` (bulk stub download)
-- `src/pages/payroll/EmployeeSelfService.tsx` (self-serve download)
-- `src/lib/communicationAttachments.ts` (email attachments)
-
-All three already read the org (`address_line1`, `city`, `province`, `postal_code`, `country`) and employee address parts, so this is just extra fields on the `PayStubData` object — no new queries.
-
-`EmployeePayHistoryDialog.tsx` has its own local PDF builder (not using `generatePayStubPdf`); apply the same header layout there so the in-app preview and download match.
-
-## Technical notes
-
-- No schema or backend changes.
-- No new dependencies.
-- Layout uses existing jsPDF calls; only text placement changes.
-- All new fields optional, so existing behavior is preserved when address data is missing.
+5. **Verification**
+   - Generate/check a pay stub PDF path from the pay runs view and confirm both employer and employee mailing addresses render.
+   - Confirm older pay stubs still render using fallback live address data if snapshot fields are empty.
