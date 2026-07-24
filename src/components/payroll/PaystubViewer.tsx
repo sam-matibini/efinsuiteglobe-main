@@ -305,24 +305,34 @@ export function PaystubViewer({ payStub, companyName, companyLogo, currencyCode 
 
   return (
     <Card className="p-6 border rounded-lg">
-      {/* Header with logo */}
-      <div className="text-center mb-4">
-        {companyLogo && (
-          <div className="flex justify-center mb-2">
-            <img src={companyLogo} alt="Company Logo" className="h-12 object-contain" />
-          </div>
-        )}
-        <h2 className="text-xl font-bold text-primary">{companyName}</h2>
-        <p className="text-muted-foreground text-sm">Pay Statement</p>
+      {/* Header with employer mailing address */}
+      <div className="flex items-start justify-between gap-6 mb-4">
+        <div>
+          {companyLogo && (
+            <img src={companyLogo} alt="Company Logo" className="h-12 object-contain mb-2" />
+          )}
+          <h2 className="text-xl font-bold text-primary">{companyName}</h2>
+          <p className="text-muted-foreground text-sm">Pay Statement</p>
+        </div>
+        <div className="text-right text-sm text-muted-foreground leading-relaxed">
+          <p className="font-medium text-foreground">{companyName}</p>
+          {employerAddressLines.map((line) => (
+            <p key={line}>{line}</p>
+          ))}
+        </div>
       </div>
       
       <Separator className="my-4" />
       
       {/* Employee & Pay Period Info */}
-      <div className="flex justify-between items-start mb-4">
+      <div className="flex justify-between items-start gap-6 mb-4">
         <div>
           <p className="font-semibold">{payStub.employeeName}</p>
-          <p className="text-sm text-muted-foreground">{payStub.employeeNumber}</p>
+          {employeeAddressLines.map((line) => (
+            <p key={line} className="text-sm text-muted-foreground">{line}</p>
+          ))}
+          <p className="text-sm text-muted-foreground">Employee #: {payStub.employeeNumber}</p>
+          {payStub.province && <p className="text-sm text-muted-foreground">Province: {payStub.province}</p>}
         </div>
         <div className="text-right">
           <p className="text-sm">Pay Period: {formatDate(payStub.payPeriodStart)} - {formatDate(payStub.payPeriodEnd)}</p>
