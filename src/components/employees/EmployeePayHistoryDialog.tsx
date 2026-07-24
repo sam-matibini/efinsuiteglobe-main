@@ -141,7 +141,7 @@ export default function EmployeePayHistoryDialog({ open, onOpenChange, employee 
     }).format(amount);
   };
 
-  const companyName = organization?.name || 'Company';
+  const companyName = organization?.legal_name || organization?.name || 'Company';
   const companyLogo = organization?.payroll_show_logo === false ? undefined : (organization?.payroll_logo_url || organization?.logo_url);
 
   const generatePayStubPdf = async (payStub: PayStubWithPayRun): Promise<jsPDF> => {
