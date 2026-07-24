@@ -132,6 +132,9 @@ const TaxSlips = lazy(() => import("./pages/TaxSlips"));
 const RoeRecords = lazy(() => import("./pages/RoeRecords"));
 const EmployeeOnboarding = lazy(() => import("./pages/payroll/EmployeeOnboarding"));
 const EmployeesList = lazy(() => import("./pages/payroll/EmployeesList"));
+const BulkEmployeeUpload = lazy(() => import("./pages/payroll/BulkEmployeeUpload"));
+const BulkEmployeeUploadHistory = lazy(() => import("./pages/payroll/BulkEmployeeUploadHistory"));
+
 const EmployeeProfile = lazy(() => import("./pages/payroll/EmployeeProfile"));
 const EmployeeTimesheets = lazy(() => import("./pages/payroll/EmployeeTimesheets"));
 const TimesheetDetail = lazy(() => import("./pages/payroll/TimesheetDetail"));
