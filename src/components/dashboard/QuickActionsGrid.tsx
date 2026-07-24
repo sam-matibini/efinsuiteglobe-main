@@ -52,6 +52,15 @@ const quickActions: QuickAction[] = [
     requiredModules: ['payroll'],
     isAction: true,
   },
+  {
+    label: 'Bulk Upload',
+    icon: Upload,
+    color: 'bg-chart-4/10 text-chart-4 hover:bg-chart-4/20',
+    path: '/payroll/employees/bulk-upload',
+    description: 'Import employees',
+    requiredModules: ['payroll'],
+    isAction: true,
+  },
   { 
     label: 'Record Donation', 
     icon: Heart, 
