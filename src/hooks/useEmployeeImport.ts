@@ -98,7 +98,7 @@ export function useEmployeeImport() {
         // insert in chunks of 500
         for (let i = 0; i < allRows.length; i += 500) {
           const chunk = allRows.slice(i, i + 500);
-          const { error: rowErr } = await supabase.from('employee_import_rows').insert(chunk);
+          const { error: rowErr } = await supabase.from('employee_import_rows').insert(chunk as never);
           if (rowErr) throw rowErr;
         }
       }
