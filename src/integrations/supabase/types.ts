@@ -14897,6 +14897,18 @@ export type Database = {
           ei_employer: number | null
           ei_premium: number | null
           employee_id: string
+          employee_mailing_address_line1: string | null
+          employee_mailing_address_line2: string | null
+          employee_mailing_city: string | null
+          employee_mailing_country: string | null
+          employee_mailing_postal_code: string | null
+          employee_mailing_region: string | null
+          employer_mailing_address_line1: string | null
+          employer_mailing_address_line2: string | null
+          employer_mailing_city: string | null
+          employer_mailing_country: string | null
+          employer_mailing_postal_code: string | null
+          employer_mailing_region: string | null
           federal_tax: number | null
           gross_pay: number
           id: string
@@ -14929,6 +14941,18 @@ export type Database = {
           ei_employer?: number | null
           ei_premium?: number | null
           employee_id: string
+          employee_mailing_address_line1?: string | null
+          employee_mailing_address_line2?: string | null
+          employee_mailing_city?: string | null
+          employee_mailing_country?: string | null
+          employee_mailing_postal_code?: string | null
+          employee_mailing_region?: string | null
+          employer_mailing_address_line1?: string | null
+          employer_mailing_address_line2?: string | null
+          employer_mailing_city?: string | null
+          employer_mailing_country?: string | null
+          employer_mailing_postal_code?: string | null
+          employer_mailing_region?: string | null
           federal_tax?: number | null
           gross_pay?: number
           id?: string
@@ -14961,6 +14985,18 @@ export type Database = {
           ei_employer?: number | null
           ei_premium?: number | null
           employee_id?: string
+          employee_mailing_address_line1?: string | null
+          employee_mailing_address_line2?: string | null
+          employee_mailing_city?: string | null
+          employee_mailing_country?: string | null
+          employee_mailing_postal_code?: string | null
+          employee_mailing_region?: string | null
+          employer_mailing_address_line1?: string | null
+          employer_mailing_address_line2?: string | null
+          employer_mailing_city?: string | null
+          employer_mailing_country?: string | null
+          employer_mailing_postal_code?: string | null
+          employer_mailing_region?: string | null
           federal_tax?: number | null
           gross_pay?: number
           id?: string
