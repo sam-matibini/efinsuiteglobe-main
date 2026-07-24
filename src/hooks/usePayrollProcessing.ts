@@ -141,6 +141,20 @@ export function usePayrollProcessing() {
         payStubsToInsert.push({
           pay_run_id: payRunId,
           employee_id: employee.id,
+          employee_mailing_address_line1: employee.address_line1 || null,
+          employee_mailing_address_line2: employee.address_line2 || null,
+          employee_mailing_city: employee.city || null,
+          employee_mailing_region: employee.mailing_province || employee.province || null,
+          employee_mailing_postal_code: employee.postal_code || null,
+          employee_mailing_country: employee.country || null,
+          employer_mailing_address_line1: (organization as any)?.address_line1 || null,
+          employer_mailing_address_line2: (organization as any)?.address_line2 || null,
+          employer_mailing_city: (organization as any)?.city || null,
+          employer_mailing_region: (organization as any)?.province || null,
+          employer_mailing_postal_code: (organization as any)?.postal_code || null,
+          employer_mailing_country: typeof (organization as any)?.country === 'string'
+            ? (organization as any).country
+            : (organization as any)?.country?.name || null,
           regular_hours: timesheet.regularHours,
           overtime_hours: timesheet.overtimeHours,
           vacation_hours: timesheet.vacationHours,
