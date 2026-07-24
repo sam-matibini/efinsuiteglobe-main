@@ -1,4 +1,4 @@
-import { FileText, DollarSign, CreditCard, Users, Calculator, BarChart3, Receipt, Heart } from 'lucide-react';
+import { FileText, DollarSign, CreditCard, Users, Calculator, BarChart3, Receipt, Heart, Upload } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { useEnabledModules, ModuleCode } from '@/hooks/useEnabledModules';
@@ -49,6 +49,15 @@ const quickActions: QuickAction[] = [
     color: 'bg-primary/10 text-primary hover:bg-primary/20',
     path: '/payroll/runs',
     description: 'Process pay run',
+    requiredModules: ['payroll'],
+    isAction: true,
+  },
+  {
+    label: 'Bulk Upload',
+    icon: Upload,
+    color: 'bg-chart-4/10 text-chart-4 hover:bg-chart-4/20',
+    path: '/payroll/employees/bulk-upload',
+    description: 'Import employees',
     requiredModules: ['payroll'],
     isAction: true,
   },
