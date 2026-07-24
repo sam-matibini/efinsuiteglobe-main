@@ -23,12 +23,26 @@ import * as XLSX from 'xlsx';
 import eFinSuiteGlobeLogo from '@/assets/efinsuite-globe-logo.png';
 import { copyTextToClipboard, tryOpenInNewTab } from '@/lib/share';
 import { useTwilioShare } from '@/hooks/useTwilioShare';
+import { buildAddressLines, generatePayStubPdf } from '@/lib/generatePayStubPdf';
 
 interface PayStubData {
   id: string;
   employeeName: string;
   employeeNumber: string;
   department?: string;
+  province?: string;
+  employeeAddressLine1?: string;
+  employeeAddressLine2?: string;
+  employeeCity?: string;
+  employeeProvince?: string;
+  employeePostalCode?: string;
+  employeeCountry?: string;
+  companyAddressLine1?: string;
+  companyAddressLine2?: string;
+  companyCity?: string;
+  companyProvince?: string;
+  companyPostalCode?: string;
+  companyCountry?: string;
   payPeriodStart: string;
   payPeriodEnd: string;
   payDate: string;
