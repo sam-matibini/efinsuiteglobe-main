@@ -1,4 +1,4 @@
-import { FileText, DollarSign, CreditCard, Users, Calculator, BarChart3, Receipt, Heart } from 'lucide-react';
+import { FileText, DollarSign, CreditCard, Users, Calculator, BarChart3, Receipt, Heart, Upload } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { useEnabledModules, ModuleCode } from '@/hooks/useEnabledModules';
