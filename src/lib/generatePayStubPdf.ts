@@ -78,19 +78,22 @@ const formatDate = (dateStr: string): string => {
 };
 
 /** Build stacked address lines from either structured fields or a legacy comma-joined string. */
-function buildAddressLines(opts: {
+export function buildAddressLines(opts: {
   line1?: string;
   line2?: string;
   city?: string;
   province?: string;
+  region?: string;
   postalCode?: string;
   country?: string;
   fallback?: string;
 }): string[] {
-  const { line1, line2, city, province, postalCode, country, fallback } = opts;
-  const hasStructured = !!(line1 || line2 || city || province || postalCode || country);
+  const { line1, line2, city, province, region, postalCode, country, fallback } = opts;
+  const administrativeRegion = region || province;
+  const hasStructured = !!(line1 || line2 || city || administrativeRegion || postalCode || country);
   if (hasStructured) {
-    const cityLine = [city, province, postalCode].filter(Boolean).join(', ').replace(/, (\S+)$/, ' $1');
+    const cityRegion = [city, administrativeRegion].filter(Boolean).join(', ');
+    const cityLine = [cityRegion, postalCode].filter(Boolean).join(' ');
     return [line1, line2, cityLine, country].filter((v): v is string => !!v && v.trim().length > 0);
   }
   if (fallback && fallback.trim().length > 0) {
@@ -117,7 +120,7 @@ export function generatePayStubPdf(data: PayStubData): jsPDF {
     line1: data.companyAddressLine1,
     line2: data.companyAddressLine2,
     city: data.companyCity,
-    province: data.companyProvince,
+    region: data.companyProvince,
     postalCode: data.companyPostalCode,
     country: data.companyCountry,
   });
@@ -157,7 +160,7 @@ export function generatePayStubPdf(data: PayStubData): jsPDF {
     line1: data.employeeAddressLine1,
     line2: data.employeeAddressLine2,
     city: data.employeeCity,
-    province: data.employeeProvince,
+    region: data.employeeProvince,
     postalCode: data.employeePostalCode,
     country: data.employeeCountry,
     fallback: data.employeeAddress,
