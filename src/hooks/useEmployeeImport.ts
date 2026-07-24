@@ -69,10 +69,11 @@ export function useEmployeeImport() {
           status: 'validated',
           replace_blanks: args.replaceBlanks,
           validation_summary: args.validation.summary as unknown as Record<string, unknown>,
-        })
+        } as never)
         .select()
         .single();
       if (error) throw error;
+
 
       const buildRows = (sheet: 'employees' | 'compensation' | 'deductions' | 'payment', rows: ValidationResult['employees']) =>
         rows.map((r) => ({
