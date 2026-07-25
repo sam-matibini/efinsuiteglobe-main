@@ -123,7 +123,7 @@ async function getEfinsignIds(localDocId: string, localSignerId?: string, localF
 // ---- action handlers -----------------------------------------------------
 
 type Payload = Record<string, unknown>;
-type Ctx = { userId: string; orgId: string | null; isAdmin: boolean };
+type Ctx = { userId: string; orgId: string | null; isAdmin: boolean; origin: string | null };
 
 async function assertDocumentInOrg(localDocId: string, orgId: string | null) {
   if (!orgId) {
