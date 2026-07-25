@@ -308,21 +308,13 @@ export function useSendDocument() {
 
   return useMutation({
     mutationFn: async (documentId: string) => {
-      return await invokeEfinsign<{ success: boolean; emailed?: Array<{ signer_id: string; email: string; success: boolean; error?: string }> }>('send', { id: documentId });
+      return await invokeEfinsign('send', { id: documentId });
     },
-    onSuccess: (data, documentId) => {
+    onSuccess: (_data, documentId) => {
       queryClient.invalidateQueries({ queryKey: ['documents'] });
       queryClient.invalidateQueries({ queryKey: ['document', documentId] });
       queryClient.invalidateQueries({ queryKey: ['document-signers', documentId] });
-      const emailed = data?.emailed || [];
-      const failed = emailed.filter((e) => !e.success);
-      if (emailed.length === 0) {
-        toast.success('Document sent for signing via eFinSign.');
-      } else if (failed.length === 0) {
-        toast.success(`Document sent. Emailed ${emailed.length} signer${emailed.length === 1 ? '' : 's'}.`);
-      } else {
-        toast.warning(`Document sent, but ${failed.length} of ${emailed.length} signer emails failed: ${failed.map((f) => f.email).join(', ')}`);
-      }
+      toast.success('Document sent for signing via eFinSign.');
     },
     onError: (error) => toast.error('Failed to send document: ' + error.message),
   });
