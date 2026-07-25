@@ -237,10 +237,7 @@ const handlers: Record<string, (payload: Payload, ctx: Ctx) => Promise<unknown>>
       document_id: id, action: 'document_sent', actor_type: 'user',
       details: { via: 'efinsign', sent_at: new Date().toISOString() },
     });
-
-    // eFinSign does not email signers — do it here.
-    const emailed = await emailSignersForDocument(id, ctx);
-    return { success: true, emailed };
+    return { success: true };
   },
 
   async void(payload, ctx) {
