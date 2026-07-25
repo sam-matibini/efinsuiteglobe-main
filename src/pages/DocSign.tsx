@@ -21,7 +21,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
-import { useDocuments, useDocumentSigners, useDocumentFields, useAddField, useUpdateDocument, useAddSigner, useSendDocument, useUpdateDocumentField, type Document } from '@/hooks/useDocuments';
+import { useDocuments, useDocumentSigners, useDocumentFields, useAddField, useUpdateDocument, useAddSigner, useSendDocument, useRemindDocument, useUpdateDocumentField, type Document } from '@/hooks/useDocuments';
 import { CreateDocumentDialog } from '@/components/docsign/CreateDocumentDialog';
 import { DocumentDetailDialog } from '@/components/docsign/DocumentDetailDialog';
 import { DocumentEditor } from '@/components/docsign/DocumentEditor';
@@ -71,6 +71,7 @@ export default function DocSign() {
   const updateFieldMutation = useUpdateDocumentField();
   const addSigner = useAddSigner();
   const sendDocument = useSendDocument();
+  const remindDocument = useRemindDocument();
   const { user } = useAuth();
   const { flattenPdf } = usePdfFlatten();
   const saveSignature = useSaveSignature();
@@ -212,7 +213,7 @@ export default function DocSign() {
 
   const handleResendDocument = async (docId: string) => {
     try {
-      await sendDocument.mutateAsync(docId);
+      await remindDocument.mutateAsync(docId);
     } catch {
       // Error toast handled by hook
     }
@@ -874,7 +875,7 @@ export default function DocSign() {
                           <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="icon"><MoreVertical className="w-4 h-4" /></Button></DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             {isResendEligible(doc.status) && (
-                              <DropdownMenuItem disabled={sendDocument.isPending} onClick={(e) => { e.stopPropagation(); void handleResendDocument(doc.id); }}><Send className="w-4 h-4 mr-2" />Resend</DropdownMenuItem>
+                              <DropdownMenuItem disabled={remindDocument.isPending} onClick={(e) => { e.stopPropagation(); void handleResendDocument(doc.id); }}><Send className="w-4 h-4 mr-2" />Resend</DropdownMenuItem>
                             )}
                             <DropdownMenuItem 
                               onClick={(e) => { e.stopPropagation(); setDocumentToDelete({ id: doc.id, title: doc.title }); setDeleteDialogOpen(true); }} 
@@ -942,7 +943,7 @@ export default function DocSign() {
                             <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="icon"><MoreVertical className="w-4 h-4" /></Button></DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                               {isResendEligible(doc.status) && (
-                                <DropdownMenuItem disabled={sendDocument.isPending} onClick={(e) => { e.stopPropagation(); void handleResendDocument(doc.id); }}><Send className="w-4 h-4 mr-2" />Resend</DropdownMenuItem>
+                                <DropdownMenuItem disabled={remindDocument.isPending} onClick={(e) => { e.stopPropagation(); void handleResendDocument(doc.id); }}><Send className="w-4 h-4 mr-2" />Resend</DropdownMenuItem>
                               )}
                               <DropdownMenuItem 
                                 onClick={(e) => { e.stopPropagation(); setDocumentToDelete({ id: doc.id, title: doc.title }); setDeleteDialogOpen(true); }} 
@@ -1000,7 +1001,7 @@ export default function DocSign() {
                             <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="icon"><MoreVertical className="w-4 h-4" /></Button></DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                               {isResendEligible(doc.status) && (
-                                <DropdownMenuItem disabled={sendDocument.isPending} onClick={(e) => { e.stopPropagation(); void handleResendDocument(doc.id); }}><Send className="w-4 h-4 mr-2" />Resend</DropdownMenuItem>
+                                <DropdownMenuItem disabled={remindDocument.isPending} onClick={(e) => { e.stopPropagation(); void handleResendDocument(doc.id); }}><Send className="w-4 h-4 mr-2" />Resend</DropdownMenuItem>
                               )}
                               <DropdownMenuItem 
                                 onClick={(e) => { e.stopPropagation(); setDocumentToDelete({ id: doc.id, title: doc.title }); setDeleteDialogOpen(true); }} 
