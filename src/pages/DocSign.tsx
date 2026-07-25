@@ -71,6 +71,7 @@ export default function DocSign() {
   const updateFieldMutation = useUpdateDocumentField();
   const addSigner = useAddSigner();
   const sendDocument = useSendDocument();
+  const remindDocument = useRemindDocument();
   const { user } = useAuth();
   const { flattenPdf } = usePdfFlatten();
   const saveSignature = useSaveSignature();
