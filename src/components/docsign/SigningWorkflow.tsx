@@ -17,6 +17,7 @@ import {
   ChevronRight,
   UserCheck,
   ArrowLeft,
+  Loader2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -432,8 +433,15 @@ export function SigningWorkflow({
   // Helper to get step ID for current index
   const currentStepId = steps[activeStep]?.id || '';
 
-  const handleSend = () => {
-    onComplete(recipients, placedFields, settings);
+  const [isSending, setIsSending] = useState(false);
+  const handleSend = async () => {
+    if (isSending) return;
+    setIsSending(true);
+    try {
+      await onComplete(recipients, placedFields, settings);
+    } finally {
+      setIsSending(false);
+    }
   };
 
   return (
@@ -446,7 +454,8 @@ export function SigningWorkflow({
             {steps.map((step, index) => (
               <div key={step.id} className="flex items-center">
                 <button
-                  onClick={() => setActiveStep(index)}
+                  onClick={() => !isSending && setActiveStep(index)}
+                  disabled={isSending}
                   className={cn(
                     'flex items-center gap-2 px-3 py-1.5 rounded-full text-sm transition-colors',
                     activeStep === index 
@@ -1402,7 +1411,7 @@ export function SigningWorkflow({
       {/* Footer Navigation */}
       <div className="border-t bg-background px-6 py-4">
         <div className="flex justify-between max-w-4xl mx-auto">
-          <Button variant="outline" onClick={handlePrev}>
+          <Button variant="outline" onClick={handlePrev} disabled={isSending}>
             <ArrowLeft className="w-4 h-4 mr-2" />
             {activeStep === 0 ? 'Back' : 'Previous'}
           </Button>
@@ -1426,11 +1435,20 @@ export function SigningWorkflow({
           ) : (
             <Button 
               onClick={handleSend}
-              disabled={!canSend}
+              disabled={!canSend || isSending}
               className="bg-accent hover:bg-accent/90"
             >
-              <Send className="w-4 h-4 mr-2" />
-              Prepare & Send
+              {isSending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Sending…
+                </>
+              ) : (
+                <>
+                  <Send className="w-4 h-4 mr-2" />
+                  Prepare & Send
+                </>
+              )}
             </Button>
           )}
         </div>
