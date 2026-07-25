@@ -83,7 +83,6 @@ export function useDocuments() {
 }
 
 export function useDocument(documentId: string | undefined) {
-  const { organization } = useCurrentOrganization();
 
   return useQuery({
     queryKey: ['document', documentId],
@@ -94,7 +93,6 @@ export function useDocument(documentId: string | undefined) {
         .from('documents')
         .select('*')
         .eq('id', documentId)
-        .eq('organization_id', organization?.id)
         .single();
 
       if (error) throw error;
