@@ -212,8 +212,8 @@ export function useDeleteDocument() {
 
   return useMutation({
     mutationFn: async (documentId: string) => {
-      await invokeEfinsign('delete_document', { id: documentId });
-      return documentId;
+      const res = await invokeEfinsign<{ success: boolean; remote?: 'deleted' | 'voided' | 'failed' | 'none'; remote_error?: string }>('delete_document', { id: documentId });
+      return { documentId, ...res };
     },
     onMutate: async (documentId) => {
       await queryClient.cancelQueries({ queryKey: ['documents'] });
@@ -224,7 +224,15 @@ export function useDeleteDocument() {
       });
       return { previousDocuments };
     },
-    onSuccess: () => toast.success('Document deleted successfully'),
+    onSuccess: (result) => {
+      if (result.remote === 'voided') {
+        toast.success("Document deleted locally; remote copy voided (eFinSign doesn't allow deleting non-draft documents)");
+      } else if (result.remote === 'failed') {
+        toast.warning(`Document deleted locally, but remote cleanup failed: ${result.remote_error ?? 'unknown error'}`);
+      } else {
+        toast.success('Document deleted successfully');
+      }
+    },
     onError: (error, _documentId, context) => {
       context?.previousDocuments?.forEach(([queryKey, docs]) => queryClient.setQueryData(queryKey, docs));
       toast.error('Failed to delete document: ' + error.message);
