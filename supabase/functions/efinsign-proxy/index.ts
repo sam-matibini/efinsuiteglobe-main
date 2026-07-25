@@ -217,13 +217,36 @@ const handlers: Record<string, (payload: Payload, ctx: Ctx) => Promise<unknown>>
     await assertDocumentInOrg(id, ctx.orgId);
     const { data: doc } = await admin.from('documents').select('efinsign_document_id').eq('id', id).single();
     const efId = (doc as { efinsign_document_id?: string } | null)?.efinsign_document_id;
+    let remote: 'deleted' | 'voided' | 'failed' | 'none' = 'none';
+    let remote_error: string | undefined;
     if (efId) {
-      try { await efinsign(`/documents/${efId}`, { method: 'DELETE' }); }
-      catch (e) { console.warn('eFinSign delete failed (continuing):', e); }
+      try {
+        await efinsign(`/documents/${efId}`, { method: 'DELETE' });
+        remote = 'deleted';
+      } catch (e) {
+        const err = e as { status?: number; body?: { error?: { message?: string; code?: string } }; message?: string };
+        const msg = err?.body?.error?.message || err?.message || '';
+        const isNonDraft = err?.status === 400 && /draft/i.test(msg);
+        if (isNonDraft) {
+          try {
+            await efinsign(`/documents/${efId}/void`, { method: 'POST' });
+            remote = 'voided';
+          } catch (e2) {
+            const err2 = e2 as { body?: { error?: { message?: string } }; message?: string };
+            remote = 'failed';
+            remote_error = err2?.body?.error?.message || err2?.message || 'void failed';
+            console.warn('eFinSign void fallback failed:', e2);
+          }
+        } else {
+          remote = 'failed';
+          remote_error = msg || 'delete failed';
+          console.warn('eFinSign delete failed:', e);
+        }
+      }
     }
     const { error } = await admin.from('documents').delete().eq('id', id);
     if (error) throw error;
-    return { success: true };
+    return { success: true, remote, remote_error };
   },
 
   async send(payload, ctx) {
