@@ -1,18 +1,20 @@
-## Add Bulk Employee Upload to Dashboard Quick Actions
+## Goal
 
-Add a new tile to the `QuickActionsGrid` on the Dashboard that links to `/payroll/employees/bulk-upload`.
+Show a loading indicator on the **Prepare & Send** button in `SigningWorkflow` while the eFinSign proxy call is in flight, so users get feedback that their document is being sent.
 
-### Changes
+## Changes
 
-**`src/components/dashboard/QuickActionsGrid.tsx`**
-- Add a new `QuickAction` entry:
-  - Label: "Bulk Upload"
-  - Icon: `Upload` (lucide-react)
-  - Path: `/payroll/employees/bulk-upload`
-  - Description: "Import employees"
-  - Color: `bg-chart-4/10 text-chart-4 hover:bg-chart-4/20`
-  - `requiredModules: ['payroll']`
-  - `isAction: true` (hidden for read-only auditors)
+**`src/components/docsign/SigningWorkflow.tsx`**
 
-### Notes
-- Role gating (admin-only) is enforced on the destination page itself, so the tile stays visible to any payroll user; they'll see the gate if unauthorized. If you'd rather hide the tile entirely for non-admins, say the word and I'll add a role check in the filter.
+1. Add a local `isSending` state (`useState<boolean>(false)`).
+2. Make `handleSend` async: set `isSending = true`, `await onComplete(recipients, placedFields, settings)`, then reset in a `finally` block. (The parent `handleSigningWorkflowComplete` in `DocSign.tsx` is already `async`, so awaiting it will resolve after the `efinsign-proxy` call completes.)
+3. Update the footer **Prepare & Send** button to:
+   - `disabled={!canSend || isSending}`
+   - Swap the `Send` icon for a spinning `Loader2` when `isSending` is true.
+   - Change the label to `Sending…` while pending.
+4. Also disable the **Previous** button and the step-progress buttons in the header while `isSending` is true so the user can't navigate away mid-send.
+
+## Out of scope
+
+- No changes to `handleSigningWorkflowComplete` in `DocSign.tsx` or to the proxy — the existing toasts still fire on success/error.
+- No changes to the other "Prepare & Send" entry points (dropdown menu, DocumentDetailDialog); those just open the workflow.

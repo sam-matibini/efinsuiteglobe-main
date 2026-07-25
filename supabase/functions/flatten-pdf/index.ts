@@ -30,12 +30,37 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+    // Resolve to a signed URL if the fileUrl points at the private docsign bucket
+    const BUCKET = 'docsign-documents';
+    const PUBLIC_MARKER = `/storage/v1/object/public/${BUCKET}/`;
+    const SIGNED_MARKER = `/storage/v1/object/sign/${BUCKET}/`;
+
+    let fetchUrl = fileUrl;
+    let objectPath: string | null = null;
+    const pubIdx = fileUrl.indexOf(PUBLIC_MARKER);
+    const signIdx = fileUrl.indexOf(SIGNED_MARKER);
+    if (pubIdx !== -1) {
+      objectPath = decodeURIComponent(fileUrl.slice(pubIdx + PUBLIC_MARKER.length).split('?')[0]);
+    } else if (signIdx !== -1) {
+      objectPath = decodeURIComponent(fileUrl.slice(signIdx + SIGNED_MARKER.length).split('?')[0]);
+    }
+
+    if (objectPath) {
+      const { data: signed, error: signErr } = await supabase.storage
+        .from(BUCKET)
+        .createSignedUrl(objectPath, 3600);
+      if (signErr || !signed?.signedUrl) {
+        throw new Error(`Failed to sign PDF URL: ${signErr?.message || 'unknown error'}`);
+      }
+      fetchUrl = signed.signedUrl;
+    }
+
     // Fetch the original PDF
-    const response = await fetch(fileUrl);
+    const response = await fetch(fetchUrl);
     if (!response.ok) {
       throw new Error(`Failed to fetch PDF: ${response.statusText}`);
     }
-    
+
     const pdfBuffer = await response.arrayBuffer();
     const pdfBytes = new Uint8Array(pdfBuffer);
 

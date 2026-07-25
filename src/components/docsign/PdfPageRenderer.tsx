@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
+import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+import { resolveDocSignFileUrl } from '@/lib/docsign/resolveFileUrl';
 
-// Configure pdf.js worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+// Configure pdf.js worker (bundled by Vite to match installed pdfjs-dist version)
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 interface PdfPageRendererProps {
   fileUrl: string;
@@ -51,8 +53,9 @@ export function PdfPageRenderer({
 
         // Load PDF document (cache it)
         if (!pdfDocRef.current) {
+          const resolvedUrl = (await resolveDocSignFileUrl(fileUrl)) ?? fileUrl;
           const loadingTask = pdfjsLib.getDocument({
-            url: fileUrl,
+            url: resolvedUrl,
             cMapUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/',
             cMapPacked: true,
           });
