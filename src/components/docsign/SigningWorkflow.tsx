@@ -1411,7 +1411,7 @@ export function SigningWorkflow({
       {/* Footer Navigation */}
       <div className="border-t bg-background px-6 py-4">
         <div className="flex justify-between max-w-4xl mx-auto">
-          <Button variant="outline" onClick={handlePrev}>
+          <Button variant="outline" onClick={handlePrev} disabled={isSending}>
             <ArrowLeft className="w-4 h-4 mr-2" />
             {activeStep === 0 ? 'Back' : 'Previous'}
           </Button>
@@ -1435,11 +1435,20 @@ export function SigningWorkflow({
           ) : (
             <Button 
               onClick={handleSend}
-              disabled={!canSend}
+              disabled={!canSend || isSending}
               className="bg-accent hover:bg-accent/90"
             >
-              <Send className="w-4 h-4 mr-2" />
-              Prepare & Send
+              {isSending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Sending…
+                </>
+              ) : (
+                <>
+                  <Send className="w-4 h-4 mr-2" />
+                  Prepare & Send
+                </>
+              )}
             </Button>
           )}
         </div>
