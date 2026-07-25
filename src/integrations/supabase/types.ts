@@ -8372,6 +8372,400 @@ export type Database = {
         }
         Relationships: []
       }
+      employee_compensation: {
+        Row: {
+          amount: number
+          compensation_type: string
+          created_at: string
+          currency: string
+          effective_date: string
+          employee_id: string
+          end_date: string | null
+          frequency: string
+          id: string
+          notes: string | null
+          organization_id: string
+          source_batch_id: string | null
+          taxable: boolean
+          updated_at: string
+        }
+        Insert: {
+          amount?: number
+          compensation_type: string
+          created_at?: string
+          currency?: string
+          effective_date?: string
+          employee_id: string
+          end_date?: string | null
+          frequency?: string
+          id?: string
+          notes?: string | null
+          organization_id: string
+          source_batch_id?: string | null
+          taxable?: boolean
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          compensation_type?: string
+          created_at?: string
+          currency?: string
+          effective_date?: string
+          employee_id?: string
+          end_date?: string | null
+          frequency?: string
+          id?: string
+          notes?: string | null
+          organization_id?: string
+          source_batch_id?: string | null
+          taxable?: boolean
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_compensation_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_compensation_source_batch_id_fkey"
+            columns: ["source_batch_id"]
+            isOneToOne: false
+            referencedRelation: "employee_import_batches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      employee_deductions: {
+        Row: {
+          amount: number
+          category: string
+          created_at: string
+          currency: string
+          deduction_type: string
+          employee_id: string
+          end_date: string | null
+          frequency: string
+          id: string
+          notes: string | null
+          organization_id: string
+          source_batch_id: string | null
+          start_date: string
+          updated_at: string
+        }
+        Insert: {
+          amount?: number
+          category?: string
+          created_at?: string
+          currency?: string
+          deduction_type: string
+          employee_id: string
+          end_date?: string | null
+          frequency?: string
+          id?: string
+          notes?: string | null
+          organization_id: string
+          source_batch_id?: string | null
+          start_date?: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          category?: string
+          created_at?: string
+          currency?: string
+          deduction_type?: string
+          employee_id?: string
+          end_date?: string | null
+          frequency?: string
+          id?: string
+          notes?: string | null
+          organization_id?: string
+          source_batch_id?: string | null
+          start_date?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_deductions_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_deductions_source_batch_id_fkey"
+            columns: ["source_batch_id"]
+            isOneToOne: false
+            referencedRelation: "employee_import_batches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      employee_import_audit: {
+        Row: {
+          action: string
+          batch_id: string
+          details: Json
+          id: string
+          performed_at: string
+          performed_by: string | null
+        }
+        Insert: {
+          action: string
+          batch_id: string
+          details?: Json
+          id?: string
+          performed_at?: string
+          performed_by?: string | null
+        }
+        Update: {
+          action?: string
+          batch_id?: string
+          details?: Json
+          id?: string
+          performed_at?: string
+          performed_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_import_audit_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "employee_import_batches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      employee_import_batches: {
+        Row: {
+          country_code: string | null
+          created_at: string
+          created_by: string | null
+          created_count: number
+          error_report: Json | null
+          failed_count: number
+          file_hash: string | null
+          file_name: string | null
+          file_size_bytes: number | null
+          id: string
+          import_mode: string
+          organization_id: string
+          posted_at: string | null
+          posted_by: string | null
+          replace_blanks: boolean
+          reversal_reason: string | null
+          reversed_at: string | null
+          reversed_by: string | null
+          skipped_count: number
+          status: string
+          template_version: string
+          total_rows: number
+          updated_at: string
+          updated_count: number
+          validation_summary: Json
+        }
+        Insert: {
+          country_code?: string | null
+          created_at?: string
+          created_by?: string | null
+          created_count?: number
+          error_report?: Json | null
+          failed_count?: number
+          file_hash?: string | null
+          file_name?: string | null
+          file_size_bytes?: number | null
+          id?: string
+          import_mode?: string
+          organization_id: string
+          posted_at?: string | null
+          posted_by?: string | null
+          replace_blanks?: boolean
+          reversal_reason?: string | null
+          reversed_at?: string | null
+          reversed_by?: string | null
+          skipped_count?: number
+          status?: string
+          template_version?: string
+          total_rows?: number
+          updated_at?: string
+          updated_count?: number
+          validation_summary?: Json
+        }
+        Update: {
+          country_code?: string | null
+          created_at?: string
+          created_by?: string | null
+          created_count?: number
+          error_report?: Json | null
+          failed_count?: number
+          file_hash?: string | null
+          file_name?: string | null
+          file_size_bytes?: number | null
+          id?: string
+          import_mode?: string
+          organization_id?: string
+          posted_at?: string | null
+          posted_by?: string | null
+          replace_blanks?: boolean
+          reversal_reason?: string | null
+          reversed_at?: string | null
+          reversed_by?: string | null
+          skipped_count?: number
+          status?: string
+          template_version?: string
+          total_rows?: number
+          updated_at?: string
+          updated_count?: number
+          validation_summary?: Json
+        }
+        Relationships: []
+      }
+      employee_import_rows: {
+        Row: {
+          batch_id: string
+          created_at: string
+          employee_number: string | null
+          id: string
+          is_valid: boolean
+          match_type: string | null
+          posted: boolean
+          posted_entity_id: string | null
+          previous_data: Json | null
+          raw_data: Json
+          resolved_employee_id: string | null
+          row_number: number
+          sheet: string
+          updated_at: string
+          validation_errors: Json
+          validation_warnings: Json
+        }
+        Insert: {
+          batch_id: string
+          created_at?: string
+          employee_number?: string | null
+          id?: string
+          is_valid?: boolean
+          match_type?: string | null
+          posted?: boolean
+          posted_entity_id?: string | null
+          previous_data?: Json | null
+          raw_data?: Json
+          resolved_employee_id?: string | null
+          row_number: number
+          sheet: string
+          updated_at?: string
+          validation_errors?: Json
+          validation_warnings?: Json
+        }
+        Update: {
+          batch_id?: string
+          created_at?: string
+          employee_number?: string | null
+          id?: string
+          is_valid?: boolean
+          match_type?: string | null
+          posted?: boolean
+          posted_entity_id?: string | null
+          previous_data?: Json | null
+          raw_data?: Json
+          resolved_employee_id?: string | null
+          row_number?: number
+          sheet?: string
+          updated_at?: string
+          validation_errors?: Json
+          validation_warnings?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_import_rows_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "employee_import_batches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      employee_payment_methods: {
+        Row: {
+          account_name: string | null
+          account_number_encrypted: string | null
+          account_number_last4: string | null
+          bank_name: string | null
+          created_at: string
+          currency: string
+          employee_id: string
+          iban: string | null
+          id: string
+          institution_number: string | null
+          is_primary: boolean
+          method: string
+          organization_id: string
+          routing_number: string | null
+          source_batch_id: string | null
+          swift: string | null
+          transit_number: string | null
+          updated_at: string
+        }
+        Insert: {
+          account_name?: string | null
+          account_number_encrypted?: string | null
+          account_number_last4?: string | null
+          bank_name?: string | null
+          created_at?: string
+          currency?: string
+          employee_id: string
+          iban?: string | null
+          id?: string
+          institution_number?: string | null
+          is_primary?: boolean
+          method?: string
+          organization_id: string
+          routing_number?: string | null
+          source_batch_id?: string | null
+          swift?: string | null
+          transit_number?: string | null
+          updated_at?: string
+        }
+        Update: {
+          account_name?: string | null
+          account_number_encrypted?: string | null
+          account_number_last4?: string | null
+          bank_name?: string | null
+          created_at?: string
+          currency?: string
+          employee_id?: string
+          iban?: string | null
+          id?: string
+          institution_number?: string | null
+          is_primary?: boolean
+          method?: string
+          organization_id?: string
+          routing_number?: string | null
+          source_batch_id?: string | null
+          swift?: string | null
+          transit_number?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_payment_methods_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_payment_methods_source_batch_id_fkey"
+            columns: ["source_batch_id"]
+            isOneToOne: false
+            referencedRelation: "employee_import_batches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       employee_self_service: {
         Row: {
           can_edit_personal_info: boolean | null
@@ -8638,6 +9032,7 @@ export type Database = {
           bank_institution: string | null
           bank_transit: string | null
           city: string | null
+          cost_centre: string | null
           country: string | null
           cpp_exempt: boolean
           created_at: string
@@ -8659,20 +9054,27 @@ export type Database = {
           last_name: string
           mailing_province: string | null
           manager_id: string | null
+          national_id_encrypted: string | null
+          nationality: string | null
           notes: string | null
           organization_id: string | null
           pay_frequency: Database["public"]["Enums"]["pay_frequency"]
+          payroll_start_date: string | null
           phone: string | null
           postal_code: string | null
+          preferred_name: string | null
           province: Database["public"]["Enums"]["province_code"]
           sin_encrypted: string | null
           status: Database["public"]["Enums"]["employee_status"]
+          statutory_profile: Json
+          tax_id_encrypted: string | null
           termination_date: string | null
           termination_reason_code:
             | Database["public"]["Enums"]["roe_reason"]
             | null
           termination_reason_notes: string | null
           updated_at: string
+          work_schedule: string | null
         }
         Insert: {
           address_line1?: string | null
@@ -8682,6 +9084,7 @@ export type Database = {
           bank_institution?: string | null
           bank_transit?: string | null
           city?: string | null
+          cost_centre?: string | null
           country?: string | null
           cpp_exempt?: boolean
           created_at?: string
@@ -8703,20 +9106,27 @@ export type Database = {
           last_name: string
           mailing_province?: string | null
           manager_id?: string | null
+          national_id_encrypted?: string | null
+          nationality?: string | null
           notes?: string | null
           organization_id?: string | null
           pay_frequency?: Database["public"]["Enums"]["pay_frequency"]
+          payroll_start_date?: string | null
           phone?: string | null
           postal_code?: string | null
+          preferred_name?: string | null
           province?: Database["public"]["Enums"]["province_code"]
           sin_encrypted?: string | null
           status?: Database["public"]["Enums"]["employee_status"]
+          statutory_profile?: Json
+          tax_id_encrypted?: string | null
           termination_date?: string | null
           termination_reason_code?:
             | Database["public"]["Enums"]["roe_reason"]
             | null
           termination_reason_notes?: string | null
           updated_at?: string
+          work_schedule?: string | null
         }
         Update: {
           address_line1?: string | null
@@ -8726,6 +9136,7 @@ export type Database = {
           bank_institution?: string | null
           bank_transit?: string | null
           city?: string | null
+          cost_centre?: string | null
           country?: string | null
           cpp_exempt?: boolean
           created_at?: string
@@ -8747,20 +9158,27 @@ export type Database = {
           last_name?: string
           mailing_province?: string | null
           manager_id?: string | null
+          national_id_encrypted?: string | null
+          nationality?: string | null
           notes?: string | null
           organization_id?: string | null
           pay_frequency?: Database["public"]["Enums"]["pay_frequency"]
+          payroll_start_date?: string | null
           phone?: string | null
           postal_code?: string | null
+          preferred_name?: string | null
           province?: Database["public"]["Enums"]["province_code"]
           sin_encrypted?: string | null
           status?: Database["public"]["Enums"]["employee_status"]
+          statutory_profile?: Json
+          tax_id_encrypted?: string | null
           termination_date?: string | null
           termination_reason_code?:
             | Database["public"]["Enums"]["roe_reason"]
             | null
           termination_reason_notes?: string | null
           updated_at?: string
+          work_schedule?: string | null
         }
         Relationships: [
           {
@@ -14897,6 +15315,18 @@ export type Database = {
           ei_employer: number | null
           ei_premium: number | null
           employee_id: string
+          employee_mailing_address_line1: string | null
+          employee_mailing_address_line2: string | null
+          employee_mailing_city: string | null
+          employee_mailing_country: string | null
+          employee_mailing_postal_code: string | null
+          employee_mailing_region: string | null
+          employer_mailing_address_line1: string | null
+          employer_mailing_address_line2: string | null
+          employer_mailing_city: string | null
+          employer_mailing_country: string | null
+          employer_mailing_postal_code: string | null
+          employer_mailing_region: string | null
           federal_tax: number | null
           gross_pay: number
           id: string
@@ -14929,6 +15359,18 @@ export type Database = {
           ei_employer?: number | null
           ei_premium?: number | null
           employee_id: string
+          employee_mailing_address_line1?: string | null
+          employee_mailing_address_line2?: string | null
+          employee_mailing_city?: string | null
+          employee_mailing_country?: string | null
+          employee_mailing_postal_code?: string | null
+          employee_mailing_region?: string | null
+          employer_mailing_address_line1?: string | null
+          employer_mailing_address_line2?: string | null
+          employer_mailing_city?: string | null
+          employer_mailing_country?: string | null
+          employer_mailing_postal_code?: string | null
+          employer_mailing_region?: string | null
           federal_tax?: number | null
           gross_pay?: number
           id?: string
@@ -14961,6 +15403,18 @@ export type Database = {
           ei_employer?: number | null
           ei_premium?: number | null
           employee_id?: string
+          employee_mailing_address_line1?: string | null
+          employee_mailing_address_line2?: string | null
+          employee_mailing_city?: string | null
+          employee_mailing_country?: string | null
+          employee_mailing_postal_code?: string | null
+          employee_mailing_region?: string | null
+          employer_mailing_address_line1?: string | null
+          employer_mailing_address_line2?: string | null
+          employer_mailing_city?: string | null
+          employer_mailing_country?: string | null
+          employer_mailing_postal_code?: string | null
+          employer_mailing_region?: string | null
           federal_tax?: number | null
           gross_pay?: number
           id?: string
@@ -26825,6 +27279,74 @@ export type Database = {
         }
         Relationships: []
       }
+      v_employee_payment_methods_masked: {
+        Row: {
+          account_name: string | null
+          account_number_last4: string | null
+          account_number_masked: string | null
+          bank_name: string | null
+          created_at: string | null
+          currency: string | null
+          employee_id: string | null
+          iban_masked: string | null
+          id: string | null
+          institution_number: string | null
+          is_primary: boolean | null
+          method: string | null
+          organization_id: string | null
+          routing_number: string | null
+          swift: string | null
+          transit_number: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          account_name?: string | null
+          account_number_last4?: string | null
+          account_number_masked?: never
+          bank_name?: string | null
+          created_at?: string | null
+          currency?: string | null
+          employee_id?: string | null
+          iban_masked?: never
+          id?: string | null
+          institution_number?: string | null
+          is_primary?: boolean | null
+          method?: string | null
+          organization_id?: string | null
+          routing_number?: string | null
+          swift?: string | null
+          transit_number?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          account_name?: string | null
+          account_number_last4?: string | null
+          account_number_masked?: never
+          bank_name?: string | null
+          created_at?: string | null
+          currency?: string | null
+          employee_id?: string | null
+          iban_masked?: never
+          id?: string | null
+          institution_number?: string | null
+          is_primary?: boolean | null
+          method?: string | null
+          organization_id?: string | null
+          routing_number?: string | null
+          swift?: string | null
+          transit_number?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_payment_methods_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       v_je_lines_with_division: {
         Row: {
           account_id: string | null
@@ -27598,6 +28120,10 @@ export type Database = {
       resolve_tax_gl_account: {
         Args: { _account_type: string; _org_id: string; _patterns: string[] }
         Returns: string
+      }
+      rollback_employee_import: {
+        Args: { _batch_id: string; _reason: string }
+        Returns: undefined
       }
       run_integrity_scan: {
         Args: { p_organization_id: string }
