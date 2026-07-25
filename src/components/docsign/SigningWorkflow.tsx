@@ -454,7 +454,8 @@ export function SigningWorkflow({
             {steps.map((step, index) => (
               <div key={step.id} className="flex items-center">
                 <button
-                  onClick={() => setActiveStep(index)}
+                  onClick={() => !isSending && setActiveStep(index)}
+                  disabled={isSending}
                   className={cn(
                     'flex items-center gap-2 px-3 py-1.5 rounded-full text-sm transition-colors',
                     activeStep === index 
