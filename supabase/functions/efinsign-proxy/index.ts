@@ -244,8 +244,12 @@ const handlers: Record<string, (payload: Payload, ctx: Ctx) => Promise<unknown>>
         }
       }
     }
-    const { error } = await admin.from('documents').delete().eq('id', id);
-    if (error) throw error;
+    if (remote === 'voided') {
+      await admin.from('documents').update({ status: 'voided' }).eq('id', id);
+    } else {
+      const { error } = await admin.from('documents').delete().eq('id', id);
+      if (error) throw error;
+    }
     return { success: true, remote, remote_error };
   },
 
