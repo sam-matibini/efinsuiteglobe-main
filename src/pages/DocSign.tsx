@@ -213,7 +213,7 @@ export default function DocSign() {
 
   const handleResendDocument = async (docId: string) => {
     try {
-      await sendDocument.mutateAsync(docId);
+      await remindDocument.mutateAsync(docId);
     } catch {
       // Error toast handled by hook
     }
