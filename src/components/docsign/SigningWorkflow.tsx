@@ -433,8 +433,15 @@ export function SigningWorkflow({
   // Helper to get step ID for current index
   const currentStepId = steps[activeStep]?.id || '';
 
-  const handleSend = () => {
-    onComplete(recipients, placedFields, settings);
+  const [isSending, setIsSending] = useState(false);
+  const handleSend = async () => {
+    if (isSending) return;
+    setIsSending(true);
+    try {
+      await onComplete(recipients, placedFields, settings);
+    } finally {
+      setIsSending(false);
+    }
   };
 
   return (
