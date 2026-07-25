@@ -72,6 +72,7 @@ export function useDocuments() {
       const { data, error } = await supabase
         .from('documents')
         .select('*')
+        .eq('organization_id', organization?.id)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -82,6 +83,8 @@ export function useDocuments() {
 }
 
 export function useDocument(documentId: string | undefined) {
+  const { organization } = useCurrentOrganization();
+
   return useQuery({
     queryKey: ['document', documentId],
     queryFn: async () => {
@@ -91,6 +94,7 @@ export function useDocument(documentId: string | undefined) {
         .from('documents')
         .select('*')
         .eq('id', documentId)
+        .eq('organization_id', organization?.id)
         .single();
 
       if (error) throw error;
