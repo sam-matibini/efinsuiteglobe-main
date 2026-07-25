@@ -1,39 +1,20 @@
-# Fix: Deletes not propagating to eFinSign
+## Goal
 
-## Root cause (confirmed from logs)
+Show a loading indicator on the **Prepare & Send** button in `SigningWorkflow` while the eFinSign proxy call is in flight, so users get feedback that their document is being sent.
 
-`edge-function-logs-efinsign-proxy` shows:
+## Changes
 
-```
-eFinSign delete failed (continuing): [400] Only draft documents can be deleted
-```
+**`src/components/docsign/SigningWorkflow.tsx`**
 
-eFinSign's API only permits `DELETE /documents/{id}` on documents in **draft** status. Once a document is sent/completed/voided it can no longer be deleted via the API — only voided. The current `delete_document` handler in `supabase/functions/efinsign-proxy/index.ts` catches this 400, logs a warning, and still returns `{ success: true }` after deleting the local row. From the UI it looks like a success but the eFinSign record is orphaned.
+1. Add a local `isSending` state (`useState<boolean>(false)`).
+2. Make `handleSend` async: set `isSending = true`, `await onComplete(recipients, placedFields, settings)`, then reset in a `finally` block. (The parent `handleSigningWorkflowComplete` in `DocSign.tsx` is already `async`, so awaiting it will resolve after the `efinsign-proxy` call completes.)
+3. Update the footer **Prepare & Send** button to:
+   - `disabled={!canSend || isSending}`
+   - Swap the `Send` icon for a spinning `Loader2` when `isSending` is true.
+   - Change the label to `Sending…` while pending.
+4. Also disable the **Previous** button and the step-progress buttons in the header while `isSending` is true so the user can't navigate away mid-send.
 
-## Fix
+## Out of scope
 
-Update `delete_document` in `supabase/functions/efinsign-proxy/index.ts`:
-
-1. Fetch `efinsign_document_id` and local `status` (already partially done).
-2. If `efinsign_document_id` exists:
-   - Try `DELETE /documents/{efId}` first.
-   - If it fails with a 400 whose body indicates "Only draft documents can be deleted", fall back to `POST /documents/{efId}/void` (eFinSign's void endpoint) so the remote record is at least closed out rather than orphaned.
-   - Track the remote outcome: `deleted` | `voided` | `failed` (+ error message).
-3. Delete the local row as today.
-4. Return `{ success: true, remote: <outcome>, remote_error?: string }` instead of a blanket success, so the client can show an accurate toast.
-
-## Client-side surface
-
-In `src/hooks/useDocuments.ts` (`useDeleteDocument`), read `remote` from the response and adjust the success toast:
-
-- `deleted` → "Document deleted"
-- `voided` → "Document deleted locally; remote copy voided (eFinSign doesn't allow deleting non-draft documents)"
-- `failed` → warning toast with `remote_error`
-
-No schema changes. No UI component changes beyond the toast text.
-
-## Verification
-
-- Delete a draft document → eFinSign record removed, toast says "deleted".
-- Delete a sent/completed document → eFinSign record voided, toast explains the fallback.
-- Check `edge-function-logs-efinsign-proxy` no longer shows the swallowed 400 for the non-draft path.
+- No changes to `handleSigningWorkflowComplete` in `DocSign.tsx` or to the proxy — the existing toasts still fire on success/error.
+- No changes to the other "Prepare & Send" entry points (dropdown menu, DocumentDetailDialog); those just open the workflow.
