@@ -1,34 +1,39 @@
-## Goal
-When a document is sent via `efinsign-proxy` `send`, email each signer their signing link, because eFinSign does not send those emails for us.
+# Fix: Deletes not propagating to eFinSign
 
-## Where
-`supabase/functions/efinsign-proxy/index.ts` — `send` handler (around lines 226-238).
+## Root cause (confirmed from logs)
 
-## Behavior
-After the existing eFinSign `/documents/{efId}/send` call succeeds and local statuses are updated:
+`edge-function-logs-efinsign-proxy` shows:
 
-1. Load document (title, organization_id) and all its signers (id, email, name, status) from Supabase.
-2. Load the sending organization's email branding from `organizations` (`email_from_name`, `email_from_address`, plus display name for the greeting).
-3. For each signer whose status is not `signed`/`declined`:
-   - Build a signing URL that points to our own app page that already handles redirects:
-     `${APP_URL}/docsign/sign?sign=${signer.id}` where `APP_URL` comes from a new env var `APP_PUBLIC_URL` (fallback to `SITE_URL`, then to request `origin` header).
-   - Compose subject: `Action required: Please sign "${document.title}"`.
-   - Compose text + branded HTML body (mirrors the copy in `useMessaging.sendDocumentSigningRequest`) with a Review & Sign button, plain link fallback, and organization signature.
-4. Send each email by invoking the existing `resend-integration` edge function server-side:
-   - `POST ${SUPABASE_URL}/functions/v1/resend-integration` with the service-role key in `Authorization`.
-   - Body: `{ action: 'send-email', to, subject, message, html, branding: { email, displayName } }` where `branding` uses the org's `email_from_address` / `email_from_name` so Resend uses the configured sender.
-5. Collect per-signer results. Do not fail the whole `send` if some emails fail — log an audit row and return them:
-   - Insert a `document_audit_logs` entry `action: 'signer_emailed'` per signer (with `success`, `error`, `message_id`).
-   - Return `{ success: true, emailed: [{ signer_id, email, success, error? }] }` so the client can toast partial failures.
+```
+eFinSign delete failed (continuing): [400] Only draft documents can be deleted
+```
 
-## Client
-No API change required — `useSendDocument` already handles `{ success: true }`. Optionally surface partial email failures: if any `emailed[i].success === false`, show a warning toast listing those recipients (small UI tweak in `useDocuments.ts` `useSendDocument.onSuccess`).
+eFinSign's API only permits `DELETE /documents/{id}` on documents in **draft** status. Once a document is sent/completed/voided it can no longer be deleted via the API — only voided. The current `delete_document` handler in `supabase/functions/efinsign-proxy/index.ts` catches this 400, logs a warning, and still returns `{ success: true }` after deleting the local row. From the UI it looks like a success but the eFinSign record is orphaned.
 
-## Config
-- New optional secret `APP_PUBLIC_URL` (e.g. `https://app.efinsuite.com`) so links point to production. If missing, fall back to `SITE_URL`, then to the `origin` request header.
-- Uses existing `resend-integration` function + org-level `email_from_name` / `email_from_address` already configured in Settings → Email sender. No new Resend config required.
+## Fix
 
-## Out of scope
-- SMS/WhatsApp notifications (current request is email only).
-- Reminder/void emails (`remind` already delegates to eFinSign; unchanged).
-- Template edits beyond the copy shown above.
+Update `delete_document` in `supabase/functions/efinsign-proxy/index.ts`:
+
+1. Fetch `efinsign_document_id` and local `status` (already partially done).
+2. If `efinsign_document_id` exists:
+   - Try `DELETE /documents/{efId}` first.
+   - If it fails with a 400 whose body indicates "Only draft documents can be deleted", fall back to `POST /documents/{efId}/void` (eFinSign's void endpoint) so the remote record is at least closed out rather than orphaned.
+   - Track the remote outcome: `deleted` | `voided` | `failed` (+ error message).
+3. Delete the local row as today.
+4. Return `{ success: true, remote: <outcome>, remote_error?: string }` instead of a blanket success, so the client can show an accurate toast.
+
+## Client-side surface
+
+In `src/hooks/useDocuments.ts` (`useDeleteDocument`), read `remote` from the response and adjust the success toast:
+
+- `deleted` → "Document deleted"
+- `voided` → "Document deleted locally; remote copy voided (eFinSign doesn't allow deleting non-draft documents)"
+- `failed` → warning toast with `remote_error`
+
+No schema changes. No UI component changes beyond the toast text.
+
+## Verification
+
+- Delete a draft document → eFinSign record removed, toast says "deleted".
+- Delete a sent/completed document → eFinSign record voided, toast explains the fallback.
+- Check `edge-function-logs-efinsign-proxy` no longer shows the swallowed 400 for the non-draft path.
