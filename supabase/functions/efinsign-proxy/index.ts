@@ -123,7 +123,7 @@ async function getEfinsignIds(localDocId: string, localSignerId?: string, localF
 // ---- action handlers -----------------------------------------------------
 
 type Payload = Record<string, unknown>;
-type Ctx = { userId: string; orgId: string | null; isAdmin: boolean };
+type Ctx = { userId: string; orgId: string | null; isAdmin: boolean; origin: string | null };
 
 async function assertDocumentInOrg(localDocId: string, orgId: string | null) {
   if (!orgId) {
@@ -151,6 +151,119 @@ function requireAdmin(ctx: Ctx) {
     throw err;
   }
 }
+
+// ---- signer email delivery -----------------------------------------------
+// eFinSign does not email signers, so after a `send` we email each signer a
+// branded link to our own /docsign/sign redirector.
+
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, (c) => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string
+  ));
+}
+
+function resolveAppUrl(ctx: Ctx): string {
+  const fromEnv = Deno.env.get('APP_PUBLIC_URL') || Deno.env.get('SITE_URL');
+  return (fromEnv || ctx.origin || '').replace(/\/+$/, '');
+}
+
+type EmailResult = { signer_id: string; email: string; success: boolean; error?: string; message_id?: string };
+
+async function emailSignersForDocument(documentId: string, ctx: Ctx): Promise<EmailResult[]> {
+  const { data: doc, error: docErr } = await admin
+    .from('documents')
+    .select('id, title, organization_id')
+    .eq('id', documentId)
+    .single();
+  if (docErr || !doc) return [];
+
+  const { data: org } = await admin
+    .from('organizations')
+    .select('name, email_from_name, email_from_address')
+    .eq('id', (doc as { organization_id: string }).organization_id)
+    .maybeSingle();
+
+  const { data: signers } = await admin
+    .from('document_signers')
+    .select('id, email, name, status')
+    .eq('document_id', documentId);
+
+  const appUrl = resolveAppUrl(ctx);
+  const fromName = (org as { email_from_name?: string | null } | null)?.email_from_name || (org as { name?: string } | null)?.name || undefined;
+  const fromAddress = (org as { email_from_address?: string | null } | null)?.email_from_address || undefined;
+  const orgLabel = fromName || 'eFinsuite';
+
+  const results: EmailResult[] = [];
+  const targets = ((signers || []) as Array<{ id: string; email: string; name: string | null; status: string | null }>)
+    .filter((s) => s.email && s.status !== 'signed' && s.status !== 'declined');
+
+  for (const s of targets) {
+    const signerName = s.name || 'there';
+    const signingUrl = appUrl ? `${appUrl}/docsign/sign?sign=${encodeURIComponent(s.id)}` : '';
+    const title = (doc as { title: string }).title;
+    const subject = `Action required: Please sign "${title}"`;
+    const text = `Hi ${signerName},\n\nYou have been requested to sign "${title}".\n\nPlease click the link below to review and sign:\n${signingUrl}\n\n— ${orgLabel}`;
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #1e40af;">Document Signing Request</h2>
+        <p>Hi ${escapeHtml(signerName)},</p>
+        <p>You have been requested to sign <strong>"${escapeHtml(title)}"</strong>.</p>
+        <p>
+          <a href="${signingUrl}"
+             style="display: inline-block; background: #1e40af; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 16px 0;">
+            Review &amp; Sign Document
+          </a>
+        </p>
+        <p style="color: #666; font-size: 14px;">If the button doesn't work, copy and paste this link:<br>${escapeHtml(signingUrl)}</p>
+        <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;">
+        <p style="color: #999; font-size: 12px;">Sent by ${escapeHtml(orgLabel)}</p>
+      </div>
+    `;
+
+    let success = false;
+    let error: string | undefined;
+    let messageId: string | undefined;
+    try {
+      const resp = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/resend-integration`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+        },
+        body: JSON.stringify({
+          action: 'send-email',
+          to: s.email,
+          subject,
+          message: text,
+          html,
+          branding: fromAddress ? { email: fromAddress, displayName: fromName } : undefined,
+        }),
+      });
+      const body = await resp.json().catch(() => ({} as Record<string, unknown>));
+      if (resp.ok && (body as { success?: boolean }).success) {
+        success = true;
+        messageId = (body as { messageId?: string }).messageId;
+      } else {
+        error = (body as { error?: string }).error || `HTTP ${resp.status}`;
+      }
+    } catch (e) {
+      error = e instanceof Error ? e.message : String(e);
+    }
+
+    await admin.from('document_audit_logs').insert({
+      document_id: documentId,
+      action: 'signer_emailed',
+      actor_type: 'system',
+      details: { signer_id: s.id, email: s.email, success, error, message_id: messageId, signing_url: signingUrl },
+    });
+
+    results.push({ signer_id: s.id, email: s.email, success, error, message_id: messageId });
+  }
+
+  return results;
+}
+
+
 
 const handlers: Record<string, (payload: Payload, ctx: Ctx) => Promise<unknown>> = {
 
@@ -234,7 +347,10 @@ const handlers: Record<string, (payload: Payload, ctx: Ctx) => Promise<unknown>>
       document_id: id, action: 'document_sent', actor_type: 'user',
       details: { via: 'efinsign', sent_at: new Date().toISOString() },
     });
-    return { success: true };
+
+    // eFinSign does not email signers — do it here.
+    const emailed = await emailSignersForDocument(id, ctx);
+    return { success: true, emailed };
   },
 
   async void(payload, ctx) {
@@ -634,7 +750,8 @@ Deno.serve(async (req) => {
     const { data: isAdminRes } = await admin.rpc('has_role', { _user_id: userId, _role: 'admin' });
     const isAdmin = isAdminRes === true;
 
-    const data = await handler(payload || {}, { userId, orgId, isAdmin });
+    const origin = req.headers.get('origin');
+    const data = await handler(payload || {}, { userId, orgId, isAdmin, origin });
     return json({ data });
 
   } catch (e) {
