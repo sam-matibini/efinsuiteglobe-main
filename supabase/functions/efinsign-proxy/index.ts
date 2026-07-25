@@ -634,7 +634,8 @@ Deno.serve(async (req) => {
     const { data: isAdminRes } = await admin.rpc('has_role', { _user_id: userId, _role: 'admin' });
     const isAdmin = isAdminRes === true;
 
-    const data = await handler(payload || {}, { userId, orgId, isAdmin });
+    const origin = req.headers.get('origin');
+    const data = await handler(payload || {}, { userId, orgId, isAdmin, origin });
     return json({ data });
 
   } catch (e) {
