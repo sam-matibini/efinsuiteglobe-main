@@ -875,7 +875,7 @@ export default function DocSign() {
                           <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="icon"><MoreVertical className="w-4 h-4" /></Button></DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             {isResendEligible(doc.status) && (
-                              <DropdownMenuItem disabled={sendDocument.isPending} onClick={(e) => { e.stopPropagation(); void handleResendDocument(doc.id); }}><Send className="w-4 h-4 mr-2" />Resend</DropdownMenuItem>
+                              <DropdownMenuItem disabled={remindDocument.isPending} onClick={(e) => { e.stopPropagation(); void handleResendDocument(doc.id); }}><Send className="w-4 h-4 mr-2" />Resend</DropdownMenuItem>
                             )}
                             <DropdownMenuItem 
                               onClick={(e) => { e.stopPropagation(); setDocumentToDelete({ id: doc.id, title: doc.title }); setDeleteDialogOpen(true); }} 
@@ -943,7 +943,7 @@ export default function DocSign() {
                             <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="icon"><MoreVertical className="w-4 h-4" /></Button></DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                               {isResendEligible(doc.status) && (
-                                <DropdownMenuItem disabled={sendDocument.isPending} onClick={(e) => { e.stopPropagation(); void handleResendDocument(doc.id); }}><Send className="w-4 h-4 mr-2" />Resend</DropdownMenuItem>
+                                <DropdownMenuItem disabled={remindDocument.isPending} onClick={(e) => { e.stopPropagation(); void handleResendDocument(doc.id); }}><Send className="w-4 h-4 mr-2" />Resend</DropdownMenuItem>
                               )}
                               <DropdownMenuItem 
                                 onClick={(e) => { e.stopPropagation(); setDocumentToDelete({ id: doc.id, title: doc.title }); setDeleteDialogOpen(true); }} 
@@ -1001,7 +1001,7 @@ export default function DocSign() {
                             <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="icon"><MoreVertical className="w-4 h-4" /></Button></DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                               {isResendEligible(doc.status) && (
-                                <DropdownMenuItem disabled={sendDocument.isPending} onClick={(e) => { e.stopPropagation(); void handleResendDocument(doc.id); }}><Send className="w-4 h-4 mr-2" />Resend</DropdownMenuItem>
+                                <DropdownMenuItem disabled={remindDocument.isPending} onClick={(e) => { e.stopPropagation(); void handleResendDocument(doc.id); }}><Send className="w-4 h-4 mr-2" />Resend</DropdownMenuItem>
                               )}
                               <DropdownMenuItem 
                                 onClick={(e) => { e.stopPropagation(); setDocumentToDelete({ id: doc.id, title: doc.title }); setDeleteDialogOpen(true); }} 
