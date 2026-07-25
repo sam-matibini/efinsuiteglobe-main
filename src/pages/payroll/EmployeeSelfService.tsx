@@ -102,12 +102,18 @@ export default function EmployeeSelfService() {
       return null;
     }
 
+    const org = organization as any;
     return {
       employeeName: `${currentEmployee.first_name} ${currentEmployee.last_name}`,
       employeeNumber: currentEmployee.employee_number,
       department: currentEmployee.department || undefined,
       province: currentEmployee.province || 'ON',
-      employeeAddress: [currentEmployee.address_line1, currentEmployee.address_line2, [currentEmployee.city, currentEmployee.province, currentEmployee.postal_code].filter(Boolean).join(', ')].filter(Boolean).join(', ') || undefined,
+      employeeAddressLine1: stub.employee_mailing_address_line1 || currentEmployee.address_line1 || undefined,
+      employeeAddressLine2: stub.employee_mailing_address_line2 || currentEmployee.address_line2 || undefined,
+      employeeCity: stub.employee_mailing_city || currentEmployee.city || undefined,
+      employeeProvince: stub.employee_mailing_region || currentEmployee.mailing_province || currentEmployee.province || undefined,
+      employeePostalCode: stub.employee_mailing_postal_code || currentEmployee.postal_code || undefined,
+      employeeCountry: stub.employee_mailing_country || (currentEmployee as any).country || undefined,
 
       payPeriodStart: stub.pay_runs.pay_period_start,
       payPeriodEnd: stub.pay_runs.pay_period_end,
@@ -140,7 +146,13 @@ export default function EmployeeSelfService() {
       ytdFederalTax: stub.ytd_federal_tax || 0,
       ytdProvincialTax: stub.ytd_provincial_tax || 0,
 
-      companyName: organization?.name || undefined,
+      companyName: org?.legal_name || org?.name || undefined,
+      companyAddressLine1: stub.employer_mailing_address_line1 || org?.address_line1 || undefined,
+      companyAddressLine2: stub.employer_mailing_address_line2 || org?.address_line2 || undefined,
+      companyCity: stub.employer_mailing_city || org?.city || undefined,
+      companyProvince: stub.employer_mailing_region || org?.province || undefined,
+      companyPostalCode: stub.employer_mailing_postal_code || org?.postal_code || undefined,
+      companyCountry: stub.employer_mailing_country || (typeof org?.country === 'string' ? org.country : org?.country?.name) || undefined,
     };
   };
 

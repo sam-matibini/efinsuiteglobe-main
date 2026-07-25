@@ -23,12 +23,26 @@ import * as XLSX from 'xlsx';
 import eFinSuiteGlobeLogo from '@/assets/efinsuite-globe-logo.png';
 import { copyTextToClipboard, tryOpenInNewTab } from '@/lib/share';
 import { useTwilioShare } from '@/hooks/useTwilioShare';
+import { buildAddressLines, generatePayStubPdf } from '@/lib/generatePayStubPdf';
 
 interface PayStubData {
   id: string;
   employeeName: string;
   employeeNumber: string;
   department?: string;
+  province?: string;
+  employeeAddressLine1?: string;
+  employeeAddressLine2?: string;
+  employeeCity?: string;
+  employeeProvince?: string;
+  employeePostalCode?: string;
+  employeeCountry?: string;
+  companyAddressLine1?: string;
+  companyAddressLine2?: string;
+  companyCity?: string;
+  companyProvince?: string;
+  companyPostalCode?: string;
+  companyCountry?: string;
   payPeriodStart: string;
   payPeriodEnd: string;
   payDate: string;
@@ -83,250 +97,70 @@ export function PaystubViewer({ payStub, companyName, companyLogo, currencyCode 
     }).format(new Date(year, month - 1, day));
   };
 
+  const employeeAddressLines = buildAddressLines({
+    line1: payStub.employeeAddressLine1,
+    line2: payStub.employeeAddressLine2,
+    city: payStub.employeeCity,
+    region: payStub.employeeProvince,
+    postalCode: payStub.employeePostalCode,
+    country: payStub.employeeCountry,
+  });
+
+  const employerAddressLines = buildAddressLines({
+    line1: payStub.companyAddressLine1,
+    line2: payStub.companyAddressLine2,
+    city: payStub.companyCity,
+    region: payStub.companyProvince,
+    postalCode: payStub.companyPostalCode,
+    country: payStub.companyCountry,
+  });
+
   const generatePdf = async (): Promise<jsPDF> => {
-    const doc = new jsPDF();
-    const pageWidth = doc.internal.pageSize.getWidth();
-    let y = 20;
-    const leftMargin = 15;
-    const rightMargin = pageWidth - 15;
-
-    // Logo placeholder - if logo exists, add it
-    if (companyLogo) {
-      try {
-        doc.addImage(companyLogo, 'PNG', pageWidth / 2 - 20, y, 40, 15);
-        y += 20;
-      } catch (e) {
-        // Logo loading failed, continue without it
-      }
-    }
-
-    // Company name header
-    doc.setFontSize(18);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(31, 78, 121);
-    doc.text(companyName, pageWidth / 2, y, { align: 'center' });
-    
-    y += 8;
-    doc.setFontSize(11);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(100, 100, 100);
-    doc.text('Pay Statement', pageWidth / 2, y, { align: 'center' });
-    
-    // Divider
-    y += 8;
-    doc.setDrawColor(200, 200, 200);
-    doc.line(leftMargin, y, rightMargin, y);
-    
-    // Employee & Pay Period Info - two columns
-    y += 10;
-    doc.setFontSize(10);
-    doc.setTextColor(0, 0, 0);
-    doc.setFont('helvetica', 'bold');
-    doc.text(payStub.employeeName, leftMargin, y);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Pay Period: ${formatDate(payStub.payPeriodStart)} - ${formatDate(payStub.payPeriodEnd)}`, rightMargin, y, { align: 'right' });
-    
-    y += 6;
-    doc.setTextColor(100, 100, 100);
-    doc.text(payStub.employeeNumber, leftMargin, y);
-    doc.text(`Pay Date: ${formatDate(payStub.payDate)}`, rightMargin, y, { align: 'right' });
-    
-    // Divider
-    y += 8;
-    doc.setDrawColor(200, 200, 200);
-    doc.line(leftMargin, y, rightMargin, y);
-    
-    // Earnings Section
-    y += 10;
-    doc.setTextColor(0, 0, 0);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Earnings', leftMargin, y);
-    
-    y += 8;
-    doc.setFont('helvetica', 'normal');
-    
-    // Regular earnings
-    if (payStub.regularHours > 0) {
-      doc.setTextColor(100, 100, 100);
-      doc.text(`Regular (${payStub.regularHours}h)`, leftMargin, y);
-      doc.setTextColor(0, 0, 0);
-      doc.text(formatCurrency(payStub.regularEarnings), rightMargin, y, { align: 'right' });
-      y += 6;
-    }
-    
-    // Overtime
-    if (payStub.overtimeHours > 0) {
-      doc.setTextColor(100, 100, 100);
-      doc.text(`Overtime (${payStub.overtimeHours}h)`, leftMargin, y);
-      doc.setTextColor(0, 0, 0);
-      doc.text(formatCurrency(payStub.overtimeEarnings), rightMargin, y, { align: 'right' });
-      y += 6;
-    }
-    
-    // Vacation
-    if (payStub.vacationPay > 0) {
-      doc.setTextColor(100, 100, 100);
-      doc.text('Vacation Pay', leftMargin, y);
-      doc.setTextColor(0, 0, 0);
-      doc.text(formatCurrency(payStub.vacationPay), rightMargin, y, { align: 'right' });
-      y += 6;
-    }
-    
-    // Gross Pay
-    y += 2;
-    doc.setFont('helvetica', 'bold');
-    doc.text('Gross Pay', leftMargin, y);
-    doc.text(formatCurrency(payStub.grossPay), rightMargin, y, { align: 'right' });
-    
-    // Deductions Section
-    y += 12;
-    doc.text('Deductions', leftMargin, y);
-    
-    y += 8;
-    doc.setFont('helvetica', 'normal');
-    
-    if (payStub.cppContribution > 0) {
-      doc.setTextColor(180, 100, 80);
-      doc.text('CPP (Employee)', leftMargin, y);
-      doc.text(`(${formatCurrency(payStub.cppContribution)})`, rightMargin, y, { align: 'right' });
-      y += 6;
-    }
-    
-    if (payStub.eiPremium > 0) {
-      doc.text('EI (Employee)', leftMargin, y);
-      doc.text(`(${formatCurrency(payStub.eiPremium)})`, rightMargin, y, { align: 'right' });
-      y += 6;
-    }
-    
-    if (payStub.federalTax > 0) {
-      doc.text('Federal Tax', leftMargin, y);
-      doc.text(`(${formatCurrency(payStub.federalTax)})`, rightMargin, y, { align: 'right' });
-      y += 6;
-    }
-    
-    if (payStub.provincialTax > 0) {
-      doc.text('Provincial Tax', leftMargin, y);
-      doc.text(`(${formatCurrency(payStub.provincialTax)})`, rightMargin, y, { align: 'right' });
-      y += 6;
-    }
-    
-    // Total Deductions
-    y += 2;
-    doc.setFont('helvetica', 'bold');
-    doc.text('Total Deductions', leftMargin, y);
-    doc.text(`(${formatCurrency(payStub.totalDeductions)})`, rightMargin, y, { align: 'right' });
-    
-    // Net Pay Section
-    y += 12;
-    doc.setFillColor(240, 248, 255);
-    doc.rect(leftMargin, y - 5, rightMargin - leftMargin, 14, 'F');
-    doc.setTextColor(0, 0, 0);
-    doc.setFontSize(12);
-    doc.text('Net Pay', leftMargin + 5, y + 3);
-    doc.setTextColor(34, 139, 34);
-    doc.text(formatCurrency(payStub.netPay), rightMargin - 5, y + 3, { align: 'right' });
-    
-    // Year-to-Date Section
-    y += 20;
-    doc.setTextColor(0, 0, 0);
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Year-to-Date', leftMargin, y);
-    
-    y += 8;
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
-    
-    // YTD in rows - compute derived values if not provided
-    const ytdTax = payStub.ytdTax ?? (payStub.ytdFederalTax + payStub.ytdProvincialTax);
-    const ytdNetPay = payStub.ytdNetPay ?? (payStub.ytdGross - payStub.ytdCpp - payStub.ytdEi - ytdTax);
-    
-    const ytdItems = [
-      { label: 'Gross:', value: payStub.ytdGross },
-      { label: 'CPP:', value: payStub.ytdCpp },
-      { label: 'EI:', value: payStub.ytdEi },
-      { label: 'Fed Tax:', value: payStub.ytdFederalTax },
-      { label: 'Prov Tax:', value: payStub.ytdProvincialTax },
-      { label: 'Total Tax:', value: ytdTax },
-      { label: 'Net Pay:', value: ytdNetPay },
-    ];
-    
-    const colWidth = (rightMargin - leftMargin) / 3;
-    ytdItems.forEach((item, idx) => {
-      const col = idx % 3;
-      const row = Math.floor(idx / 3);
-      const xPos = leftMargin + col * colWidth;
-      const yPos = y + row * 8;
-      
-      doc.setTextColor(100, 100, 100);
-      doc.text(item.label, xPos, yPos);
-      doc.setTextColor(0, 0, 0);
-      doc.text(formatCurrency(item.value), xPos + 25, yPos);
+    return generatePayStubPdf({
+      employeeName: payStub.employeeName,
+      employeeNumber: payStub.employeeNumber,
+      department: payStub.department,
+      province: payStub.province || payStub.employeeProvince || 'ON',
+      employeeAddressLine1: payStub.employeeAddressLine1,
+      employeeAddressLine2: payStub.employeeAddressLine2,
+      employeeCity: payStub.employeeCity,
+      employeeProvince: payStub.employeeProvince,
+      employeePostalCode: payStub.employeePostalCode,
+      employeeCountry: payStub.employeeCountry,
+      payPeriodStart: payStub.payPeriodStart,
+      payPeriodEnd: payStub.payPeriodEnd,
+      payDate: payStub.payDate,
+      regularHours: payStub.regularHours,
+      regularEarnings: payStub.regularEarnings,
+      overtimeHours: payStub.overtimeHours,
+      overtimeEarnings: payStub.overtimeEarnings,
+      vacationHours: 0,
+      vacationPay: payStub.vacationPay,
+      sickHours: 0,
+      bonus: 0,
+      commission: 0,
+      otherEarnings: 0,
+      grossPay: payStub.grossPay,
+      cppContribution: payStub.cppContribution,
+      eiPremium: payStub.eiPremium,
+      federalTax: payStub.federalTax,
+      provincialTax: payStub.provincialTax,
+      otherDeductions: payStub.otherDeductions,
+      totalDeductions: payStub.totalDeductions,
+      netPay: payStub.netPay,
+      ytdGross: payStub.ytdGross,
+      ytdCpp: payStub.ytdCpp,
+      ytdEi: payStub.ytdEi,
+      ytdFederalTax: payStub.ytdFederalTax,
+      ytdProvincialTax: payStub.ytdProvincialTax,
+      companyName,
+      companyAddressLine1: payStub.companyAddressLine1,
+      companyAddressLine2: payStub.companyAddressLine2,
+      companyCity: payStub.companyCity,
+      companyProvince: payStub.companyProvince,
+      companyPostalCode: payStub.companyPostalCode,
+      companyCountry: payStub.companyCountry,
     });
-    
-    // Footer with branding
-    const footerY = doc.internal.pageSize.getHeight() - 35;
-    y = footerY;
-    
-    // Add logo
-    if (companyLogo) {
-      try {
-        const logoImg = new Image();
-        logoImg.src = companyLogo;
-        // We'll use the brand logo instead for consistency
-      } catch (e) {
-        console.error('Logo error:', e);
-      }
-    }
-    
-    doc.setFontSize(7);
-    doc.setTextColor(100, 100, 100);
-    doc.setFont('helvetica', 'normal');
-    doc.text('Powered By:', pageWidth / 2, y, { align: 'center' });
-    y += 4;
-    
-    // Add eFinsuite Globe logo
-    try {
-      const logoModule = await import('@/assets/efinsuite-globe-logo.png');
-      const logoResponse = await fetch(logoModule.default);
-      const logoBlob = await logoResponse.blob();
-      const logoBase64 = await new Promise<string>((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result as string);
-        reader.readAsDataURL(logoBlob);
-      });
-      
-      const logoWidth = 10;
-      const logoHeight = 10;
-      const logoX = (pageWidth - logoWidth) / 2;
-      doc.addImage(logoBase64, 'PNG', logoX, y, logoWidth, logoHeight);
-      y += logoHeight + 2;
-    } catch (e) {
-      console.error('Failed to add logo:', e);
-      y += 2;
-    }
-    
-    // Brand name
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(30, 64, 175);
-    doc.text('eFinsuite Globe', pageWidth / 2, y, { align: 'center' });
-    y += 4;
-    
-    // Contact info
-    doc.setFontSize(7);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(100, 100, 100);
-    doc.text('For more information or clarification email: info@efintax.biz', pageWidth / 2, y, { align: 'center' });
-    y += 4;
-    
-    // Timestamp
-    doc.setFontSize(6);
-    doc.setTextColor(150, 150, 150);
-    doc.text(`Generated: ${new Date().toLocaleDateString('en-CA')}`, pageWidth / 2, y, { align: 'center' });
-    doc.setTextColor(0, 0, 0);
-    
-    return doc;
   };
 
   const handlePrint = async () => {
@@ -471,24 +305,34 @@ export function PaystubViewer({ payStub, companyName, companyLogo, currencyCode 
 
   return (
     <Card className="p-6 border rounded-lg">
-      {/* Header with logo */}
-      <div className="text-center mb-4">
-        {companyLogo && (
-          <div className="flex justify-center mb-2">
-            <img src={companyLogo} alt="Company Logo" className="h-12 object-contain" />
-          </div>
-        )}
-        <h2 className="text-xl font-bold text-primary">{companyName}</h2>
-        <p className="text-muted-foreground text-sm">Pay Statement</p>
+      {/* Header with employer mailing address */}
+      <div className="flex items-start justify-between gap-6 mb-4">
+        <div>
+          {companyLogo && (
+            <img src={companyLogo} alt="Company Logo" className="h-12 object-contain mb-2" />
+          )}
+          <h2 className="text-xl font-bold text-primary">{companyName}</h2>
+          <p className="text-muted-foreground text-sm">Pay Statement</p>
+        </div>
+        <div className="text-right text-sm text-muted-foreground leading-relaxed">
+          <p className="font-medium text-foreground">{companyName}</p>
+          {employerAddressLines.map((line) => (
+            <p key={line}>{line}</p>
+          ))}
+        </div>
       </div>
       
       <Separator className="my-4" />
       
       {/* Employee & Pay Period Info */}
-      <div className="flex justify-between items-start mb-4">
+      <div className="flex justify-between items-start gap-6 mb-4">
         <div>
           <p className="font-semibold">{payStub.employeeName}</p>
-          <p className="text-sm text-muted-foreground">{payStub.employeeNumber}</p>
+          {employeeAddressLines.map((line) => (
+            <p key={line} className="text-sm text-muted-foreground">{line}</p>
+          ))}
+          <p className="text-sm text-muted-foreground">Employee #: {payStub.employeeNumber}</p>
+          {payStub.province && <p className="text-sm text-muted-foreground">Province: {payStub.province}</p>}
         </div>
         <div className="text-right">
           <p className="text-sm">Pay Period: {formatDate(payStub.payPeriodStart)} - {formatDate(payStub.payPeriodEnd)}</p>

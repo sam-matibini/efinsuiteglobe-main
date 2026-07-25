@@ -253,16 +253,19 @@ async function buildPaystubBlob(payStubId: string, employeeId: string, organizat
     .maybeSingle();
   if (eErr || !employee) throw new Error('Employee not found');
 
+  const emp = employee as any;
+  const org = organization as any;
   const data: PayStubData = {
-    employeeName: `${(employee as any).first_name} ${(employee as any).last_name}`,
-    employeeNumber: (employee as any).employee_number,
-    department: (employee as any).department || undefined,
-    province: (employee as any).province || 'ON',
-    employeeAddress: [
-      (employee as any).address_line1,
-      (employee as any).address_line2,
-      [(employee as any).city, (employee as any).province, (employee as any).postal_code].filter(Boolean).join(', '),
-    ].filter(Boolean).join(', ') || undefined,
+    employeeName: `${emp.first_name} ${emp.last_name}`,
+    employeeNumber: emp.employee_number,
+    department: emp.department || undefined,
+    province: emp.province || 'ON',
+    employeeAddressLine1: (stub as any).employee_mailing_address_line1 || emp.address_line1 || undefined,
+    employeeAddressLine2: (stub as any).employee_mailing_address_line2 || emp.address_line2 || undefined,
+    employeeCity: (stub as any).employee_mailing_city || emp.city || undefined,
+    employeeProvince: (stub as any).employee_mailing_region || emp.mailing_province || emp.province || undefined,
+    employeePostalCode: (stub as any).employee_mailing_postal_code || emp.postal_code || undefined,
+    employeeCountry: (stub as any).employee_mailing_country || emp.country || undefined,
     payPeriodStart: (payRun as any).pay_period_start,
     payPeriodEnd: (payRun as any).pay_period_end,
     payDate: (payRun as any).pay_date,
@@ -289,7 +292,13 @@ async function buildPaystubBlob(payStubId: string, employeeId: string, organizat
     ytdEi: (stub as any).ytd_ei || 0,
     ytdFederalTax: (stub as any).ytd_federal_tax || 0,
     ytdProvincialTax: (stub as any).ytd_provincial_tax || 0,
-    companyName: organization?.name || undefined,
+    companyName: org?.legal_name || org?.name || undefined,
+    companyAddressLine1: (stub as any).employer_mailing_address_line1 || org?.address_line1 || undefined,
+    companyAddressLine2: (stub as any).employer_mailing_address_line2 || org?.address_line2 || undefined,
+    companyCity: (stub as any).employer_mailing_city || org?.city || undefined,
+    companyProvince: (stub as any).employer_mailing_region || org?.province || undefined,
+    companyPostalCode: (stub as any).employer_mailing_postal_code || org?.postal_code || undefined,
+    companyCountry: (stub as any).employer_mailing_country || (typeof org?.country === 'string' ? org.country : org?.country?.name) || undefined,
   };
 
   const doc = generatePayStubPdf(data);

@@ -52,12 +52,31 @@ interface PayStub {
   ytd_ei: number | null;
   ytd_federal_tax: number | null;
   ytd_provincial_tax: number | null;
+  employee_mailing_address_line1?: string | null;
+  employee_mailing_address_line2?: string | null;
+  employee_mailing_city?: string | null;
+  employee_mailing_region?: string | null;
+  employee_mailing_postal_code?: string | null;
+  employee_mailing_country?: string | null;
+  employer_mailing_address_line1?: string | null;
+  employer_mailing_address_line2?: string | null;
+  employer_mailing_city?: string | null;
+  employer_mailing_region?: string | null;
+  employer_mailing_postal_code?: string | null;
+  employer_mailing_country?: string | null;
   employee: {
     id: string;
     first_name: string;
     last_name: string;
     employee_number: string | null;
     department: string | null;
+    province?: string | null;
+    mailing_province?: string | null;
+    address_line1?: string | null;
+    address_line2?: string | null;
+    city?: string | null;
+    postal_code?: string | null;
+    country?: string | null;
   } | null;
 }
 
@@ -91,7 +110,7 @@ export function ViewPayRunDialog({ open, onOpenChange, payRun }: ViewPayRunDialo
         .from('pay_stubs')
         .select(`
           *,
-          employee:employees(id, first_name, last_name, employee_number, department)
+          employee:employees(id, first_name, last_name, employee_number, department, province, mailing_province, address_line1, address_line2, city, postal_code, country)
         `)
         .eq('pay_run_id', payRun.id)
         .order('created_at');
@@ -293,6 +312,19 @@ export function ViewPayRunDialog({ open, onOpenChange, payRun }: ViewPayRunDialo
     employeeName: stub.employee ? `${stub.employee.first_name} ${stub.employee.last_name}` : 'Unknown',
     employeeNumber: stub.employee?.employee_number || 'N/A',
     department: stub.employee?.department || undefined,
+    province: stub.employee?.province || stub.employee_mailing_region || 'ON',
+    employeeAddressLine1: stub.employee_mailing_address_line1 || stub.employee?.address_line1 || undefined,
+    employeeAddressLine2: stub.employee_mailing_address_line2 || stub.employee?.address_line2 || undefined,
+    employeeCity: stub.employee_mailing_city || stub.employee?.city || undefined,
+    employeeProvince: stub.employee_mailing_region || stub.employee?.mailing_province || stub.employee?.province || undefined,
+    employeePostalCode: stub.employee_mailing_postal_code || stub.employee?.postal_code || undefined,
+    employeeCountry: stub.employee_mailing_country || stub.employee?.country || undefined,
+    companyAddressLine1: stub.employer_mailing_address_line1 || organization?.address_line1 || undefined,
+    companyAddressLine2: stub.employer_mailing_address_line2 || organization?.address_line2 || undefined,
+    companyCity: stub.employer_mailing_city || organization?.city || undefined,
+    companyProvince: stub.employer_mailing_region || organization?.province || undefined,
+    companyPostalCode: stub.employer_mailing_postal_code || organization?.postal_code || undefined,
+    companyCountry: stub.employer_mailing_country || organization?.country || undefined,
     payPeriodStart: payRun?.pay_period_start || '',
     payPeriodEnd: payRun?.pay_period_end || '',
     payDate: payRun?.pay_date || '',
