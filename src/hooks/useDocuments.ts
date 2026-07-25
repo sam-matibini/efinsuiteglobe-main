@@ -226,7 +226,7 @@ export function useDeleteDocument() {
     },
     onSuccess: (result) => {
       if (result.remote === 'voided') {
-        toast.success("Document deleted locally; remote copy voided (eFinSign doesn't allow deleting non-draft documents)");
+        toast.success("Document voided (eFinSign doesn't allow deleting non-draft documents)");
       } else if (result.remote === 'failed') {
         toast.warning(`Document deleted locally, but remote cleanup failed: ${result.remote_error ?? 'unknown error'}`);
       } else {
