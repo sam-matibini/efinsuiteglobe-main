@@ -21,7 +21,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
-import { useDocuments, useDocumentSigners, useDocumentFields, useAddField, useUpdateDocument, useAddSigner, useSendDocument, useUpdateDocumentField, type Document } from '@/hooks/useDocuments';
+import { useDocuments, useDocumentSigners, useDocumentFields, useAddField, useUpdateDocument, useAddSigner, useSendDocument, useRemindDocument, useUpdateDocumentField, type Document } from '@/hooks/useDocuments';
 import { CreateDocumentDialog } from '@/components/docsign/CreateDocumentDialog';
 import { DocumentDetailDialog } from '@/components/docsign/DocumentDetailDialog';
 import { DocumentEditor } from '@/components/docsign/DocumentEditor';
