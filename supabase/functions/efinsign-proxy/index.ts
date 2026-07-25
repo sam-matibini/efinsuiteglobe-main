@@ -162,11 +162,6 @@ function escapeHtml(s: string): string {
   ));
 }
 
-function resolveAppUrl(ctx: Ctx): string {
-  const fromEnv = Deno.env.get('APP_PUBLIC_URL') || Deno.env.get('SITE_URL');
-  return (fromEnv || ctx.origin || '').replace(/\/+$/, '');
-}
-
 type EmailResult = { signer_id: string; email: string; success: boolean; error?: string; message_id?: string };
 
 async function emailSignersForDocument(documentId: string, ctx: Ctx): Promise<EmailResult[]> {
@@ -188,7 +183,7 @@ async function emailSignersForDocument(documentId: string, ctx: Ctx): Promise<Em
     .select('id, email, name, status')
     .eq('document_id', documentId);
 
-  const appUrl = resolveAppUrl(ctx);
+  const appUrl = Deno.env.get('APP_PUBLIC_URL') || Deno.env.get('SITE_URL') || 'https://efinsuite.com';
   const fromName = (org as { email_from_name?: string | null } | null)?.email_from_name || (org as { name?: string } | null)?.name || undefined;
   const fromAddress = (org as { email_from_address?: string | null } | null)?.email_from_address || undefined;
   const orgLabel = fromName || 'eFinsuite';
