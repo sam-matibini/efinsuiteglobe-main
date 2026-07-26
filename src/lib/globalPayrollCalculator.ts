@@ -225,6 +225,8 @@ export function getStatutoryDeductionCodes(countryCode: string): string[] {
       return ['PAYE', 'NAPSA', 'NHIMA'];
     case 'KE':
       return ['PAYE', 'NHIF', 'NSSF-T1', 'NSSF-T2', 'HOUSING-LEVY', 'SHIF'];
+    case 'NG':
+      return ['PAYE', 'PENSION-EE', 'PENSION-ER', 'NHF', 'NSITF', 'ITF'];
     case 'BI':
       return ['IPR', 'INSS-EMP', 'INSS-ER', 'MUTUELLE'];
     default:
