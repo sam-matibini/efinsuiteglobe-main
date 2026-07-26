@@ -64,7 +64,7 @@ interface NavItem {
   label: string;
   icon: React.ElementType;
   href?: string;
-  children?: { label: string; href: string; icon: React.ElementType; hideForReadOnly?: boolean; hideForNonCA?: boolean }[];
+  children?: { label: string; href: string; icon: React.ElementType; hideForReadOnly?: boolean; hideForNonCA?: boolean; restrictToCountries?: string[] }[];
   /** Module codes required for this nav item to be visible */
   requiredModules?: ModuleCode[];
   /** Hide this nav item when user is in read-only (auditor) mode */
