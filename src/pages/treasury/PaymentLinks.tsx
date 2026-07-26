@@ -104,6 +104,24 @@ export default function PaymentLinks() {
       window.localStorage.setItem('pl_last_deposit_bank', form.deposit_bank_account_id);
     }
 
+    // NG payout validation
+    let ngPayoutMeta: Record<string, unknown> | null = null;
+    if (isNG) {
+      if (form.ng_payout === 'bank') {
+        if (!form.ng_bank_code) { toast.error('Select a Nigerian bank'); return; }
+        if (!/^\d{10}$/.test(form.ng_account_number)) { toast.error('Enter a valid 10-digit NUBAN account number'); return; }
+        const bank = ngBanks.find((b) => b.code === form.ng_bank_code);
+        ngPayoutMeta = { payout: { country: 'NG', method: 'bank', bank_code: form.ng_bank_code, bank_name: bank?.name ?? null, account_number: form.ng_account_number } };
+      } else if (form.ng_payout === 'mobile') {
+        if (!form.ng_wallet_provider) { toast.error('Select a mobile money provider'); return; }
+        if (!/^\d{11}$/.test(form.ng_wallet_number)) { toast.error('Enter a valid 11-digit wallet / phone number'); return; }
+        const prov = ngMobile.find((m) => m.code === form.ng_wallet_provider);
+        ngPayoutMeta = { payout: { country: 'NG', method: 'mobile_money', provider_code: form.ng_wallet_provider, provider_name: prov?.name ?? null, wallet_number: form.ng_wallet_number } };
+      } else if (form.ng_payout === 'nibss') {
+        ngPayoutMeta = { payout: { country: 'NG', method: 'nibss' } };
+      }
+    }
+
     await create.mutateAsync({
       amount,
       currency: form.currency,
@@ -117,6 +135,7 @@ export default function PaymentLinks() {
       deposit_bank_account_id: form.deposit_bank_account_id || null,
       instant_payment: form.instant_payment,
       instant_method: form.instant_payment ? form.instant_method : null,
+      metadata: ngPayoutMeta,
     });
     setOpen(false);
     reset();
