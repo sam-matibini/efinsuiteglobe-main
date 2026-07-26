@@ -86,6 +86,7 @@ export default function TreasurySettings() {
                 <TableHead>Account</TableHead><TableHead>Currency</TableHead>
                 <TableHead>Plaid</TableHead><TableHead>Stripe ACH</TableHead>
                 <TableHead>EFT (Paysafe)</TableHead>
+                {config.countryCode === 'NG' && <><TableHead>NIBSS</TableHead><TableHead>RTGS</TableHead></>}
                 <TableHead>Default</TableHead><TableHead className="text-right">Actions</TableHead>
               </TableRow></TableHeader>
               <TableBody>
