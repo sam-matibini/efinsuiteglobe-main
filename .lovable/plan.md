@@ -1,49 +1,35 @@
 ## Problem
 
-Even after selecting **Nigeria** in the country selector, the eFinconnect page still shows Canadian content:
+The country selector shows **Zambia (ZM)** but the eFinconnect settings tab still shows **"Canada · CAD"** with Canadian rails (Stripe ACH, EFT Paysafe, Interac) and CRA tax payees.
 
-- Header chip reads "Canada · CAD"
-- KPI amounts show `CA$0.00`
-- "All modules" and quick-actions list "CRA Remittance", "CRA Accounts"
+**Root cause (verified):** `src/config/countryTreasuryConfig.ts` `REGISTRY` only contains `CA`, `US`, `NG`. `getCountryTreasuryConfig('ZM')` hits the `?? CA` fallback, so `useCountryTreasuryConfig` returns Canada for Zambia. Scope wiring itself is correct — the config just has no ZM entry.
 
-Root cause: `src/pages/treasury/BankingPaymentsDashboard.tsx` is hard-coded (CRA labels, `currencyOverride: 'CAD'`, static tile list). It never reads the country config or scope. Similarly `useCountryTreasuryConfig` and `CountryFlagBadge` read the *organization's* country, so they ignore the country scope until the org itself changes.
+## Fix
 
-## Plan
+Add a **Zambia (ZM)** entry to the treasury config registry so eFinconnect (settings + dashboard) localizes when Zambia is scoped.
 
-### 1. Make the treasury config follow the country scope
-Update `src/hooks/useCountryTreasuryConfig.ts` to prefer the scoped country over the organization's country, so eFinconnect switches immediately when the user picks a country — no org switch required.
+### `src/config/countryTreasuryConfig.ts`
 
-- Read `useCountryScope()` first.
-- Fall back to `organizations.country_id → countries.code`, then `organization.country`, then `CA`.
+1. Define `const ZM: CountryTreasuryConfig` with:
+   - `countryCode: 'ZM'`, `displayName: 'Zambia'`, `defaultCurrency: 'ZMW'`
+   - **Rails:** ZIPSS (real-time), DDACC / EFT (T+1), RTGS (BoZ, same-day, high value), Between accounts, Cheque, Mobile Money (MTN / Airtel — grouped as `manual` rail id since no dedicated enum yet)
+   - **Tax payees:** ZRA VAT, ZRA PAYE, ZRA WHT, ZRA CIT, ZRA Turnover Tax, NAPSA (pension), NHIMA (health insurance)
+   - **Sections:**
+     - Bills: Pay bills, Pay ZRA taxes (→ generic tax payments page), Pay NAPSA & NHIMA, Pay salaries
+     - Transfers: Between accounts, ZIPSS instant, EFT (DDACC), BoZ RTGS
+     - Payments: Payment links, Scheduled payments
+2. Register `ZM` in `REGISTRY`.
 
-### 2. Country-aware BankingPaymentsDashboard
-Refactor `src/pages/treasury/BankingPaymentsDashboard.tsx`:
+No new rail IDs are added to the `RailId` union in this pass — Zambian rails reuse existing generic ids (`ach` relabeled as EFT/DDACC, `wire` as RTGS, `interac` as ZIPSS instant, `manual` for mobile money) to avoid touching downstream rail-flag logic. This is the same pattern used for US/NG.
 
-- Consume `useCountryTreasuryConfig()` to get `countryCode`, `defaultCurrency`, and `taxPayees`.
-- Derive `primaryAuthority` from `taxPayees[0].authority` (CRA / IRS / FIRS / HMRC). Use it for tile titles, button labels, and the transaction "source" prefix.
-- Replace the local `cad()` formatter with `fmt.formatCurrency(n, { currencyOverride: config.defaultCurrency })` so KPI cards render `₦0.00` in Nigeria, `$0.00` in the US, etc.
-- Rebuild the `tiles` array:
-  - Replace "CRA Remittance" with `${primaryAuthority} Remittance` linking to `/treasury/tax-payments` (the country-neutral hub) instead of the Canada-only `/banking-payments/cra-remittance`.
-  - Replace "CRA Accounts" with `${primaryAuthority} Accounts`; hide entirely for non-CA (CRA Accounts UI is Canada-specific).
-  - Keep AP Payments, Payroll Payments, Scheduled, Payment History, Payment Links, EFT Rails (they are country-neutral).
-- Replace the top-right "CRA remittance" button with `${primaryAuthority} remittance` pointing to the same country-neutral hub.
-- Filter the KPI/`recent` list source label to use `primaryAuthority` rather than the literal "CRA".
+### Out of scope
 
-### 3. Country-aware flag badge
-Update `src/components/dashboard/CountryFlagBadge.tsx` to read `useCountryScope()` first, then fall back to the organization's country. This fixes the "Canada CAD" chip when Nigeria is scoped.
+- `GB`, `KE`, `BI` also missing from the registry but not part of this report — leave for a follow-up unless requested.
+- `EfinconnectSettingsTab.tsx` footnote still says *"To change country, update Organization → Country"*; scope selector already overrides this. Not touching copy here.
 
-### 4. Verification
-- Load `/banking-payments` while scoped to Nigeria and confirm:
-  - Header chip shows Nigeria / NGN
-  - KPI values render as `₦0.00`
-  - Tiles show "FIRS Remittance", no "CRA Accounts"
-- Switch scope to Canada and confirm CRA labels + CAD return.
-- Typecheck passes.
+## Verification
 
-## Files touched
-
-- `src/hooks/useCountryTreasuryConfig.ts` — prefer scoped country
-- `src/pages/treasury/BankingPaymentsDashboard.tsx` — country-driven tiles, labels, currency
-- `src/components/dashboard/CountryFlagBadge.tsx` — follow scope
-
-No database or route changes.
+1. With Zambia scoped, `/settings?tab=efinconnect` header badge shows **"Zambia · ZMW"**.
+2. Payment rails list shows ZIPSS / EFT / RTGS / Mobile Money (not Stripe ACH / Interac).
+3. Tax authorities list shows ZRA / NAPSA / NHIMA (not CRA).
+4. `/treasury` dashboard tiles and currency also swap (already wired via `useCountryTreasuryConfig`).
