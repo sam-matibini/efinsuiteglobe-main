@@ -90,7 +90,7 @@ export function generateGenericSeparationDocPdf(data: GenericSeparationDocData):
     emp?.address_line1,
     emp?.address_line2,
     [emp?.city, emp?.province, emp?.postal_code].filter(Boolean).join(' '),
-    emp?.country,
+    (emp as any)?.country,
   ].filter(Boolean);
   empAddr.forEach((line) => {
     doc.text(String(line), M + 24, y);
