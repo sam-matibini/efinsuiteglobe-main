@@ -6,7 +6,7 @@ import { useCountryTreasuryConfig } from '@/hooks/useCountryTreasuryConfig';
 import type { RailId } from '@/config/countryTreasuryConfig';
 import { toast } from 'sonner';
 
-export type EfinconnectSectionKey = 'bills' | 'transfers' | 'payments' | 'governance';
+export type EfinconnectSectionKey = 'bills' | 'taxRemittances' | 'transfers' | 'payments' | 'governance';
 
 export interface EfinconnectPreferences {
   rails: Partial<Record<RailId, boolean>>;
