@@ -172,8 +172,13 @@ export async function recordBillTaxes(ctx: BillPostContext): Promise<string[]> {
 
 export interface PayrollLineInput {
   pay_stub_id: string;
-  gross_earnings: number;
-  pension_base?: number | null;
+  gross_earnings: number;         // per-period gross
+  periods_per_year?: number;      // default 12 (monthly)
+  pension_employee?: number;      // per-period, annualized inside
+  nhf_employee?: number;
+  nhis_employee?: number;
+  life_assurance_premium?: number;
+  pension_base?: number | null;   // per-period base for pension contribution ledger row
 }
 
 export interface PayrollPostContext {
@@ -201,11 +206,20 @@ export async function recordPayrollTaxes(ctx: PayrollPostContext): Promise<strin
   const ids: string[] = [];
 
   for (const stub of ctx.stubs) {
-    // PAYE (uses consolidated relief + pension deduction internally).
-    const paye = calculatePaye(payeDef, stub.gross_earnings, {
+    const periods = stub.periods_per_year ?? 12;
+    const paye = calculatePaye(
+      payeDef,
+      {
+        annualGross: stub.gross_earnings * periods,
+        pensionEmployee: (stub.pension_employee ?? 0) * periods,
+        nhfEmployee: (stub.nhf_employee ?? 0) * periods,
+        nhisEmployee: (stub.nhis_employee ?? 0) * periods,
+        lifeAssurancePremium: stub.life_assurance_premium ?? 0,
+        periodsPerYear: periods,
+      },
       reliefs,
-      annualize: true,
-    });
+    );
+
     const pid = await writeTaxLedger({
       organization_id: ctx.organization_id,
       result: paye,
