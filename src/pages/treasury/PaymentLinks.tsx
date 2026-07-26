@@ -38,13 +38,20 @@ export default function PaymentLinks() {
   const { invoices = [] } = useInvoices() as { invoices?: Array<{ id: string; invoice_number: string; balance_due: number; status: string; customer_id?: string; total: number }> };
   const { customers = [] } = useCustomers() as { customers?: Array<{ id: string; name: string; email: string | null }> };
   const isReadOnly = useIsReadOnly();
+  const { country: countryScope } = useCountryScope();
+  const isNG = countryScope === 'NG';
+  const ngBanks = useMemo(() => getBankInstitutionsOnly('NG'), []);
+  const ngMobile = useMemo(() => getMobileMoneyProviders('NG'), []);
+
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<'invoice' | 'adhoc'>('invoice');
   const lastBank = typeof window !== 'undefined' ? window.localStorage.getItem('pl_last_deposit_bank') ?? '' : '';
-  const [form, setForm] = useState({
+  const defaultCurrency = isNG ? 'NGN' : 'CAD';
+  type NgPayout = 'none' | 'nibss' | 'bank' | 'mobile';
+  const initialForm = {
     invoice_id: '',
     amount: '',
-    currency: 'CAD',
+    currency: defaultCurrency,
     description: '',
     payment_method: 'all' as PaymentLinkMethod,
     create_invoice_on_payment: false,
@@ -53,7 +60,14 @@ export default function PaymentLinks() {
     deposit_bank_account_id: lastBank,
     instant_payment: false,
     instant_method: 'interac_etransfer' as InstantMethod,
-  });
+    // NG-specific payout fields
+    ng_payout: 'none' as NgPayout,
+    ng_bank_code: '',
+    ng_account_number: '',
+    ng_wallet_provider: '',
+    ng_wallet_number: '',
+  };
+  const [form, setForm] = useState(initialForm);
 
   const openInvoices = useMemo(
     () => invoices.filter((i) => ['sent', 'partial', 'overdue', 'issued', 'final'].includes(i.status) && Number(i.balance_due) > 0),
@@ -62,7 +76,7 @@ export default function PaymentLinks() {
 
   const selectedInv = openInvoices.find((i) => i.id === form.invoice_id);
 
-  const reset = () => setForm({ invoice_id: '', amount: '', currency: 'CAD', description: '', payment_method: 'all', create_invoice_on_payment: false, payer_name: '', payer_email: '', deposit_bank_account_id: lastBank, instant_payment: false, instant_method: 'interac_etransfer' });
+  const reset = () => setForm(initialForm);
 
   const submit = async () => {
     const amount = mode === 'invoice' && selectedInv ? Number(form.amount || selectedInv.balance_due) : Number(form.amount);
