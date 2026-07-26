@@ -299,6 +299,10 @@ export default function Settings() {
             <CreditCard className="w-4 h-4" />
             <span className="hidden sm:inline">Payments</span>
           </TabsTrigger>
+          <TabsTrigger value="efinconnect" className="gap-2">
+            <Send className="w-4 h-4" />
+            <span className="hidden sm:inline">eFinconnect</span>
+          </TabsTrigger>
           <TabsTrigger value="billing" className="gap-2">
             <Wallet className="w-4 h-4" />
             <span className="hidden sm:inline">Billing</span>
