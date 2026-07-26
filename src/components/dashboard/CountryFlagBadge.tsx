@@ -79,9 +79,11 @@ const getFlag = (countryCode: string) => {
 
 export function CountryFlagBadge() {
   const { organization } = useCurrentOrganization();
-  
-  // Extract country code from organization
-  const countryString = organization?.country || '';
+  const { country: scopedCountry } = useCountryScope();
+
+  // Country scope wins over the organization's own country so this badge
+  // reflects the D365-style top-left selector immediately.
+  const countryString = scopedCountry || organization?.country || '';
   
   // Map common country names/codes to ISO codes
   const getCountryCode = (country: string): string => {
