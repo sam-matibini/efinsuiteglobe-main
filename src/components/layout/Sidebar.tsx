@@ -131,7 +131,7 @@ const getNavigation = (payrollLabels: { taxSlips: string; separationDoc: string;
     requiredModules: ['treasury'],
     children: [
       { label: 'Dashboard', href: '/banking-payments', icon: LayoutDashboard },
-      { label: 'CRA Payments', href: '/banking-payments/cra-payments', icon: Receipt },
+      { label: 'CRA Payments', href: '/banking-payments/cra-payments', icon: Receipt, hideForNonCA: true },
       { label: 'AP Payments', href: '/treasury/ap-payments', icon: CreditCard },
       { label: 'Payroll Payments', href: '/treasury/payroll-payments', icon: Users },
       { label: 'Scheduled', href: '/banking-payments/scheduled', icon: Receipt },
