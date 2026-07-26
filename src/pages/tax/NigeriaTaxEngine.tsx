@@ -439,7 +439,7 @@ export default function NigeriaTaxEngine() {
         </p>
       </div>
 
-      <Tabs defaultValue="compliance">
+      <Tabs defaultValue={new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '').get('tab') || 'compliance'}>
         <TabsList className="flex-wrap h-auto">
           <TabsTrigger value="compliance">Compliance</TabsTrigger>
           <TabsTrigger value="definitions">Definitions</TabsTrigger>

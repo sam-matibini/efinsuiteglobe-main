@@ -17,6 +17,7 @@ import { useCraAccounts, CraTaxType } from '@/hooks/useCraAccounts';
 import { useIsReadOnly } from '@/hooks/useIsReadOnly';
 import { Plus, Send, Trash2, Pencil, Mail } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { useCountryTreasuryConfig } from '@/hooks/useCountryTreasuryConfig';
 
 const TYPE_LABEL: Record<TaxPaymentType, string> = {
   source_deductions: 'CRA Source Deductions (PD7A)',
@@ -32,11 +33,29 @@ export default function TaxPayments() {
   const { processTaxPayment } = useTreasuryRails();
   const { accounts: bankAccounts } = useBankAccounts();
   const isReadOnly = useIsReadOnly();
+  const { config, countryCode } = useCountryTreasuryConfig();
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<{ amount: string; period_start: string; period_end: string; payment_method: TaxPaymentMethod; notes: string; bank_account_id: string }>({
     amount: '', period_start: '', period_end: '', payment_method: 'cra_my_payment', notes: '', bank_account_id: '',
   });
+
+  if (countryCode && countryCode !== 'CA') {
+    const dest = countryCode === 'NG' ? '/tax/nigeria' : '/tax';
+    return (
+      <div className="p-6">
+        <Card>
+          <CardHeader><CardTitle>Not available for {config.displayName}</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              This screen manages Canadian CRA remittances. For {config.displayName}, use the localized tax engine instead.
+            </p>
+            <Button asChild><a href={dest}>Open {config.displayName} Tax Engine</a></Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   const openEdit = (p: typeof payments[number]) => {
     setEditId(p.id);

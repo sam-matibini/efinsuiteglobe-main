@@ -53,6 +53,7 @@ import { useOrganizationContext } from '@/hooks/useOrganizationContext';
 import { useAuth } from '@/hooks/useAuth';
 import { usePayrollLocalization } from '@/hooks/usePayrollLocalization';
 import { useEnabledModules, ModuleCode } from '@/hooks/useEnabledModules';
+import { useCountryTreasuryConfig } from '@/hooks/useCountryTreasuryConfig';
 
 import { CreateOrganizationDialog } from '@/components/accounts/CreateOrganizationDialog';
 import { SearchableOrgSwitcher } from '@/components/layout/SearchableOrgSwitcher';
@@ -62,7 +63,7 @@ interface NavItem {
   label: string;
   icon: React.ElementType;
   href?: string;
-  children?: { label: string; href: string; icon: React.ElementType; hideForReadOnly?: boolean }[];
+  children?: { label: string; href: string; icon: React.ElementType; hideForReadOnly?: boolean; hideForNonCA?: boolean }[];
   /** Module codes required for this nav item to be visible */
   requiredModules?: ModuleCode[];
   /** Hide this nav item when user is in read-only (auditor) mode */
@@ -131,7 +132,7 @@ const getNavigation = (payrollLabels: { taxSlips: string; separationDoc: string;
     requiredModules: ['treasury'],
     children: [
       { label: 'Dashboard', href: '/banking-payments', icon: LayoutDashboard },
-      { label: 'CRA Payments', href: '/banking-payments/cra-payments', icon: Receipt },
+      { label: 'CRA Payments', href: '/banking-payments/cra-payments', icon: Receipt, hideForNonCA: true },
       { label: 'AP Payments', href: '/treasury/ap-payments', icon: CreditCard },
       { label: 'Payroll Payments', href: '/treasury/payroll-payments', icon: Users },
       { label: 'Scheduled', href: '/banking-payments/scheduled', icon: Receipt },
@@ -141,7 +142,7 @@ const getNavigation = (payrollLabels: { taxSlips: string; separationDoc: string;
       { label: 'Payout Routing', href: '/banking-payments/stripe-connect/routing', icon: Link2 },
       { label: 'Stripe Compliance', href: '/banking-payments/stripe-connect/compliance', icon: Link2 },
       { label: 'Approvals', href: '/treasury/approvals', icon: UserCheck },
-      { label: 'CRA Accounts', href: '/banking-payments/cra-accounts', icon: Settings, hideForReadOnly: true },
+      { label: 'CRA Accounts', href: '/banking-payments/cra-accounts', icon: Settings, hideForReadOnly: true, hideForNonCA: true },
       { label: 'Settings', href: '/treasury/settings', icon: Settings, hideForReadOnly: true },
     ],
   },
@@ -282,6 +283,7 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
   const [createOrgOpen, setCreateOrgOpen] = useState(false);
   const { sidebarLabels } = usePayrollLocalization();
   const { isModuleEnabled, isModuleInCurrentPlan, isLoading: modulesLoading, isReadOnly, userRole, planTier } = useEnabledModules();
+  const { countryCode } = useCountryTreasuryConfig();
   const [upgradeModal, setUpgradeModal] = useState<{ open: boolean; module?: ModuleCode; label?: string }>({ open: false });
 
   // Generate navigation with localized payroll labels
@@ -306,15 +308,13 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
       })
       .filter((x): x is NavItem & { locked: boolean } => x !== null)
       .map(item => {
-        if (isReadOnly && item.children) {
-          return {
-            ...item,
-            children: item.children.filter(child => !child.hideForReadOnly),
-          };
-        }
-        return item;
+        if (!item.children) return item;
+        let children = item.children;
+        if (isReadOnly) children = children.filter(child => !child.hideForReadOnly);
+        if (countryCode && countryCode !== 'CA') children = children.filter(child => !child.hideForNonCA);
+        return { ...item, children };
       });
-  }, [baseNavigation, isModuleEnabled, isModuleInCurrentPlan, modulesLoading, isReadOnly, userRole]);
+  }, [baseNavigation, isModuleEnabled, isModuleInCurrentPlan, modulesLoading, isReadOnly, userRole, countryCode]);
 
 
   // Auto-expand parent groups when navigating to child routes
