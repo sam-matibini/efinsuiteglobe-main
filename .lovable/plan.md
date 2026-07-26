@@ -1,47 +1,44 @@
-## Phase 9 — Wire NG Tax Engine into Transaction Flows
+## Phase 10 — NG Tax Engine: Filing Automation & Remittance Workflow
 
-Connect the integration helpers built in `src/lib/ngTax/integration.ts` into the actual invoice, bill, payroll, and payment forms so the ledger populates from real user activity.
+With the ledger now capturing taxes from Invoices, Bills, Vendor Payments, and Payroll, the next logical phase closes the loop: turning ledger entries into filed returns and posted remittances with full accounting integration.
 
 ### Scope
 
-1. **Invoices (AR)**
-   - In `CreateInvoiceDialog` / invoice save path: after invoice + JE are persisted, call `recordInvoiceTaxes({ orgId, invoiceId, journalEntryId, lines })`.
-   - Guard behind org jurisdiction = NG (helper already no-ops otherwise, but skip the query when possible).
-   - Show resolved VAT/WHT breakdown in the invoice totals panel using `useNgTaxCalculation`.
+1. **Automated Filing Generation from Ledger**
+   - Extend `generate_ng_filing` RPC to aggregate ledger rows by tax type + period, instead of manual entry.
+   - Support VAT (monthly), PAYE (monthly), WHT (monthly), Pension (monthly), CIT (annual).
+   - Auto-populate taxable base, tax amount, exemptions applied, and line-item counts.
+   - Mark contributing ledger rows with `filing_id` on generation (traceability).
 
-2. **Bills (AP)**
-   - In `CreateBillDialog` / bill save path: call `recordBillTaxes(...)` with vendor + lines.
-   - When a bill is marked paid and WHT applies, call `markBillWhtWithheld(billId, paymentDate)` from the payment flow so the WHT ledger row flips to `withheld`.
-   - Surface WHT-to-withhold amount on the bill summary.
+2. **Remittance → Journal Entry Posting**
+   - When a remittance is posted via `post_ng_remittance`, auto-create a journal entry:
+     - Dr: Tax Liability account (from `ng_tax_account_mappings`)
+     - Cr: Bank/Cash account (user-selected)
+   - Link JE back to remittance and ledger rows (`remittance_id`, `journal_entry_id`).
+   - Update ledger row status from `filed` → `remitted`.
 
-3. **Payroll**
-   - In the pay-run finalization path (where JEs are posted): call `recordPayrollTaxes({ orgId, payRunId, employeeId, gross, journalEntryId })` per pay stub for NG employees.
-   - Ensures PAYE + Pension appear in the ledger tied to the payroll JE.
+3. **Filing Review & Approval Workflow**
+   - Add "Review" step in Filings tab: draft → review → submitted → filed.
+   - Show line-level breakdown drill-down (per invoice/bill/pay stub) before submission.
+   - Capture submitter, reviewer, submitted_at, filing reference number.
 
-4. **Traceability polish**
-   - From invoice/bill/pay-stub detail views, add a "Tax Ledger" link that opens the existing Traceability Drawer filtered to that `source_transaction_id`.
+4. **Compliance Dashboard**
+   - New "Compliance" tab: upcoming filing deadlines by tax type, overdue alerts, YTD remittance totals vs. accrued liability reconciliation.
+
+5. **Remittance Receipt Attachment**
+   - Allow uploading FIRS/State IRS/Pension custodian receipts against remittance records.
+   - Store in Supabase Storage bucket `ng-tax-receipts` with RLS.
 
 ### Technical Details
 
-- Helpers are already idempotent-friendly (they write ledger rows keyed by source id); add a pre-check to avoid duplicate inserts on edit/repost.
-- Reuse `useOrganization` to get `orgId` and skip when `country_code !== 'NG'`.
-- No schema changes required — all tables and RPCs already exist from prior phases.
-- Files to touch (expected):
-  - `src/components/invoices/CreateInvoiceDialog.tsx` (+ edit dialog)
-  - `src/components/bills/CreateBillDialog.tsx` (+ edit dialog, payment dialog)
-  - `src/hooks/usePayRunProcessing.ts` (or equivalent finalize path)
-  - `src/pages/tax/NigeriaTaxEngine.tsx` — expose drawer open by source id
-  - Invoice/Bill/PayStub detail views — add "Tax Ledger" link
+- **DB migration**: add `filing_id`, `remittance_id`, `journal_entry_id` FKs on `ng_tax_transaction_ledger` (some may exist — verify first). Add `status` enum transitions. Create `ng-tax-receipts` storage bucket with per-org RLS.
+- **RPCs**: rewrite `generate_ng_filing` to aggregate from ledger; extend `post_ng_remittance` to write JE via existing journal helpers; add `submit_ng_filing_for_review` and `approve_ng_filing`.
+- **UI**: enhance `NigeriaTaxEngine.tsx` Filings tab with review drawer + line breakdown; enhance Remittances tab with bank account selector + receipt upload; new Compliance tab.
+- **Hooks**: extend `useNgTaxCalculation.ts` / add `useNgFilings.ts`, `useNgRemittances.ts`.
+- **No-op guard**: all new flows gate on org country = NG.
 
-### Out of Scope
+### Out of Scope (future phases)
 
-- New tax types or rate changes
-- Non-NG jurisdictions
-- Filing generation changes (already implemented)
-
-### Verification
-
-- Create a test NG invoice with VAT + WHT line → confirm two ledger rows appear in `/tax/nigeria` Reports tab with links back to invoice + JE.
-- Create a test NG bill, mark paid → WHT row status flips to `withheld`.
-- Run a payroll for an NG employee → PAYE + Pension rows appear tied to the pay run JE.
-- Typecheck clean.
+- Direct e-filing API integration with FIRS TaxPro-Max (Phase 11).
+- Multi-state (Lagos LIRS, Rivers, etc.) tax authority-specific forms.
+- Bulk import of historical filings.
