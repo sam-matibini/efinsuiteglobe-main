@@ -173,7 +173,7 @@ export default function BankingPaymentsDashboard() {
       date: p.payment_date,
       ref: p.reference ?? p.invoice?.invoice_number ?? '—',
       amount: Number(p.amount),
-      currency: 'CAD',
+      currency,
       method: p.payment_method ?? 'manual',
       source: p.customer?.name ?? 'Customer payment',
     }));
@@ -182,9 +182,9 @@ export default function BankingPaymentsDashboard() {
       date: (p.paid_at as string | null)?.slice(0, 10) ?? '',
       ref: p.reference,
       amount: Number(p.amount ?? 0),
-      currency: p.currency ?? 'CAD',
+      currency: p.currency ?? currency,
       method: 'eft',
-      source: `CRA · ${p.payment_type.replace('_', ' ')}`,
+      source: `${primaryAuthority} · ${p.payment_type.replace('_', ' ')}`,
     }));
     return rows
       .filter((r) => r.date)
@@ -197,18 +197,28 @@ export default function BankingPaymentsDashboard() {
   const overdue = schedules.filter((s) => s.is_active && s.next_run_date < todayIso);
 
   const tiles = [
-    { title: 'CRA Remittance', href: '/banking-payments/cra-remittance', icon: Receipt },
+    {
+      title: `${primaryAuthority} Remittance`,
+      href: countryCode === 'CA' ? '/banking-payments/cra-remittance' : '/treasury/tax-payments',
+      icon: Receipt,
+    },
     { title: 'AP Payments', href: '/treasury/ap-payments', icon: CreditCard },
     { title: 'Payroll Payments', href: '/treasury/payroll-payments', icon: Users },
     { title: 'Scheduled', href: '/banking-payments/scheduled', icon: Calendar },
     { title: 'Payment History', href: '/banking-payments/history', icon: History },
     { title: 'Payment Links', href: '/banking-payments/payment-links', icon: Link2 },
-    { title: 'CRA Accounts', href: '/banking-payments/cra-accounts', icon: Building2, desc: `${accounts.length} registered` },
+    ...(countryCode === 'CA'
+      ? [{
+          title: 'CRA Accounts',
+          href: '/banking-payments/cra-accounts',
+          icon: Building2,
+          desc: `${accounts.length} registered`,
+        }]
+      : []),
     { title: 'EFT Rails', href: '/banking-payments/eft-rails', icon: Landmark },
   ];
 
-  const cad = (n: number) =>
-    fmt.formatCurrency(n, { showCurrencySymbol: true, currencyOverride: 'CAD' });
+  const money_ = money; // preserved for readability below
 
   return (
     <div className="space-y-6 p-6">
