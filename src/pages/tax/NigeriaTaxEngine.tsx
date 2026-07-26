@@ -655,7 +655,8 @@ export default function NigeriaTaxEngine() {
                       <TableHead>Payment date</TableHead><TableHead>Definition</TableHead>
                       <TableHead className="text-right">Amount</TableHead>
                       <TableHead>Reference</TableHead><TableHead>Status</TableHead>
-                      <TableHead>Filing</TableHead>
+                      <TableHead>JE</TableHead>
+                      <TableHead>Receipt</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -666,7 +667,41 @@ export default function NigeriaTaxEngine() {
                         <TableCell className="text-right font-medium">{fmtNaira(r.amount)}</TableCell>
                         <TableCell className="text-xs">{r.reference ?? r.confirmation_reference ?? '—'}</TableCell>
                         <TableCell><Badge className={statusColors[r.status] ?? ''}>{r.status}</Badge></TableCell>
-                        <TableCell className="text-xs font-mono">{r.filing_id?.slice(0, 8) ?? '—'}</TableCell>
+                        <TableCell>
+                          {r.journal_entry_id
+                            ? <Link to={`/journal-entries?id=${r.journal_entry_id}`} className="text-primary underline text-xs">View JE</Link>
+                            : <span className="text-muted-foreground text-xs">—</span>}
+                        </TableCell>
+                        <TableCell>
+                          <input
+                            type="file"
+                            accept="application/pdf,image/*"
+                            className="text-xs w-40"
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (!file || !orgId) return;
+                              const path = `${orgId}/${r.id}/${Date.now()}-${file.name}`;
+                              const up = await supabase.storage.from('ng-tax-receipts').upload(path, file, { upsert: true });
+                              if (up.error) { toast.error(up.error.message); return; }
+                              const { error } = await (supabase.from('ng_tax_remittances') as any)
+                                .update({ receipt_storage_path: path, receipt_uploaded_at: new Date().toISOString() })
+                                .eq('id', r.id);
+                              if (error) { toast.error(error.message); return; }
+                              toast.success('Receipt uploaded');
+                              qc.invalidateQueries({ queryKey: ['ng-tax-remittances', orgId] });
+                            }}
+                          />
+                          {r.receipt_storage_path && (
+                            <button
+                              className="text-xs text-primary underline ml-2"
+                              onClick={async () => {
+                                const { data } = await supabase.storage.from('ng-tax-receipts')
+                                  .createSignedUrl(r.receipt_storage_path, 300);
+                                if (data?.signedUrl) window.open(data.signedUrl, '_blank');
+                              }}
+                            >view</button>
+                          )}
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
