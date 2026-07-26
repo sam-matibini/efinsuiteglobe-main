@@ -974,6 +974,7 @@ export function AutoRateUpdatesTab({ organizationId }: AutoRateUpdatesTabProps) 
             <ul className="text-sm text-muted-foreground space-y-1">
               <li>• <strong>🇨🇦 Canada:</strong> CRA - GST/HST/PST, CPP/EI, Federal & Provincial Tax Credits (TD1)</li>
               <li>• <strong>🇺🇸 USA:</strong> IRS - FICA, Medicare, FUTA, Federal Tax Brackets</li>
+              <li>• <strong>🇳🇬 Nigeria:</strong> FIRS - VAT, WHT, PAYE Brackets, Pension, NHF, ITF, NSITF, TET, CIT</li>
               <li>• <strong>🇿🇲 Zambia:</strong> ZRA - VAT, NAPSA, NHIMA, PAYE Brackets</li>
               <li>• <strong>🇰🇪 Kenya:</strong> KRA - VAT, NSSF, SHIF, Housing Levy, PAYE</li>
               <li>• <strong>🇧🇮 Burundi:</strong> OBR - TVA, INSS, IPR Brackets</li>
