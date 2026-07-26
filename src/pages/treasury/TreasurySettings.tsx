@@ -14,8 +14,14 @@ import { CheckCircle2, Zap, Star, ExternalLink, ShieldCheck } from 'lucide-react
 import { PadAgreementsCard } from '@/components/treasury/PadAgreementsCard';
 
 
+import { useCountryTreasuryConfig } from '@/hooks/useCountryTreasuryConfig';
+
 export default function TreasurySettings() {
-  const { accounts, isLoading, enableStripeAch, enablePaysafeEft, disablePaysafeEft, setDefault } = useFundingBankAccounts();
+  const { config } = useCountryTreasuryConfig();
+  const {
+    accounts, isLoading, enableStripeAch, enablePaysafeEft, disablePaysafeEft, setDefault,
+    enableNibss, disableNibss, enableRtgs, disableRtgs,
+  } = useFundingBankAccounts();
   const { roles, members, threshold, toggleRole, setThreshold } = useApprovalRoles();
   const isReadOnly = useIsReadOnly();
   const [thresholdInput, setThresholdInput] = useState<string>('');
@@ -26,7 +32,40 @@ export default function TreasurySettings() {
 
   return (
     <div className="space-y-6 p-6">
-      <h1 className="text-3xl font-bold">Treasury Settings</h1>
+      <h1 className="text-3xl font-bold">eFinconnect Settings</h1>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            Country &amp; Rails
+            <Badge variant="outline">{config.displayName} · {config.defaultCurrency}</Badge>
+          </CardTitle>
+          <p className="text-sm text-muted-foreground">
+            eFinconnect adapts payment rails, tax payees, and dashboard shortcuts to your
+            organization's country. Change your country in Organization Settings to switch profile.
+          </p>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-3 md:grid-cols-2">
+            <div>
+              <div className="text-xs font-medium text-muted-foreground mb-1">Supported rails</div>
+              <div className="flex flex-wrap gap-1.5">
+                {config.rails.map((r) => (
+                  <Badge key={r.id} variant="secondary" title={r.description}>{r.label}</Badge>
+                ))}
+              </div>
+            </div>
+            <div>
+              <div className="text-xs font-medium text-muted-foreground mb-1">Tax payees</div>
+              <div className="flex flex-wrap gap-1.5">
+                {config.taxPayees.map((p) => (
+                  <Badge key={p.code} variant="outline" title={p.authority}>{p.label}</Badge>
+                ))}
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -47,6 +86,7 @@ export default function TreasurySettings() {
                 <TableHead>Account</TableHead><TableHead>Currency</TableHead>
                 <TableHead>Plaid</TableHead><TableHead>Stripe ACH</TableHead>
                 <TableHead>EFT (Paysafe)</TableHead>
+                {config.countryCode === 'NG' && <><TableHead>NIBSS</TableHead><TableHead>RTGS</TableHead></>}
                 <TableHead>Default</TableHead><TableHead className="text-right">Actions</TableHead>
               </TableRow></TableHeader>
               <TableBody>
@@ -72,6 +112,20 @@ export default function TreasurySettings() {
                         ? <Badge className="gap-1"><CheckCircle2 className="h-3 w-3" />Enabled</Badge>
                         : <Badge variant="secondary">Disabled</Badge>}
                     </TableCell>
+                    {config.countryCode === 'NG' && (
+                      <>
+                        <TableCell>
+                          {a.isNibssEnabled
+                            ? <Badge className="gap-1"><CheckCircle2 className="h-3 w-3" />Enabled</Badge>
+                            : <Badge variant="secondary">Disabled</Badge>}
+                        </TableCell>
+                        <TableCell>
+                          {a.isRtgsEnabled
+                            ? <Badge className="gap-1"><CheckCircle2 className="h-3 w-3" />Enabled</Badge>
+                            : <Badge variant="secondary">Disabled</Badge>}
+                        </TableCell>
+                      </>
+                    )}
                     <TableCell>
                       {a.isDefault && <Badge variant="outline" className="gap-1"><Star className="h-3 w-3" />Default</Badge>}
                     </TableCell>
@@ -93,6 +147,26 @@ export default function TreasurySettings() {
                           onClick={() => disablePaysafeEft.mutate(a.id)}>
                           Disable EFT
                         </Button>
+                      )}
+                      {!isReadOnly && config.countryCode === 'NG' && !a.isNibssEnabled && (
+                        <Button size="sm" variant="outline" disabled={enableNibss.isPending}
+                          onClick={() => enableNibss.mutate(a.id)}>
+                          <Zap className="mr-2 h-3 w-3" />Enable NIBSS
+                        </Button>
+                      )}
+                      {!isReadOnly && config.countryCode === 'NG' && a.isNibssEnabled && (
+                        <Button size="sm" variant="ghost" disabled={disableNibss.isPending}
+                          onClick={() => disableNibss.mutate(a.id)}>Disable NIBSS</Button>
+                      )}
+                      {!isReadOnly && config.countryCode === 'NG' && !a.isRtgsEnabled && (
+                        <Button size="sm" variant="outline" disabled={enableRtgs.isPending}
+                          onClick={() => enableRtgs.mutate(a.id)}>
+                          <Zap className="mr-2 h-3 w-3" />Enable RTGS
+                        </Button>
+                      )}
+                      {!isReadOnly && config.countryCode === 'NG' && a.isRtgsEnabled && (
+                        <Button size="sm" variant="ghost" disabled={disableRtgs.isPending}
+                          onClick={() => disableRtgs.mutate(a.id)}>Disable RTGS</Button>
                       )}
                       {!isReadOnly && !a.isDefault && (
                         <Button size="sm" variant="ghost" disabled={setDefault.isPending}

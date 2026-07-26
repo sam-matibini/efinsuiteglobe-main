@@ -1,25 +1,17 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import {
   Landmark, Receipt, AlertTriangle, CheckCircle2,
-  CreditCard, Users, ArrowLeftRight, Send, Link as LinkIcon,
-  Clock, ShieldCheck, History, Settings, ChevronRight, ExternalLink,
+  ShieldCheck, History, Settings, ChevronRight, ExternalLink,
 } from 'lucide-react';
 import { useTaxPayments } from '@/hooks/useTaxPayments';
 import { useAPPaymentBatches } from '@/hooks/useAPPaymentBatches';
 import { Link } from 'react-router-dom';
 import { ConnectedAccountsBalanceCard } from '@/components/treasury/ConnectedAccountsBalanceCard';
-import type { LucideIcon } from 'lucide-react';
+import { useCountryTreasuryConfig } from '@/hooks/useCountryTreasuryConfig';
+import type { DashboardActionDef } from '@/config/countryTreasuryConfig';
 
-interface ActionCardProps {
-  title: string;
-  description: string;
-  to: string;
-  icon: LucideIcon;
-  external?: boolean;
-  deliveryEstimate?: string;
-}
-
-function ActionCard({ title, description, to, icon: Icon, external, deliveryEstimate }: ActionCardProps) {
+function ActionCard({ title, description, to, icon: Icon, external, deliveryEstimate }: DashboardActionDef) {
   return (
     <div className="space-y-2">
       <Link
@@ -28,9 +20,7 @@ function ActionCard({ title, description, to, icon: Icon, external, deliveryEsti
       >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <h3 className="font-semibold text-foreground">{title}</h3>
-            </div>
+            <h3 className="font-semibold text-foreground">{title}</h3>
             <p className="mt-2 text-sm text-muted-foreground leading-relaxed">{description}</p>
           </div>
           <div className="shrink-0 flex flex-col items-end gap-3">
@@ -54,11 +44,14 @@ function ActionCard({ title, description, to, icon: Icon, external, deliveryEsti
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, cards }: { title: string; cards: DashboardActionDef[] }) {
+  if (!cards.length) return null;
   return (
     <section className="space-y-3">
       <h2 className="text-sm font-semibold text-foreground/80">{title}</h2>
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">{children}</div>
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {cards.map((c) => <ActionCard key={c.title} {...c} />)}
+      </div>
     </section>
   );
 }
@@ -66,6 +59,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 export default function TreasuryDashboard() {
   const { payments } = useTaxPayments();
   const { batches } = useAPPaymentBatches();
+  const { config } = useCountryTreasuryConfig();
 
   const pendingTax = payments.filter((p) => ['draft', 'scheduled', 'submitted'].includes(p.status));
   const paidTax = payments.filter((p) => p.status === 'paid');
@@ -75,11 +69,24 @@ export default function TreasuryDashboard() {
   const sum = (items: { amount?: number; total_amount?: number }[], key: 'amount' | 'total_amount') =>
     items.reduce((s, i) => s + Number(i[key] ?? 0), 0);
 
+  const governance: DashboardActionDef[] = [
+    { title: 'Approvals',       description: 'Review and approve pending payment batches.',        to: '/treasury/approvals',        icon: ShieldCheck },
+    { title: 'Payment history', description: 'Full audit trail of every remittance and batch.',    to: '/banking-payments/history',  icon: History },
+    { title: 'Settings',        description: 'Rails, limits, and account defaults.',               to: '/treasury/settings',         icon: Settings },
+  ];
+
+  const fmt = new Intl.NumberFormat('en', { style: 'currency', currency: config.defaultCurrency, maximumFractionDigits: 0 });
+
   return (
     <div className="space-y-8 p-6">
-      <div>
-        <h1 className="text-3xl font-bold">eFinconnect</h1>
-        <p className="text-muted-foreground">Pay bills, remit taxes, and move money between your accounts.</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-3xl font-bold">eFinconnect</h1>
+          <p className="text-muted-foreground">Pay bills, remit taxes, and move money between your accounts.</p>
+        </div>
+        <Badge variant="outline" className="gap-1">
+          <Landmark className="h-3 w-3" /> {config.displayName} · {config.defaultCurrency}
+        </Badge>
       </div>
 
       {/* KPI strip */}
@@ -91,7 +98,7 @@ export default function TreasuryDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{pendingTax.length}</div>
-            <p className="text-xs text-muted-foreground">${sum(pendingTax, 'amount').toFixed(2)} outstanding</p>
+            <p className="text-xs text-muted-foreground">{fmt.format(sum(pendingTax, 'amount'))} outstanding</p>
           </CardContent>
         </Card>
         <Card>
@@ -101,7 +108,7 @@ export default function TreasuryDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{paidTax.length}</div>
-            <p className="text-xs text-muted-foreground">${sum(paidTax, 'amount').toFixed(2)} remitted</p>
+            <p className="text-xs text-muted-foreground">{fmt.format(sum(paidTax, 'amount'))} remitted</p>
           </CardContent>
         </Card>
         <Card>
@@ -111,7 +118,7 @@ export default function TreasuryDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{pendingBatches.length}</div>
-            <p className="text-xs text-muted-foreground">${sum(pendingBatches, 'total_amount').toFixed(2)} pending</p>
+            <p className="text-xs text-muted-foreground">{fmt.format(sum(pendingBatches, 'total_amount'))} pending</p>
           </CardContent>
         </Card>
         <Card>
@@ -131,93 +138,11 @@ export default function TreasuryDashboard() {
         <ConnectedAccountsBalanceCard />
       </div>
 
-      {/* Bank-style action grid */}
-      <Section title="Bills">
-        <ActionCard
-          title="Pay bills"
-          description="Pay bills easily from anywhere with your phone, tablet, or computer."
-          to="/treasury/ap-payments"
-          icon={CreditCard}
-        />
-        <ActionCard
-          title="Pay business taxes"
-          description="File and pay your Federal and Provincial government business taxes."
-          to="/treasury/tax-payments"
-          icon={Receipt}
-          external
-        />
-      </Section>
-
-      <Section title="Transfers">
-        <ActionCard
-          title="Transfer between accounts"
-          description="Pay your credit card or transfer money between your accounts."
-          to="/banking/transfers"
-          icon={ArrowLeftRight}
-        />
-        <ActionCard
-          title="Interac e-Transfer"
-          description="Send and request money from anyone with a Canadian bank account with Interac e-Transfer."
-          to="/banking-payments/payment-links"
-          icon={Send}
-        />
-        <ActionCard
-          title="Bank deposit"
-          description="Send money directly to a bank account with International Money Transfer."
-          to="/banking-payments/scheduled"
-          icon={Landmark}
-          deliveryEstimate="Up to 5 business days"
-        />
-        <ActionCard
-          title="Cash pickup"
-          description="Send money to an agent location with Western Union."
-          to="/banking-payments/scheduled"
-          icon={Send}
-          deliveryEstimate="2–4 hours"
-        />
-      </Section>
-
-      <Section title="Payments & Collections">
-        <ActionCard
-          title="Payment links"
-          description="Create shareable pay-me links for customers."
-          to="/banking-payments/payment-links"
-          icon={LinkIcon}
-        />
-        <ActionCard
-          title="Stripe Connect payouts"
-          description="Route settlements to connected accounts and sub-merchants."
-          to="/banking-payments/stripe-connect"
-          icon={LinkIcon}
-        />
-        <ActionCard
-          title="Scheduled payments"
-          description="View and manage upcoming outbound payments."
-          to="/banking-payments/scheduled"
-          icon={Clock}
-        />
-      </Section>
-
-      <Section title="Governance">
-        <ActionCard
-          title="Approvals"
-          description="Review and approve pending payment batches."
-          to="/treasury/approvals"
-          icon={ShieldCheck}
-        />
-        <ActionCard
-          title="Payment history"
-          description="Full audit trail of every remittance and batch."
-          to="/banking-payments/history"
-          icon={History}
-        />
-        <ActionCard
-          title="Settings"
-          description="Rails, limits, and account defaults."
-          to="/treasury/settings"
-          icon={Settings}
-        />
-      </Section>
+      {/* Country-driven action grid */}
+      <Section title="Bills"                    cards={config.sections.bills} />
+      <Section title="Transfers"                cards={config.sections.transfers} />
+      <Section title="Payments & Collections"   cards={config.sections.payments} />
+      <Section title="Governance"               cards={governance} />
     </div>
   );
 }
