@@ -126,7 +126,7 @@ const getNavigation = (payrollLabels: { taxSlips: string; separationDoc: string;
     ]
   },
   {
-    label: 'Treasury Management',
+    label: 'eFinconnect',
     icon: Landmark,
     requiredModules: ['treasury'],
     children: [
