@@ -184,9 +184,55 @@ const NG: CountryTreasuryConfig = {
 };
 
 // ---------------------------------------------------------------------------
+// Zambia
+// ---------------------------------------------------------------------------
+const ZM: CountryTreasuryConfig = {
+  countryCode: 'ZM',
+  displayName: 'Zambia',
+  defaultCurrency: 'ZMW',
+  rails: [
+    { id: 'interac', label: 'ZIPSS Instant', description: 'Zambia Interbank Payment & Settlement — instant to any Zambian bank.', deliveryEstimate: 'Instant' },
+    { id: 'ach',     label: 'EFT (DDACC)',   description: 'Direct Debit & Credit Clearing — standard bank transfer.',            deliveryEstimate: 'T+1' },
+    { id: 'wire',    label: 'BoZ RTGS',      description: 'Bank of Zambia Real-Time Gross Settlement for high-value payments.', deliveryEstimate: 'Same day' },
+    { id: 'manual',  label: 'Mobile Money',  description: 'MTN MoMo / Airtel Money payouts.',                                   deliveryEstimate: 'Instant' },
+    { id: 'internal',label: 'Between accounts', description: 'Own-account transfer',                                             deliveryEstimate: 'Instant' },
+    { id: 'cheque',  label: 'Cheque',        description: 'Printed cheque',                                                     deliveryEstimate: '3–5 business days' },
+  ],
+  taxPayees: [
+    { code: 'ZRA-VAT',      label: 'ZRA — Value Added Tax',        authority: 'ZRA',   taxType: 'vat',              liabilityCodePrefix: ['2-3'], liabilityKeywords: ['vat'] },
+    { code: 'ZRA-PAYE',     label: 'ZRA — PAYE',                    authority: 'ZRA',   taxType: 'paye',             liabilityCodePrefix: ['2-2'], liabilityKeywords: ['paye'] },
+    { code: 'ZRA-WHT',      label: 'ZRA — Withholding Tax',         authority: 'ZRA',   taxType: 'wht',              liabilityCodePrefix: ['2-2'], liabilityKeywords: ['withholding', 'wht'] },
+    { code: 'ZRA-CIT',      label: 'ZRA — Company Income Tax',      authority: 'ZRA',   taxType: 'cit',              liabilityCodePrefix: ['2-4'], liabilityKeywords: ['corporate', 'income tax'] },
+    { code: 'ZRA-TOT',      label: 'ZRA — Turnover Tax',            authority: 'ZRA',   taxType: 'turnover_tax',     liabilityCodePrefix: ['2-4'], liabilityKeywords: ['turnover'] },
+    { code: 'NAPSA',        label: 'NAPSA — Pension Contributions', authority: 'NAPSA', taxType: 'pension',          liabilityCodePrefix: ['2-2'], liabilityKeywords: ['napsa', 'pension'] },
+    { code: 'NHIMA',        label: 'NHIMA — National Health Insurance', authority: 'NHIMA', taxType: 'health_insurance', liabilityCodePrefix: ['2-2'], liabilityKeywords: ['nhima', 'health'] },
+  ],
+  sections: {
+    bills: [
+      { title: 'Pay bills', description: 'Pay vendor invoices via ZIPSS, EFT, RTGS or Mobile Money.', to: '/treasury/ap-payments', icon: CreditCard },
+      { title: 'Pay ZRA taxes', description: 'Remit VAT, PAYE, WHT and CIT to the Zambia Revenue Authority.', to: '/treasury/tax-payments', icon: Receipt },
+      { title: 'Pay NAPSA & NHIMA', description: 'Remit pension and health insurance contributions.', to: '/treasury/tax-payments', icon: Wallet },
+      { title: 'Pay salaries', description: 'Batch salary payout via ZIPSS or EFT.', to: '/treasury/payroll-payments', icon: Users, deliveryEstimate: 'Instant' },
+    ],
+    transfers: [
+      { title: 'Transfer between accounts', description: 'Move money between your own bank accounts.', to: '/banking/transfers', icon: ArrowLeftRight },
+      { title: 'ZIPSS Instant', description: 'Send funds to any Zambian bank account instantly.', to: '/banking-payments/scheduled', icon: Send, deliveryEstimate: 'Instant' },
+      { title: 'EFT (DDACC)', description: 'Standard Direct Debit & Credit Clearing transfer.', to: '/banking-payments/scheduled', icon: Banknote, deliveryEstimate: 'T+1' },
+      { title: 'BoZ RTGS', description: 'High-value real-time gross settlement.', to: '/banking-payments/scheduled', icon: Landmark, deliveryEstimate: 'Same day' },
+      { title: 'Mobile Money', description: 'Send to MTN MoMo or Airtel Money wallets.', to: '/banking-payments/scheduled', icon: Send, deliveryEstimate: 'Instant' },
+    ],
+    payments: [
+      { title: 'Payment links', description: 'Create shareable pay-me links for customers.', to: '/banking-payments/payment-links', icon: LinkIcon },
+      { title: 'Scheduled payments', description: 'View and manage upcoming outbound payments.', to: '/banking-payments/scheduled', icon: Clock },
+    ],
+    governance: [],
+  },
+};
+
+// ---------------------------------------------------------------------------
 // Registry
 // ---------------------------------------------------------------------------
-const REGISTRY: Record<string, CountryTreasuryConfig> = { CA, US, NG };
+const REGISTRY: Record<string, CountryTreasuryConfig> = { CA, US, NG, ZM };
 
 export function getCountryTreasuryConfig(code?: string | null): CountryTreasuryConfig {
   if (!code) return CA;
@@ -196,3 +242,4 @@ export function getCountryTreasuryConfig(code?: string | null): CountryTreasuryC
 export function listSupportedCountries(): CountryTreasuryConfig[] {
   return Object.values(REGISTRY);
 }
+
