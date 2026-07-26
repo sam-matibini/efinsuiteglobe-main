@@ -148,6 +148,26 @@ export default function TreasurySettings() {
                           Disable EFT
                         </Button>
                       )}
+                      {!isReadOnly && config.countryCode === 'NG' && !a.isNibssEnabled && (
+                        <Button size="sm" variant="outline" disabled={enableNibss.isPending}
+                          onClick={() => enableNibss.mutate(a.id)}>
+                          <Zap className="mr-2 h-3 w-3" />Enable NIBSS
+                        </Button>
+                      )}
+                      {!isReadOnly && config.countryCode === 'NG' && a.isNibssEnabled && (
+                        <Button size="sm" variant="ghost" disabled={disableNibss.isPending}
+                          onClick={() => disableNibss.mutate(a.id)}>Disable NIBSS</Button>
+                      )}
+                      {!isReadOnly && config.countryCode === 'NG' && !a.isRtgsEnabled && (
+                        <Button size="sm" variant="outline" disabled={enableRtgs.isPending}
+                          onClick={() => enableRtgs.mutate(a.id)}>
+                          <Zap className="mr-2 h-3 w-3" />Enable RTGS
+                        </Button>
+                      )}
+                      {!isReadOnly && config.countryCode === 'NG' && a.isRtgsEnabled && (
+                        <Button size="sm" variant="ghost" disabled={disableRtgs.isPending}
+                          onClick={() => disableRtgs.mutate(a.id)}>Disable RTGS</Button>
+                      )}
                       {!isReadOnly && !a.isDefault && (
                         <Button size="sm" variant="ghost" disabled={setDefault.isPending}
                           onClick={() => setDefault.mutate(a.id)}>
