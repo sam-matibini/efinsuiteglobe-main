@@ -33,7 +33,7 @@ export default function TaxPayments() {
   const { processTaxPayment } = useTreasuryRails();
   const { accounts: bankAccounts } = useBankAccounts();
   const isReadOnly = useIsReadOnly();
-  const { config, countryCode } = require('@/hooks/useCountryTreasuryConfig').useCountryTreasuryConfig();
+  const { config, countryCode } = useCountryTreasuryConfig();
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<{ amount: string; period_start: string; period_end: string; payment_method: TaxPaymentMethod; notes: string; bank_account_id: string }>({
