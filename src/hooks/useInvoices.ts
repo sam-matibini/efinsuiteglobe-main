@@ -4,6 +4,7 @@ import { useCurrentOrganization } from './useOrganization';
 import { toast } from 'sonner';
 import { addDays, format } from 'date-fns';
 import { createJournalEntry, getDefaultAccounts, getTaxGlAccounts } from './useJournalEntryCreation';
+import { recordInvoiceTaxes } from '@/lib/ngTax/integration';
 
 export interface Invoice {
   id: string;
