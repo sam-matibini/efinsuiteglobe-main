@@ -1694,6 +1694,8 @@ export type Database = {
           institution_code: string | null
           institution_type: string
           is_active: boolean
+          is_nibss_enabled: boolean
+          is_rtgs_enabled: boolean
           is_treasury_funding_default: boolean
           last_reconciled_at: string | null
           last_reconciled_balance: number | null
@@ -1726,6 +1728,8 @@ export type Database = {
           institution_code?: string | null
           institution_type?: string
           is_active?: boolean
+          is_nibss_enabled?: boolean
+          is_rtgs_enabled?: boolean
           is_treasury_funding_default?: boolean
           last_reconciled_at?: string | null
           last_reconciled_balance?: number | null
@@ -1758,6 +1762,8 @@ export type Database = {
           institution_code?: string | null
           institution_type?: string
           is_active?: boolean
+          is_nibss_enabled?: boolean
+          is_rtgs_enabled?: boolean
           is_treasury_funding_default?: boolean
           last_reconciled_at?: string | null
           last_reconciled_balance?: number | null
@@ -28810,6 +28816,15 @@ export type Database = {
       }
       ng_mark_filing_rejected: {
         Args: { p_filing_id: string; p_reason: string }
+        Returns: undefined
+      }
+      ng_mark_remittance_paid: {
+        Args: {
+          _bank_account_id?: string
+          _confirmation_reference?: string
+          _journal_entry_id?: string
+          _remittance_id: string
+        }
         Returns: undefined
       }
       ng_post_remittance: {
