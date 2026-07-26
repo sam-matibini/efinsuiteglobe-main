@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrganization } from './useOrganization';
 import { toast } from 'sonner';
 import { createJournalEntry, getDefaultAccounts } from './useJournalEntryCreation';
+import { markBillWhtWithheld } from '@/lib/ngTax/integration';
 import { parseLocalDate } from '@/lib/utils';
 
 export interface VendorPayment {
