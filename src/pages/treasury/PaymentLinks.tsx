@@ -233,6 +233,86 @@ export default function PaymentLinks() {
                   </SelectContent>
                 </Select>
               </div>
+
+              {isNG && (
+                <div className="rounded-md border p-3 space-y-3">
+                  <div>
+                    <Label className="text-sm font-medium">Default payout method</Label>
+                    <p className="text-[11px] text-muted-foreground">Where the collected NGN funds should settle.</p>
+                  </div>
+                  <div className="inline-flex rounded-full bg-muted p-1 text-sm">
+                    {[
+                      { v: 'none',   label: 'None' },
+                      { v: 'nibss',  label: 'NIBSS (NG)' },
+                      { v: 'bank',   label: 'Bank' },
+                      { v: 'mobile', label: 'Mobile Money' },
+                    ].map((opt) => (
+                      <button
+                        key={opt.v}
+                        type="button"
+                        onClick={() => setForm({ ...form, ng_payout: opt.v as typeof form.ng_payout })}
+                        className={`px-3 py-1 rounded-full transition ${form.ng_payout === opt.v ? 'bg-background shadow font-medium' : 'text-muted-foreground'}`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {form.ng_payout === 'bank' && (
+                    <div className="grid gap-2">
+                      <div>
+                        <Label>Bank Name</Label>
+                        <Select value={form.ng_bank_code} onValueChange={(v) => setForm({ ...form, ng_bank_code: v })}>
+                          <SelectTrigger><SelectValue placeholder="Search Nigerian bank…" /></SelectTrigger>
+                          <SelectContent className="max-h-72">
+                            {ngBanks.map((b) => (
+                              <SelectItem key={b.code} value={b.code}>{b.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label>Account Number</Label>
+                        <Input
+                          inputMode="numeric"
+                          maxLength={10}
+                          placeholder="0123456789"
+                          value={form.ng_account_number}
+                          onChange={(e) => setForm({ ...form, ng_account_number: e.target.value.replace(/\D/g, '') })}
+                        />
+                        <p className="text-[11px] text-muted-foreground mt-1">10-digit NUBAN.</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {form.ng_payout === 'mobile' && (
+                    <div className="grid gap-2">
+                      <div>
+                        <Label>Mobile Money Provider</Label>
+                        <Select value={form.ng_wallet_provider} onValueChange={(v) => setForm({ ...form, ng_wallet_provider: v })}>
+                          <SelectTrigger><SelectValue placeholder="Select provider" /></SelectTrigger>
+                          <SelectContent>
+                            {ngMobile.map((m) => (
+                              <SelectItem key={m.code} value={m.code}>{m.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label>Wallet / Phone Number</Label>
+                        <Input
+                          inputMode="numeric"
+                          maxLength={11}
+                          placeholder="08012345678"
+                          value={form.ng_wallet_number}
+                          onChange={(e) => setForm({ ...form, ng_wallet_number: e.target.value.replace(/\D/g, '') })}
+                        />
+                        <p className="text-[11px] text-muted-foreground mt-1">11-digit Nigerian mobile number.</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
               <div>
                 <Label>Deposit bank account <span className="text-muted-foreground font-normal">(optional)</span></Label>
                 <Select
