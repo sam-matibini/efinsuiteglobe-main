@@ -313,7 +313,7 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
         if (!item.children) return item;
         let children = item.children;
         if (isReadOnly) children = children.filter(child => !child.hideForReadOnly);
-        if (countryCode && countryCode !== 'CA') children = children.filter(child => !child.hideForNonCA);
+        children = children.filter(child => isChildVisibleForCountry(child, countryCode));
         return { ...item, children };
       });
   }, [baseNavigation, isModuleEnabled, isModuleInCurrentPlan, modulesLoading, isReadOnly, userRole, countryCode]);
