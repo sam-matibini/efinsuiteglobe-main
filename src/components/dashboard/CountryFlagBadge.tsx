@@ -1,4 +1,5 @@
 import { useCurrentOrganization } from '@/hooks/useOrganization';
+import { useCountryScope } from '@/hooks/useCountryFilter';
 import { getCountryLocalization } from '@/data/countryLocalizations';
 
 // SVG Flag components for consistent cross-platform rendering
