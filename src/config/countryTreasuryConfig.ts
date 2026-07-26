@@ -57,6 +57,7 @@ export interface CountryTreasuryConfig {
 
   sections: {
     bills: DashboardActionDef[];
+    taxRemittances: DashboardActionDef[];
     transfers: DashboardActionDef[];
     payments: DashboardActionDef[];
     governance: DashboardActionDef[];
