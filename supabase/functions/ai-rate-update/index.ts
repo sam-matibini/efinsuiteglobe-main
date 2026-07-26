@@ -586,7 +586,7 @@ function buildRateResearchPrompt(
       prompt += `- Personal income tax brackets and rates\n`;
       prompt += `- Tax-free threshold\n`;
     } else if (countryCode === 'NG') {
-      prompt += `## Payroll Rates (Nigeria — FIRS / State IRS / PenCom / NHF / ITF / NSITF)\n`;
+      prompt += `## Payroll Rates (Nigeria — NRS / State IRS / PenCom / NHF / ITF / NSITF)\n`;
       prompt += `Research the ${year} rates for:\n`;
       prompt += `### Pension (PenCom PRA 2014)\n- Employee 8%, Employer 10% of monthly emoluments\n\n`;
       prompt += `### NHF (National Housing Fund)\n- Employee 2.5% (employees earning ≥ ₦3,000/month)\n\n`;
