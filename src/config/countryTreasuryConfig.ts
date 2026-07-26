@@ -39,9 +39,9 @@ export interface DashboardActionDef {
 }
 
 export interface TaxPayeeDef {
-  code: string;              // stable ID e.g. 'FIRS-VAT'
+  code: string;              // stable ID e.g. 'NRS-VAT'
   label: string;             // human-facing
-  authority: string;         // e.g. 'FIRS' | 'CRA' | 'IRS'
+  authority: string;         // e.g. 'NRS' | 'CRA' | 'IRS'
   taxType: string;           // links to tax_payments.payment_type / ng_tax_definitions.tax_type
   liabilityCodePrefix?: string[];  // GL account code prefixes for JE mapping
   liabilityKeywords?: string[];
@@ -151,10 +151,10 @@ const NG: CountryTreasuryConfig = {
     { id: 'cheque',     label: 'Cheque',              description: 'Printed cheque',                                       deliveryEstimate: '3–5 business days' },
   ],
   taxPayees: [
-    { code: 'FIRS-VAT',      label: 'FIRS — Value Added Tax',            authority: 'FIRS',   taxType: 'vat',      liabilityCodePrefix: ['2-3'], liabilityKeywords: ['vat'] },
-    { code: 'FIRS-WHT',      label: 'FIRS — Withholding Tax',            authority: 'FIRS',   taxType: 'wht',      liabilityCodePrefix: ['2-2'], liabilityKeywords: ['withholding', 'wht'] },
-    { code: 'FIRS-CIT',      label: 'FIRS — Companies Income Tax',       authority: 'FIRS',   taxType: 'cit',      liabilityCodePrefix: ['2-4'], liabilityKeywords: ['corporate', 'income tax'] },
-    { code: 'FIRS-PAYE-FCT', label: 'FIRS — PAYE (FCT residents)',       authority: 'FIRS',   taxType: 'paye',     liabilityCodePrefix: ['2-2'], liabilityKeywords: ['paye'] },
+    { code: 'NRS-VAT',      label: 'NRS — Value Added Tax',            authority: 'NRS',   taxType: 'vat',      liabilityCodePrefix: ['2-3'], liabilityKeywords: ['vat'] },
+    { code: 'NRS-WHT',      label: 'NRS — Withholding Tax',            authority: 'NRS',   taxType: 'wht',      liabilityCodePrefix: ['2-2'], liabilityKeywords: ['withholding', 'wht'] },
+    { code: 'NRS-CIT',      label: 'NRS — Companies Income Tax',       authority: 'NRS',   taxType: 'cit',      liabilityCodePrefix: ['2-4'], liabilityKeywords: ['corporate', 'income tax'] },
+    { code: 'NRS-PAYE-FCT', label: 'NRS — PAYE (FCT residents)',       authority: 'NRS',   taxType: 'paye',     liabilityCodePrefix: ['2-2'], liabilityKeywords: ['paye'] },
     { code: 'SIRS-PAYE',     label: 'State IRS — PAYE',                  authority: 'SIRS',   taxType: 'paye',     liabilityCodePrefix: ['2-2'], liabilityKeywords: ['paye'] },
     { code: 'PENCOM',        label: 'National Pension Commission',        authority: 'PenCom', taxType: 'pension',  liabilityCodePrefix: ['2-2'], liabilityKeywords: ['pension'] },
     { code: 'NHF',           label: 'National Housing Fund',              authority: 'FMBN',   taxType: 'nhf',      liabilityCodePrefix: ['2-2'], liabilityKeywords: ['nhf', 'housing'] },
@@ -164,7 +164,7 @@ const NG: CountryTreasuryConfig = {
   sections: {
     bills: [
       { title: 'Pay bills', description: 'Pay vendor invoices via NIP, NEFT, or RTGS.', to: '/treasury/ap-payments', icon: CreditCard },
-      { title: 'Pay FIRS taxes', description: 'Remit VAT, WHT, CIT and PAYE to the Federal Inland Revenue Service.', to: '/tax/nigeria?tab=remittances&authority=FIRS', icon: Receipt },
+      { title: 'Pay NRS taxes', description: 'Remit VAT, WHT, CIT and PAYE to the Nigeria Revenue Service.', to: '/tax/nigeria?tab=remittances&authority=NRS', icon: Receipt },
       { title: 'Pay State (SIRS) taxes', description: 'Remit PAYE to the State Internal Revenue Service.', to: '/tax/nigeria?tab=remittances&authority=SIRS', icon: Building2 },
       { title: 'Pay pension & NHF', description: 'Remit PenCom, NHF, NSITF and ITF contributions.', to: '/tax/nigeria?tab=remittances&authority=PenCom', icon: Wallet },
       { title: 'Pay salaries (NIBSS)', description: 'Batch salary payout via NIBSS Instant.', to: '/treasury/payroll-payments', icon: Users, deliveryEstimate: 'Instant' },

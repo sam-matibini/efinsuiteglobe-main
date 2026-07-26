@@ -1069,7 +1069,7 @@ export default function NigeriaTaxEngine() {
               </div>
               <div className="space-y-2">
                 <Label>Reference / receipt</Label>
-                <Input placeholder="FIRS receipt no." value={remitRef} onChange={e => setRemitRef(e.target.value)} />
+                <Input placeholder="NRS receipt no." value={remitRef} onChange={e => setRemitRef(e.target.value)} />
               </div>
               <p className="text-xs text-muted-foreground border-l-2 border-emerald-500 pl-2">
                 A journal entry will be posted automatically: <b>Dr</b> tax liability, <b>Cr</b> selected bank —
@@ -1212,7 +1212,7 @@ export default function NigeriaTaxEngine() {
               </div>
               <p className="text-xs text-muted-foreground border-l-2 border-blue-500 pl-2">
                 {subMode === 'manifest'
-                  ? 'A CSV manifest will be downloaded and the filing marked submitted. Upload the CSV to the FIRS TaxProMax or State IRS portal.'
+                  ? 'A CSV manifest will be downloaded and the filing marked submitted. Upload the CSV to the NRS TaxProMax or State IRS portal.'
                   : 'The filing will be marked submitted. Enter the reference issued by the tax authority.'}
               </p>
             </div>
