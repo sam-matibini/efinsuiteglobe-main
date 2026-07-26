@@ -10,6 +10,7 @@ import {
   type PayStubCalculation 
 } from '@/lib/payrollCalculator';
 import { postPayrollJournalEntries } from '@/lib/payrollJournalPosting';
+import { recordPayrollTaxes } from '@/lib/ngTax/integration';
 
 export interface TimesheetEntry {
   employeeId: string;
