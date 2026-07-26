@@ -107,6 +107,7 @@ export function usePaymentLinks() {
           deposit_bank_account_id: input.deposit_bank_account_id ?? null,
           instant_payment: input.instant_payment ?? false,
           instant_method: input.instant_payment ? (input.instant_method ?? null) : null,
+          metadata: input.metadata ?? null,
         } as never)
         .select()
         .single();
