@@ -1,28 +1,32 @@
 /**
- * useNgTaxCalculation — reusable Phase 3 primitive.
+ * useNgTaxCalculation — reusable Phase 3 primitive for transaction forms.
  *
- * Lets any transaction form (invoices, bills, expenses, payroll runs) call
- * into the Nigerian tax engine, get a calculation result, and persist it
- * to `ng_tax_transaction_ledger` for end-to-end traceability.
+ * Thin passthrough over the pure calculators + resolver + ledger writer.
+ * Caller pattern:
  *
- * Usage:
- *   const { calcVat, calcWht, calcPaye, calcPension, record } = useNgTaxCalculation();
- *   const vat = await calcVat({ amount: 100_000, date: today });
+ *   const { resolve, calc, record } = useNgTaxCalculation();
+ *   const vatDef = await resolve('VAT', invoiceDate);
+ *   const vat = calc.vat(vatDef, lineAmount);
  *   await record({
  *     result: vat,
  *     source_type: 'invoice_line',
  *     source_id: line.id,
  *     source_parent_id: invoice.id,
- *     transaction_date: today,
+ *     transaction_date: invoiceDate,
  *     journal_entry_id: je.id,
  *   });
  */
 
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useCurrentOrganization } from '@/hooks/useOrganization';
 import {
-  calcVAT, calcWHT, calcPAYE, calcPension, calcCIT,
+  calculateVat,
+  calculateWht,
+  calculatePaye,
+  calculatePercentageOnBase,
+  calculateCit,
 } from '@/lib/ngTax/calculators';
+import { resolveTaxByCode, resolveServiceClassification, loadReliefs } from '@/lib/ngTax/resolver';
 import { writeTaxLedger, linkLedgerToJournalEntry } from '@/lib/ngTax/ledgerWriter';
 import type { NgCalculationResult, NgLedgerSourceType } from '@/lib/ngTax/types';
 
@@ -41,56 +45,48 @@ export function useNgTaxCalculation() {
   const { organization } = useCurrentOrganization();
   const orgId = organization?.id ?? null;
 
-  const calcVat = useCallback(
-    (params: { amount: number; date: string; isExempt?: boolean }) =>
-      calcVAT({ organization_id: orgId, ...params }),
+  const resolve = useCallback(
+    (code: string, effectiveDate: string) => resolveTaxByCode(code, effectiveDate, orgId),
     [orgId],
   );
 
-  const calcWht = useCallback(
-    (params: { amount: number; date: string; serviceCode: string; isResident?: boolean }) =>
-      calcWHT({ organization_id: orgId, ...params }),
+  const resolveService = useCallback(
+    (code: string, effectiveDate: string) => resolveServiceClassification(code, effectiveDate),
+    [],
+  );
+
+  const reliefs = useCallback(
+    (effectiveDate: string, types?: string[]) => loadReliefs(effectiveDate, orgId, types),
     [orgId],
   );
 
-  const calcEmployeePaye = useCallback(
-    (params: { grossAnnual: number; date: string; pensionContribution?: number; nhfContribution?: number }) =>
-      calcPAYE({ organization_id: orgId, ...params }),
+  const record = useCallback(
+    async (input: RecordInput): Promise<string | null> => {
+      if (!orgId) return null;
+      return writeTaxLedger({ organization_id: orgId, ...input });
+    },
     [orgId],
   );
 
-  const calcEmployeePension = useCallback(
-    (params: { grossMonthly: number; date: string }) =>
-      calcPension({ organization_id: orgId, ...params }),
-    [orgId],
-  );
-
-  const calcCorporateTax = useCallback(
-    (params: { profit: number; turnover: number; date: string }) =>
-      calcCIT({ organization_id: orgId, ...params }),
-    [orgId],
-  );
-
-  const record = useCallback(async (input: RecordInput): Promise<string | null> => {
-    if (!orgId) return null;
-    return writeTaxLedger({ organization_id: orgId, ...input });
-  }, [orgId]);
-
-  const linkToJE = useCallback(
-    (ledgerIds: string[], journalEntryId: string) =>
-      linkLedgerToJournalEntry(ledgerIds, journalEntryId),
+  const calc = useMemo(
+    () => ({
+      vat: calculateVat,
+      wht: calculateWht,
+      paye: calculatePaye,
+      percentage: calculatePercentageOnBase,
+      cit: calculateCit,
+    }),
     [],
   );
 
   return {
     orgId,
-    isNigerianOrg: !!orgId,
-    calcVat,
-    calcWht,
-    calcEmployeePaye,
-    calcEmployeePension,
-    calcCorporateTax,
+    isReady: !!orgId,
+    resolve,
+    resolveService,
+    reliefs,
+    calc,
     record,
-    linkToJE,
+    linkToJE: linkLedgerToJournalEntry,
   };
 }
