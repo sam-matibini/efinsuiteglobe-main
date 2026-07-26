@@ -226,7 +226,7 @@ export default function PaymentHistory() {
     <div className="space-y-6 p-6">
       <div>
         <h1 className="text-3xl font-bold">Payment History</h1>
-        <p className="text-muted-foreground">Unified history of CRA, AP and payroll payments</p>
+        <p className="text-muted-foreground">Unified history of {primaryAuthority}, AP and payroll payments</p>
       </div>
 
       <Card>
@@ -236,7 +236,7 @@ export default function PaymentHistory() {
             <Tabs defaultValue="all">
               <TabsList>
                 <TabsTrigger value="all">All ({rows.length})</TabsTrigger>
-                <TabsTrigger value="cra">CRA ({cra.length})</TabsTrigger>
+                <TabsTrigger value="cra">{primaryAuthority} ({cra.length})</TabsTrigger>
                 <TabsTrigger value="ap">AP ({ap.length})</TabsTrigger>
                 <TabsTrigger value="payroll">Payroll ({payroll.length})</TabsTrigger>
               </TabsList>
