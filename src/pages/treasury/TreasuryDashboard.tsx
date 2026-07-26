@@ -16,31 +16,41 @@ interface ActionCardProps {
   to: string;
   icon: LucideIcon;
   external?: boolean;
+  deliveryEstimate?: string;
 }
 
-function ActionCard({ title, description, to, icon: Icon, external }: ActionCardProps) {
+function ActionCard({ title, description, to, icon: Icon, external, deliveryEstimate }: ActionCardProps) {
   return (
-    <Link
-      to={to}
-      className="group block rounded-xl border bg-card p-5 shadow-sm transition-all hover:shadow-md hover:border-primary/40"
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <h3 className="font-semibold text-foreground">{title}</h3>
+    <div className="space-y-2">
+      <Link
+        to={to}
+        className="group block rounded-xl border bg-card p-5 shadow-sm transition-all hover:shadow-md hover:border-primary/40"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <h3 className="font-semibold text-foreground">{title}</h3>
+            </div>
+            <p className="mt-2 text-sm text-muted-foreground leading-relaxed">{description}</p>
+          </div>
+          <div className="shrink-0 flex flex-col items-end gap-3">
             {external ? (
               <ExternalLink className="h-4 w-4 text-primary opacity-70" />
             ) : (
               <ChevronRight className="h-4 w-4 text-primary opacity-70 transition-transform group-hover:translate-x-0.5" />
             )}
+            <div className="rounded-lg bg-accent/60 p-2.5 text-primary">
+              <Icon className="h-5 w-5" />
+            </div>
           </div>
-          <p className="mt-2 text-sm text-muted-foreground leading-relaxed">{description}</p>
         </div>
-        <div className="shrink-0 rounded-lg bg-accent/60 p-2.5 text-primary">
-          <Icon className="h-5 w-5" />
+      </Link>
+      {deliveryEstimate && (
+        <div className="rounded-md bg-muted/60 px-3 py-1.5 text-xs text-muted-foreground">
+          <span className="font-medium text-foreground/80">Delivery estimate</span> {deliveryEstimate}
         </div>
-      </div>
-    </Link>
+      )}
+    </div>
   );
 }
 
