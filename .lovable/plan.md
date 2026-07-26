@@ -1,51 +1,60 @@
-## Change
+## Problem
 
-Nigeria's tax authority has been renamed from **Federal Inland Revenue Service (FIRS)** to **Nigeria Revenue Service (NRS)**. Update all user-facing labels and DB display rows.
+On `/tax` for a Zambia-scoped organization, the **Tax Codes** tab shows Canadian codes (GST 5%, HST-ON 13%, HST-ATL 15%, PST-BC/SK/MB, QST), not Zambian VAT.
 
-## Approach
+## Root cause (verified)
 
-Keep the short code as **NRS** and full name as **Nigeria Revenue Service**. Stable internal IDs like `FIRS-VAT` in `countryTreasuryConfig.ts` and the `authority` field values will be renamed to `NRS-*` / `NRS` since these are only used within the app (not linked to external persisted keys).
+`src/hooks/useSalesTax.ts` → `useTaxCodes` (lines 173–422):
 
-## Files to update
+- Queries `tax_codes` for the org. If empty (typical for Zambia orgs today), it falls into a derivation branch that **unconditionally** pushes Canadian GST/HST/PST/QST rows into the result, regardless of `organization.country`.
+- The Zambia UI copy in `SalesTax.tsx` already exists ("VAT management and ZRA reporting"), but the underlying tax-code list is hard-wired to Canada.
 
-### 1. `src/config/countryTreasuryConfig.ts` (NG section)
-- Comment on line 44: `'FIRS'` → `'NRS'`
-- Comment on line 42: `'FIRS-VAT'` → `'NRS-VAT'`
-- taxPayees codes `FIRS-VAT/WHT/CIT/PAYE-FCT` → `NRS-VAT/WHT/CIT/PAYE-FCT`
-- taxPayees `authority: 'FIRS'` → `authority: 'NRS'` (4 entries)
-- Labels: `'FIRS — …'` → `'NRS — …'`
-- Bills tile: `'Pay FIRS taxes'` → `'Pay NRS taxes'`, description `"Federal Inland Revenue Service"` → `"Nigeria Revenue Service"`, URL `authority=FIRS` → `authority=NRS`
+No `tax_codes` rows exist for Zambia orgs; the fix is in the derivation logic (frontend hook), not in the DB.
 
-### 2. `src/pages/tax/NigeriaTaxEngine.tsx`
-- Line 1072: input placeholder `"FIRS receipt no."` → `"NRS receipt no."`
-- Line 1215: description mentions `FIRS TaxProMax` → `NRS TaxProMax` (portal branding assumed to follow)
+## Fix
 
-### 3. `src/components/settings/AutoRateUpdatesTab.tsx`
-- Line 318: `authority: 'FIRS'` → `authority: 'NRS'`
-- Line 977: `FIRS - VAT, WHT, …` → `NRS - VAT, WHT, …`
-- Source strings on lines 261-289, 310: `'FIRS VAT Act…'` → `'NRS VAT Act…'`, `'FIRS WHT Regulations'` → `'NRS WHT Regulations'`, `'FIRS / Finance Act 2023'` → `'NRS / Finance Act 2023'`
+Make the derivation in `useTaxCodes` country-aware, keyed off `organization.country`.
 
-### 4. `supabase/functions/ai-rate-update/index.ts`
-- Update Nigeria system prompt (line 206) and prompt sections (515, 516, 589, 1016) to say **Nigeria Revenue Service (NRS)** instead of FIRS / Federal Inland Revenue Service.
-- Source strings on lines 1019-1026: `'FIRS …'` → `'NRS …'`
-- Line 1053: `'FIRS - Federal Inland Revenue Service (firs.gov.ng)'` → `'NRS - Nigeria Revenue Service (nrs.gov.ng)'`
-- Line 1064 notes: swap `FIRS` → `NRS`, `firs.gov.ng` → `nrs.gov.ng`
+### 1. Extend `useTaxCodes` signature
 
-### 5. `src/config/countryModuleMap.ts`
-- Line 14 comment: `FIRS / SIRS / PAYE` → `NRS / SIRS / PAYE`
+Accept the country code alongside `organizationId`:
 
-### 6. `src/lib/ngTax/submission.ts`
-- Line 8 comment: `FIRS TaxProMax` → `NRS TaxProMax`
+```ts
+useTaxCodes(organizationId, countryCode)
+```
 
-### 7. New DB migration — rename existing authority text
-- Update `public.tax_types.description` where description contains "FIRS": `'FIRS VAT 7.5%'` → `'NRS VAT 7.5%'`, `'FIRS/SIRS WHT'` → `'NRS/SIRS WHT'` (jurisdiction remains 'federal').
-- If a `public.tax_authorities` row exists for Nigeria with `name` containing "Federal Inland Revenue Service" or code `FIRS`, update `name` to `'Nigeria Revenue Service'` and `code`/`short_name` (if present) to `'NRS'`. Use `WHERE country_id = (SELECT id FROM countries WHERE code = 'NG')`.
+Update the single caller in `src/pages/SalesTax.tsx` (already computes `countryCode`) to pass it in. Other call sites keep the current CA default.
+
+### 2. Branch the derived-codes list by country
+
+Replace the current Canadian-only block with a switch on `countryCode`:
+
+- **ZM (Zambia)** — ZRA VAT Act:
+  - `E` Exempt (0%) — medical, education, financial services
+  - `VAT` Standard-rated VAT (16%) — `tax_type: 'VAT'`, recoverable
+  - `VAT-ZR` Zero-rated (0%) — exports, prescribed supplies
+  - `VAT-EX` VAT Exempt supplies (0%)
+  - `IPL` Insurance Premium Levy (5%) — non-recoverable
+  - `TL` Tourism Levy (1.5%) — non-recoverable
+- **KE (Kenya)** — KRA: `VAT` 16%, `VAT-ZR` 0%, `VAT-EX` 0%
+- **NG (Nigeria)** — NRS: `VAT` 7.5%, `VAT-ZR` 0%, `VAT-EX` 0%, `WHT-CONTRACT` 5%, `WHT-PROF` 10%
+- **BI (Burundi)** — OBR: `TVA` 18%, `TVA-ZR` 0%, `TVA-EX` 0%
+- **GB (UK)** — HMRC: `VAT-STD` 20%, `VAT-RED` 5%, `VAT-ZR` 0%, `VAT-EX` 0%
+- **CA / default** — keep the existing Canadian block unchanged
+
+Each derived code uses the current shape (`generateDeterministicUuid`, `gl_collected_account_id`/`gl_paid_account_id` mapped from `sales_tax_settings` where a match exists, else `null`; province tab column stays "Federal" / "-" for non-Canadian rows so the existing table renders cleanly).
+
+### 3. No DB migration required
+
+The derived codes render in the Tax Codes list and flow through the existing tax-selection UI. Users can still click **+ Add Tax Code** to persist overrides into `public.tax_codes`, at which point the DB rows take precedence exactly as they do today for Canadian orgs.
+
+## Files touched
+
+- `src/hooks/useSalesTax.ts` — country-aware derivation branch inside `useTaxCodes`
+- `src/pages/SalesTax.tsx` — pass `countryCode` into `useTaxCodes(organization?.id, countryCode)`
 
 ## Out of scope
-- No changes to comments containing the word "FIRST" (unrelated to FIRS).
-- `RevenueChart.tsx`, `ExpensesPieChart.tsx`, `AccountsSnapshot.tsx`, `AIFinancialToolkit.tsx`, `useFixedAssets.ts`, `SearchableOrgSwitcher.tsx` only contain the word "FIRST" — untouched.
 
-## Verification
-- eFinconnect Bills tile reads **"Pay NRS taxes — … Nigeria Revenue Service."**
-- Settings → Rate Updates shows Nigeria authority as **NRS**.
-- Nigeria Tax Engine placeholders and helper text reference **NRS**.
+- Editing existing Canadian defaults
+- Changing `sales_tax_settings` schema or seeding per-country rows
+- Reworking the VAT return posting logic (already country-aware via `taxTerminology`)
