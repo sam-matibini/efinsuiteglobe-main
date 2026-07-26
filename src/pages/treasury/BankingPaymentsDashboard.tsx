@@ -17,6 +17,7 @@ import { useCraAccounts } from '@/hooks/useCraAccounts';
 import { usePaymentLinks } from '@/hooks/usePaymentLinks';
 import { useCustomerPayments } from '@/hooks/useCustomerPayments';
 import { useCurrencyFormatter } from '@/hooks/useCurrencyFormatter';
+import { useCountryTreasuryConfig } from '@/hooks/useCountryTreasuryConfig';
 import { parseLocalDate } from '@/lib/utils';
 
 const METHOD_COLORS: Record<string, string> = {
