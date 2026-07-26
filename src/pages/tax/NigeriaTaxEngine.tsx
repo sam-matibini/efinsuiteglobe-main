@@ -216,6 +216,19 @@ export default function NigeriaTaxEngine() {
     },
   });
 
+  const { data: compliance } = useQuery({
+    queryKey: ['ng-tax-compliance', orgId],
+    enabled: !!orgId,
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from('ng_tax_compliance_dashboard')
+        .select('*')
+        .eq('organization_id', orgId!)
+        .order('due_date');
+      return data ?? [];
+    },
+  });
+
   const activeByDef = useMemo(() => {
     const m = new Map<string, any>();
     (versions ?? []).forEach((v: any) => {
@@ -351,8 +364,9 @@ export default function NigeriaTaxEngine() {
         </p>
       </div>
 
-      <Tabs defaultValue="definitions">
+      <Tabs defaultValue="compliance">
         <TabsList className="flex-wrap h-auto">
+          <TabsTrigger value="compliance">Compliance</TabsTrigger>
           <TabsTrigger value="definitions">Definitions</TabsTrigger>
           <TabsTrigger value="wht">WHT Services</TabsTrigger>
           <TabsTrigger value="ledger">Ledger</TabsTrigger>
@@ -361,6 +375,83 @@ export default function NigeriaTaxEngine() {
           <TabsTrigger value="reports">Reports</TabsTrigger>
           <TabsTrigger value="exemptions">Exemptions &amp; Reliefs</TabsTrigger>
         </TabsList>
+
+        {/* -------- COMPLIANCE DASHBOARD -------- */}
+        <TabsContent value="compliance" className="space-y-4">
+          {(() => {
+            const rows: any[] = compliance ?? [];
+            const overdue = rows.filter(r => r.urgency === 'overdue');
+            const dueSoon = rows.filter(r => r.urgency === 'due_soon');
+            const totalAccrued = rows.reduce((s, r) => s + Number(r.accrued_tax || 0), 0);
+            const totalFiled = rows.reduce((s, r) => s + Number(r.filed_unremitted_tax || 0), 0);
+            return (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                  <Card><CardHeader><CardTitle className="text-sm">Overdue filings</CardTitle></CardHeader>
+                    <CardContent><div className="text-2xl font-bold text-red-600">{overdue.length}</div></CardContent></Card>
+                  <Card><CardHeader><CardTitle className="text-sm">Due within 14 days</CardTitle></CardHeader>
+                    <CardContent><div className="text-2xl font-bold text-amber-600">{dueSoon.length}</div></CardContent></Card>
+                  <Card><CardHeader><CardTitle className="text-sm">Accrued (unfiled)</CardTitle></CardHeader>
+                    <CardContent><div className="text-2xl font-bold">{fmtNaira(totalAccrued)}</div></CardContent></Card>
+                  <Card><CardHeader><CardTitle className="text-sm">Filed, unremitted</CardTitle></CardHeader>
+                    <CardContent><div className="text-2xl font-bold text-amber-700">{fmtNaira(totalFiled)}</div></CardContent></Card>
+                </div>
+                <Card>
+                  <CardHeader><CardTitle>Upcoming &amp; Overdue Filings</CardTitle></CardHeader>
+                  <CardContent>
+                    {!orgId ? (
+                      <p className="text-muted-foreground">Select an organization.</p>
+                    ) : rows.length === 0 ? (
+                      <p className="text-muted-foreground">No outstanding tax liabilities. Everything is filed and remitted.</p>
+                    ) : (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Urgency</TableHead>
+                            <TableHead>Tax</TableHead>
+                            <TableHead>Period</TableHead>
+                            <TableHead>Due date</TableHead>
+                            <TableHead className="text-right">Accrued</TableHead>
+                            <TableHead className="text-right">Filed, unremitted</TableHead>
+                            <TableHead className="text-right">Action</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {rows.map((r, i) => (
+                            <TableRow key={`${r.definition_id}-${r.period_month}-${i}`}>
+                              <TableCell>
+                                <Badge className={
+                                  r.urgency === 'overdue' ? 'bg-red-100 text-red-700'
+                                    : r.urgency === 'due_soon' ? 'bg-amber-100 text-amber-700'
+                                    : 'bg-slate-100 text-slate-700'
+                                }>{r.urgency}</Badge>
+                              </TableCell>
+                              <TableCell className="font-mono text-xs">{r.definition_code}</TableCell>
+                              <TableCell className="text-xs">{String(r.period_month).slice(0,7)}</TableCell>
+                              <TableCell className="text-xs">{r.due_date}</TableCell>
+                              <TableCell className="text-right">{fmtNaira(r.accrued_tax)}</TableCell>
+                              <TableCell className="text-right text-amber-700">{fmtNaira(r.filed_unremitted_tax)}</TableCell>
+                              <TableCell className="text-right">
+                                <Button size="sm" variant="outline" onClick={() => {
+                                  setGenDef(r.definition_id);
+                                  setGenStart(String(r.period_month).slice(0,10));
+                                  setGenEnd(r.period_end);
+                                  setGenForm('');
+                                  setGenOpen(true);
+                                }}>Generate filing</Button>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    )}
+                  </CardContent>
+                </Card>
+              </>
+            );
+          })()}
+        </TabsContent>
+
 
         {/* -------- DEFINITIONS -------- */}
         <TabsContent value="definitions">
@@ -564,7 +655,8 @@ export default function NigeriaTaxEngine() {
                       <TableHead>Payment date</TableHead><TableHead>Definition</TableHead>
                       <TableHead className="text-right">Amount</TableHead>
                       <TableHead>Reference</TableHead><TableHead>Status</TableHead>
-                      <TableHead>Filing</TableHead>
+                      <TableHead>JE</TableHead>
+                      <TableHead>Receipt</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -575,7 +667,41 @@ export default function NigeriaTaxEngine() {
                         <TableCell className="text-right font-medium">{fmtNaira(r.amount)}</TableCell>
                         <TableCell className="text-xs">{r.reference ?? r.confirmation_reference ?? '—'}</TableCell>
                         <TableCell><Badge className={statusColors[r.status] ?? ''}>{r.status}</Badge></TableCell>
-                        <TableCell className="text-xs font-mono">{r.filing_id?.slice(0, 8) ?? '—'}</TableCell>
+                        <TableCell>
+                          {r.journal_entry_id
+                            ? <Link to={`/journal-entries?id=${r.journal_entry_id}`} className="text-primary underline text-xs">View JE</Link>
+                            : <span className="text-muted-foreground text-xs">—</span>}
+                        </TableCell>
+                        <TableCell>
+                          <input
+                            type="file"
+                            accept="application/pdf,image/*"
+                            className="text-xs w-40"
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (!file || !orgId) return;
+                              const path = `${orgId}/${r.id}/${Date.now()}-${file.name}`;
+                              const up = await supabase.storage.from('ng-tax-receipts').upload(path, file, { upsert: true });
+                              if (up.error) { toast.error(up.error.message); return; }
+                              const { error } = await (supabase.from('ng_tax_remittances') as any)
+                                .update({ receipt_storage_path: path, receipt_uploaded_at: new Date().toISOString() })
+                                .eq('id', r.id);
+                              if (error) { toast.error(error.message); return; }
+                              toast.success('Receipt uploaded');
+                              qc.invalidateQueries({ queryKey: ['ng-tax-remittances', orgId] });
+                            }}
+                          />
+                          {r.receipt_storage_path && (
+                            <button
+                              className="text-xs text-primary underline ml-2"
+                              onClick={async () => {
+                                const { data } = await supabase.storage.from('ng-tax-receipts')
+                                  .createSignedUrl(r.receipt_storage_path, 300);
+                                if (data?.signedUrl) window.open(data.signedUrl, '_blank');
+                              }}
+                            >view</button>
+                          )}
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -784,6 +910,10 @@ export default function NigeriaTaxEngine() {
                 <Label>Reference / receipt</Label>
                 <Input placeholder="FIRS receipt no." value={remitRef} onChange={e => setRemitRef(e.target.value)} />
               </div>
+              <p className="text-xs text-muted-foreground border-l-2 border-emerald-500 pl-2">
+                A journal entry will be posted automatically: <b>Dr</b> tax liability, <b>Cr</b> selected bank —
+                using the account mapping for this tax. Leave the bank blank to skip auto-posting.
+              </p>
             </div>
           )}
           <DialogFooter>
