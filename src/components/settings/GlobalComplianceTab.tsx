@@ -87,7 +87,7 @@ export function GlobalComplianceTab({ organizationId }: GlobalComplianceTabProps
       if (!matchedCountryId) return [];
       const { data, error } = await supabase
         .from('tax_types')
-        .select('*')
+        .select('*, tax_rates(rate, is_default, is_active)')
         .eq('country_id', matchedCountryId)
         .eq('is_active', true)
         .order('name');
