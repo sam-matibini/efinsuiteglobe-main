@@ -6,7 +6,7 @@ export interface IndustryConfig {
   label: string;
   description: string;
   icon: string;
-  accountingFramework: 'ASPE' | 'ASNPO' | 'IFRS';
+  accountingFramework: 'ASPE' | 'ASNPO' | 'IFRS' | 'IFRS_SME';
   specializedAccounts: string[];
   cogsRequired: boolean;
   inventoryRequired: boolean;
