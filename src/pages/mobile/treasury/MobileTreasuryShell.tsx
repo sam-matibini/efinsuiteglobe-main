@@ -14,7 +14,7 @@ export default function MobileTreasuryShell() {
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <header className="px-4 py-3 border-b">
-        <h1 className="text-lg font-semibold">efinsuite Treasury</h1>
+        <h1 className="text-lg font-semibold">eFinconnect</h1>
       </header>
       <main className="flex-1 overflow-auto pb-20">
         <Outlet />
