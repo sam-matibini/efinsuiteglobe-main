@@ -11,7 +11,7 @@ import { isEuCountry } from '@/hooks/useCountryFilter';
 export interface CountryModuleFlags {
   /** CRA / provincial sales tax UI (GST-HST, PST, QST). */
   showCanadianTax: boolean;
-  /** Nigerian Tax Engine — FIRS / SIRS / PAYE. */
+  /** Nigerian Tax Engine — NRS / SIRS / PAYE. */
   showNigerianTax: boolean;
   /** IRS + US state sales/address tax. */
   showUsTax: boolean;
