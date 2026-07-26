@@ -39,9 +39,9 @@ export interface DashboardActionDef {
 }
 
 export interface TaxPayeeDef {
-  code: string;              // stable ID e.g. 'FIRS-VAT'
+  code: string;              // stable ID e.g. 'NRS-VAT'
   label: string;             // human-facing
-  authority: string;         // e.g. 'FIRS' | 'CRA' | 'IRS'
+  authority: string;         // e.g. 'NRS' | 'CRA' | 'IRS'
   taxType: string;           // links to tax_payments.payment_type / ng_tax_definitions.tax_type
   liabilityCodePrefix?: string[];  // GL account code prefixes for JE mapping
   liabilityKeywords?: string[];
