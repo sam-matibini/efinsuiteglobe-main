@@ -220,9 +220,11 @@ const ZM: CountryTreasuryConfig = {
   sections: {
     bills: [
       { title: 'Pay bills', description: 'Pay vendor invoices via ZIPSS, EFT, RTGS or Mobile Money.', to: '/treasury/ap-payments', icon: CreditCard },
+      { title: 'Pay salaries', description: 'Batch salary payout via ZIPSS or EFT.', to: '/treasury/payroll-payments', icon: Users, deliveryEstimate: 'Instant' },
+    ],
+    taxRemittances: [
       { title: 'Pay ZRA taxes', description: 'Remit VAT, PAYE, WHT and CIT to the Zambia Revenue Authority.', to: '/treasury/tax-payments', icon: Receipt },
       { title: 'Pay NAPSA & NHIMA', description: 'Remit pension and health insurance contributions.', to: '/treasury/tax-payments', icon: Wallet },
-      { title: 'Pay salaries', description: 'Batch salary payout via ZIPSS or EFT.', to: '/treasury/payroll-payments', icon: Users, deliveryEstimate: 'Instant' },
     ],
     transfers: [
       { title: 'Transfer between accounts', description: 'Move money between your own bank accounts.', to: '/banking/transfers', icon: ArrowLeftRight },
