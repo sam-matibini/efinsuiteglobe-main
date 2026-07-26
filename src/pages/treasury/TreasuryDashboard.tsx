@@ -135,43 +135,45 @@ export default function TreasuryDashboard() {
       <Section title="Bills">
         <ActionCard
           title="Pay bills"
-          description="Pay vendor bills from anywhere with EFT or cheque."
+          description="Pay bills easily from anywhere with your phone, tablet, or computer."
           to="/treasury/ap-payments"
           icon={CreditCard}
         />
         <ActionCard
           title="Pay business taxes"
-          description="File and remit federal & provincial taxes (CRA, IRS, FIRS, HMRC)."
+          description="File and pay your Federal and Provincial government business taxes."
           to="/treasury/tax-payments"
           icon={Receipt}
           external
-        />
-        <ActionCard
-          title="Payroll remittances"
-          description="Send source deductions and payroll taxes to the tax authority."
-          to="/treasury/payroll-payments"
-          icon={Users}
         />
       </Section>
 
       <Section title="Transfers">
         <ActionCard
           title="Transfer between accounts"
-          description="Move funds between your connected bank and credit card accounts."
+          description="Pay your credit card or transfer money between your accounts."
           to="/banking/transfers"
           icon={ArrowLeftRight}
         />
         <ActionCard
           title="Interac e-Transfer"
-          description="Send or request money by email or SMS via payment links."
+          description="Send and request money from anyone with a Canadian bank account with Interac e-Transfer."
           to="/banking-payments/payment-links"
           icon={Send}
         />
         <ActionCard
-          title="Bank deposit / Wire"
-          description="Send money directly to another bank account on a schedule."
+          title="Bank deposit"
+          description="Send money directly to a bank account with International Money Transfer."
           to="/banking-payments/scheduled"
           icon={Landmark}
+          deliveryEstimate="Up to 5 business days"
+        />
+        <ActionCard
+          title="Cash pickup"
+          description="Send money to an agent location with Western Union."
+          to="/banking-payments/scheduled"
+          icon={Send}
+          deliveryEstimate="2–4 hours"
         />
       </Section>
 
