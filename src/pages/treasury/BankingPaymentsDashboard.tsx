@@ -39,6 +39,11 @@ export default function BankingPaymentsDashboard() {
   const { links } = usePaymentLinks();
   const { payments: customerPayments } = useCustomerPayments();
   const fmt = useCurrencyFormatter();
+  const { config, countryCode } = useCountryTreasuryConfig();
+  const primaryAuthority = config.taxPayees[0]?.authority ?? 'Tax';
+  const currency = config.defaultCurrency;
+  const money = (n: number) =>
+    fmt.formatCurrency(n, { showCurrencySymbol: true, currencyOverride: currency });
 
   const today = new Date();
   const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
