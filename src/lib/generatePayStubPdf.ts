@@ -1,5 +1,8 @@
 import jsPDF from 'jspdf';
 import { parseLocalDate } from '@/lib/utils';
+import { getPayrollPdfConfig } from '@/lib/payroll/slipFieldMapping';
+import { getPayrollLocalization } from '@/data/payrollLocalization';
+
 
 export interface PayStubData {
   // Employee Info
