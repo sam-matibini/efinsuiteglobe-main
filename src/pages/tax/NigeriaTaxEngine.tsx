@@ -926,6 +926,80 @@ export default function NigeriaTaxEngine() {
             </CardContent>
           </Card>
         </TabsContent>
+        {/* -------- RECONCILIATION -------- */}
+        <TabsContent value="reconciliation">
+          <Card>
+            <CardHeader className="flex-row items-center justify-between flex-wrap gap-2">
+              <div>
+                <CardTitle>Accrued vs Filed vs Remitted</CardTitle>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Reconciles ledger accruals against submitted filings and posted remittances. Non-zero variances highlight open compliance items.
+                </p>
+              </div>
+              <div className="flex items-end gap-2">
+                <div>
+                  <Label className="text-xs">From</Label>
+                  <Input type="date" value={reconStart} onChange={e => setReconStart(e.target.value)} className="h-8 w-36" />
+                </div>
+                <div>
+                  <Label className="text-xs">To</Label>
+                  <Input type="date" value={reconEnd} onChange={e => setReconEnd(e.target.value)} className="h-8 w-36" />
+                </div>
+                <Button size="sm" variant="outline" onClick={() => refetchRecon()}>Refresh</Button>
+                <Button size="sm" variant="outline" disabled={!recon?.length} onClick={() => {
+                  const csv = toCsv(recon ?? [], [
+                    { key: 'period_month', label: 'Month' },
+                    { key: 'definition_code', label: 'Tax' },
+                    { key: 'accrued_tax', label: 'Accrued' },
+                    { key: 'filed_tax', label: 'Filed' },
+                    { key: 'remitted_tax', label: 'Remitted' },
+                    { key: 'filed_variance', label: 'Unfiled variance' },
+                    { key: 'remit_variance', label: 'Unremitted variance' },
+                  ]);
+                  downloadCsv(`ng-tax-reconciliation-${today}.csv`, csv);
+                }}>Export CSV</Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {!orgId ? (
+                <p className="text-muted-foreground">Select an organization.</p>
+              ) : (recon?.length ?? 0) === 0 ? (
+                <p className="text-muted-foreground">No ledger activity in the selected range.</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Month</TableHead><TableHead>Tax</TableHead>
+                      <TableHead className="text-right">Accrued</TableHead>
+                      <TableHead className="text-right">Filed</TableHead>
+                      <TableHead className="text-right">Remitted</TableHead>
+                      <TableHead className="text-right">Unfiled</TableHead>
+                      <TableHead className="text-right">Unremitted</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {(recon ?? []).map((r: any, i: number) => {
+                      const filedVar = Number(r.filed_variance || 0);
+                      const remitVar = Number(r.remit_variance || 0);
+                      return (
+                        <TableRow key={`${r.definition_id}-${r.period_month}-${i}`}>
+                          <TableCell className="text-xs">{String(r.period_month).slice(0,7)}</TableCell>
+                          <TableCell className="font-mono text-xs">{r.definition_code}</TableCell>
+                          <TableCell className="text-right">{fmtNaira(r.accrued_tax)}</TableCell>
+                          <TableCell className="text-right text-amber-700">{fmtNaira(r.filed_tax)}</TableCell>
+                          <TableCell className="text-right text-emerald-700">{fmtNaira(r.remitted_tax)}</TableCell>
+                          <TableCell className={`text-right ${Math.abs(filedVar) > 0.01 ? 'text-red-600 font-medium' : 'text-muted-foreground'}`}>{fmtNaira(filedVar)}</TableCell>
+                          <TableCell className={`text-right ${Math.abs(remitVar) > 0.01 ? 'text-red-600 font-medium' : 'text-muted-foreground'}`}>{fmtNaira(remitVar)}</TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
       </Tabs>
 
       {/* Generate filing dialog */}
