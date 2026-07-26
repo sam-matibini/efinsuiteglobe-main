@@ -1,50 +1,47 @@
-## Nigerian Tax Engine — Remaining Phases Rollout
+## Phase 9 — Wire NG Tax Engine into Transaction Flows
 
-Wire the already-shipped engine (schema, calculators, ledger, filings, remittances, admin UI) into live transaction flows and finish reporting/exemptions.
+Connect the integration helpers built in `src/lib/ngTax/integration.ts` into the actual invoice, bill, payroll, and payment forms so the ledger populates from real user activity.
 
-### Phase 3 — Transaction Integration
-Attach `useNgTaxCalculation` to the four transaction surfaces so every NG-jurisdiction posting writes to `ng_tax_transaction_ledger`.
+### Scope
 
-1. **Invoices (VAT output)**
-   - In `src/pages/invoicing/InvoiceForm.tsx` (and line editor), when org jurisdiction = NG: auto-resolve VAT definition, compute per-line VAT, show a "NG VAT" summary row.
-   - On invoice post: call `record()` with `source_type='invoice'`, link `journal_entry_id`.
+1. **Invoices (AR)**
+   - In `CreateInvoiceDialog` / invoice save path: after invoice + JE are persisted, call `recordInvoiceTaxes({ orgId, invoiceId, journalEntryId, lines })`.
+   - Guard behind org jurisdiction = NG (helper already no-ops otherwise, but skip the query when possible).
+   - Show resolved VAT/WHT breakdown in the invoice totals panel using `useNgTaxCalculation`.
 
-2. **Bills (WHT + input VAT)**
-   - In `src/pages/purchases/BillForm.tsx`: add a WHT service-class selector per line (defaults from vendor profile → `ng_tax_service_classifications`).
-   - Compute WHT withheld + input VAT; reduce vendor payable by WHT; write two ledger rows (VAT_INPUT, WHT) on post.
+2. **Bills (AP)**
+   - In `CreateBillDialog` / bill save path: call `recordBillTaxes(...)` with vendor + lines.
+   - When a bill is marked paid and WHT applies, call `markBillWhtWithheld(billId, paymentDate)` from the payment flow so the WHT ledger row flips to `withheld`.
+   - Surface WHT-to-withhold amount on the bill summary.
 
-3. **Payroll (PAYE + Pension)**
-   - In `src/lib/payroll/processing.ts` (NG branch): replace any inline PAYE math with `calculators.paye()` and `calculators.pension()`.
-   - Write ledger rows per pay stub with `source_type='pay_stub'`, `source_id=pay_stub.id`.
+3. **Payroll**
+   - In the pay-run finalization path (where JEs are posted): call `recordPayrollTaxes({ orgId, payRunId, employeeId, gross, journalEntryId })` per pay stub for NG employees.
+   - Ensures PAYE + Pension appear in the ledger tied to the payroll JE.
 
-4. **Vendor Payments (WHT remittance trigger)**
-   - On payment of a bill with WHT ledger rows: mark those rows as `withheld=true` and surface in the Remittances tab.
+4. **Traceability polish**
+   - From invoice/bill/pay-stub detail views, add a "Tax Ledger" link that opens the existing Traceability Drawer filtered to that `source_transaction_id`.
 
-### Phase 5 completion — Filings polish
-- Add filing PDF export (VAT, WHT, PAYE, CIT) using existing `print_templates` pattern.
-- Add "Amend filing" action (creates v2, supersedes v1).
+### Technical Details
 
-### Phase 6 completion — Remittances
-- Hook "Post Remittance" to `payments` module: create a `tax_payments` row + JE via existing tax payment infra, then call `ng_post_remittance`.
-- Add FIRS/State IRS payee presets in `cra_payee_catalog`-equivalent (new `ng_payee_catalog` seed rows).
+- Helpers are already idempotent-friendly (they write ledger rows keyed by source id); add a pre-check to avoid duplicate inserts on edit/repost.
+- Reuse `useOrganization` to get `orgId` and skip when `country_code !== 'NG'`.
+- No schema changes required — all tables and RPCs already exist from prior phases.
+- Files to touch (expected):
+  - `src/components/invoices/CreateInvoiceDialog.tsx` (+ edit dialog)
+  - `src/components/bills/CreateBillDialog.tsx` (+ edit dialog, payment dialog)
+  - `src/hooks/usePayRunProcessing.ts` (or equivalent finalize path)
+  - `src/pages/tax/NigeriaTaxEngine.tsx` — expose drawer open by source id
+  - Invoice/Bill/PayStub detail views — add "Tax Ledger" link
 
-### Phase 7 — Reporting & Traceability
-- **Reports tab** on `/tax/nigeria`: monthly VAT return, WHT schedule (WHT-01/02), PAYE schedule (Form G/H1), CIT computation — all sourced from `ng_tax_ledger_summary` + ledger drill-down.
-- **Traceability drawer**: click any ledger row → shows source txn, JE lines, filing, remittance in one panel.
-- Add CSV export per report.
+### Out of Scope
 
-### Phase 8 — Exemptions & Reliefs
-- CRUD UI for `ng_tax_exemptions` and `ng_tax_reliefs` (already tables) on the existing tab.
-- Resolver enhancement: apply exemption (customer/vendor/item scoped) before calc; apply reliefs (PAYE consolidated relief already in; add pension voluntary, NHF, life assurance).
+- New tax types or rate changes
+- Non-NG jurisdictions
+- Filing generation changes (already implemented)
 
-### Technical notes
-- All calls go through `useNgTaxCalculation` — no direct SQL from components.
-- Ledger writes are inside the same JE-posting transaction (RPC wrapper) to guarantee traceability.
-- Feature-gate every hook by `organization.country_code === 'NG'` to avoid affecting CA/US/GB flows.
-- Add vitest coverage for each integration point (invoice VAT, bill WHT, payroll PAYE) mirroring existing calculator tests.
+### Verification
 
-### Deliverables order
-1. Phase 3 (Invoices → Bills → Payroll → Payments)
-2. Phase 7 Reports + Traceability drawer
-3. Phase 8 Exemptions/Reliefs CRUD + resolver
-4. Phase 5/6 polish (PDF export, amendments, payee presets)
+- Create a test NG invoice with VAT + WHT line → confirm two ledger rows appear in `/tax/nigeria` Reports tab with links back to invoice + JE.
+- Create a test NG bill, mark paid → WHT row status flips to `withheld`.
+- Run a payroll for an NG employee → PAYE + Pension rows appear tied to the pay run JE.
+- Typecheck clean.

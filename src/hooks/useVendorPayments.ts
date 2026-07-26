@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrganization } from './useOrganization';
 import { toast } from 'sonner';
 import { createJournalEntry, getDefaultAccounts } from './useJournalEntryCreation';
+import { markBillWhtWithheld } from '@/lib/ngTax/integration';
 import { parseLocalDate } from '@/lib/utils';
 
 export interface VendorPayment {
@@ -159,6 +160,15 @@ export function useVendorPayments() {
         }
       } catch (jeError) {
         console.warn('Could not create journal entry for vendor payment:', jeError);
+      }
+
+      // NG Tax Engine — mark bill WHT rows as withheld (no-op for non-NG / no bill)
+      if (input.bill_id) {
+        try {
+          await markBillWhtWithheld(input.bill_id);
+        } catch (ngErr) {
+          console.warn('NG WHT status update skipped:', ngErr);
+        }
       }
       
       return payment;
