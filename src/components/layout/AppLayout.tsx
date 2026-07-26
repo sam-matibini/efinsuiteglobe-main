@@ -25,6 +25,7 @@ import { EconomicIndicatorsTicker } from '@/components/dashboard/EconomicIndicat
 import { AIAccountingAssistant } from '@/components/dashboard/AIAccountingAssistant';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
+import { CountrySelector } from './CountrySelector';
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -176,13 +177,16 @@ export function AppLayout({ children }: AppLayoutProps) {
             >
               <Menu className="w-5 h-5" />
             </Button>
-            
+
+            {/* Country selector (MS Dynamics-style, top-left) */}
+            <CountrySelector />
+
             {/* Search - hidden on mobile, shown on tablet+ */}
             <div className="relative hidden sm:block">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input 
                 placeholder="Search..." 
-                className="w-40 md:w-80 pl-10 bg-muted/50 border-0 focus-visible:ring-1 focus-visible:ring-accent"
+                className="w-40 md:w-64 pl-10 bg-muted/50 border-0 focus-visible:ring-1 focus-visible:ring-accent"
               />
             </div>
           </div>

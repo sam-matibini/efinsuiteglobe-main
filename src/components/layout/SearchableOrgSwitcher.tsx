@@ -11,6 +11,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Organization } from '@/hooks/useOrganization';
+import { normalizeCountryCode, countryName, countryFlag } from '@/hooks/useCountryFilter';
 
 interface SearchableOrgSwitcherProps {
   currentOrg: Organization | null;
@@ -18,6 +19,8 @@ interface SearchableOrgSwitcherProps {
   isLoading: boolean;
   onSwitch: (org: Organization) => void;
   onCreateNew: () => void;
+  filterCountry?: string | null;
+  onClearCountryFilter?: () => void;
 }
 
 export const SearchableOrgSwitcher = forwardRef<HTMLDivElement, SearchableOrgSwitcherProps>(
@@ -27,15 +30,22 @@ export const SearchableOrgSwitcher = forwardRef<HTMLDivElement, SearchableOrgSwi
     isLoading,
     onSwitch,
     onCreateNew,
+    filterCountry,
+    onClearCountryFilter,
   }, ref) {
     const [open, setOpen] = useState(false);
     const [search, setSearch] = useState('');
     const navigate = useNavigate();
     const location = useLocation();
 
-    // Sort alphabetically and filter by search term
+    // Filter by country, sort alphabetically, then filter by search term
     const filteredOrganizations = useMemo(() => {
       let orgs = [...organizations];
+      if (filterCountry) {
+        orgs = orgs.filter(
+          (o) => normalizeCountryCode(o.country) === filterCountry
+        );
+      }
       orgs.sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
       if (search.trim()) {
         const term = search.toLowerCase();
@@ -47,7 +57,7 @@ export const SearchableOrgSwitcher = forwardRef<HTMLDivElement, SearchableOrgSwi
         );
       }
       return orgs;
-    }, [organizations, search]);
+    }, [organizations, search, filterCountry]);
 
     const handleSelect = (org: Organization) => {
       setOpen(false);
@@ -105,6 +115,22 @@ export const SearchableOrgSwitcher = forwardRef<HTMLDivElement, SearchableOrgSwi
                   className="pl-8 h-9 bg-sidebar-accent border-sidebar-border text-sidebar-foreground placeholder:text-sidebar-muted focus-visible:ring-sidebar-primary"
                 />
               </div>
+              {filterCountry && (
+                <div className="mt-2 flex items-center justify-between gap-2 rounded-md bg-sidebar-accent/50 px-2 py-1 text-xs text-sidebar-foreground">
+                  <span className="flex items-center gap-1.5 min-w-0">
+                    <span>{countryFlag(filterCountry)}</span>
+                    <span className="truncate">Filtered by {countryName(filterCountry)}</span>
+                  </span>
+                  {onClearCountryFilter && (
+                    <button
+                      onClick={onClearCountryFilter}
+                      className="text-sidebar-muted hover:text-sidebar-foreground underline"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Organization List with proper scrolling */}

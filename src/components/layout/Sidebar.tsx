@@ -53,6 +53,7 @@ import { useOrganizationContext } from '@/hooks/useOrganizationContext';
 import { useAuth } from '@/hooks/useAuth';
 import { usePayrollLocalization } from '@/hooks/usePayrollLocalization';
 import { useEnabledModules, ModuleCode } from '@/hooks/useEnabledModules';
+import { useCountryFilter } from '@/hooks/useCountryFilter';
 import { useCountryTreasuryConfig } from '@/hooks/useCountryTreasuryConfig';
 
 import { CreateOrganizationDialog } from '@/components/accounts/CreateOrganizationDialog';
@@ -284,6 +285,7 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
   const { sidebarLabels } = usePayrollLocalization();
   const { isModuleEnabled, isModuleInCurrentPlan, isLoading: modulesLoading, isReadOnly, userRole, planTier } = useEnabledModules();
   const { countryCode } = useCountryTreasuryConfig();
+  const { country: countryFilter, clear: clearCountryFilter } = useCountryFilter();
   const [upgradeModal, setUpgradeModal] = useState<{ open: boolean; module?: ModuleCode; label?: string }>({ open: false });
 
   // Generate navigation with localized payroll labels
@@ -375,6 +377,8 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
               isLoading={orgsLoading}
               onSwitch={switchOrganization}
               onCreateNew={() => setCreateOrgOpen(true)}
+              filterCountry={countryFilter}
+              onClearCountryFilter={clearCountryFilter}
             />
           )}
           
