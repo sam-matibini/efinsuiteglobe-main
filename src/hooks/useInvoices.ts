@@ -277,7 +277,7 @@ export function useInvoices() {
       if (invoiceError) throw invoiceError;
       
       // Create invoice lines
-      const { error: linesError } = await supabase
+      const { data: insertedLines, error: linesError } = await supabase
         .from('invoice_lines')
         .insert(
           lines.map(line => ({
@@ -292,7 +292,8 @@ export function useInvoices() {
             line_order: line.line_order,
             notes: (line as any).notes || null,
           }))
-        );
+        )
+        .select('id, amount, tax_rate');
       
       if (linesError) throw linesError;
 
