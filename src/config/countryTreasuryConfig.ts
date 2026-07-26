@@ -131,7 +131,10 @@ const US: CountryTreasuryConfig = {
     ...CA.sections,
     bills: [
       { title: 'Pay bills', description: 'Pay vendor invoices via ACH, wire, or check.', to: '/treasury/ap-payments', icon: CreditCard },
+    ],
+    taxRemittances: [
       { title: 'Pay business taxes', description: 'File and pay Federal and State taxes.', to: '/treasury/tax-payments', icon: Receipt, external: true },
+      { title: 'US Remittance Centre', description: 'IRS Form 941, sales-tax nexus, and state payroll filings.', to: '/banking-payments/us-remittance', icon: Landmark },
     ],
     transfers: [
       { title: 'Transfer between accounts', description: 'Move money between your accounts.', to: '/banking/transfers', icon: ArrowLeftRight },
