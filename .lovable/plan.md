@@ -1,44 +1,66 @@
-# Country Selector (Top-Left Company Organizer)
+# Country-First Scoping (Dynamics 365 style)
 
-Add a Dynamics 365–style **Country Selector** to the top-left of the app header so companies/clients are grouped and filtered by country, making it easy to administer the accounting system per localized jurisdiction.
-
-## Where it goes
-
-Header top-left, right after the menu button and before the search input, in `src/components/layout/AppLayout.tsx`:
-
-```text
-[☰]  [🇳🇬 Nigeria ▾]  [🔍 Search…]        …flag / indicators / user
-```
-
-On mobile, the trigger collapses to a flag-only button.
+Restructure the app so the top-left country selector is the **primary scope**. Once a country is chosen, every list, dashboard, and module only shows data, settings, and options tied to that country. "All countries" is removed — a country is always required.
 
 ## Behavior
 
-1. **Trigger**: shows the flag + country name of the currently active organization (fallback: "All countries").
-2. **Dropdown** (Popover + Command search):
-   - "All countries" option at the top.
-   - List of countries derived from the distinct `country_code` values across the user's organizations (CA, US, NG, GB, …).
-   - Each country row shows flag, name, and a count badge of companies in that country.
-   - Expanding a country reveals its companies; clicking a company calls the existing `switchOrganization(id)` from `useOrganization`.
-3. **Filter behavior**:
-   - Selecting a country stores `selected_country_filter` in `localStorage` (per user).
-   - The existing `SearchableOrgSwitcher` in the sidebar reads the same filter and shows only orgs from that country (with a "Clear country filter" chip).
-   - If the currently active org is not in the selected country, the dropdown highlights "Switch to a company in {country}" but does not auto-switch.
-4. **Auto-set on switch**: switching an org updates the country filter to that org's country so the selector always reflects the active company's jurisdiction.
+- Country selector becomes the **root scope** (persisted in `localStorage` + URL search param `?country=CA`).
+- On login / first load:
+  - If the user has orgs in only one country → auto-select it.
+  - If multiple → show a country picker screen (D365-style "Choose environment").
+- Switching country:
+  - Filters the org switcher to that country only.
+  - Auto-switches `currentOrganization` to the first (or last-used) org in that country.
+  - Invalidates all React Query caches keyed by org/country.
+- No "All countries" option anywhere.
 
-## Files
+## Module scoping rules
 
-- New: `src/components/layout/CountrySelector.tsx` — Popover/Command UI, grouping logic, count badges, flags via existing `CountryFlagBadge` icon set / `country-flag-icons` (already used).
-- New: `src/hooks/useCountryFilter.ts` — reads/writes `localStorage` key `efs.country_filter`, exposes `{ country, setCountry, clear }`, backed by a small event bus so sidebar + header stay in sync.
-- Edit: `src/components/layout/AppLayout.tsx` — mount `<CountrySelector />` in the left header cluster (line ~188).
-- Edit: `src/components/layout/SearchableOrgSwitcher.tsx` — accept optional `filterCountry` prop and filter the org list; show a small "Filtered by {country}" chip with clear button.
-- Edit: `src/components/layout/Sidebar.tsx` — pass the current country filter (from `useCountryFilter`) into `SearchableOrgSwitcher`.
+| Module | Scoped behavior |
+|---|---|
+| Org switcher / dashboards | Only orgs where `organizations.country_id` matches. |
+| Tax engine | Route to country's engine only: CA → CRA/GST-HST/PST/QST; NG → FIRS/SIRS (NigeriaTaxEngine); US → IRS/state; GB → HMRC MTD; EU → OSS. Hide the others from nav + Reports Centre. |
+| Payroll | Load only the country's `payrollLocalization` (T4/ROE for CA, W-2/1099 for US, PAYE/P60 for GB, PAYE/Pension for NG). Sidebar labels, tax slips, remittance forms swap. |
+| Accounting standards & CoA | CoA templates filtered by country (`coa_templates.country_code`). Reporting framework locked to the country default (IFRS / IFRS-SME / ASPE / US GAAP). |
+| eFinconnect | Payment rails, tax payees, and dashboard sections come from `countryTreasuryConfig` for that country only. |
+| Reports Centre | Country-specific reports only (e.g. hide GST/HST for NG orgs). |
 
-## Data
+## UI changes (D365-style shell)
 
-Uses existing `public.organizations.country_code` (already populated; Nigeria orgs are `NG`, Canadian orgs `CA`, etc.). No migration required.
+- Top-left header becomes a **two-tier selector**:
+  1. **Country pill** (flag + name) — opens country grid.
+  2. **Organization pill** — opens orgs within the selected country.
+- Add a `/select-country` landing screen shown when no country is set and user has orgs in >1 country.
+- Sidebar nav items conditionally render based on `country`:
+  - `NigeriaTaxEngine` only if `country === 'NG'`.
+  - `SalesTax` (CRA) only if `country === 'CA'`.
+  - `EuOssFilings` only if `country ∈ EU`.
+  - `UkVatFilings` only if `country === 'GB'`.
+
+## Technical details
+
+**New / updated files**
+- `src/hooks/useCountryScope.ts` — replaces `useCountryFilter`. Required country (never null), auto-derives from current org, exposes `setCountry(code)` that also switches org.
+- `src/context/CountryScopeProvider.tsx` — wraps app, gates rendering until a country is chosen.
+- `src/pages/SelectCountry.tsx` — D365-style country grid landing.
+- `src/components/layout/CountrySelector.tsx` — country-only picker (orgs move to a separate switcher below).
+- `src/components/layout/OrgSwitcher.tsx` — always filtered by scoped country.
+- `src/config/countryModuleMap.ts` — maps country code → allowed modules, tax engine, payroll config, CoA template ids, eFinconnect config.
+- `src/config/routeModuleMap.ts` — extend with `requiredCountries?: string[]`.
+- `src/hooks/useOrganization.ts` — filter `organizations` list by scoped country; block switching to an org outside scope.
+- Sidebar + AppLayout — read `useCountryScope()` and hide non-matching nav sections.
+
+**Data**
+- Uses existing `organizations.country_id → countries.code`. No schema changes required.
+- `coa_templates` already carries country info; ensure templates listing filters by scoped country.
+- No migration needed unless we want to enforce a `default_country` per user (optional, not in this plan).
+
+**Removals**
+- `useCountryFilter` (superseded).
+- "All countries" button in `CountrySelector`.
+- Cross-country consolidated dashboards (out of scope — can be reintroduced later as a dedicated "Group" workspace).
 
 ## Out of scope
-
-- No changes to accounting logic, tax engines, or CoA templates — this is UI-only organization/navigation.
-- No new country creation flow; countries are inferred from existing organizations.
+- Multi-country consolidation reporting.
+- Per-user default country preference stored server-side.
+- Renaming/reorganizing existing tax data.

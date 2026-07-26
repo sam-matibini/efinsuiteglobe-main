@@ -53,8 +53,8 @@ import { useOrganizationContext } from '@/hooks/useOrganizationContext';
 import { useAuth } from '@/hooks/useAuth';
 import { usePayrollLocalization } from '@/hooks/usePayrollLocalization';
 import { useEnabledModules, ModuleCode } from '@/hooks/useEnabledModules';
-import { useCountryFilter } from '@/hooks/useCountryFilter';
-import { useCountryTreasuryConfig } from '@/hooks/useCountryTreasuryConfig';
+import { useCountryScope, normalizeCountryCode } from '@/hooks/useCountryFilter';
+import { isChildVisibleForCountry, getCountryModuleFlags } from '@/config/countryModuleMap';
 
 import { CreateOrganizationDialog } from '@/components/accounts/CreateOrganizationDialog';
 import { SearchableOrgSwitcher } from '@/components/layout/SearchableOrgSwitcher';
@@ -64,7 +64,7 @@ interface NavItem {
   label: string;
   icon: React.ElementType;
   href?: string;
-  children?: { label: string; href: string; icon: React.ElementType; hideForReadOnly?: boolean; hideForNonCA?: boolean }[];
+  children?: { label: string; href: string; icon: React.ElementType; hideForReadOnly?: boolean; hideForNonCA?: boolean; restrictToCountries?: string[] }[];
   /** Module codes required for this nav item to be visible */
   requiredModules?: ModuleCode[];
   /** Hide this nav item when user is in read-only (auditor) mode */
@@ -204,8 +204,10 @@ const getNavigation = (payrollLabels: { taxSlips: string; separationDoc: string;
       { label: 'Audit Trail', href: '/tax/audit-trail', icon: History },
       { label: 'Advanced Reports', href: '/tax/reports', icon: BarChart3 },
       { label: 'E-File Returns', href: '/tax/e-file', icon: Send, hideForReadOnly: true },
-      { label: 'Address Tax (US)', href: '/tax/address-tax', icon: MapPin },
-      { label: 'EU VAT (OSS)', href: '/tax/eu-vat', icon: Globe },
+      { label: 'Address Tax (US)', href: '/tax/address-tax', icon: MapPin, restrictToCountries: ['US'] },
+      { label: 'UK VAT (MTD)', href: '/intl/uk-vat', icon: Globe, restrictToCountries: ['GB'] },
+      { label: 'EU VAT (OSS)', href: '/tax/eu-vat', icon: Globe, restrictToCountries: ['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE'] },
+      { label: 'Nigeria Tax Engine', href: '/tax/nigeria', icon: Globe, restrictToCountries: ['NG'] },
       { label: 'Tax Provisioning', href: '/tax/provision', icon: Scale },
       { label: 'Withholding Tax', href: '/tax/withholding', icon: Receipt },
     ],
@@ -284,8 +286,8 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
   const [createOrgOpen, setCreateOrgOpen] = useState(false);
   const { sidebarLabels } = usePayrollLocalization();
   const { isModuleEnabled, isModuleInCurrentPlan, isLoading: modulesLoading, isReadOnly, userRole, planTier } = useEnabledModules();
-  const { countryCode } = useCountryTreasuryConfig();
-  const { country: countryFilter, clear: clearCountryFilter } = useCountryFilter();
+  const { country: scopedCountry } = useCountryScope();
+  const countryCode = scopedCountry ?? normalizeCountryCode(currentOrg?.country ?? null) ?? 'CA';
   const [upgradeModal, setUpgradeModal] = useState<{ open: boolean; module?: ModuleCode; label?: string }>({ open: false });
 
   // Generate navigation with localized payroll labels
@@ -313,7 +315,7 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
         if (!item.children) return item;
         let children = item.children;
         if (isReadOnly) children = children.filter(child => !child.hideForReadOnly);
-        if (countryCode && countryCode !== 'CA') children = children.filter(child => !child.hideForNonCA);
+        children = children.filter(child => isChildVisibleForCountry(child, countryCode));
         return { ...item, children };
       });
   }, [baseNavigation, isModuleEnabled, isModuleInCurrentPlan, modulesLoading, isReadOnly, userRole, countryCode]);
@@ -377,8 +379,8 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
               isLoading={orgsLoading}
               onSwitch={switchOrganization}
               onCreateNew={() => setCreateOrgOpen(true)}
-              filterCountry={countryFilter}
-              onClearCountryFilter={clearCountryFilter}
+              filterCountry={scopedCountry}
+
             />
           )}
           
