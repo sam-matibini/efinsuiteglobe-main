@@ -1,45 +1,51 @@
-# Fix CRA leakage in eFinconnect for Nigerian organizations
+## Add eFinconnect tab to Settings (country-aware)
 
-## Root cause (verified)
+Surface a new **eFinconnect** tab in the main Settings page so payment rails and tax remittance targets follow the organization's country automatically, with per-org overrides.
 
-- `Earthweb Security and Intelligence Network Limited` is correctly stored with `country_id → countries.code = 'NG'`, and `useCountryTreasuryConfig` correctly resolves to the `NG` profile — so the dashboard shell itself renders "Nigeria · NGN".
-- However, the NG action cards in `src/config/countryTreasuryConfig.ts` link to `/treasury/tax-payments?authority=FIRS|SIRS|PenCom`, which renders `src/pages/treasury/TaxPayments.tsx` — a **CRA-only** page (labels, PD7A, `cra_my_payment` rail, CRA program-account dropdown, "CRA source deductions, GST/HST, corporate tax…" subheading).
-- The shared `src/pages/treasury/PaymentHistory.tsx` also hardcodes copy: *"Unified history of CRA, AP and payroll payments"* and a `CRA` tab, regardless of country.
-- Sidebar / KPI-linked destinations (`CraRemittanceCentre`, `CraRailStatusCard`, `PadAgreementsCard`, `MultiBusinessRemittance`, `EftRailSettings`, `BulkPayrollRemittance`, `FintracReports`) are Canada-only and should not surface for NG orgs.
+### 1. New Settings tab
+In `src/pages/Settings.tsx`:
+- Add a new `<TabsTrigger value="efinconnect">` with a `Send` icon (matches sidebar).
+- Add a `<TabsContent value="efinconnect">` that renders a new `EfinconnectSettingsTab` component.
 
-## Changes
+### 2. New component: `src/components/settings/EfinconnectSettingsTab.tsx`
+Driven by `useCountryTreasuryConfig()` so it re-renders per org country (CA / US / NG / fallback):
 
-### 1. Route NG tax-bill cards to the Nigeria tax engine
-`src/config/countryTreasuryConfig.ts` — replace the three NG "Pay …" tax destinations:
+- **Country & Profile card** — active country, flag, currency, resolved rails, tax authorities (e.g. CRA vs FIRS/SIRS/PenCom). Read-only summary with a link to change the organization's country in the Organization tab.
+- **Payment rails toggles** — dynamic list from config:
+  - CA: EFT, Interac e-Transfer, Wire, Bill Pay
+  - US: ACH, Wire, RTP, Check
+  - NG: NIBSS Instant, CBN RTGS, NEFT
+  Toggles persist to `organizations.settings->efinconnect.rails` (JSON column already exists on organizations).
+- **Tax remittance targets** — cards for each country-scoped authority from `countryTreasuryConfig.taxPayees`, each with an enable switch and a "Manage payees" deep link (CRA → `/treasury/tax-payments`, NG → `/tax/nigeria?tab=remittances`).
+- **Dashboard sections** — checkboxes to show/hide Bills, Transfers, Payments & Collections, Governance on the eFinconnect dashboard. Persisted to `organizations.settings->efinconnect.sections`.
+- **Defaults card** — default funding bank account selector (reuses existing `useFundingBankAccounts`) and default approval workflow (reuses existing approval workflow query).
 
-| Card | New `to` |
-| --- | --- |
-| Pay FIRS taxes | `/tax/nigeria?authority=FIRS` |
-| Pay State (SIRS) taxes | `/tax/nigeria?authority=SIRS` |
-| Pay pension & NHF | `/tax/nigeria?authority=PenCom` |
+### 3. Wire the dashboard to respect settings
+`src/pages/treasury/TreasuryDashboard.tsx` and `src/config/countryTreasuryConfig.ts` consumers already read the config. Add a thin `useEfinconnectPreferences()` hook that merges `organizations.settings.efinconnect` over the country defaults so:
+- Disabled rails hide their action cards.
+- Disabled sections collapse entirely.
+- Disabled tax authorities disappear from the "Pay business taxes" card list.
 
-Confirm `/tax/nigeria` (`NigeriaTaxEngine.tsx`) reads the `authority` query param and pre-filters the Filings/Remittances tab; add that hook if it doesn't already.
+### 4. Persistence
+No new tables. Store the JSON under `organizations.settings` (existing jsonb):
+```
+settings.efinconnect = {
+  rails: { eft: true, interac: true, nibss: false, ... },
+  sections: { bills: true, transfers: true, collections: true, governance: true },
+  taxAuthorities: { CRA: true, FIRS: true, SIRS: true, PenCom: false },
+  defaults: { fundingAccountId: uuid|null, approvalWorkflowId: uuid|null }
+}
+```
+Read/write through the existing `useCurrentOrganization` + Supabase update pattern used elsewhere in Settings.
 
-### 2. Country-scope `TaxPayments.tsx`
-Add `useCountryTreasuryConfig` at the top; if `countryCode !== 'CA'`, render a friendly redirect notice with a button to the country-appropriate page (`/tax/nigeria` for NG, no-op for CA). This prevents anyone who reaches `/treasury/tax-payments` directly from seeing CRA UI on a Nigerian org.
+### 5. Behavior by country (out of the box)
+- **CA org**: rails = EFT/Interac/Wire; taxes = CRA + Provincial payees.
+- **US org**: rails = ACH/Wire/RTP; taxes = IRS + State.
+- **NG org**: rails = NIBSS/RTGS/NEFT; taxes = FIRS/SIRS/PenCom; CRA cards hidden (already handled).
+- Unknown country: falls back to CA config with a banner prompting the user to set the country in the Organization tab.
 
-### 3. Make `PaymentHistory.tsx` country-aware
-- Replace subtitle with a dynamic string driven by `config.taxPayees[0].authority` (e.g. "Unified history of FIRS, AP and payroll payments" for NG, "CRA, AP and payroll payments" for CA).
-- Rename the `cra` tab label to `{primaryAuthority}` from config; filter logic stays the same (it already keys off `payment_type`, which is generic).
-
-### 4. Hide Canada-only sub-nav for non-CA orgs
-In the eFinconnect sidebar / `TreasurySettings` links, wrap CRA-specific entries (CRA Remittance Centre, CRA XML Filings, Multi-Business CRA, PAD Agreements, FINTRAC, EFT Rail Settings, Bulk Payroll Remittance) so they only render when `countryCode === 'CA'`. Nigerian orgs get the NG action grid + generic AP/Payroll/History links only.
-
-## Verification
-
-1. Sign in as the Nigerian org, open `/treasury` → header reads "Nigeria · NGN", tax cards link to `/tax/nigeria?authority=…`.
-2. Click each of the three tax cards → lands on `NigeriaTaxEngine` pre-filtered to the requested authority; no CRA text anywhere.
-3. Visit `/treasury/tax-payments` directly → shows the "This page is for Canadian organizations" redirect card.
-4. Visit `/banking-payments/history` → subtitle and tab say "FIRS" not "CRA".
-5. Re-check as a Canadian org → all existing CRA screens still render exactly as before.
-
-## Out of scope
-
-- No database migration; `Earthweb`'s country is already NG.
-- No changes to the Nigeria tax engine tables/RPCs.
-- No visual redesign of `TreasuryDashboard.tsx` beyond the config-driven link swap.
+### Technical notes
+- No DB migration required (uses existing `organizations.settings jsonb`).
+- Reuses `countryTreasuryConfig`, `useCountryTreasuryConfig`, `useFundingBankAccounts`.
+- All UI in `src/components/settings/EfinconnectSettingsTab.tsx` (plus a small `useEfinconnectPreferences.ts` hook).
+- Tab integrated into `src/pages/Settings.tsx` only; no routing changes.
