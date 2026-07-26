@@ -993,7 +993,59 @@ function getFallbackRates(countryCode: string, year: number, updateType: string)
       confidence: 0.80,
       notes: 'Rates from OBR and INSS official publications - verify with obr.bi for latest updates'
     };
+  } else if (countryCode === 'NG') {
+    // Nigeria — FIRS, State IRS, PenCom, NHF, ITF, NSITF (Finance Act 2023)
+    return {
+      sales_tax_changes: updateType !== 'payroll' ? [
+        { code: 'VAT', name: 'Value Added Tax (Standard)', current_rate: 7.5, effective_date: `${year}-01-01`, source: 'FIRS VAT Act (Finance Act 2020)' },
+        { code: 'VAT-ZERO', name: 'VAT Zero-Rated (Exports, Basic Foods)', current_rate: 0, effective_date: `${year}-01-01`, source: 'FIRS VAT Act' },
+        { code: 'VAT-EXEMPT', name: 'VAT Exempt (Medical, Education, Financial)', current_rate: 0, effective_date: `${year}-01-01`, source: 'FIRS VAT Act' },
+        { code: 'WHT-CONTRACT', name: 'Withholding Tax - Contracts/Supplies', current_rate: 5, effective_date: `${year}-01-01`, source: 'FIRS WHT Regulations' },
+        { code: 'WHT-PROF', name: 'Withholding Tax - Professional Services', current_rate: 10, effective_date: `${year}-01-01`, source: 'FIRS WHT Regulations' },
+        { code: 'WHT-RENT', name: 'Withholding Tax - Rent', current_rate: 10, effective_date: `${year}-01-01`, source: 'FIRS WHT Regulations' },
+        { code: 'WHT-DIV', name: 'Withholding Tax - Dividends/Interest/Royalties', current_rate: 10, effective_date: `${year}-01-01`, source: 'CITA / FIRS WHT Regulations' },
+        { code: 'WHT-DIR', name: 'Withholding Tax - Directors Fees', current_rate: 10, effective_date: `${year}-01-01`, source: 'FIRS WHT Regulations' },
+        { code: 'CIT-SMALL', name: 'Companies Income Tax - Small (≤₦25m turnover)', current_rate: 0, effective_date: `${year}-01-01`, source: 'Finance Act 2023' },
+        { code: 'CIT-MED', name: 'Companies Income Tax - Medium (₦25m–₦100m)', current_rate: 20, effective_date: `${year}-01-01`, source: 'Finance Act 2023' },
+        { code: 'CIT-LARGE', name: 'Companies Income Tax - Large (>₦100m)', current_rate: 30, effective_date: `${year}-01-01`, source: 'CITA / Finance Act 2023' },
+        { code: 'TET', name: 'Tertiary Education Tax', current_rate: 3, effective_date: `${year}-01-01`, source: 'Finance Act 2023' },
+        { code: 'CGT', name: 'Capital Gains Tax', current_rate: 10, effective_date: `${year}-01-01`, source: 'Capital Gains Tax Act' },
+        { code: 'STAMP', name: 'Stamp Duty (Electronic Transfer)', current_rate: 0.375, effective_date: `${year}-01-01`, source: 'Stamp Duties Act (Finance Act 2020)' },
+      ] : [],
+      payroll_changes: updateType !== 'sales_tax' ? [
+        { code: 'PENSION', name: 'Pension Contribution (PenCom)', employee_rate: 8, employer_rate: 10, effective_date: `${year}-01-01`, source: 'Pension Reform Act 2014', notes: 'Employers with 3+ employees; total 18% of monthly emoluments' },
+        { code: 'NHF', name: 'National Housing Fund', employee_rate: 2.5, employer_rate: 0, effective_date: `${year}-01-01`, source: 'NHF Act', notes: 'Applies to employees earning ≥ ₦3,000/month' },
+        { code: 'ITF', name: 'Industrial Training Fund', employee_rate: 0, employer_rate: 1, effective_date: `${year}-01-01`, source: 'ITF Act (as amended)', notes: 'Employers with 5+ employees or ₦50m+ turnover; 1% of annual payroll' },
+        { code: 'NSITF', name: 'Employee Compensation Scheme (NSITF)', employee_rate: 0, employer_rate: 1, effective_date: `${year}-01-01`, source: 'Employee Compensation Act 2010', notes: '1% of monthly payroll, employer-only' },
+      ] : [],
+      tax_credits: updateType !== 'sales_tax' ? [
+        { code: 'CRA-BASE', name: 'Consolidated Relief Allowance (Base)', amount: 200000, type: 'national', effective_date: `${year}-01-01`, source: 'PIT Act (as amended)', notes: 'Higher of ₦200,000 or 1% of gross income' },
+        { code: 'CRA-PCT', name: 'Consolidated Relief Allowance (20% of Gross)', amount: 0, type: 'national', effective_date: `${year}-01-01`, source: 'PIT Act (as amended)', notes: 'Plus 20% of gross income, added to CRA base' },
+      ] : [],
+      tax_brackets: updateType !== 'sales_tax' ? [
+        { jurisdiction: 'NG-PAYE', min_income: 0, max_income: 300000, rate: 7, effective_date: `${year}-01-01`, source: 'PIT Act Sixth Schedule' },
+        { jurisdiction: 'NG-PAYE', min_income: 300000, max_income: 600000, rate: 11, effective_date: `${year}-01-01`, source: 'PIT Act Sixth Schedule' },
+        { jurisdiction: 'NG-PAYE', min_income: 600000, max_income: 1100000, rate: 15, effective_date: `${year}-01-01`, source: 'PIT Act Sixth Schedule' },
+        { jurisdiction: 'NG-PAYE', min_income: 1100000, max_income: 1600000, rate: 19, effective_date: `${year}-01-01`, source: 'PIT Act Sixth Schedule' },
+        { jurisdiction: 'NG-PAYE', min_income: 1600000, max_income: 3200000, rate: 21, effective_date: `${year}-01-01`, source: 'PIT Act Sixth Schedule' },
+        { jurisdiction: 'NG-PAYE', min_income: 3200000, max_income: 999999999, rate: 24, effective_date: `${year}-01-01`, source: 'PIT Act Sixth Schedule' },
+      ] : [],
+      authority_sources: [
+        'FIRS - Federal Inland Revenue Service (firs.gov.ng)',
+        'State Internal Revenue Services (PAYE)',
+        'PenCom - National Pension Commission (Pension Reform Act 2014)',
+        'FMBN - Federal Mortgage Bank (NHF Act)',
+        'ITF - Industrial Training Fund',
+        'NSITF - Employee Compensation Act 2010',
+        'Finance Act 2023',
+        'Personal Income Tax Act (as amended)',
+        'Companies Income Tax Act (CITA)'
+      ],
+      confidence: 0.85,
+      notes: 'Rates based on Finance Act 2023 and FIRS publications - verify with firs.gov.ng for latest circulars'
+    };
   }
+
 
   return {
     sales_tax_changes: [],
