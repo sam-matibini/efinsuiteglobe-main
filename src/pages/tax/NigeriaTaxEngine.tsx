@@ -32,6 +32,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
+import {
+  buildFilingManifest,
+  downloadManifest,
+  submitFiling as submitFilingHelper,
+  acknowledgeFiling,
+  rejectFiling,
+  type SubmissionMode,
+} from '@/lib/ngTax/submission';
 
 function toCsv(rows: any[], columns: { key: string; label: string }[]): string {
   const esc = (v: any) => {
@@ -63,6 +71,9 @@ const statusColors: Record<string, string> = {
   draft: 'bg-slate-100 text-slate-700',
   ready: 'bg-blue-100 text-blue-700',
   submitted: 'bg-amber-100 text-amber-700',
+  accepted: 'bg-emerald-100 text-emerald-700',
+  rejected: 'bg-red-100 text-red-700',
+  amended: 'bg-purple-100 text-purple-700',
   remitted: 'bg-emerald-100 text-emerald-700',
   pending: 'bg-slate-100 text-slate-700',
   computed: 'bg-blue-100 text-blue-700',
@@ -352,6 +363,70 @@ export default function NigeriaTaxEngine() {
     onError: (e: any) => toast.error(e.message ?? 'Failed'),
   });
 
+  // ---- Reconciliation report ----
+  const [reconStart, setReconStart] = useState<string>(firstOfMonth(new Date(new Date().getFullYear(), 0, 1)));
+  const [reconEnd, setReconEnd] = useState<string>(lastOfMonth());
+  const { data: recon, refetch: refetchRecon } = useQuery({
+    queryKey: ['ng-tax-recon', orgId, reconStart, reconEnd],
+    enabled: !!orgId,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc('ng_get_reconciliation', {
+        p_organization_id: orgId,
+        p_period_start: reconStart,
+        p_period_end: reconEnd,
+      });
+      if (error) throw error;
+      return (data as any[]) ?? [];
+    },
+  });
+
+  // ---- Submission dialog ----
+  const [subOpen, setSubOpen] = useState(false);
+  const [subFiling, setSubFiling] = useState<any>(null);
+  const [subMode, setSubMode] = useState<SubmissionMode>('manifest');
+  const [subRef, setSubRef] = useState('');
+
+  const runSubmit = useMutation({
+    mutationFn: async () => {
+      if (!subFiling) throw new Error('No filing selected');
+      const defCode = defById.get(subFiling.definition_id)?.code ?? 'NG-TAX';
+      if (subMode === 'manifest') {
+        const manifest = buildFilingManifest(subFiling, defCode);
+        downloadManifest(manifest);
+      }
+      await submitFilingHelper({
+        filingId: subFiling.id,
+        mode: subMode,
+        reference: subRef,
+        payload: { definition_code: defCode, generated_at: new Date().toISOString() },
+      });
+    },
+    onSuccess: () => {
+      toast.success(subMode === 'manifest' ? 'Manifest downloaded and filing marked submitted' : 'Filing marked submitted');
+      setSubOpen(false); setSubFiling(null); setSubRef(''); setSubMode('manifest');
+      qc.invalidateQueries({ queryKey: ['ng-tax-filings', orgId] });
+    },
+    onError: (e: any) => toast.error(e.message ?? 'Submission failed'),
+  });
+
+  const ackFiling = useMutation({
+    mutationFn: async ({ id, ref }: { id: string; ref: string }) => acknowledgeFiling(id, ref),
+    onSuccess: () => {
+      toast.success('Filing acknowledged');
+      qc.invalidateQueries({ queryKey: ['ng-tax-filings', orgId] });
+    },
+    onError: (e: any) => toast.error(e.message ?? 'Failed'),
+  });
+
+  const rejFiling = useMutation({
+    mutationFn: async ({ id, reason }: { id: string; reason: string }) => rejectFiling(id, reason),
+    onSuccess: () => {
+      toast.success('Filing marked rejected');
+      qc.invalidateQueries({ queryKey: ['ng-tax-filings', orgId] });
+    },
+    onError: (e: any) => toast.error(e.message ?? 'Failed'),
+  });
+
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -373,6 +448,7 @@ export default function NigeriaTaxEngine() {
           <TabsTrigger value="filings">Filings</TabsTrigger>
           <TabsTrigger value="remittances">Remittances</TabsTrigger>
           <TabsTrigger value="reports">Reports</TabsTrigger>
+          <TabsTrigger value="reconciliation">Reconciliation</TabsTrigger>
           <TabsTrigger value="exemptions">Exemptions &amp; Reliefs</TabsTrigger>
         </TabsList>
 
@@ -619,11 +695,22 @@ export default function NigeriaTaxEngine() {
                         <TableCell className="text-right space-x-2">
                           {f.status === 'ready' && (
                             <Button size="sm" variant="outline" onClick={() => {
-                              const ref = window.prompt('Confirmation reference (optional):') ?? '';
-                              submitFiling.mutate({ id: f.id, ref });
+                              setSubFiling(f); setSubMode('manifest'); setSubRef(''); setSubOpen(true);
                             }}>Submit</Button>
                           )}
-                          {(f.status === 'submitted' || f.status === 'ready') && (
+                          {f.status === 'submitted' && (
+                            <>
+                              <Button size="sm" variant="outline" onClick={() => {
+                                const ref = window.prompt('Authority acknowledgment reference:') ?? '';
+                                ackFiling.mutate({ id: f.id, ref });
+                              }}>Acknowledge</Button>
+                              <Button size="sm" variant="outline" className="text-red-700" onClick={() => {
+                                const reason = window.prompt('Rejection reason:') ?? '';
+                                if (reason) rejFiling.mutate({ id: f.id, reason });
+                              }}>Reject</Button>
+                            </>
+                          )}
+                          {(f.status === 'submitted' || f.status === 'accepted' || f.status === 'ready') && (
                             <Button size="sm" onClick={() => {
                               setRemitFiling(f); setRemitOpen(true);
                               setRemitDate(today); setRemitBank(''); setRemitRef('');
@@ -839,6 +926,80 @@ export default function NigeriaTaxEngine() {
             </CardContent>
           </Card>
         </TabsContent>
+        {/* -------- RECONCILIATION -------- */}
+        <TabsContent value="reconciliation">
+          <Card>
+            <CardHeader className="flex-row items-center justify-between flex-wrap gap-2">
+              <div>
+                <CardTitle>Accrued vs Filed vs Remitted</CardTitle>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Reconciles ledger accruals against submitted filings and posted remittances. Non-zero variances highlight open compliance items.
+                </p>
+              </div>
+              <div className="flex items-end gap-2">
+                <div>
+                  <Label className="text-xs">From</Label>
+                  <Input type="date" value={reconStart} onChange={e => setReconStart(e.target.value)} className="h-8 w-36" />
+                </div>
+                <div>
+                  <Label className="text-xs">To</Label>
+                  <Input type="date" value={reconEnd} onChange={e => setReconEnd(e.target.value)} className="h-8 w-36" />
+                </div>
+                <Button size="sm" variant="outline" onClick={() => refetchRecon()}>Refresh</Button>
+                <Button size="sm" variant="outline" disabled={!recon?.length} onClick={() => {
+                  const csv = toCsv(recon ?? [], [
+                    { key: 'period_month', label: 'Month' },
+                    { key: 'definition_code', label: 'Tax' },
+                    { key: 'accrued_tax', label: 'Accrued' },
+                    { key: 'filed_tax', label: 'Filed' },
+                    { key: 'remitted_tax', label: 'Remitted' },
+                    { key: 'filed_variance', label: 'Unfiled variance' },
+                    { key: 'remit_variance', label: 'Unremitted variance' },
+                  ]);
+                  downloadCsv(`ng-tax-reconciliation-${today}.csv`, csv);
+                }}>Export CSV</Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {!orgId ? (
+                <p className="text-muted-foreground">Select an organization.</p>
+              ) : (recon?.length ?? 0) === 0 ? (
+                <p className="text-muted-foreground">No ledger activity in the selected range.</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Month</TableHead><TableHead>Tax</TableHead>
+                      <TableHead className="text-right">Accrued</TableHead>
+                      <TableHead className="text-right">Filed</TableHead>
+                      <TableHead className="text-right">Remitted</TableHead>
+                      <TableHead className="text-right">Unfiled</TableHead>
+                      <TableHead className="text-right">Unremitted</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {(recon ?? []).map((r: any, i: number) => {
+                      const filedVar = Number(r.filed_variance || 0);
+                      const remitVar = Number(r.remit_variance || 0);
+                      return (
+                        <TableRow key={`${r.definition_id}-${r.period_month}-${i}`}>
+                          <TableCell className="text-xs">{String(r.period_month).slice(0,7)}</TableCell>
+                          <TableCell className="font-mono text-xs">{r.definition_code}</TableCell>
+                          <TableCell className="text-right">{fmtNaira(r.accrued_tax)}</TableCell>
+                          <TableCell className="text-right text-amber-700">{fmtNaira(r.filed_tax)}</TableCell>
+                          <TableCell className="text-right text-emerald-700">{fmtNaira(r.remitted_tax)}</TableCell>
+                          <TableCell className={`text-right ${Math.abs(filedVar) > 0.01 ? 'text-red-600 font-medium' : 'text-muted-foreground'}`}>{fmtNaira(filedVar)}</TableCell>
+                          <TableCell className={`text-right ${Math.abs(remitVar) > 0.01 ? 'text-red-600 font-medium' : 'text-muted-foreground'}`}>{fmtNaira(remitVar)}</TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
       </Tabs>
 
       {/* Generate filing dialog */}
@@ -1024,6 +1185,47 @@ export default function NigeriaTaxEngine() {
           )}
         </SheetContent>
       </Sheet>
+      {/* Submission dialog */}
+      <Dialog open={subOpen} onOpenChange={setSubOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Submit Filing</DialogTitle></DialogHeader>
+          {subFiling && (
+            <div className="space-y-4">
+              <div className="text-sm text-muted-foreground">
+                {defById.get(subFiling.definition_id)?.code} · {subFiling.period_start} → {subFiling.period_end} ·
+                <span className="font-medium ml-1">{fmtNaira(subFiling.total_tax)}</span>
+              </div>
+              <div className="space-y-2">
+                <Label>Submission mode</Label>
+                <Select value={subMode} onValueChange={(v) => setSubMode(v as SubmissionMode)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="manifest">Manifest (download CSV for portal upload)</SelectItem>
+                    <SelectItem value="manual">Manual (already submitted outside system)</SelectItem>
+                    <SelectItem value="api" disabled>Direct API (requires portal credentials)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Confirmation reference (optional)</Label>
+                <Input placeholder="Portal receipt / manifest ID" value={subRef} onChange={e => setSubRef(e.target.value)} />
+              </div>
+              <p className="text-xs text-muted-foreground border-l-2 border-blue-500 pl-2">
+                {subMode === 'manifest'
+                  ? 'A CSV manifest will be downloaded and the filing marked submitted. Upload the CSV to the FIRS TaxProMax or State IRS portal.'
+                  : 'The filing will be marked submitted. Enter the reference issued by the tax authority.'}
+              </p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSubOpen(false)}>Cancel</Button>
+            <Button onClick={() => runSubmit.mutate()} disabled={runSubmit.isPending}>
+              {runSubmit.isPending ? 'Submitting…' : 'Submit'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 }
