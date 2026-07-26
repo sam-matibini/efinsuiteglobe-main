@@ -18,7 +18,10 @@ import { useCountryTreasuryConfig } from '@/hooks/useCountryTreasuryConfig';
 
 export default function TreasurySettings() {
   const { config } = useCountryTreasuryConfig();
-  const { accounts, isLoading, enableStripeAch, enablePaysafeEft, disablePaysafeEft, setDefault } = useFundingBankAccounts();
+  const {
+    accounts, isLoading, enableStripeAch, enablePaysafeEft, disablePaysafeEft, setDefault,
+    enableNibss, disableNibss, enableRtgs, disableRtgs,
+  } = useFundingBankAccounts();
   const { roles, members, threshold, toggleRole, setThreshold } = useApprovalRoles();
   const isReadOnly = useIsReadOnly();
   const [thresholdInput, setThresholdInput] = useState<string>('');
