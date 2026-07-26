@@ -511,7 +511,17 @@ function buildRateResearchPrompt(
       prompt += `- Standard TVA (VAT) rate (18%)\n`;
       prompt += `- Zero-rated supplies\n`;
       prompt += `- Exempt supplies\n`;
+    } else if (countryCode === 'NG') {
+      prompt += `## VAT & Transactional Taxes (FIRS)\n`;
+      prompt += `Research current rates from FIRS:\n`;
+      prompt += `- Standard VAT rate (7.5%)\n`;
+      prompt += `- Zero-rated and exempt supplies\n`;
+      prompt += `- Withholding Tax rates by service type (contracts, professional, rent, dividends, directors' fees)\n`;
+      prompt += `- Companies Income Tax tiers (Small ≤₦25m, Medium ₦25m–₦100m, Large >₦100m)\n`;
+      prompt += `- Tertiary Education Tax (TET) — 3%\n`;
+      prompt += `- Capital Gains Tax and Stamp Duty\n`;
     }
+
     prompt += `Current configured tax types: ${currentTaxTypes.map(t => t.code).join(', ')}\n\n`;
   }
 
