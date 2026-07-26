@@ -308,15 +308,13 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
       })
       .filter((x): x is NavItem & { locked: boolean } => x !== null)
       .map(item => {
-        if (isReadOnly && item.children) {
-          return {
-            ...item,
-            children: item.children.filter(child => !child.hideForReadOnly),
-          };
-        }
-        return item;
+        if (!item.children) return item;
+        let children = item.children;
+        if (isReadOnly) children = children.filter(child => !child.hideForReadOnly);
+        if (countryCode && countryCode !== 'CA') children = children.filter(child => !child.hideForNonCA);
+        return { ...item, children };
       });
-  }, [baseNavigation, isModuleEnabled, isModuleInCurrentPlan, modulesLoading, isReadOnly, userRole]);
+  }, [baseNavigation, isModuleEnabled, isModuleInCurrentPlan, modulesLoading, isReadOnly, userRole, countryCode]);
 
 
   // Auto-expand parent groups when navigating to child routes
