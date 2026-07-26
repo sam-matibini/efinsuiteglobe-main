@@ -87,7 +87,11 @@ const CA: CountryTreasuryConfig = {
   sections: {
     bills: [
       { title: 'Pay bills', description: 'Pay bills easily from anywhere with your phone, tablet, or computer.', to: '/treasury/ap-payments', icon: CreditCard },
+    ],
+    taxRemittances: [
       { title: 'Pay business taxes', description: 'File and pay your Federal and Provincial government business taxes.', to: '/treasury/tax-payments', icon: Receipt, external: true },
+      { title: 'CRA Remittance Centre', description: 'Payroll, GST/HST, corporate tax and scheduled CRA remittances.', to: '/banking-payments/cra-remittance', icon: Landmark },
+      { title: 'Provincial Remittances', description: 'Revenu Québec, WSIB, WCB, EHT and PST/RST filings.', to: '/banking-payments/provincial', icon: Building2 },
     ],
     transfers: [
       { title: 'Transfer between accounts', description: 'Pay your credit card or transfer money between your accounts.', to: '/banking/transfers', icon: ArrowLeftRight },
