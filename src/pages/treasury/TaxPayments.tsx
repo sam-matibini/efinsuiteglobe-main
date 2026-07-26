@@ -32,11 +32,29 @@ export default function TaxPayments() {
   const { processTaxPayment } = useTreasuryRails();
   const { accounts: bankAccounts } = useBankAccounts();
   const isReadOnly = useIsReadOnly();
+  const { config, countryCode } = require('@/hooks/useCountryTreasuryConfig').useCountryTreasuryConfig();
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<{ amount: string; period_start: string; period_end: string; payment_method: TaxPaymentMethod; notes: string; bank_account_id: string }>({
     amount: '', period_start: '', period_end: '', payment_method: 'cra_my_payment', notes: '', bank_account_id: '',
   });
+
+  if (countryCode && countryCode !== 'CA') {
+    const dest = countryCode === 'NG' ? '/tax/nigeria' : '/tax';
+    return (
+      <div className="p-6">
+        <Card>
+          <CardHeader><CardTitle>Not available for {config.displayName}</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              This screen manages Canadian CRA remittances. For {config.displayName}, use the localized tax engine instead.
+            </p>
+            <Button asChild><a href={dest}>Open {config.displayName} Tax Engine</a></Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   const openEdit = (p: typeof payments[number]) => {
     setEditId(p.id);
