@@ -37,6 +37,8 @@ import { toast } from 'sonner';
 import { format, addDays } from 'date-fns';
 import { getCountryLocalization } from '@/data/countryLocalizations';
 import { getLocaleForCountry } from '@/lib/localizedCurrencyFormatter';
+import { recordBillTaxes } from '@/lib/ngTax/integration';
+
 
 const lineSchema = z.object({
   description: z.string().min(1, 'Description is required'),
