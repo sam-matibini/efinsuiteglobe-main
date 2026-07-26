@@ -17,6 +17,7 @@ import { useCraAccounts, CraTaxType } from '@/hooks/useCraAccounts';
 import { useIsReadOnly } from '@/hooks/useIsReadOnly';
 import { Plus, Send, Trash2, Pencil, Mail } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { useCountryTreasuryConfig } from '@/hooks/useCountryTreasuryConfig';
 
 const TYPE_LABEL: Record<TaxPaymentType, string> = {
   source_deductions: 'CRA Source Deductions (PD7A)',
