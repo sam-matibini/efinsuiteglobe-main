@@ -307,7 +307,7 @@ const HISTORICAL_RATES: Record<string, Record<number, any>> = {
         { code: 'CRA', name: 'Consolidated Relief Allowance', amount: 200000, notes: '20% of gross + higher of ₦200,000 or 1% of gross' },
       ],
       effective_date: '2025-01-01',
-      source: 'FIRS / Finance Act 2023'
+      source: 'NRS / Finance Act 2023'
     }
   }
 };
