@@ -448,6 +448,7 @@ export default function NigeriaTaxEngine() {
           <TabsTrigger value="filings">Filings</TabsTrigger>
           <TabsTrigger value="remittances">Remittances</TabsTrigger>
           <TabsTrigger value="reports">Reports</TabsTrigger>
+          <TabsTrigger value="reconciliation">Reconciliation</TabsTrigger>
           <TabsTrigger value="exemptions">Exemptions &amp; Reliefs</TabsTrigger>
         </TabsList>
 
