@@ -459,6 +459,7 @@ export default function NigeriaTaxEngine() {
                       <TableHead className="text-right">Tax</TableHead>
                       <TableHead>Status</TableHead><TableHead>JE</TableHead>
                       <TableHead>Filing</TableHead>
+                      <TableHead className="text-right">Trace</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -477,10 +478,14 @@ export default function NigeriaTaxEngine() {
                             : <span className="text-muted-foreground text-xs">unlinked</span>}
                         </TableCell>
                         <TableCell className="text-xs font-mono">{l.filing_id ? l.filing_id.slice(0, 8) : '—'}</TableCell>
+                        <TableCell className="text-right">
+                          <Button size="sm" variant="ghost" onClick={() => setTraceRow(l)}>View</Button>
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
+
               )}
             </CardContent>
           </Card>
