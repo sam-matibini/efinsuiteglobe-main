@@ -173,12 +173,44 @@ const BURUNDI_CONFIG: CountryPayrollConfig = {
   jurisdictionalTaxCredits: [],
 };
 
+// 2025 Nigeria Tax Data
+// Sources: PITA 2011 (as amended), PRA 2014, NHF Act, ECA 2010 (NSITF), ITF Act.
+const NIGERIA_CONFIG: CountryPayrollConfig = {
+  taxFormName: 'PAYE Tax Declaration',
+  taxFormDescription: '2025 NRS / State IRS statutory deductions',
+  nationalIdLabel: 'Tax Identification Number (TIN)',
+  nationalIdPlaceholder: '12345678-0001',
+  autoPopulateLabel: 'Apply NRS Defaults',
+  autoPopulateSource: 'NRS',
+  currencySymbol: '₦',
+  currencyCode: 'NGN',
+  federalDeductions: [
+    { code: 'PENSION-EE', name: 'Pension (Employee)', description: 'PRA 2014 — 8% of Basic + Housing + Transport', employeeRate: 8, employerRate: 10, isEmployeePortion: true, inputType: 'rate' },
+    { code: 'NHF', name: 'NHF', description: 'National Housing Fund — 2.5% of Basic (earning ≥ ₦3,000/month)', employeeRate: 2.5, isEmployeePortion: true, inputType: 'rate' },
+    { code: 'NSITF', name: 'NSITF', description: 'Employee Compensation — 1% of gross (employer-only)', employeeRate: 0, employerRate: 1, isEmployeePortion: false, inputType: 'rate' },
+    { code: 'ITF', name: 'ITF', description: 'Industrial Training Fund — 1% of annual payroll (employer-only, ≥5 employees)', employeeRate: 0, employerRate: 1, isEmployeePortion: false, inputType: 'boolean' },
+  ],
+  jurisdictionalDeductions: [
+    { code: 'PAYE-STATE', name: 'State PAYE', description: 'Progressive PIT withheld per PITA bands', employeeRate: 0, isEmployeePortion: true, inputType: 'rate' },
+  ],
+  federalTaxCredits: [
+    { code: 'CRA_FIXED', name: 'CRA Fixed Portion', defaultAmount: 200000, description: 'Higher of ₦200,000 or 1% of gross (annual)' },
+    { code: 'CRA_VARIABLE_PCT', name: 'CRA Variable %', defaultAmount: 20, description: '20% of gross emoluments (auto-calculated)' },
+    { code: 'PENSION_RELIEF', name: 'Pension Relief', defaultAmount: 0, description: 'Auto = actual pension contribution' },
+    { code: 'NHF_RELIEF', name: 'NHF Relief', defaultAmount: 0, description: 'Auto = actual NHF contribution' },
+    { code: 'LIFE_ASSURANCE', name: 'Life Assurance Premium (Annual)', defaultAmount: 0, description: 'Deductible life insurance premium' },
+    { code: 'GRATUITY', name: 'Gratuity', defaultAmount: 0, description: 'Exempt gratuity amount' },
+  ],
+  jurisdictionalTaxCredits: [],
+};
+
 export const COUNTRY_PAYROLL_CONFIG: Record<string, CountryPayrollConfig> = {
   CA: CANADA_CONFIG,
   US: US_CONFIG,
   ZM: ZAMBIA_CONFIG,
   KE: KENYA_CONFIG,
   BI: BURUNDI_CONFIG,
+  NG: NIGERIA_CONFIG,
 };
 
 // Get provincial/state BPA defaults for Canada (Source: CRA TD1 2025)
