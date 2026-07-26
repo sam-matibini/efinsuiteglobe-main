@@ -28,15 +28,8 @@ export default function SalesTax() {
   const confirmDelete = useConfirmDelete();
   const { organization } = useCurrentOrganization();
   const isReadOnly = useIsReadOnly();
-  const { data: taxCodes = [], isLoading: codesLoading } = useTaxCodes(organization?.id, countryCode);
-  const { data: taxReturns = [], isLoading: returnsLoading } = useTaxReturns(organization?.id);
-  const { data: settings } = useSalesTaxSettings(organization?.id);
-  const { data: accounts = [], isLoading: accountsLoading } = useAccounts(organization?.id);
-  const createTaxCode = useCreateTaxCode();
-  const updateTaxCode = useUpdateTaxCode();
-  const deleteTaxCode = useDeleteTaxCode();
 
-  // Determine country code from organization
+  // Determine country code from organization (needed for country-aware tax code derivation)
   const countryCode = useMemo(() => {
     if (organization?.country) {
       const upperCountry = organization.country.toUpperCase();
@@ -53,6 +46,15 @@ export default function SalesTax() {
     getCountryLocalization(countryCode), 
     [countryCode]
   );
+
+  const { data: taxCodes = [], isLoading: codesLoading } = useTaxCodes(organization?.id, countryCode);
+  const { data: taxReturns = [], isLoading: returnsLoading } = useTaxReturns(organization?.id);
+  const { data: settings } = useSalesTaxSettings(organization?.id);
+  const { data: accounts = [], isLoading: accountsLoading } = useAccounts(organization?.id);
+  const createTaxCode = useCreateTaxCode();
+  const updateTaxCode = useUpdateTaxCode();
+  const deleteTaxCode = useDeleteTaxCode();
+
 
   const [selectedPeriod, setSelectedPeriod] = useState<string>('');
   const [showAddCodeDialog, setShowAddCodeDialog] = useState(false);
