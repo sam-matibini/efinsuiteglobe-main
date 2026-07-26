@@ -91,6 +91,8 @@ function getStage(row: UnifiedRow): Stage {
 
 export default function PaymentHistory() {
   const { currentOrganization } = useOrganizationContext();
+  const { config } = useCountryTreasuryConfig();
+  const primaryAuthority = config.taxPayees[0]?.authority ?? 'Tax';
   const orgId = currentOrganization?.id;
   const [confirmTarget, setConfirmTarget] = useState<{ id: string; reference: string } | null>(null);
 
