@@ -233,7 +233,7 @@ export async function recordPayrollTaxes(ctx: PayrollPostContext): Promise<strin
 
     // Employee pension contribution (8%).
     if (pensionDef && stub.pension_base && stub.pension_base > 0) {
-      const pen = calculateVat(pensionDef, stub.pension_base); // percentage on base
+      const pen = calculatePercentageOnBase(pensionDef, stub.pension_base);
       const penId = await writeTaxLedger({
         organization_id: ctx.organization_id,
         result: pen,
