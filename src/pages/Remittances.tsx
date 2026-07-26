@@ -29,7 +29,7 @@ import { useRemittances, type Remittance } from '@/hooks/useRemittances';
 import { useCurrentOrganization } from '@/hooks/useOrganization';
 import { getPayrollLocalization } from '@/data/payrollLocalization';
 import { COUNTRY_LOCALIZATIONS } from '@/data/countryLocalizations';
-import { downloadRemittancePD7APdf, downloadRemittanceCsv, type RemittancePD7AData } from '@/lib/generateRemittancePD7APdf';
+import { downloadRemittancePD7APdf, downloadRemittanceCsv, downloadLocalizedRemittancePdf, downloadLocalizedRemittanceCsv, type RemittancePD7AData } from '@/lib/generateRemittancePD7APdf';
 import { toast } from 'sonner';
 
 export default function Remittances() {
@@ -182,7 +182,7 @@ export default function Remittances() {
     try {
       setDownloadingId(remittance.id);
       const data = await buildPdfData(remittance);
-      downloadRemittancePD7APdf(data);
+      downloadLocalizedRemittancePdf(data, countryCode);
       toast.success('Remittance PDF downloaded');
     } catch (e: any) {
       toast.error('Failed to generate report: ' + (e?.message || 'Unknown error'));
@@ -195,7 +195,7 @@ export default function Remittances() {
     try {
       setDownloadingId(remittance.id);
       const data = await buildPdfData(remittance);
-      downloadRemittanceCsv(data);
+      downloadLocalizedRemittanceCsv(data, countryCode);
       toast.success('Remittance CSV downloaded');
     } catch (e: any) {
       toast.error('Failed to generate CSV: ' + (e?.message || 'Unknown error'));
