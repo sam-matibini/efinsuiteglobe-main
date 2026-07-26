@@ -743,6 +743,10 @@ export default function Settings() {
           <PaymentSettingsTab />
         </TabsContent>
 
+        <TabsContent value="efinconnect" className="space-y-6">
+          <EfinconnectSettingsTab />
+        </TabsContent>
+
         <TabsContent value="billing" className="space-y-6">
           <BillingSettingsTab />
         </TabsContent>
