@@ -1,39 +1,32 @@
-# Nigeria: Rate Updates + IFRS + CoA
+## Problem
 
-Confirmed via DB: `countries.accounting_standard` for `NG` is already `IFRS`. A `Nigeria SMEs (IFRS)` CoA template exists with 62 accounts. The AI Rate Updates UI (`AutoRateUpdatesTab.tsx`) currently supports CA, US, ZM, KE, BI — Nigeria is missing from the picker, historicals, prompt, and fallback rates.
+The Compliance tab reads `public.tax_types` filtered by the org's country. Nigeria (the current org's country) has **0 rows** in `tax_types` and `tax_rates`, so the card shows "No tax types configured" and clicking "Run AI Setup to configure" doesn't help — the AI apply step only writes `organization_tax_settings` referencing `tax_types.id` rows that don't exist.
 
-## 1. AI-Powered Tax Authority Rate Updates — add Nigeria (FIRS)
+Note: the NG Tax Engine already stores full NG tax logic in `ng_tax_definitions`. The compliance tab reads a different (generic) table, which is why it looks empty.
 
-**`src/components/settings/AutoRateUpdatesTab.tsx`**
-- Add `NG: { name: 'Nigeria', flag: '🇳🇬', currency: 'NGN', authority: 'FIRS' }` to `COUNTRY_LABELS`.
-- Add `HISTORICAL_RATES.NG` for 2024 and 2025 covering: VAT 7.5%, PAYE progressive brackets (7/11/15/19/21/24%), Pension (8% ee / 10% er), NHF (2.5%), ITF (1%), NSITF (1%), CIT tiers (small 0%, medium 20%, large 30%), TET 3%, WHT common rates.
-- Add Nigeria bullet to the "Supported Countries" legend.
+## Fix
 
-**`supabase/functions/ai-rate-update/index.ts`**
-- Add `NG` entry to `systemPrompts` describing FIRS + State IRS (PAYE), Finance Act, PenCom, NHF, ITF, NSITF, TET, CIT authority scope.
-- Extend `getFallbackRates` with an `NG` branch producing:
-  - `sales_tax_changes`: VAT 7.5%, VAT-Zero, VAT-Exempt, WHT rates (contracts 5%, professional services 10%, rent 10%, dividends 10%, directors' fees 10%).
-  - `payroll_changes`: Pension, NHF, ITF, NSITF (with employee/employer split and ceilings).
-  - `tax_brackets`: Finance Act 2023 PAYE bands.
-  - `tax_credits`: Consolidated Relief Allowance (CRA — 20% + higher of ₦200,000 or 1% of gross).
-  - `authority_sources`: FIRS, PenCom, NHF, ITF, NSITF, relevant State IRS, Finance Act 2023.
-- Confidence 0.85; notes cite Finance Act 2023 and PIT Act.
+1. Seed Nigeria's `tax_types` + `tax_rates` in `public.tax_types` / `public.tax_rates` so the Compliance tab renders them and AI Setup can enable them for the org:
+   - VAT — 7.5% (consumption, default)
+   - WHT — 10% default (income_tax)
+   - CIT — 30% large / 20% medium / 0% small (income_tax)
+   - TET (Tertiary Education Tax) — 3% (income_tax)
+   - PAYE — progressive placeholder default 7% (payroll)
+   - CGT — 10% (income_tax)
+   - Stamp Duty — 0.75% (other)
 
-## 2. IFRS for Nigeria (accounting standard)
+   Each linked to Nigeria `country_id = afa3524b-4e7e-4a48-83ab-69648a263259`, with an `effective_from = 2023-01-01`, `is_default = true` on the primary rate, `is_active = true`.
 
-Already `IFRS` at country level. Enhancements:
-- Update the "Nigeria SMEs (IFRS)" CoA template to explicitly stamp `accounting_framework = 'IFRS'` on the template row (if the column exists) so downstream org creation inherits it. Verify at implementation time; skip if column absent.
-- No app code changes required beyond confirming `CreateOrganizationDialog` reads `countries.accounting_standard` for the default (spot-check during build).
+2. After the seed, `useTaxTypes(NG)` returns 7 rows and the card shows a populated table. Existing "Run AI Setup" button already upserts `organization_tax_settings` for every returned tax_type — no code change needed.
 
-## 3. Update Chart of Accounts (Nigeria IFRS template)
+3. Small UI polish: in `GlobalComplianceTab.tsx`, compute the rate column from the first `tax_rates` row instead of showing "—". (Requires selecting `tax_rates(*)` in the query.)
 
-Migration to refresh `coa_templates` + `coa_template_accounts` for the Nigeria template so it's IFRS-aligned and current with the tax engine:
-- Ensure presence of tax-liability accounts referenced by the NG tax engine: VAT Output Payable, VAT Input Recoverable, WHT Payable (Companies), WHT Payable (Individuals), PAYE Payable, Pension Payable, NHF Payable, ITF Payable, NSITF Payable, CIT Payable, TET Payable, Stamp Duty Payable, CGT Payable.
-- Add IFRS-specific presentation accounts if missing: Right-of-Use Assets, Lease Liabilities (current/non-current), Deferred Tax Asset, Deferred Tax Liability, Retained Earnings, Other Comprehensive Income (FVOCI reserve), Revaluation Surplus.
-- Idempotent inserts via `ON CONFLICT (template_id, code) DO NOTHING`.
+## Out of scope
 
-## Technical notes
+- Seeding tax_types for the other 40+ countries currently at 0 (Canada, Kenya, Burundi already seeded; other jurisdictions can be addressed on request).
+- Any change to the NG Tax Engine (`ng_tax_definitions`) — that stays as the source of truth for calculations; `tax_types` here is just the compliance display/registration list.
 
-- Framework value used across app is `IFRS` (matches existing `Organization.default_accounting_framework`).
-- Rate fallbacks return same shape as other countries so the UI table renders without code branches.
-- No RLS/policy changes; `coa_templates` is global reference data owned by service role.
+## Files
+
+- **New migration** — seed Nigeria into `tax_types` + `tax_rates`.
+- **`src/components/settings/GlobalComplianceTab.tsx`** — join `tax_rates` and render the default rate.
