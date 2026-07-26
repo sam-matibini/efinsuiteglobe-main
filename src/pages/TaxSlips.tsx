@@ -35,7 +35,7 @@ import {
 import { MoreHorizontal } from 'lucide-react';
 import { useTaxSlips } from '@/hooks/useTaxSlips';
 import { useCurrentOrganization } from '@/hooks/useOrganization';
-import { downloadT4Pdf } from '@/lib/generateT4Pdf';
+import { downloadT4Pdf, downloadTaxSlipPdf } from '@/lib/generateT4Pdf';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { getPayrollLocalization } from '@/data/payrollLocalization';
 import { COUNTRY_LOCALIZATIONS } from '@/data/countryLocalizations';
@@ -217,7 +217,7 @@ export default function TaxSlips() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => downloadT4Pdf(slip, organization?.name || 'Company')}>
+                        <DropdownMenuItem onClick={() => downloadTaxSlipPdf(slip, organization, countryCode)}>
                           <Download className="w-4 h-4 mr-2" />
                           Download PDF
                         </DropdownMenuItem>
