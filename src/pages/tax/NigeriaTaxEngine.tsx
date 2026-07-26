@@ -216,6 +216,19 @@ export default function NigeriaTaxEngine() {
     },
   });
 
+  const { data: compliance } = useQuery({
+    queryKey: ['ng-tax-compliance', orgId],
+    enabled: !!orgId,
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from('ng_tax_compliance_dashboard')
+        .select('*')
+        .eq('organization_id', orgId!)
+        .order('due_date');
+      return data ?? [];
+    },
+  });
+
   const activeByDef = useMemo(() => {
     const m = new Map<string, any>();
     (versions ?? []).forEach((v: any) => {
