@@ -9,6 +9,7 @@ import { useAPPaymentBatches } from '@/hooks/useAPPaymentBatches';
 import { Link } from 'react-router-dom';
 import { ConnectedAccountsBalanceCard } from '@/components/treasury/ConnectedAccountsBalanceCard';
 import { useCountryTreasuryConfig } from '@/hooks/useCountryTreasuryConfig';
+import { useEfinconnectPreferences } from '@/hooks/useEfinconnectPreferences';
 import type { DashboardActionDef } from '@/config/countryTreasuryConfig';
 
 function ActionCard({ title, description, to, icon: Icon, external, deliveryEstimate }: DashboardActionDef) {
@@ -60,6 +61,14 @@ export default function TreasuryDashboard() {
   const { payments } = useTaxPayments();
   const { batches } = useAPPaymentBatches();
   const { config } = useCountryTreasuryConfig();
+  const { sectionEnabled, authorityEnabled } = useEfinconnectPreferences();
+
+  // Filter bills cards to only include those whose ?authority= query param is enabled
+  const filterByAuthority = (cards: DashboardActionDef[]) =>
+    cards.filter((c) => {
+      const m = c.to.match(/authority=([^&]+)/);
+      return !m || authorityEnabled(m[1]);
+    });
 
   const pendingTax = payments.filter((p) => ['draft', 'scheduled', 'submitted'].includes(p.status));
   const paidTax = payments.filter((p) => p.status === 'paid');
@@ -138,11 +147,11 @@ export default function TreasuryDashboard() {
         <ConnectedAccountsBalanceCard />
       </div>
 
-      {/* Country-driven action grid */}
-      <Section title="Bills"                    cards={config.sections.bills} />
-      <Section title="Transfers"                cards={config.sections.transfers} />
-      <Section title="Payments & Collections"   cards={config.sections.payments} />
-      <Section title="Governance"               cards={governance} />
+      {/* Country-driven action grid (filtered by user preferences) */}
+      {sectionEnabled('bills')      && <Section title="Bills"                    cards={filterByAuthority(config.sections.bills)} />}
+      {sectionEnabled('transfers')  && <Section title="Transfers"                cards={config.sections.transfers} />}
+      {sectionEnabled('payments')   && <Section title="Payments & Collections"   cards={config.sections.payments} />}
+      {sectionEnabled('governance') && <Section title="Governance"               cards={governance} />}
     </div>
   );
 }

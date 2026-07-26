@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Building2, Users, Shield, Palette, Receipt, Plus, MapPin, Phone, Wand2, FileText, Globe, TrendingUp, Check, ChevronsUpDown, RotateCcw, AlertTriangle, CreditCard, Coins, Wallet } from 'lucide-react';
+import { Building2, Users, Shield, Palette, Receipt, Plus, MapPin, Phone, Wand2, FileText, Globe, TrendingUp, Check, ChevronsUpDown, RotateCcw, AlertTriangle, CreditCard, Coins, Wallet, Send } from 'lucide-react';
+import { EfinconnectSettingsTab } from '@/components/settings/EfinconnectSettingsTab';
 import { MultiCurrencySettingsTab } from '@/components/settings/MultiCurrencySettingsTab';
 import { TroubleshootingTab } from '@/components/admin/TroubleshootingTab';
 import { Button } from '@/components/ui/button';
@@ -297,6 +298,10 @@ export default function Settings() {
           <TabsTrigger value="payments" className="gap-2">
             <CreditCard className="w-4 h-4" />
             <span className="hidden sm:inline">Payments</span>
+          </TabsTrigger>
+          <TabsTrigger value="efinconnect" className="gap-2">
+            <Send className="w-4 h-4" />
+            <span className="hidden sm:inline">eFinconnect</span>
           </TabsTrigger>
           <TabsTrigger value="billing" className="gap-2">
             <Wallet className="w-4 h-4" />
@@ -736,6 +741,10 @@ export default function Settings() {
 
         <TabsContent value="payments" className="space-y-6">
           <PaymentSettingsTab />
+        </TabsContent>
+
+        <TabsContent value="efinconnect" className="space-y-6">
+          <EfinconnectSettingsTab />
         </TabsContent>
 
         <TabsContent value="billing" className="space-y-6">
