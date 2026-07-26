@@ -5,7 +5,7 @@
  *   - manifest : generate authority-formatted CSV manifest for manual upload
  *   - manual   : record a submission the user made outside the system
  *
- * `api` mode is stubbed; real integrations (FIRS TaxProMax, LIRS eTax) will
+ * `api` mode is stubbed; real integrations (NRS TaxProMax, LIRS eTax) will
  * plug in per-authority payload builders.
  */
 import { supabase } from '@/integrations/supabase/client';
