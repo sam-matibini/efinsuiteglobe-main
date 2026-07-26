@@ -9,6 +9,7 @@ import { useAPPaymentBatches } from '@/hooks/useAPPaymentBatches';
 import { Link } from 'react-router-dom';
 import { ConnectedAccountsBalanceCard } from '@/components/treasury/ConnectedAccountsBalanceCard';
 import { useCountryTreasuryConfig } from '@/hooks/useCountryTreasuryConfig';
+import { useEfinconnectPreferences } from '@/hooks/useEfinconnectPreferences';
 import type { DashboardActionDef } from '@/config/countryTreasuryConfig';
 
 function ActionCard({ title, description, to, icon: Icon, external, deliveryEstimate }: DashboardActionDef) {
