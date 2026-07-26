@@ -121,6 +121,10 @@ export function generatePayStubPdf(data: PayStubData): jsPDF {
   const rightCol = pageWidth / 2 + 10;
   let y = 20;
 
+  const formatCurrency = buildFormatCurrency(data.countryCode);
+  const labels = getPayrollPdfConfig(data.countryCode || 'CA').payStub;
+
+
   // ==== Header: company name (left) + employer mailing address (right) ====
   doc.setFontSize(16);
   doc.setFont('helvetica', 'bold');
