@@ -258,9 +258,9 @@ const HISTORICAL_RATES: Record<string, Record<number, any>> = {
   NG: {
     2024: {
       sales_tax: [
-        { code: 'VAT', rate: 7.5, source: 'FIRS VAT Act (Finance Act 2020)' },
-        { code: 'WHT-CONTRACT', rate: 5, source: 'FIRS WHT Regulations' },
-        { code: 'WHT-PROF', rate: 10, source: 'FIRS WHT Regulations' },
+        { code: 'VAT', rate: 7.5, source: 'NRS VAT Act (Finance Act 2020)' },
+        { code: 'WHT-CONTRACT', rate: 5, source: 'NRS WHT Regulations' },
+        { code: 'WHT-PROF', rate: 10, source: 'NRS WHT Regulations' },
       ],
       payroll: [
         { code: 'PENSION', employee_rate: 8, employer_rate: 10, source: 'PenCom PRA 2014' },
