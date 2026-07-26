@@ -1185,6 +1185,47 @@ export default function NigeriaTaxEngine() {
           )}
         </SheetContent>
       </Sheet>
+      {/* Submission dialog */}
+      <Dialog open={subOpen} onOpenChange={setSubOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Submit Filing</DialogTitle></DialogHeader>
+          {subFiling && (
+            <div className="space-y-4">
+              <div className="text-sm text-muted-foreground">
+                {defById.get(subFiling.definition_id)?.code} · {subFiling.period_start} → {subFiling.period_end} ·
+                <span className="font-medium ml-1">{fmtNaira(subFiling.total_tax)}</span>
+              </div>
+              <div className="space-y-2">
+                <Label>Submission mode</Label>
+                <Select value={subMode} onValueChange={(v) => setSubMode(v as SubmissionMode)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="manifest">Manifest (download CSV for portal upload)</SelectItem>
+                    <SelectItem value="manual">Manual (already submitted outside system)</SelectItem>
+                    <SelectItem value="api" disabled>Direct API (requires portal credentials)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Confirmation reference (optional)</Label>
+                <Input placeholder="Portal receipt / manifest ID" value={subRef} onChange={e => setSubRef(e.target.value)} />
+              </div>
+              <p className="text-xs text-muted-foreground border-l-2 border-blue-500 pl-2">
+                {subMode === 'manifest'
+                  ? 'A CSV manifest will be downloaded and the filing marked submitted. Upload the CSV to the FIRS TaxProMax or State IRS portal.'
+                  : 'The filing will be marked submitted. Enter the reference issued by the tax authority.'}
+              </p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSubOpen(false)}>Cancel</Button>
+            <Button onClick={() => runSubmit.mutate()} disabled={runSubmit.isPending}>
+              {runSubmit.isPending ? 'Submitting…' : 'Submit'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 }
