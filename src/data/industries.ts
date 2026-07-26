@@ -6,7 +6,7 @@ export interface IndustryConfig {
   label: string;
   description: string;
   icon: string;
-  accountingFramework: 'ASPE' | 'ASNPO' | 'IFRS';
+  accountingFramework: 'ASPE' | 'ASNPO' | 'IFRS' | 'IFRS_SME';
   specializedAccounts: string[];
   cogsRequired: boolean;
   inventoryRequired: boolean;
@@ -59,6 +59,7 @@ export const INDUSTRIES: IndustryConfig[] = [
   { value: 'transportation_logistics', label: 'Transportation & Logistics', description: 'Freight, shipping, fleet', icon: 'Truck', accountingFramework: 'ASPE', specializedAccounts: ['Fleet Assets', 'Fuel Costs', 'Freight Revenue'], cogsRequired: true, inventoryRequired: false },
   { value: 'venture_capital', label: 'Venture Capital & Private Equity', description: 'Investment funds, PE firms', icon: 'TrendingUp', accountingFramework: 'IFRS', specializedAccounts: ['Portfolio Investments', 'Carried Interest', 'Management Fees'], cogsRequired: false, inventoryRequired: false },
   { value: 'wholesale', label: 'Wholesale & Distribution', description: 'Wholesale trade, distributors', icon: 'Package', accountingFramework: 'ASPE', specializedAccounts: ['Inventory', 'Freight-In', 'Volume Discounts'], cogsRequired: true, inventoryRequired: true },
+  { value: 'security_intelligence', label: 'Security & Intelligence', description: 'Guarding, investigations, cyber-intel, protective services', icon: 'ShieldCheck', accountingFramework: 'IFRS', specializedAccounts: ['Guarding Services Revenue', 'Guard Wages & Allowances', 'Uniforms & PPE', 'Firearms & Ammunition', 'Surveillance Equipment', 'Regulatory Bond Payable', 'NSCDC Licensing'], cogsRequired: true, inventoryRequired: true },
   { value: 'other', label: 'Other', description: 'Other industries not listed', icon: 'MoreHorizontal', accountingFramework: 'ASPE', specializedAccounts: [], cogsRequired: false, inventoryRequired: false },
 ];
 
@@ -80,9 +81,17 @@ export function isNpoIndustry(industryValue: string): boolean {
 }
 
 // Get industries by accounting framework
-export function getIndustriesByFramework(framework: 'ASPE' | 'ASNPO' | 'IFRS'): IndustryConfig[] {
+export function getIndustriesByFramework(framework: 'ASPE' | 'ASNPO' | 'IFRS' | 'IFRS_SME'): IndustryConfig[] {
   return INDUSTRIES.filter(ind => ind.accountingFramework === framework);
 }
+
+// Human-readable label for an accounting framework
+export const ACCOUNTING_FRAMEWORK_LABELS: Record<'ASPE' | 'ASNPO' | 'IFRS' | 'IFRS_SME', string> = {
+  ASPE: 'ASPE',
+  ASNPO: 'ASNPO',
+  IFRS: 'Full IFRS',
+  IFRS_SME: 'IFRS for SMEs',
+};
 
 // Industry type for TypeScript
 export type IndustryType = typeof INDUSTRIES[number]['value'];
