@@ -280,13 +280,13 @@ const HISTORICAL_RATES: Record<string, Record<number, any>> = {
         { code: 'CRA', name: 'Consolidated Relief Allowance', amount: 200000, notes: '20% of gross + higher of ₦200,000 or 1% of gross' },
       ],
       effective_date: '2024-01-01',
-      source: 'FIRS / Finance Act 2023'
+      source: 'NRS / Finance Act 2023'
     },
     2025: {
       sales_tax: [
-        { code: 'VAT', rate: 7.5, source: 'FIRS VAT Act (Finance Act 2020)' },
-        { code: 'WHT-CONTRACT', rate: 5, source: 'FIRS WHT Regulations' },
-        { code: 'WHT-PROF', rate: 10, source: 'FIRS WHT Regulations' },
+        { code: 'VAT', rate: 7.5, source: 'NRS VAT Act (Finance Act 2020)' },
+        { code: 'WHT-CONTRACT', rate: 5, source: 'NRS WHT Regulations' },
+        { code: 'WHT-PROF', rate: 10, source: 'NRS WHT Regulations' },
         { code: 'TET', rate: 3, source: 'Finance Act 2023' },
       ],
       payroll: [
