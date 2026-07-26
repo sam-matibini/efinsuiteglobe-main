@@ -53,6 +53,7 @@ import { useOrganizationContext } from '@/hooks/useOrganizationContext';
 import { useAuth } from '@/hooks/useAuth';
 import { usePayrollLocalization } from '@/hooks/usePayrollLocalization';
 import { useEnabledModules, ModuleCode } from '@/hooks/useEnabledModules';
+import { useCountryTreasuryConfig } from '@/hooks/useCountryTreasuryConfig';
 
 import { CreateOrganizationDialog } from '@/components/accounts/CreateOrganizationDialog';
 import { SearchableOrgSwitcher } from '@/components/layout/SearchableOrgSwitcher';
