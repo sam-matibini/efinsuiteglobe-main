@@ -337,3 +337,40 @@ export function downloadT4Pdf(slip: TaxSlip, organizationName: string): void {
     employerAccountNumber: slip.employer_account_number || undefined,
   });
 }
+
+// Country-aware dispatcher — CA uses the pixel-perfect bilingual T4 above;
+// all other countries render via the generic statutory-slip renderer.
+import { generateGenericStatutorySlipPdf } from './payroll/drawGenericStatutorySlip';
+import { getPayrollLocalization } from '@/data/payrollLocalization';
+
+export function downloadTaxSlipPdf(
+  slip: TaxSlip,
+  organization: any,
+  countryCode: string,
+): void {
+  const cc = (countryCode || 'CA').toUpperCase();
+  if (cc === 'CA') {
+    downloadT4Pdf(slip, organization?.name || 'Company');
+    return;
+  }
+  const loc = getPayrollLocalization(cc);
+  const address = [
+    organization?.address_line1,
+    [organization?.city, organization?.province, organization?.postal_code].filter(Boolean).join(' '),
+  ].filter(Boolean).join(', ');
+  generateGenericStatutorySlipPdf({
+    slip,
+    countryCode: cc,
+    currencyCode: loc.currencyCode,
+    currencyLocale: loc.currencyLocale,
+    employerName: organization?.legal_name || organization?.name || 'Employer',
+    employerAddress: address || undefined,
+    employerTaxId:
+      organization?.tax_identification_number ||
+      organization?.business_number ||
+      organization?.payroll_account_number,
+    employerAccountNumber:
+      slip.employer_account_number || organization?.payroll_account_number,
+  });
+}
+

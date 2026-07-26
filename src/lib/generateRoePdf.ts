@@ -212,3 +212,34 @@ export function downloadRoePdf(roe: RoERecord, organizationName: string): void {
     employerName: organizationName,
   });
 }
+
+// Country-aware dispatcher — CA keeps the ROE layout; other countries produce
+// a country-appropriate separation document (Certificate of Service, P45,
+// Attestation de Travail, Termination Letter, Separation Notice…).
+import { generateGenericSeparationDocPdf } from './payroll/drawGenericSeparationDoc';
+import { getPayrollLocalization } from '@/data/payrollLocalization';
+
+export function downloadSeparationDocPdf(
+  roe: RoERecord,
+  organization: any,
+  countryCode: string,
+): void {
+  const cc = (countryCode || 'CA').toUpperCase();
+  if (cc === 'CA') {
+    downloadRoePdf(roe, organization?.name || 'Employer');
+    return;
+  }
+  const loc = getPayrollLocalization(cc);
+  generateGenericSeparationDocPdf({
+    roe,
+    countryCode: cc,
+    employerName: organization?.legal_name || organization?.name || 'Employer',
+    employerTaxId:
+      organization?.tax_identification_number ||
+      organization?.business_number ||
+      organization?.payroll_account_number,
+    currencyCode: loc.currencyCode,
+    currencyLocale: loc.currencyLocale,
+  });
+}
+
