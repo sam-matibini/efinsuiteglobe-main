@@ -112,6 +112,20 @@ export default function TreasurySettings() {
                         ? <Badge className="gap-1"><CheckCircle2 className="h-3 w-3" />Enabled</Badge>
                         : <Badge variant="secondary">Disabled</Badge>}
                     </TableCell>
+                    {config.countryCode === 'NG' && (
+                      <>
+                        <TableCell>
+                          {a.isNibssEnabled
+                            ? <Badge className="gap-1"><CheckCircle2 className="h-3 w-3" />Enabled</Badge>
+                            : <Badge variant="secondary">Disabled</Badge>}
+                        </TableCell>
+                        <TableCell>
+                          {a.isRtgsEnabled
+                            ? <Badge className="gap-1"><CheckCircle2 className="h-3 w-3" />Enabled</Badge>
+                            : <Badge variant="secondary">Disabled</Badge>}
+                        </TableCell>
+                      </>
+                    )}
                     <TableCell>
                       {a.isDefault && <Badge variant="outline" className="gap-1"><Star className="h-3 w-3" />Default</Badge>}
                     </TableCell>
