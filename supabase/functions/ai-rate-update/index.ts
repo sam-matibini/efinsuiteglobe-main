@@ -585,12 +585,21 @@ function buildRateResearchPrompt(
       prompt += `### IPR (Impôt Professionnel sur les Rémunérations)\n`;
       prompt += `- Personal income tax brackets and rates\n`;
       prompt += `- Tax-free threshold\n`;
+    } else if (countryCode === 'NG') {
+      prompt += `## Payroll Rates (Nigeria — FIRS / State IRS / PenCom / NHF / ITF / NSITF)\n`;
+      prompt += `Research the ${year} rates for:\n`;
+      prompt += `### Pension (PenCom PRA 2014)\n- Employee 8%, Employer 10% of monthly emoluments\n\n`;
+      prompt += `### NHF (National Housing Fund)\n- Employee 2.5% (employees earning ≥ ₦3,000/month)\n\n`;
+      prompt += `### ITF (Industrial Training Fund)\n- Employer 1% of annual payroll (5+ employees or ₦50m+ turnover)\n\n`;
+      prompt += `### NSITF (Employee Compensation Scheme)\n- Employer 1% of monthly payroll\n\n`;
+      prompt += `### PAYE Tax Brackets (PIT Act Sixth Schedule)\n- All progressive bands (7/11/15/19/21/24%)\n- Consolidated Relief Allowance (higher of ₦200,000 or 1% of gross + 20% of gross)\n`;
     }
 
     prompt += `\nCurrent configured payroll deductions: ${currentPayrollTypes.map(d => d.code).join(', ')}\n\n`;
   }
 
-  const currencyMap: Record<string, string> = { CA: 'CAD', US: 'USD', ZM: 'ZMW', KE: 'KES', BI: 'BIF' };
+  const currencyMap: Record<string, string> = { CA: 'CAD', US: 'USD', ZM: 'ZMW', KE: 'KES', BI: 'BIF', NG: 'NGN' };
+
   prompt += `## Response Requirements:\n`;
   prompt += `1. All amounts in ${currencyMap[countryCode] || 'local currency'}\n`;
   prompt += `2. Cite the specific ${authority.name} publication or webpage for each rate\n`;
