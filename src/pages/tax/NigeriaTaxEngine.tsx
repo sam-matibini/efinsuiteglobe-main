@@ -308,6 +308,38 @@ export default function NigeriaTaxEngine() {
     onError: (e: any) => toast.error(e.message ?? 'Failed to post remittance'),
   });
 
+  // ---- Traceability drawer ----
+  const [traceRow, setTraceRow] = useState<any>(null);
+
+  // ---- Exemption dialog ----
+  const [exOpen, setExOpen] = useState(false);
+  const [exDef, setExDef] = useState('');
+  const [exScope, setExScope] = useState('customer');
+  const [exFrom, setExFrom] = useState(today);
+  const [exTo, setExTo] = useState('');
+  const [exReason, setExReason] = useState('');
+  const createExemption = useMutation({
+    mutationFn: async () => {
+      if (!orgId || !exDef) throw new Error('Select a tax definition');
+      const { error } = await (supabase.from('ng_tax_exemptions') as any).insert({
+        organization_id: orgId,
+        definition_id: exDef,
+        scope: exScope,
+        effective_from: exFrom,
+        effective_to: exTo || null,
+        reason: exReason || null,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('Exemption added');
+      setExOpen(false); setExDef(''); setExReason(''); setExTo('');
+      qc.invalidateQueries({ queryKey: ['ng-tax-exemptions', orgId] });
+    },
+    onError: (e: any) => toast.error(e.message ?? 'Failed'),
+  });
+
+
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div>
