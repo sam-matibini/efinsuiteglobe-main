@@ -14350,6 +14350,8 @@ export type Database = {
       }
       ng_tax_filings: {
         Row: {
+          acknowledged_at: string | null
+          acknowledgment_reference: string | null
           confirmation_reference: string | null
           created_at: string
           definition_id: string
@@ -14360,7 +14362,10 @@ export type Database = {
           organization_id: string
           period_end: string
           period_start: string
+          rejection_reason: string | null
           status: string
+          submission_mode: string | null
+          submission_payload: Json | null
           submitted_at: string | null
           submitted_by: string | null
           total_tax: number | null
@@ -14368,6 +14373,8 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          acknowledged_at?: string | null
+          acknowledgment_reference?: string | null
           confirmation_reference?: string | null
           created_at?: string
           definition_id: string
@@ -14378,7 +14385,10 @@ export type Database = {
           organization_id: string
           period_end: string
           period_start: string
+          rejection_reason?: string | null
           status?: string
+          submission_mode?: string | null
+          submission_payload?: Json | null
           submitted_at?: string | null
           submitted_by?: string | null
           total_tax?: number | null
@@ -14386,6 +14396,8 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          acknowledged_at?: string | null
+          acknowledgment_reference?: string | null
           confirmation_reference?: string | null
           created_at?: string
           definition_id?: string
@@ -14396,7 +14408,10 @@ export type Database = {
           organization_id?: string
           period_end?: string
           period_start?: string
+          rejection_reason?: string | null
           status?: string
+          submission_mode?: string | null
+          submission_payload?: Json | null
           submitted_at?: string | null
           submitted_by?: string | null
           total_tax?: number | null
@@ -28771,6 +28786,31 @@ export type Database = {
           p_period_start: string
         }
         Returns: string
+      }
+      ng_get_reconciliation: {
+        Args: {
+          p_organization_id: string
+          p_period_end: string
+          p_period_start: string
+        }
+        Returns: {
+          accrued_tax: number
+          definition_code: string
+          definition_id: string
+          filed_tax: number
+          filed_variance: number
+          period_month: string
+          remit_variance: number
+          remitted_tax: number
+        }[]
+      }
+      ng_mark_filing_acknowledged: {
+        Args: { p_ack_reference?: string; p_filing_id: string }
+        Returns: undefined
+      }
+      ng_mark_filing_rejected: {
+        Args: { p_filing_id: string; p_reason: string }
+        Returns: undefined
       }
       ng_post_remittance: {
         Args: {
