@@ -1069,7 +1069,7 @@ export default function NigeriaTaxEngine() {
               </div>
               <div className="space-y-2">
                 <Label>Reference / receipt</Label>
-                <Input placeholder="FIRS receipt no." value={remitRef} onChange={e => setRemitRef(e.target.value)} />
+                <Input placeholder="NRS receipt no." value={remitRef} onChange={e => setRemitRef(e.target.value)} />
               </div>
               <p className="text-xs text-muted-foreground border-l-2 border-emerald-500 pl-2">
                 A journal entry will be posted automatically: <b>Dr</b> tax liability, <b>Cr</b> selected bank —
