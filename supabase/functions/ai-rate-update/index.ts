@@ -512,8 +512,8 @@ function buildRateResearchPrompt(
       prompt += `- Zero-rated supplies\n`;
       prompt += `- Exempt supplies\n`;
     } else if (countryCode === 'NG') {
-      prompt += `## VAT & Transactional Taxes (FIRS)\n`;
-      prompt += `Research current rates from FIRS:\n`;
+      prompt += `## VAT & Transactional Taxes (NRS)\n`;
+      prompt += `Research current rates from NRS:\n`;
       prompt += `- Standard VAT rate (7.5%)\n`;
       prompt += `- Zero-rated and exempt supplies\n`;
       prompt += `- Withholding Tax rates by service type (contracts, professional, rent, dividends, directors' fees)\n`;
