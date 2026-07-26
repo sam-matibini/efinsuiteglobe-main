@@ -10,26 +10,26 @@ import { supabase } from '@/integrations/supabase/client';
 import type { NgLedgerWriteInput } from './types';
 
 export async function writeTaxLedger(input: NgLedgerWriteInput): Promise<string | null> {
-  const { data, error } = await supabase
-    .from('ng_tax_transaction_ledger')
-    .insert({
-      organization_id: input.organization_id,
-      definition_id: input.result.definition_id,
-      rate_version_id: input.result.rate_version_id,
-      service_classification_id: input.service_classification_id ?? null,
-      source_type: input.source_type,
-      source_id: input.source_id ?? null,
-      source_parent_id: input.source_parent_id ?? null,
-      transaction_date: input.transaction_date,
-      taxable_base: input.result.taxable_base,
-      tax_rate: input.result.tax_rate,
-      tax_amount: input.result.tax_amount,
-      currency: input.result.currency,
-      journal_entry_id: input.journal_entry_id ?? null,
-      journal_entry_line_id: input.journal_entry_line_id ?? null,
-      breakdown: input.result.breakdown as unknown as Record<string, unknown>,
-      status: 'accrued',
-    })
+  const row: any = {
+    organization_id: input.organization_id,
+    definition_id: input.result.definition_id,
+    rate_version_id: input.result.rate_version_id,
+    service_classification_id: input.service_classification_id ?? null,
+    source_type: input.source_type,
+    source_id: input.source_id ?? null,
+    source_parent_id: input.source_parent_id ?? null,
+    transaction_date: input.transaction_date,
+    taxable_base: input.result.taxable_base,
+    tax_rate: input.result.tax_rate,
+    tax_amount: input.result.tax_amount,
+    currency: input.result.currency,
+    journal_entry_id: input.journal_entry_id ?? null,
+    journal_entry_line_id: input.journal_entry_line_id ?? null,
+    breakdown: input.result.breakdown as unknown as Record<string, unknown>,
+    status: 'accrued',
+  };
+  const { data, error } = await (supabase.from('ng_tax_transaction_ledger') as any)
+    .insert(row)
     .select('id')
     .maybeSingle();
   if (error) {

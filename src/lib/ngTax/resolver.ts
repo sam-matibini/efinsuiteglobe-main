@@ -51,7 +51,7 @@ export async function resolveTaxByCode(
     .order('effective_from', { ascending: false });
   const version = (versions ?? []).find(
     (v: any) => v.effective_to == null || v.effective_to >= asOf,
-  ) as NgTaxRateVersion | undefined;
+  ) as unknown as NgTaxRateVersion | undefined;
   if (!version) return null;
   return { definition, version };
 }
