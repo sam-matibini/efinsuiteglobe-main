@@ -68,6 +68,13 @@ const NAME_TO_CODE: Record<string, string> = {
   'south africa': 'ZA',
   ghana: 'GH',
   kenya: 'KE',
+  zambia: 'ZM',
+  burundi: 'BI',
+  rwanda: 'RW',
+  tanzania: 'TZ',
+  uganda: 'UG',
+  malawi: 'MW',
+  zimbabwe: 'ZW',
 };
 
 export function normalizeCountryCode(raw?: string | null): string | null {
@@ -92,7 +99,15 @@ const CODE_TO_NAME: Record<string, string> = {
   ZA: 'South Africa',
   GH: 'Ghana',
   KE: 'Kenya',
+  ZM: 'Zambia',
+  BI: 'Burundi',
+  RW: 'Rwanda',
+  TZ: 'Tanzania',
+  UG: 'Uganda',
+  MW: 'Malawi',
+  ZW: 'Zimbabwe',
 };
+
 
 export function countryName(code: string): string {
   return CODE_TO_NAME[code] ?? code;
