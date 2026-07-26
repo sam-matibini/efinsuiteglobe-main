@@ -1,21 +1,22 @@
 import { useCallback, useEffect, useState } from 'react';
 
+/**
+ * Country scope (ISO alpha-2) — the primary D365-style scope.
+ * When set, the org switcher and every localized module is restricted
+ * to organizations/data for that country. `null` means "not yet chosen".
+ */
 const KEY = 'efs.country_filter';
 const EVENT = 'efs:country-filter-change';
 
 function read(): string | null {
   try {
     const v = localStorage.getItem(KEY);
-    return v && v.trim() ? v : null;
+    return v && v.trim() ? v.toUpperCase() : null;
   } catch {
     return null;
   }
 }
 
-/**
- * Global country filter (ISO alpha-2) used to scope the org switcher.
- * `null` = All countries.
- */
 export function useCountryFilter() {
   const [country, setCountryState] = useState<string | null>(() => read());
 
@@ -31,7 +32,7 @@ export function useCountryFilter() {
 
   const setCountry = useCallback((code: string | null) => {
     try {
-      if (code) localStorage.setItem(KEY, code);
+      if (code) localStorage.setItem(KEY, code.toUpperCase());
       else localStorage.removeItem(KEY);
     } catch {
       /* ignore */
@@ -43,6 +44,9 @@ export function useCountryFilter() {
 
   return { country, setCountry, clear };
 }
+
+/** Alias — country scope is now the primary selector, not just a filter. */
+export const useCountryScope = useCountryFilter;
 
 /** Best-effort normalization of an Organization.country string to ISO alpha-2. */
 const NAME_TO_CODE: Record<string, string> = {
@@ -100,4 +104,13 @@ export function countryFlag(code: string): string {
   const cc = code.toUpperCase();
   const A = 0x1f1e6;
   return String.fromCodePoint(A + (cc.charCodeAt(0) - 65), A + (cc.charCodeAt(1) - 65));
+}
+
+const EU_COUNTRIES = new Set([
+  'AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT',
+  'LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE',
+]);
+
+export function isEuCountry(code?: string | null): boolean {
+  return !!code && EU_COUNTRIES.has(code.toUpperCase());
 }
