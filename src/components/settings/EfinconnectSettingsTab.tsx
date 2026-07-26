@@ -22,11 +22,12 @@ export function EfinconnectSettingsTab() {
   // Unique authority list from taxPayees
   const authorities = Array.from(new Set(config.taxPayees.map((p) => p.authority)));
 
-  const sectionKeys: Array<{ key: 'bills' | 'transfers' | 'payments' | 'governance'; label: string; hint: string }> = [
-    { key: 'bills',      label: 'Bills',                 hint: 'Pay bills and taxes' },
-    { key: 'transfers',  label: 'Transfers',             hint: 'Move money between accounts and rails' },
-    { key: 'payments',   label: 'Payments & Collections', hint: 'Payment links, connect payouts, scheduled' },
-    { key: 'governance', label: 'Governance',            hint: 'Approvals, history and settings' },
+  const sectionKeys: Array<{ key: 'bills' | 'taxRemittances' | 'transfers' | 'payments' | 'governance'; label: string; hint: string }> = [
+    { key: 'bills',          label: 'Bills',                   hint: 'Pay vendor bills and salaries' },
+    { key: 'taxRemittances', label: 'Taxes & Remittances',     hint: 'Remit taxes to CRA, IRS, NRS, ZRA and other authorities' },
+    { key: 'transfers',      label: 'Transfers',               hint: 'Move money between accounts and rails' },
+    { key: 'payments',       label: 'Payments & Collections',  hint: 'Payment links, connect payouts, scheduled' },
+    { key: 'governance',     label: 'Governance',              hint: 'Approvals, history and settings' },
   ];
 
   return (
