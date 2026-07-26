@@ -139,7 +139,7 @@ export function CreateBillDialog({ open, onOpenChange }: CreateBillDialogProps) 
       if (billError) throw billError;
 
       // Create bill lines
-      const { error: linesError } = await supabase
+      const { data: insertedBillLines, error: linesError } = await supabase
         .from('bill_lines')
         .insert(
           data.lines.map((line, idx) => ({
@@ -152,9 +152,28 @@ export function CreateBillDialog({ open, onOpenChange }: CreateBillDialogProps) 
             tax_amount: (line.quantity * line.unit_price) * ((line.tax_rate || 0) / 100),
             line_order: idx,
           }))
-        );
+        )
+        .select('id, amount, tax_amount');
 
       if (linesError) throw linesError;
+
+      // NG Tax Engine — record WHT + input VAT (no-op for non-NG orgs)
+      try {
+        await recordBillTaxes({
+          organization_id: organization.id,
+          bill_id: bill.id,
+          bill_date: data.bill_date,
+          journal_entry_id: null,
+          lines: (insertedBillLines ?? []).map((l: any) => ({
+            id: l.id,
+            taxable_amount: Number(l.amount) || 0,
+            vat_input_amount: Number(l.tax_amount) || 0,
+          })),
+        });
+      } catch (ngErr) {
+        console.warn('NG tax ledger write skipped:', ngErr);
+      }
+
 
       queryClient.invalidateQueries({ queryKey: ['bills'] });
       toast.success('Bill created successfully');
