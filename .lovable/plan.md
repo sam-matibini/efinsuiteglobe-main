@@ -1,60 +1,38 @@
-## Problem
 
-On `/tax` for a Zambia-scoped organization, the **Tax Codes** tab shows Canadian codes (GST 5%, HST-ON 13%, HST-ATL 15%, PST-BC/SK/MB, QST), not Zambian VAT.
+## Goal
 
-## Root cause (verified)
+On the Payment Links create dialog (and any other Nigeria payout picker on `/banking-payments/*`), when the active country scope is Nigeria, offer a country-appropriate "Default payout method" strip similar to the reference mockup:
 
-`src/hooks/useSalesTax.ts` → `useTaxCodes` (lines 173–422):
+`None · NIBSS (NG) · Bank · Mobile Money`
 
-- Queries `tax_codes` for the org. If empty (typical for Zambia orgs today), it falls into a derivation branch that **unconditionally** pushes Canadian GST/HST/PST/QST rows into the result, regardless of `organization.country`.
-- The Zambia UI copy in `SalesTax.tsx` already exists ("VAT management and ZRA reporting"), but the underlying tax-code list is hard-wired to Canada.
+with Bank Name (lookup) and Account Number as the key input fields. Mobile Money is optional and includes an **eFinMoney** provider entry alongside MTN MoMo, Airtel Money, OPay, PalmPay, Moniepoint, Kuda.
 
-No `tax_codes` rows exist for Zambia orgs; the fix is in the derivation logic (frontend hook), not in the DB.
+## Changes
 
-## Fix
+### 1. Add Nigeria to `src/data/localizedBankingInstitutions.ts`
+- New `NG` entry in `BANKING_INSTITUTIONS`:
+  - `currency: 'NGN'`, `accountNumberFormat: { label: 'Account Number', pattern: '^\\d{10}$', placeholder: '0123456789', helperText: '10-digit NUBAN' }`.
+  - `clearingHouses`: NIBSS NIP (instant), NEFT (T+1), RTGS (same-day).
+  - `commercialBanks`: full CBN-licensed list — Access, Zenith, GTBank, First Bank, UBA, Fidelity, FCMB, Union, Sterling, Stanbic IBTC, Ecobank, Wema, Polaris, Keystone, Providus, Unity, Titan Trust, Globus, Heritage, Citibank NG, Standard Chartered NG, SunTrust, Jaiz (non-interest), TAJ, Lotus (non-interest), Optimus, Signature, Premium Trust, Parallex, Coronation, Rand Merchant Bank NG, Nova Merchant, FSDH Merchant, FBNQuest Merchant, Greenwich Merchant.
+  - `microfinance`: Kuda MFB, Moniepoint MFB, OPay Digital, PalmPay, Sparkle, Rubies, VFD MFB, Mint MFB, Fairmoney MFB.
+  - `mobileMoneyProviders`: **eFinMoney**, MTN MoMo PSB, Airtel SmartCash PSB, 9mobile 9PSB, OPay Wallet, PalmPay Wallet, Paga.
 
-Make the derivation in `useTaxCodes` country-aware, keyed off `organization.country`.
+### 2. Country-aware payout method strip in Payment Links dialog (`src/pages/treasury/PaymentLinks.tsx`)
+- Read `useCountryScope()`. When `country === 'NG'`, replace the current `Accepted methods` select with a segmented button group:
+  - `None`, `NIBSS (NG)`, `Bank`, `Mobile Money`.
+- When `Bank` is selected, render:
+  - **Bank Name** — `Combobox` populated from `getCommercialBanks('NG')` + `getMicrofinanceInstitutions('NG')`, with type-ahead lookup.
+  - **Account Number** — `Input` validated against the NG `accountNumberFormat` (10 digits).
+- When `Mobile Money` is selected, render:
+  - **Provider** — `Select` from `getMobileMoneyProviders('NG')` (includes eFinMoney).
+  - **Wallet / Phone Number** — `Input` (11-digit MSISDN).
+- Persist selection into the existing `form.payment_method` (`bank_ng` / `mobile_money_ng`) plus new `form.payout_bank_code`, `form.payout_account_number`, `form.payout_wallet_provider`, `form.payout_wallet_number`.
+- For non-NG scopes, keep the current Card/EFT/Interac controls untouched.
 
-### 1. Extend `useTaxCodes` signature
-
-Accept the country code alongside `organizationId`:
-
-```ts
-useTaxCodes(organizationId, countryCode)
-```
-
-Update the single caller in `src/pages/SalesTax.tsx` (already computes `countryCode`) to pass it in. Other call sites keep the current CA default.
-
-### 2. Branch the derived-codes list by country
-
-Replace the current Canadian-only block with a switch on `countryCode`:
-
-- **ZM (Zambia)** — ZRA VAT Act:
-  - `E` Exempt (0%) — medical, education, financial services
-  - `VAT` Standard-rated VAT (16%) — `tax_type: 'VAT'`, recoverable
-  - `VAT-ZR` Zero-rated (0%) — exports, prescribed supplies
-  - `VAT-EX` VAT Exempt supplies (0%)
-  - `IPL` Insurance Premium Levy (5%) — non-recoverable
-  - `TL` Tourism Levy (1.5%) — non-recoverable
-- **KE (Kenya)** — KRA: `VAT` 16%, `VAT-ZR` 0%, `VAT-EX` 0%
-- **NG (Nigeria)** — NRS: `VAT` 7.5%, `VAT-ZR` 0%, `VAT-EX` 0%, `WHT-CONTRACT` 5%, `WHT-PROF` 10%
-- **BI (Burundi)** — OBR: `TVA` 18%, `TVA-ZR` 0%, `TVA-EX` 0%
-- **GB (UK)** — HMRC: `VAT-STD` 20%, `VAT-RED` 5%, `VAT-ZR` 0%, `VAT-EX` 0%
-- **CA / default** — keep the existing Canadian block unchanged
-
-Each derived code uses the current shape (`generateDeterministicUuid`, `gl_collected_account_id`/`gl_paid_account_id` mapped from `sales_tax_settings` where a match exists, else `null`; province tab column stays "Federal" / "-" for non-Canadian rows so the existing table renders cleanly).
-
-### 3. No DB migration required
-
-The derived codes render in the Tax Codes list and flow through the existing tax-selection UI. Users can still click **+ Add Tax Code** to persist overrides into `public.tax_codes`, at which point the DB rows take precedence exactly as they do today for Canadian orgs.
-
-## Files touched
-
-- `src/hooks/useSalesTax.ts` — country-aware derivation branch inside `useTaxCodes`
-- `src/pages/SalesTax.tsx` — pass `countryCode` into `useTaxCodes(organization?.id, countryCode)`
+### 3. Small shared helper
+- Add `getNigerianBanks()` and `getNigerianMobileProviders()` re-exports in `src/data/localizedBankingInstitutions.ts` for reuse by future vendor / employee payout forms.
 
 ## Out of scope
 
-- Editing existing Canadian defaults
-- Changing `sales_tax_settings` schema or seeding per-country rows
-- Reworking the VAT return posting logic (already country-aware via `taxTerminology`)
+- No DB migration; the new fields are stored inside `payment_links.metadata` (already JSONB). Real settlement wiring to NIBSS / eFinMoney stays as-is.
+- No changes to CA/US/ZM payout flows.
