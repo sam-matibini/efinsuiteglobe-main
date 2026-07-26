@@ -14548,6 +14548,8 @@ export type Database = {
           journal_entry_id: string | null
           organization_id: string
           payment_date: string
+          receipt_storage_path: string | null
+          receipt_uploaded_at: string | null
           reference: string | null
           status: string
           updated_at: string
@@ -14563,6 +14565,8 @@ export type Database = {
           journal_entry_id?: string | null
           organization_id: string
           payment_date: string
+          receipt_storage_path?: string | null
+          receipt_uploaded_at?: string | null
           reference?: string | null
           status?: string
           updated_at?: string
@@ -14578,6 +14582,8 @@ export type Database = {
           journal_entry_id?: string | null
           organization_id?: string
           payment_date?: string
+          receipt_storage_path?: string | null
+          receipt_uploaded_at?: string | null
           reference?: string | null
           status?: string
           updated_at?: string
@@ -27926,6 +27932,39 @@ export type Database = {
             columns: ["vendor_id"]
             isOneToOne: false
             referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ng_tax_compliance_dashboard: {
+        Row: {
+          accrued_count: number | null
+          accrued_tax: number | null
+          definition_code: string | null
+          definition_id: string | null
+          definition_name: string | null
+          due_date: string | null
+          filed_unremitted_tax: number | null
+          filing_frequency: string | null
+          organization_id: string | null
+          period_end: string | null
+          period_month: string | null
+          tax_category: string | null
+          urgency: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ng_tax_transaction_ledger_definition_id_fkey"
+            columns: ["definition_id"]
+            isOneToOne: false
+            referencedRelation: "ng_tax_definitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ng_tax_transaction_ledger_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
