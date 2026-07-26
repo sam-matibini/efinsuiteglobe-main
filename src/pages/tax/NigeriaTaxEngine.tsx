@@ -694,11 +694,22 @@ export default function NigeriaTaxEngine() {
                         <TableCell className="text-right space-x-2">
                           {f.status === 'ready' && (
                             <Button size="sm" variant="outline" onClick={() => {
-                              const ref = window.prompt('Confirmation reference (optional):') ?? '';
-                              submitFiling.mutate({ id: f.id, ref });
+                              setSubFiling(f); setSubMode('manifest'); setSubRef(''); setSubOpen(true);
                             }}>Submit</Button>
                           )}
-                          {(f.status === 'submitted' || f.status === 'ready') && (
+                          {f.status === 'submitted' && (
+                            <>
+                              <Button size="sm" variant="outline" onClick={() => {
+                                const ref = window.prompt('Authority acknowledgment reference:') ?? '';
+                                ackFiling.mutate({ id: f.id, ref });
+                              }}>Acknowledge</Button>
+                              <Button size="sm" variant="outline" className="text-red-700" onClick={() => {
+                                const reason = window.prompt('Rejection reason:') ?? '';
+                                if (reason) rejFiling.mutate({ id: f.id, reason });
+                              }}>Reject</Button>
+                            </>
+                          )}
+                          {(f.status === 'submitted' || f.status === 'accepted' || f.status === 'ready') && (
                             <Button size="sm" onClick={() => {
                               setRemitFiling(f); setRemitOpen(true);
                               setRemitDate(today); setRemitBank(''); setRemitRef('');
