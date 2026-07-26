@@ -497,8 +497,8 @@ export default function SubscriptionCheckout() {
             const hasActiveSub = !!currentSub && !!(currentSub as any).stripe_subscription_id;
             const ctaLabel = isOfficeUse ? 'Activate' : (hasActiveSub ? 'Switch to this plan' : 'Subscribe');
 
-            const hasActiveSub = !!currentSub && !!(currentSub as any).stripe_subscription_id;
-            const ctaLabel = hasActiveSub ? 'Switch to this plan' : 'Subscribe';
+
+
 
             return (
               <Card key={plan.id} className={`relative flex flex-col ${isCurrentPlan ? 'border-primary ring-2 ring-primary/20' : ''} ${isHighlighted ? 'border-primary ring-2 ring-primary/40' : ''}`}>
