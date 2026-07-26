@@ -147,11 +147,11 @@ export default function TreasuryDashboard() {
         <ConnectedAccountsBalanceCard />
       </div>
 
-      {/* Country-driven action grid */}
-      <Section title="Bills"                    cards={config.sections.bills} />
-      <Section title="Transfers"                cards={config.sections.transfers} />
-      <Section title="Payments & Collections"   cards={config.sections.payments} />
-      <Section title="Governance"               cards={governance} />
+      {/* Country-driven action grid (filtered by user preferences) */}
+      {sectionEnabled('bills')      && <Section title="Bills"                    cards={filterByAuthority(config.sections.bills)} />}
+      {sectionEnabled('transfers')  && <Section title="Transfers"                cards={config.sections.transfers} />}
+      {sectionEnabled('payments')   && <Section title="Payments & Collections"   cards={config.sections.payments} />}
+      {sectionEnabled('governance') && <Section title="Governance"               cards={governance} />}
     </div>
   );
 }
