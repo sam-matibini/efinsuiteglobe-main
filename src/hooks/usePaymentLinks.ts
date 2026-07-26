@@ -48,6 +48,7 @@ export interface CreatePaymentLinkInput {
   deposit_bank_account_id?: string | null;
   instant_payment?: boolean;
   instant_method?: InstantMethod | null;
+  metadata?: Record<string, unknown> | null;
 }
 
 export function usePaymentLinks() {
