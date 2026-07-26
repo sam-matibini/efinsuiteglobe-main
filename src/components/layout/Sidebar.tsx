@@ -377,8 +377,8 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
               isLoading={orgsLoading}
               onSwitch={switchOrganization}
               onCreateNew={() => setCreateOrgOpen(true)}
-              filterCountry={countryFilter}
-              onClearCountryFilter={clearCountryFilter}
+              filterCountry={scopedCountry}
+
             />
           )}
           
