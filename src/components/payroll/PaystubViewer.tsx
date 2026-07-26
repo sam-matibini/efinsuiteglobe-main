@@ -160,6 +160,7 @@ export function PaystubViewer({ payStub, companyName, companyLogo, currencyCode 
       companyProvince: payStub.companyProvince,
       companyPostalCode: payStub.companyPostalCode,
       companyCountry: payStub.companyCountry,
+      countryCode: (payStub.companyCountry || payStub.employeeCountry || 'CA').toUpperCase().slice(0, 2),
     });
   };
 
