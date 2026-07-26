@@ -10,6 +10,8 @@ export interface FundingBankAccount extends BankAccount {
   isPlaidLinked: boolean;
   isStripeReady: boolean;
   isPaysafeEftEnabled: boolean;
+  isNibssEnabled: boolean;
+  isRtgsEnabled: boolean;
   canDrawACH: boolean;
   canSendACH: boolean;
   isDefault: boolean;
