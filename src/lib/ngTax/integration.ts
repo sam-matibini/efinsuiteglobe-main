@@ -121,7 +121,10 @@ export async function recordBillTaxes(ctx: BillPostContext): Promise<string[]> {
             : cls.resident_rate;
           const min = cls.min_threshold ?? 0;
           if (line.taxable_amount >= min) {
-            const result = calculateWht(whtDef, line.taxable_amount, rate);
+            const result = calculateWht(whtDef, cls, line.taxable_amount, {
+              isNonResident: !!line.is_non_resident,
+            });
+            void rate;
             const id = await writeTaxLedger({
               organization_id: ctx.organization_id,
               result,
@@ -137,6 +140,7 @@ export async function recordBillTaxes(ctx: BillPostContext): Promise<string[]> {
         }
       }
     }
+
 
     // ---- Input VAT (if supplied by vendor) ----
     if (vatDef && line.vat_input_amount && line.vat_input_amount > 0) {
