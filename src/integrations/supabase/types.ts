@@ -27930,6 +27930,38 @@ export type Database = {
           },
         ]
       }
+      ng_tax_ledger_summary: {
+        Row: {
+          definition_code: string | null
+          definition_id: string | null
+          definition_name: string | null
+          filed_tax: number | null
+          organization_id: string | null
+          period_month: string | null
+          remitted_tax: number | null
+          tax_category: string | null
+          total_tax: number | null
+          total_taxable_base: number | null
+          transaction_count: number | null
+          unfiled_tax: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ng_tax_transaction_ledger_definition_id_fkey"
+            columns: ["definition_id"]
+            isOneToOne: false
+            referencedRelation: "ng_tax_definitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ng_tax_transaction_ledger_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organization_invitation_history: {
         Row: {
           accepted_at: string | null
@@ -28691,6 +28723,30 @@ export type Database = {
       next_ap_batch_number: { Args: { p_org: string }; Returns: string }
       next_payment_link_reference: { Args: { p_org: string }; Returns: string }
       next_tax_payment_reference: { Args: { p_org: string }; Returns: string }
+      ng_generate_filing: {
+        Args: {
+          p_definition_id: string
+          p_form_code?: string
+          p_organization_id: string
+          p_period_end: string
+          p_period_start: string
+        }
+        Returns: string
+      }
+      ng_post_remittance: {
+        Args: {
+          p_bank_account_id?: string
+          p_filing_id: string
+          p_journal_entry_id?: string
+          p_payment_date: string
+          p_reference?: string
+        }
+        Returns: string
+      }
+      ng_submit_filing: {
+        Args: { p_confirmation_reference?: string; p_filing_id: string }
+        Returns: undefined
+      }
       normalize_phone_e164: { Args: { phone: string }; Returns: string }
       populate_equity_movements: {
         Args: { p_fiscal_year: number; p_organization_id: string }
