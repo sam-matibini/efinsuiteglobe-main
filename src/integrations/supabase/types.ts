@@ -15335,6 +15335,7 @@ export type Database = {
           docsign_require_decline_reason: boolean | null
           docsign_retention_days: number | null
           docsign_secondary_color: string | null
+          efinconnect_preferences: Json
           email: string | null
           email_enabled: boolean | null
           email_from_address: string | null
@@ -15476,6 +15477,7 @@ export type Database = {
           docsign_require_decline_reason?: boolean | null
           docsign_retention_days?: number | null
           docsign_secondary_color?: string | null
+          efinconnect_preferences?: Json
           email?: string | null
           email_enabled?: boolean | null
           email_from_address?: string | null
@@ -15617,6 +15619,7 @@ export type Database = {
           docsign_require_decline_reason?: boolean | null
           docsign_retention_days?: number | null
           docsign_secondary_color?: string | null
+          efinconnect_preferences?: Json
           email?: string | null
           email_enabled?: boolean | null
           email_from_address?: string | null
