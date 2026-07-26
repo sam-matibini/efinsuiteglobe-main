@@ -170,9 +170,9 @@ function generateDeterministicUuid(prefix: string, code: string): string {
 
 // Tax Codes Hooks - fetches from tax_codes table OR derives from sales_tax_settings
 // Includes all standard Canadian tax codes for CRA ETA place-of-supply compliance
-export function useTaxCodes(organizationId?: string) {
+export function useTaxCodes(organizationId?: string, countryCode?: string) {
   return useQuery({
-    queryKey: ['tax-codes', organizationId],
+    queryKey: ['tax-codes', organizationId, countryCode],
     queryFn: async () => {
       if (!organizationId) return [];
       
@@ -199,9 +199,114 @@ export function useTaxCodes(organizationId?: string) {
       
       if (settingsError) throw settingsError;
       
+      const now = new Date().toISOString();
+      const cc = (countryCode || 'CA').toUpperCase();
+
+      // Country-specific derivation for non-Canadian jurisdictions
+      if (cc !== 'CA' && cc !== 'US') {
+        const mk = (
+          key: string,
+          code: string,
+          name: string,
+          rate: number,
+          tax_type: string,
+          is_recoverable: boolean,
+          jurisdiction: string | null = null,
+        ): TaxCode => ({
+          id: generateDeterministicUuid(organizationId, key),
+          organization_id: organizationId,
+          code,
+          name,
+          rate,
+          jurisdiction,
+          tax_type,
+          is_recoverable,
+          is_compound: false,
+          is_active: true,
+          gl_collected_account_id: settings?.gst_collected_account_id || null,
+          gl_paid_account_id: settings?.gst_paid_account_id || null,
+          created_at: now,
+          updated_at: now,
+        });
+
+        const list: TaxCode[] = [
+          mk('exempt', 'E', 'Exempt', 0, 'exempt', false),
+        ];
+
+        switch (cc) {
+          case 'ZM':
+            list.push(
+              mk('zm-vat',    'VAT',    'VAT - Standard Rated',        16,  'VAT',        true,  'Federal'),
+              mk('zm-vat-zr', 'VAT-ZR', 'VAT - Zero Rated (Exports)',  0,   'zero-rated', true,  'Federal'),
+              mk('zm-vat-ex', 'VAT-EX', 'VAT - Exempt Supplies',        0,   'exempt',     false, 'Federal'),
+              mk('zm-ipl',    'IPL',    'Insurance Premium Levy',       5,   'levy',       false, 'Federal'),
+              mk('zm-tl',     'TL',     'Tourism Levy',                 1.5, 'levy',       false, 'Federal'),
+            );
+            break;
+          case 'KE':
+            list.push(
+              mk('ke-vat',    'VAT',    'VAT - Standard Rated',        16, 'VAT',        true,  'Federal'),
+              mk('ke-vat-zr', 'VAT-ZR', 'VAT - Zero Rated (Exports)',  0,  'zero-rated', true,  'Federal'),
+              mk('ke-vat-ex', 'VAT-EX', 'VAT - Exempt Supplies',        0,  'exempt',     false, 'Federal'),
+            );
+            break;
+          case 'NG':
+            list.push(
+              mk('ng-vat',     'VAT',          'VAT - Standard Rated',                 7.5, 'VAT',        true,  'Federal'),
+              mk('ng-vat-zr',  'VAT-ZR',       'VAT - Zero Rated (Exports)',           0,   'zero-rated', true,  'Federal'),
+              mk('ng-vat-ex',  'VAT-EX',       'VAT - Exempt Supplies',                0,   'exempt',     false, 'Federal'),
+              mk('ng-wht-c',   'WHT-CONTRACT', 'Withholding Tax - Contracts/Supplies', 5,   'WHT',        false, 'Federal'),
+              mk('ng-wht-p',   'WHT-PROF',     'Withholding Tax - Professional Fees',  10,  'WHT',        false, 'Federal'),
+            );
+            break;
+          case 'BI':
+            list.push(
+              mk('bi-tva',    'TVA',    'TVA - Taux Standard',      18, 'VAT',        true,  'Federal'),
+              mk('bi-tva-zr', 'TVA-ZR', 'TVA - Taux Zéro (Exports)', 0,  'zero-rated', true,  'Federal'),
+              mk('bi-tva-ex', 'TVA-EX', 'TVA - Exonérée',            0,  'exempt',     false, 'Federal'),
+            );
+            break;
+          case 'GB':
+            list.push(
+              mk('gb-vat-std', 'VAT-STD', 'VAT - Standard Rate', 20, 'VAT',        true,  'Federal'),
+              mk('gb-vat-red', 'VAT-RED', 'VAT - Reduced Rate',   5, 'VAT',        true,  'Federal'),
+              mk('gb-vat-zr',  'VAT-ZR',  'VAT - Zero Rated',     0, 'zero-rated', true,  'Federal'),
+              mk('gb-vat-ex',  'VAT-EX',  'VAT - Exempt',         0, 'exempt',     false, 'Federal'),
+            );
+            break;
+          default:
+            // Generic single-rate VAT fallback for other non-CA/US countries
+            list.push(
+              mk('gen-vat',    'VAT',    'VAT - Standard Rated',       (settings?.gst_rate as number) || 0, 'VAT',        true,  'Federal'),
+              mk('gen-vat-zr', 'VAT-ZR', 'VAT - Zero Rated (Exports)', 0,                                   'zero-rated', true,  'Federal'),
+              mk('gen-vat-ex', 'VAT-EX', 'VAT - Exempt Supplies',       0,                                   'exempt',     false, 'Federal'),
+            );
+        }
+
+        list.push({
+          id: generateDeterministicUuid(organizationId, 'out-of-scope'),
+          organization_id: organizationId,
+          code: 'O/S',
+          name: 'Out of Scope',
+          rate: 0,
+          jurisdiction: null,
+          tax_type: 'out-of-scope',
+          is_recoverable: false,
+          is_compound: false,
+          is_active: true,
+          gl_collected_account_id: null,
+          gl_paid_account_id: null,
+          created_at: now,
+          updated_at: now,
+        });
+
+        return list;
+      }
+
       // Build derived tax codes - include all standard Canadian taxes for place-of-supply
       const derivedCodes: TaxCode[] = [];
-      const now = new Date().toISOString();
+      
+
       
       // Add Exempt/None option
       derivedCodes.push({
