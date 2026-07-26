@@ -315,7 +315,7 @@ const HISTORICAL_RATES: Record<string, Record<number, any>> = {
 const COUNTRY_LABELS: Record<string, { name: string; flag: string; currency: string; authority: string }> = {
   CA: { name: 'Canada', flag: '🇨🇦', currency: 'CAD', authority: 'CRA' },
   US: { name: 'United States', flag: '🇺🇸', currency: 'USD', authority: 'IRS' },
-  NG: { name: 'Nigeria', flag: '🇳🇬', currency: 'NGN', authority: 'FIRS' },
+  NG: { name: 'Nigeria', flag: '🇳🇬', currency: 'NGN', authority: 'NRS' },
   ZM: { name: 'Zambia', flag: '🇿🇲', currency: 'ZMW', authority: 'ZRA' },
   KE: { name: 'Kenya', flag: '🇰🇪', currency: 'KES', authority: 'KRA' },
   BI: { name: 'Burundi', flag: '🇧🇮', currency: 'BIF', authority: 'OBR' },
