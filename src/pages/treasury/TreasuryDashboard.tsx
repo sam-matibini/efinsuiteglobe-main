@@ -16,31 +16,41 @@ interface ActionCardProps {
   to: string;
   icon: LucideIcon;
   external?: boolean;
+  deliveryEstimate?: string;
 }
 
-function ActionCard({ title, description, to, icon: Icon, external }: ActionCardProps) {
+function ActionCard({ title, description, to, icon: Icon, external, deliveryEstimate }: ActionCardProps) {
   return (
-    <Link
-      to={to}
-      className="group block rounded-xl border bg-card p-5 shadow-sm transition-all hover:shadow-md hover:border-primary/40"
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <h3 className="font-semibold text-foreground">{title}</h3>
+    <div className="space-y-2">
+      <Link
+        to={to}
+        className="group block rounded-xl border bg-card p-5 shadow-sm transition-all hover:shadow-md hover:border-primary/40"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <h3 className="font-semibold text-foreground">{title}</h3>
+            </div>
+            <p className="mt-2 text-sm text-muted-foreground leading-relaxed">{description}</p>
+          </div>
+          <div className="shrink-0 flex flex-col items-end gap-3">
             {external ? (
               <ExternalLink className="h-4 w-4 text-primary opacity-70" />
             ) : (
               <ChevronRight className="h-4 w-4 text-primary opacity-70 transition-transform group-hover:translate-x-0.5" />
             )}
+            <div className="rounded-lg bg-accent/60 p-2.5 text-primary">
+              <Icon className="h-5 w-5" />
+            </div>
           </div>
-          <p className="mt-2 text-sm text-muted-foreground leading-relaxed">{description}</p>
         </div>
-        <div className="shrink-0 rounded-lg bg-accent/60 p-2.5 text-primary">
-          <Icon className="h-5 w-5" />
+      </Link>
+      {deliveryEstimate && (
+        <div className="rounded-md bg-muted/60 px-3 py-1.5 text-xs text-muted-foreground">
+          <span className="font-medium text-foreground/80">Delivery estimate</span> {deliveryEstimate}
         </div>
-      </div>
-    </Link>
+      )}
+    </div>
   );
 }
 
@@ -125,43 +135,45 @@ export default function TreasuryDashboard() {
       <Section title="Bills">
         <ActionCard
           title="Pay bills"
-          description="Pay vendor bills from anywhere with EFT or cheque."
+          description="Pay bills easily from anywhere with your phone, tablet, or computer."
           to="/treasury/ap-payments"
           icon={CreditCard}
         />
         <ActionCard
           title="Pay business taxes"
-          description="File and remit federal & provincial taxes (CRA, IRS, FIRS, HMRC)."
+          description="File and pay your Federal and Provincial government business taxes."
           to="/treasury/tax-payments"
           icon={Receipt}
           external
-        />
-        <ActionCard
-          title="Payroll remittances"
-          description="Send source deductions and payroll taxes to the tax authority."
-          to="/treasury/payroll-payments"
-          icon={Users}
         />
       </Section>
 
       <Section title="Transfers">
         <ActionCard
           title="Transfer between accounts"
-          description="Move funds between your connected bank and credit card accounts."
+          description="Pay your credit card or transfer money between your accounts."
           to="/banking/transfers"
           icon={ArrowLeftRight}
         />
         <ActionCard
           title="Interac e-Transfer"
-          description="Send or request money by email or SMS via payment links."
+          description="Send and request money from anyone with a Canadian bank account with Interac e-Transfer."
           to="/banking-payments/payment-links"
           icon={Send}
         />
         <ActionCard
-          title="Bank deposit / Wire"
-          description="Send money directly to another bank account on a schedule."
+          title="Bank deposit"
+          description="Send money directly to a bank account with International Money Transfer."
           to="/banking-payments/scheduled"
           icon={Landmark}
+          deliveryEstimate="Up to 5 business days"
+        />
+        <ActionCard
+          title="Cash pickup"
+          description="Send money to an agent location with Western Union."
+          to="/banking-payments/scheduled"
+          icon={Send}
+          deliveryEstimate="2–4 hours"
         />
       </Section>
 
