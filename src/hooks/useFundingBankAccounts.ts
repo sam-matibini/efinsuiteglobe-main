@@ -24,6 +24,8 @@ export function decorateBankAccount(a: BankAccount): FundingBankAccount {
   const isStripeReady = !!(a as { stripe_bank_account_id?: string | null }).stripe_bank_account_id;
   const isPaysafeEftEnabled = !!(a as { paysafe_eft_enabled?: boolean }).paysafe_eft_enabled;
   const isPaysafeCardEnabled = !!(a as { paysafe_card_enabled?: boolean }).paysafe_card_enabled;
+  const isNibssEnabled = !!(a as { is_nibss_enabled?: boolean }).is_nibss_enabled;
+  const isRtgsEnabled = !!(a as { is_rtgs_enabled?: boolean }).is_rtgs_enabled;
   const isDefault = !!(a as { is_treasury_funding_default?: boolean }).is_treasury_funding_default;
   const stored = ((a as { rails_supported?: string[] }).rails_supported ?? []) as Rail[];
 
