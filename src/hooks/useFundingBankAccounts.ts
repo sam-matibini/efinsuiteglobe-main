@@ -143,26 +143,25 @@ export function useFundingBankAccounts() {
     onError: (e: Error) => toast.error(`Failed: ${e.message}`),
   });
 
-  const toggleFlag = (column: 'is_nibss_enabled' | 'is_rtgs_enabled', enabled: boolean, successMsg: string) =>
-    useMutation({
-      mutationFn: async (bankAccountId: string) => {
-        const { error } = await supabase
-          .from('bank_accounts')
-          .update({ [column]: enabled } as any)
-          .eq('id', bankAccountId);
-        if (error) throw error;
-      },
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: ['bank-accounts'] });
-        toast.success(successMsg);
-      },
-      onError: (e: Error) => toast.error(`Failed: ${e.message}`),
-    });
+  const mkFlagMutation = (column: 'is_nibss_enabled' | 'is_rtgs_enabled', enabled: boolean, successMsg: string) => ({
+    mutationFn: async (bankAccountId: string) => {
+      const { error } = await supabase
+        .from('bank_accounts')
+        .update({ [column]: enabled } as any)
+        .eq('id', bankAccountId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['bank-accounts'] });
+      toast.success(successMsg);
+    },
+    onError: (e: Error) => toast.error(`Failed: ${e.message}`),
+  });
 
-  const enableNibss  = toggleFlag('is_nibss_enabled', true,  'NIBSS Instant/NEFT enabled on this bank account');
-  const disableNibss = toggleFlag('is_nibss_enabled', false, 'NIBSS Instant/NEFT disabled');
-  const enableRtgs   = toggleFlag('is_rtgs_enabled',  true,  'CBN RTGS enabled on this bank account');
-  const disableRtgs  = toggleFlag('is_rtgs_enabled',  false, 'CBN RTGS disabled');
+  const enableNibss  = useMutation(mkFlagMutation('is_nibss_enabled', true,  'NIBSS Instant/NEFT enabled on this bank account'));
+  const disableNibss = useMutation(mkFlagMutation('is_nibss_enabled', false, 'NIBSS Instant/NEFT disabled'));
+  const enableRtgs   = useMutation(mkFlagMutation('is_rtgs_enabled',  true,  'CBN RTGS enabled on this bank account'));
+  const disableRtgs  = useMutation(mkFlagMutation('is_rtgs_enabled',  false, 'CBN RTGS disabled'));
 
   return {
     accounts: decorated, defaultAccount, isLoading,
