@@ -32,6 +32,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
+import {
+  buildFilingManifest,
+  downloadManifest,
+  submitFiling as submitFilingHelper,
+  acknowledgeFiling,
+  rejectFiling,
+  type SubmissionMode,
+} from '@/lib/ngTax/submission';
 
 function toCsv(rows: any[], columns: { key: string; label: string }[]): string {
   const esc = (v: any) => {
