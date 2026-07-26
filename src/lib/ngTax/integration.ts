@@ -15,7 +15,9 @@ import {
   calculateVat,
   calculateWht,
   calculatePaye,
+  calculatePercentageOnBase,
 } from './calculators';
+
 import {
   resolveTaxByCode,
   resolveServiceClassification,
