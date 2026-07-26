@@ -1,66 +1,49 @@
-# Country-First Scoping (Dynamics 365 style)
+## Problem
 
-Restructure the app so the top-left country selector is the **primary scope**. Once a country is chosen, every list, dashboard, and module only shows data, settings, and options tied to that country. "All countries" is removed — a country is always required.
+Even after selecting **Nigeria** in the country selector, the eFinconnect page still shows Canadian content:
 
-## Behavior
+- Header chip reads "Canada · CAD"
+- KPI amounts show `CA$0.00`
+- "All modules" and quick-actions list "CRA Remittance", "CRA Accounts"
 
-- Country selector becomes the **root scope** (persisted in `localStorage` + URL search param `?country=CA`).
-- On login / first load:
-  - If the user has orgs in only one country → auto-select it.
-  - If multiple → show a country picker screen (D365-style "Choose environment").
-- Switching country:
-  - Filters the org switcher to that country only.
-  - Auto-switches `currentOrganization` to the first (or last-used) org in that country.
-  - Invalidates all React Query caches keyed by org/country.
-- No "All countries" option anywhere.
+Root cause: `src/pages/treasury/BankingPaymentsDashboard.tsx` is hard-coded (CRA labels, `currencyOverride: 'CAD'`, static tile list). It never reads the country config or scope. Similarly `useCountryTreasuryConfig` and `CountryFlagBadge` read the *organization's* country, so they ignore the country scope until the org itself changes.
 
-## Module scoping rules
+## Plan
 
-| Module | Scoped behavior |
-|---|---|
-| Org switcher / dashboards | Only orgs where `organizations.country_id` matches. |
-| Tax engine | Route to country's engine only: CA → CRA/GST-HST/PST/QST; NG → FIRS/SIRS (NigeriaTaxEngine); US → IRS/state; GB → HMRC MTD; EU → OSS. Hide the others from nav + Reports Centre. |
-| Payroll | Load only the country's `payrollLocalization` (T4/ROE for CA, W-2/1099 for US, PAYE/P60 for GB, PAYE/Pension for NG). Sidebar labels, tax slips, remittance forms swap. |
-| Accounting standards & CoA | CoA templates filtered by country (`coa_templates.country_code`). Reporting framework locked to the country default (IFRS / IFRS-SME / ASPE / US GAAP). |
-| eFinconnect | Payment rails, tax payees, and dashboard sections come from `countryTreasuryConfig` for that country only. |
-| Reports Centre | Country-specific reports only (e.g. hide GST/HST for NG orgs). |
+### 1. Make the treasury config follow the country scope
+Update `src/hooks/useCountryTreasuryConfig.ts` to prefer the scoped country over the organization's country, so eFinconnect switches immediately when the user picks a country — no org switch required.
 
-## UI changes (D365-style shell)
+- Read `useCountryScope()` first.
+- Fall back to `organizations.country_id → countries.code`, then `organization.country`, then `CA`.
 
-- Top-left header becomes a **two-tier selector**:
-  1. **Country pill** (flag + name) — opens country grid.
-  2. **Organization pill** — opens orgs within the selected country.
-- Add a `/select-country` landing screen shown when no country is set and user has orgs in >1 country.
-- Sidebar nav items conditionally render based on `country`:
-  - `NigeriaTaxEngine` only if `country === 'NG'`.
-  - `SalesTax` (CRA) only if `country === 'CA'`.
-  - `EuOssFilings` only if `country ∈ EU`.
-  - `UkVatFilings` only if `country === 'GB'`.
+### 2. Country-aware BankingPaymentsDashboard
+Refactor `src/pages/treasury/BankingPaymentsDashboard.tsx`:
 
-## Technical details
+- Consume `useCountryTreasuryConfig()` to get `countryCode`, `defaultCurrency`, and `taxPayees`.
+- Derive `primaryAuthority` from `taxPayees[0].authority` (CRA / IRS / FIRS / HMRC). Use it for tile titles, button labels, and the transaction "source" prefix.
+- Replace the local `cad()` formatter with `fmt.formatCurrency(n, { currencyOverride: config.defaultCurrency })` so KPI cards render `₦0.00` in Nigeria, `$0.00` in the US, etc.
+- Rebuild the `tiles` array:
+  - Replace "CRA Remittance" with `${primaryAuthority} Remittance` linking to `/treasury/tax-payments` (the country-neutral hub) instead of the Canada-only `/banking-payments/cra-remittance`.
+  - Replace "CRA Accounts" with `${primaryAuthority} Accounts`; hide entirely for non-CA (CRA Accounts UI is Canada-specific).
+  - Keep AP Payments, Payroll Payments, Scheduled, Payment History, Payment Links, EFT Rails (they are country-neutral).
+- Replace the top-right "CRA remittance" button with `${primaryAuthority} remittance` pointing to the same country-neutral hub.
+- Filter the KPI/`recent` list source label to use `primaryAuthority` rather than the literal "CRA".
 
-**New / updated files**
-- `src/hooks/useCountryScope.ts` — replaces `useCountryFilter`. Required country (never null), auto-derives from current org, exposes `setCountry(code)` that also switches org.
-- `src/context/CountryScopeProvider.tsx` — wraps app, gates rendering until a country is chosen.
-- `src/pages/SelectCountry.tsx` — D365-style country grid landing.
-- `src/components/layout/CountrySelector.tsx` — country-only picker (orgs move to a separate switcher below).
-- `src/components/layout/OrgSwitcher.tsx` — always filtered by scoped country.
-- `src/config/countryModuleMap.ts` — maps country code → allowed modules, tax engine, payroll config, CoA template ids, eFinconnect config.
-- `src/config/routeModuleMap.ts` — extend with `requiredCountries?: string[]`.
-- `src/hooks/useOrganization.ts` — filter `organizations` list by scoped country; block switching to an org outside scope.
-- Sidebar + AppLayout — read `useCountryScope()` and hide non-matching nav sections.
+### 3. Country-aware flag badge
+Update `src/components/dashboard/CountryFlagBadge.tsx` to read `useCountryScope()` first, then fall back to the organization's country. This fixes the "Canada CAD" chip when Nigeria is scoped.
 
-**Data**
-- Uses existing `organizations.country_id → countries.code`. No schema changes required.
-- `coa_templates` already carries country info; ensure templates listing filters by scoped country.
-- No migration needed unless we want to enforce a `default_country` per user (optional, not in this plan).
+### 4. Verification
+- Load `/banking-payments` while scoped to Nigeria and confirm:
+  - Header chip shows Nigeria / NGN
+  - KPI values render as `₦0.00`
+  - Tiles show "FIRS Remittance", no "CRA Accounts"
+- Switch scope to Canada and confirm CRA labels + CAD return.
+- Typecheck passes.
 
-**Removals**
-- `useCountryFilter` (superseded).
-- "All countries" button in `CountrySelector`.
-- Cross-country consolidated dashboards (out of scope — can be reintroduced later as a dedicated "Group" workspace).
+## Files touched
 
-## Out of scope
-- Multi-country consolidation reporting.
-- Per-user default country preference stored server-side.
-- Renaming/reorganizing existing tax data.
+- `src/hooks/useCountryTreasuryConfig.ts` — prefer scoped country
+- `src/pages/treasury/BankingPaymentsDashboard.tsx` — country-driven tiles, labels, currency
+- `src/components/dashboard/CountryFlagBadge.tsx` — follow scope
+
+No database or route changes.
