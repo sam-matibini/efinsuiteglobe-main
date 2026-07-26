@@ -1013,17 +1013,17 @@ function getFallbackRates(countryCode: string, year: number, updateType: string)
       notes: 'Rates from OBR and INSS official publications - verify with obr.bi for latest updates'
     };
   } else if (countryCode === 'NG') {
-    // Nigeria — FIRS, State IRS, PenCom, NHF, ITF, NSITF (Finance Act 2023)
+    // Nigeria — NRS, State IRS, PenCom, NHF, ITF, NSITF (Finance Act 2023)
     return {
       sales_tax_changes: updateType !== 'payroll' ? [
-        { code: 'VAT', name: 'Value Added Tax (Standard)', current_rate: 7.5, effective_date: `${year}-01-01`, source: 'FIRS VAT Act (Finance Act 2020)' },
-        { code: 'VAT-ZERO', name: 'VAT Zero-Rated (Exports, Basic Foods)', current_rate: 0, effective_date: `${year}-01-01`, source: 'FIRS VAT Act' },
-        { code: 'VAT-EXEMPT', name: 'VAT Exempt (Medical, Education, Financial)', current_rate: 0, effective_date: `${year}-01-01`, source: 'FIRS VAT Act' },
-        { code: 'WHT-CONTRACT', name: 'Withholding Tax - Contracts/Supplies', current_rate: 5, effective_date: `${year}-01-01`, source: 'FIRS WHT Regulations' },
-        { code: 'WHT-PROF', name: 'Withholding Tax - Professional Services', current_rate: 10, effective_date: `${year}-01-01`, source: 'FIRS WHT Regulations' },
-        { code: 'WHT-RENT', name: 'Withholding Tax - Rent', current_rate: 10, effective_date: `${year}-01-01`, source: 'FIRS WHT Regulations' },
-        { code: 'WHT-DIV', name: 'Withholding Tax - Dividends/Interest/Royalties', current_rate: 10, effective_date: `${year}-01-01`, source: 'CITA / FIRS WHT Regulations' },
-        { code: 'WHT-DIR', name: 'Withholding Tax - Directors Fees', current_rate: 10, effective_date: `${year}-01-01`, source: 'FIRS WHT Regulations' },
+        { code: 'VAT', name: 'Value Added Tax (Standard)', current_rate: 7.5, effective_date: `${year}-01-01`, source: 'NRS VAT Act (Finance Act 2020)' },
+        { code: 'VAT-ZERO', name: 'VAT Zero-Rated (Exports, Basic Foods)', current_rate: 0, effective_date: `${year}-01-01`, source: 'NRS VAT Act' },
+        { code: 'VAT-EXEMPT', name: 'VAT Exempt (Medical, Education, Financial)', current_rate: 0, effective_date: `${year}-01-01`, source: 'NRS VAT Act' },
+        { code: 'WHT-CONTRACT', name: 'Withholding Tax - Contracts/Supplies', current_rate: 5, effective_date: `${year}-01-01`, source: 'NRS WHT Regulations' },
+        { code: 'WHT-PROF', name: 'Withholding Tax - Professional Services', current_rate: 10, effective_date: `${year}-01-01`, source: 'NRS WHT Regulations' },
+        { code: 'WHT-RENT', name: 'Withholding Tax - Rent', current_rate: 10, effective_date: `${year}-01-01`, source: 'NRS WHT Regulations' },
+        { code: 'WHT-DIV', name: 'Withholding Tax - Dividends/Interest/Royalties', current_rate: 10, effective_date: `${year}-01-01`, source: 'CITA / NRS WHT Regulations' },
+        { code: 'WHT-DIR', name: 'Withholding Tax - Directors Fees', current_rate: 10, effective_date: `${year}-01-01`, source: 'NRS WHT Regulations' },
         { code: 'CIT-SMALL', name: 'Companies Income Tax - Small (≤₦25m turnover)', current_rate: 0, effective_date: `${year}-01-01`, source: 'Finance Act 2023' },
         { code: 'CIT-MED', name: 'Companies Income Tax - Medium (₦25m–₦100m)', current_rate: 20, effective_date: `${year}-01-01`, source: 'Finance Act 2023' },
         { code: 'CIT-LARGE', name: 'Companies Income Tax - Large (>₦100m)', current_rate: 30, effective_date: `${year}-01-01`, source: 'CITA / Finance Act 2023' },
@@ -1050,7 +1050,7 @@ function getFallbackRates(countryCode: string, year: number, updateType: string)
         { jurisdiction: 'NG-PAYE', min_income: 3200000, max_income: 999999999, rate: 24, effective_date: `${year}-01-01`, source: 'PIT Act Sixth Schedule' },
       ] : [],
       authority_sources: [
-        'FIRS - Federal Inland Revenue Service (firs.gov.ng)',
+        'NRS - Nigeria Revenue Service (nrs.gov.ng)',
         'State Internal Revenue Services (PAYE)',
         'PenCom - National Pension Commission (Pension Reform Act 2014)',
         'FMBN - Federal Mortgage Bank (NHF Act)',
@@ -1061,7 +1061,7 @@ function getFallbackRates(countryCode: string, year: number, updateType: string)
         'Companies Income Tax Act (CITA)'
       ],
       confidence: 0.85,
-      notes: 'Rates based on Finance Act 2023 and FIRS publications - verify with firs.gov.ng for latest circulars'
+      notes: 'Rates based on Finance Act 2023 and NRS publications - verify with nrs.gov.ng for latest circulars'
     };
   }
 
