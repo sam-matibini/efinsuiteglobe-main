@@ -81,9 +81,17 @@ export function isNpoIndustry(industryValue: string): boolean {
 }
 
 // Get industries by accounting framework
-export function getIndustriesByFramework(framework: 'ASPE' | 'ASNPO' | 'IFRS'): IndustryConfig[] {
+export function getIndustriesByFramework(framework: 'ASPE' | 'ASNPO' | 'IFRS' | 'IFRS_SME'): IndustryConfig[] {
   return INDUSTRIES.filter(ind => ind.accountingFramework === framework);
 }
+
+// Human-readable label for an accounting framework
+export const ACCOUNTING_FRAMEWORK_LABELS: Record<'ASPE' | 'ASNPO' | 'IFRS' | 'IFRS_SME', string> = {
+  ASPE: 'ASPE',
+  ASNPO: 'ASNPO',
+  IFRS: 'Full IFRS',
+  IFRS_SME: 'IFRS for SMEs',
+};
 
 // Industry type for TypeScript
 export type IndustryType = typeof INDUSTRIES[number]['value'];
