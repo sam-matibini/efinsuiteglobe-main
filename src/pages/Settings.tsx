@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Building2, Users, Shield, Palette, Receipt, Plus, MapPin, Phone, Wand2, FileText, Globe, TrendingUp, Check, ChevronsUpDown, RotateCcw, AlertTriangle, CreditCard, Coins, Wallet } from 'lucide-react';
+import { Building2, Users, Shield, Palette, Receipt, Plus, MapPin, Phone, Wand2, FileText, Globe, TrendingUp, Check, ChevronsUpDown, RotateCcw, AlertTriangle, CreditCard, Coins, Wallet, Send } from 'lucide-react';
+import { EfinconnectSettingsTab } from '@/components/settings/EfinconnectSettingsTab';
 import { MultiCurrencySettingsTab } from '@/components/settings/MultiCurrencySettingsTab';
 import { TroubleshootingTab } from '@/components/admin/TroubleshootingTab';
 import { Button } from '@/components/ui/button';
