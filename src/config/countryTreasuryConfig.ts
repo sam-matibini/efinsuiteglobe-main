@@ -172,10 +172,12 @@ const NG: CountryTreasuryConfig = {
   sections: {
     bills: [
       { title: 'Pay bills', description: 'Pay vendor invoices via NIP, NEFT, or RTGS.', to: '/treasury/ap-payments', icon: CreditCard },
+      { title: 'Pay salaries (NIBSS)', description: 'Batch salary payout via NIBSS Instant.', to: '/treasury/payroll-payments', icon: Users, deliveryEstimate: 'Instant' },
+    ],
+    taxRemittances: [
       { title: 'Pay NRS taxes', description: 'Remit VAT, WHT, CIT and PAYE to the Nigeria Revenue Service.', to: '/tax/nigeria?tab=remittances&authority=NRS', icon: Receipt },
       { title: 'Pay State (SIRS) taxes', description: 'Remit PAYE to the State Internal Revenue Service.', to: '/tax/nigeria?tab=remittances&authority=SIRS', icon: Building2 },
       { title: 'Pay pension & NHF', description: 'Remit PenCom, NHF, NSITF and ITF contributions.', to: '/tax/nigeria?tab=remittances&authority=PenCom', icon: Wallet },
-      { title: 'Pay salaries (NIBSS)', description: 'Batch salary payout via NIBSS Instant.', to: '/treasury/payroll-payments', icon: Users, deliveryEstimate: 'Instant' },
     ],
     transfers: [
       { title: 'Transfer between accounts', description: 'Move money between your own bank accounts.', to: '/banking/transfers', icon: ArrowLeftRight },
