@@ -61,6 +61,14 @@ export default function TreasuryDashboard() {
   const { payments } = useTaxPayments();
   const { batches } = useAPPaymentBatches();
   const { config } = useCountryTreasuryConfig();
+  const { sectionEnabled, authorityEnabled } = useEfinconnectPreferences();
+
+  // Filter bills cards to only include those whose ?authority= query param is enabled
+  const filterByAuthority = (cards: DashboardActionDef[]) =>
+    cards.filter((c) => {
+      const m = c.to.match(/authority=([^&]+)/);
+      return !m || authorityEnabled(m[1]);
+    });
 
   const pendingTax = payments.filter((p) => ['draft', 'scheduled', 'submitted'].includes(p.status));
   const paidTax = payments.filter((p) => p.status === 'paid');
