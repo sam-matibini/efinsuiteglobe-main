@@ -32,7 +32,40 @@ export default function TreasurySettings() {
 
   return (
     <div className="space-y-6 p-6">
-      <h1 className="text-3xl font-bold">Treasury Settings</h1>
+      <h1 className="text-3xl font-bold">eFinconnect Settings</h1>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            Country &amp; Rails
+            <Badge variant="outline">{config.displayName} · {config.defaultCurrency}</Badge>
+          </CardTitle>
+          <p className="text-sm text-muted-foreground">
+            eFinconnect adapts payment rails, tax payees, and dashboard shortcuts to your
+            organization's country. Change your country in Organization Settings to switch profile.
+          </p>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-3 md:grid-cols-2">
+            <div>
+              <div className="text-xs font-medium text-muted-foreground mb-1">Supported rails</div>
+              <div className="flex flex-wrap gap-1.5">
+                {config.rails.map((r) => (
+                  <Badge key={r.id} variant="secondary" title={r.description}>{r.label}</Badge>
+                ))}
+              </div>
+            </div>
+            <div>
+              <div className="text-xs font-medium text-muted-foreground mb-1">Tax payees</div>
+              <div className="flex flex-wrap gap-1.5">
+                {config.taxPayees.map((p) => (
+                  <Badge key={p.code} variant="outline" title={p.authority}>{p.label}</Badge>
+                ))}
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
