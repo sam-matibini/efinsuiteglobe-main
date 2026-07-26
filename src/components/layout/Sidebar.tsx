@@ -284,8 +284,8 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
   const [createOrgOpen, setCreateOrgOpen] = useState(false);
   const { sidebarLabels } = usePayrollLocalization();
   const { isModuleEnabled, isModuleInCurrentPlan, isLoading: modulesLoading, isReadOnly, userRole, planTier } = useEnabledModules();
-  const { countryCode } = useCountryTreasuryConfig();
-  const { country: countryFilter, clear: clearCountryFilter } = useCountryFilter();
+  const { country: scopedCountry } = useCountryScope();
+  const countryCode = scopedCountry ?? normalizeCountryCode(currentOrg?.country ?? null) ?? 'CA';
   const [upgradeModal, setUpgradeModal] = useState<{ open: boolean; module?: ModuleCode; label?: string }>({ open: false });
 
   // Generate navigation with localized payroll labels
