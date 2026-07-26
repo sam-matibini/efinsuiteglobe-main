@@ -148,10 +148,11 @@ export default function TreasuryDashboard() {
       </div>
 
       {/* Country-driven action grid (filtered by user preferences) */}
-      {sectionEnabled('bills')      && <Section title="Bills"                    cards={filterByAuthority(config.sections.bills)} />}
-      {sectionEnabled('transfers')  && <Section title="Transfers"                cards={config.sections.transfers} />}
-      {sectionEnabled('payments')   && <Section title="Payments & Collections"   cards={config.sections.payments} />}
-      {sectionEnabled('governance') && <Section title="Governance"               cards={governance} />}
+      {sectionEnabled('bills')          && <Section title="Bills"                  cards={filterByAuthority(config.sections.bills)} />}
+      {sectionEnabled('taxRemittances') && <Section title="Taxes & Remittances"    cards={filterByAuthority(config.sections.taxRemittances)} />}
+      {sectionEnabled('transfers')      && <Section title="Transfers"              cards={config.sections.transfers} />}
+      {sectionEnabled('payments')       && <Section title="Payments & Collections" cards={config.sections.payments} />}
+      {sectionEnabled('governance')     && <Section title="Governance"             cards={governance} />}
     </div>
   );
 }

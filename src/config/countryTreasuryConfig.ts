@@ -57,6 +57,7 @@ export interface CountryTreasuryConfig {
 
   sections: {
     bills: DashboardActionDef[];
+    taxRemittances: DashboardActionDef[];
     transfers: DashboardActionDef[];
     payments: DashboardActionDef[];
     governance: DashboardActionDef[];
@@ -86,7 +87,11 @@ const CA: CountryTreasuryConfig = {
   sections: {
     bills: [
       { title: 'Pay bills', description: 'Pay bills easily from anywhere with your phone, tablet, or computer.', to: '/treasury/ap-payments', icon: CreditCard },
+    ],
+    taxRemittances: [
       { title: 'Pay business taxes', description: 'File and pay your Federal and Provincial government business taxes.', to: '/treasury/tax-payments', icon: Receipt, external: true },
+      { title: 'CRA Remittance Centre', description: 'Payroll, GST/HST, corporate tax and scheduled CRA remittances.', to: '/banking-payments/cra-remittance', icon: Landmark },
+      { title: 'Provincial Remittances', description: 'Revenu Québec, WSIB, WCB, EHT and PST/RST filings.', to: '/banking-payments/provincial', icon: Building2 },
     ],
     transfers: [
       { title: 'Transfer between accounts', description: 'Pay your credit card or transfer money between your accounts.', to: '/banking/transfers', icon: ArrowLeftRight },
@@ -126,7 +131,10 @@ const US: CountryTreasuryConfig = {
     ...CA.sections,
     bills: [
       { title: 'Pay bills', description: 'Pay vendor invoices via ACH, wire, or check.', to: '/treasury/ap-payments', icon: CreditCard },
+    ],
+    taxRemittances: [
       { title: 'Pay business taxes', description: 'File and pay Federal and State taxes.', to: '/treasury/tax-payments', icon: Receipt, external: true },
+      { title: 'US Remittance Centre', description: 'IRS Form 941, sales-tax nexus, and state payroll filings.', to: '/banking-payments/us-remittance', icon: Landmark },
     ],
     transfers: [
       { title: 'Transfer between accounts', description: 'Move money between your accounts.', to: '/banking/transfers', icon: ArrowLeftRight },
@@ -164,10 +172,12 @@ const NG: CountryTreasuryConfig = {
   sections: {
     bills: [
       { title: 'Pay bills', description: 'Pay vendor invoices via NIP, NEFT, or RTGS.', to: '/treasury/ap-payments', icon: CreditCard },
+      { title: 'Pay salaries (NIBSS)', description: 'Batch salary payout via NIBSS Instant.', to: '/treasury/payroll-payments', icon: Users, deliveryEstimate: 'Instant' },
+    ],
+    taxRemittances: [
       { title: 'Pay NRS taxes', description: 'Remit VAT, WHT, CIT and PAYE to the Nigeria Revenue Service.', to: '/tax/nigeria?tab=remittances&authority=NRS', icon: Receipt },
       { title: 'Pay State (SIRS) taxes', description: 'Remit PAYE to the State Internal Revenue Service.', to: '/tax/nigeria?tab=remittances&authority=SIRS', icon: Building2 },
       { title: 'Pay pension & NHF', description: 'Remit PenCom, NHF, NSITF and ITF contributions.', to: '/tax/nigeria?tab=remittances&authority=PenCom', icon: Wallet },
-      { title: 'Pay salaries (NIBSS)', description: 'Batch salary payout via NIBSS Instant.', to: '/treasury/payroll-payments', icon: Users, deliveryEstimate: 'Instant' },
     ],
     transfers: [
       { title: 'Transfer between accounts', description: 'Move money between your own bank accounts.', to: '/banking/transfers', icon: ArrowLeftRight },
@@ -210,9 +220,11 @@ const ZM: CountryTreasuryConfig = {
   sections: {
     bills: [
       { title: 'Pay bills', description: 'Pay vendor invoices via ZIPSS, EFT, RTGS or Mobile Money.', to: '/treasury/ap-payments', icon: CreditCard },
+      { title: 'Pay salaries', description: 'Batch salary payout via ZIPSS or EFT.', to: '/treasury/payroll-payments', icon: Users, deliveryEstimate: 'Instant' },
+    ],
+    taxRemittances: [
       { title: 'Pay ZRA taxes', description: 'Remit VAT, PAYE, WHT and CIT to the Zambia Revenue Authority.', to: '/treasury/tax-payments', icon: Receipt },
       { title: 'Pay NAPSA & NHIMA', description: 'Remit pension and health insurance contributions.', to: '/treasury/tax-payments', icon: Wallet },
-      { title: 'Pay salaries', description: 'Batch salary payout via ZIPSS or EFT.', to: '/treasury/payroll-payments', icon: Users, deliveryEstimate: 'Instant' },
     ],
     transfers: [
       { title: 'Transfer between accounts', description: 'Move money between your own bank accounts.', to: '/banking/transfers', icon: ArrowLeftRight },
