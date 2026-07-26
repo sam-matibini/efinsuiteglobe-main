@@ -50,6 +50,8 @@ export function decorateBankAccount(a: BankAccount): FundingBankAccount {
     isPlaidLinked,
     isStripeReady,
     isPaysafeEftEnabled,
+    isNibssEnabled,
+    isRtgsEnabled,
     canDrawACH: isStripeReady,
     canSendACH: isStripeReady,
     isDefault,
