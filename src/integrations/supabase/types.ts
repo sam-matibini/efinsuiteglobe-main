@@ -14153,6 +14153,702 @@ export type Database = {
         }
         Relationships: []
       }
+      ng_tax_account_mappings: {
+        Row: {
+          created_at: string
+          definition_id: string
+          expense_account_id: string | null
+          id: string
+          organization_id: string
+          payable_account_id: string | null
+          receivable_account_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          definition_id: string
+          expense_account_id?: string | null
+          id?: string
+          organization_id: string
+          payable_account_id?: string | null
+          receivable_account_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          definition_id?: string
+          expense_account_id?: string | null
+          id?: string
+          organization_id?: string
+          payable_account_id?: string | null
+          receivable_account_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ng_tax_account_mappings_definition_id_fkey"
+            columns: ["definition_id"]
+            isOneToOne: false
+            referencedRelation: "ng_tax_definitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ng_tax_account_mappings_expense_account_id_fkey"
+            columns: ["expense_account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ng_tax_account_mappings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ng_tax_account_mappings_payable_account_id_fkey"
+            columns: ["payable_account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ng_tax_account_mappings_receivable_account_id_fkey"
+            columns: ["receivable_account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ng_tax_definitions: {
+        Row: {
+          authority_id: string | null
+          base_formula: Json | null
+          code: string
+          created_at: string
+          default_credit_account_code: string | null
+          default_debit_account_code: string | null
+          description: string | null
+          filing_frequency: string
+          id: string
+          is_active: boolean
+          jurisdiction_code: string | null
+          jurisdiction_level: string
+          name: string
+          organization_id: string | null
+          remittance_due_offset_days: number
+          tax_category: string
+          updated_at: string
+        }
+        Insert: {
+          authority_id?: string | null
+          base_formula?: Json | null
+          code: string
+          created_at?: string
+          default_credit_account_code?: string | null
+          default_debit_account_code?: string | null
+          description?: string | null
+          filing_frequency?: string
+          id?: string
+          is_active?: boolean
+          jurisdiction_code?: string | null
+          jurisdiction_level: string
+          name: string
+          organization_id?: string | null
+          remittance_due_offset_days?: number
+          tax_category: string
+          updated_at?: string
+        }
+        Update: {
+          authority_id?: string | null
+          base_formula?: Json | null
+          code?: string
+          created_at?: string
+          default_credit_account_code?: string | null
+          default_debit_account_code?: string | null
+          description?: string | null
+          filing_frequency?: string
+          id?: string
+          is_active?: boolean
+          jurisdiction_code?: string | null
+          jurisdiction_level?: string
+          name?: string
+          organization_id?: string | null
+          remittance_due_offset_days?: number
+          tax_category?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ng_tax_definitions_authority_id_fkey"
+            columns: ["authority_id"]
+            isOneToOne: false
+            referencedRelation: "tax_authorities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ng_tax_definitions_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ng_tax_exemptions: {
+        Row: {
+          created_at: string
+          criteria: Json
+          definition_id: string
+          effective_from: string
+          effective_to: string | null
+          id: string
+          organization_id: string | null
+          reason: string | null
+          scope: string
+        }
+        Insert: {
+          created_at?: string
+          criteria?: Json
+          definition_id: string
+          effective_from: string
+          effective_to?: string | null
+          id?: string
+          organization_id?: string | null
+          reason?: string | null
+          scope: string
+        }
+        Update: {
+          created_at?: string
+          criteria?: Json
+          definition_id?: string
+          effective_from?: string
+          effective_to?: string | null
+          id?: string
+          organization_id?: string | null
+          reason?: string | null
+          scope?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ng_tax_exemptions_definition_id_fkey"
+            columns: ["definition_id"]
+            isOneToOne: false
+            referencedRelation: "ng_tax_definitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ng_tax_exemptions_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ng_tax_filings: {
+        Row: {
+          confirmation_reference: string | null
+          created_at: string
+          definition_id: string
+          filing_period_id: string | null
+          form_code: string
+          form_data: Json
+          id: string
+          organization_id: string
+          period_end: string
+          period_start: string
+          status: string
+          submitted_at: string | null
+          submitted_by: string | null
+          total_tax: number | null
+          total_taxable_base: number | null
+          updated_at: string
+        }
+        Insert: {
+          confirmation_reference?: string | null
+          created_at?: string
+          definition_id: string
+          filing_period_id?: string | null
+          form_code: string
+          form_data?: Json
+          id?: string
+          organization_id: string
+          period_end: string
+          period_start: string
+          status?: string
+          submitted_at?: string | null
+          submitted_by?: string | null
+          total_tax?: number | null
+          total_taxable_base?: number | null
+          updated_at?: string
+        }
+        Update: {
+          confirmation_reference?: string | null
+          created_at?: string
+          definition_id?: string
+          filing_period_id?: string | null
+          form_code?: string
+          form_data?: Json
+          id?: string
+          organization_id?: string
+          period_end?: string
+          period_start?: string
+          status?: string
+          submitted_at?: string | null
+          submitted_by?: string | null
+          total_tax?: number | null
+          total_taxable_base?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ng_tax_filings_definition_id_fkey"
+            columns: ["definition_id"]
+            isOneToOne: false
+            referencedRelation: "ng_tax_definitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ng_tax_filings_filing_period_id_fkey"
+            columns: ["filing_period_id"]
+            isOneToOne: false
+            referencedRelation: "tax_filing_periods"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ng_tax_filings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ng_tax_rate_versions: {
+        Row: {
+          brackets: Json | null
+          calculation_method: string
+          created_at: string
+          definition_id: string
+          effective_from: string
+          effective_to: string | null
+          formula: Json | null
+          id: string
+          is_active: boolean
+          max_cap: number | null
+          min_threshold: number | null
+          notes: string | null
+          rate: number | null
+          source_reference: string | null
+          updated_at: string
+        }
+        Insert: {
+          brackets?: Json | null
+          calculation_method: string
+          created_at?: string
+          definition_id: string
+          effective_from: string
+          effective_to?: string | null
+          formula?: Json | null
+          id?: string
+          is_active?: boolean
+          max_cap?: number | null
+          min_threshold?: number | null
+          notes?: string | null
+          rate?: number | null
+          source_reference?: string | null
+          updated_at?: string
+        }
+        Update: {
+          brackets?: Json | null
+          calculation_method?: string
+          created_at?: string
+          definition_id?: string
+          effective_from?: string
+          effective_to?: string | null
+          formula?: Json | null
+          id?: string
+          is_active?: boolean
+          max_cap?: number | null
+          min_threshold?: number | null
+          notes?: string | null
+          rate?: number | null
+          source_reference?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ng_tax_rate_versions_definition_id_fkey"
+            columns: ["definition_id"]
+            isOneToOne: false
+            referencedRelation: "ng_tax_definitions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ng_tax_reliefs: {
+        Row: {
+          code: string
+          created_at: string
+          effective_from: string
+          effective_to: string | null
+          formula: Json
+          id: string
+          is_active: boolean
+          name: string
+          organization_id: string | null
+          relief_type: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          effective_from: string
+          effective_to?: string | null
+          formula?: Json
+          id?: string
+          is_active?: boolean
+          name: string
+          organization_id?: string | null
+          relief_type: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          effective_from?: string
+          effective_to?: string | null
+          formula?: Json
+          id?: string
+          is_active?: boolean
+          name?: string
+          organization_id?: string | null
+          relief_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ng_tax_reliefs_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ng_tax_remittances: {
+        Row: {
+          amount: number
+          bank_account_id: string | null
+          confirmation_reference: string | null
+          created_at: string
+          definition_id: string
+          filing_id: string | null
+          id: string
+          journal_entry_id: string | null
+          organization_id: string
+          payment_date: string
+          reference: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          bank_account_id?: string | null
+          confirmation_reference?: string | null
+          created_at?: string
+          definition_id: string
+          filing_id?: string | null
+          id?: string
+          journal_entry_id?: string | null
+          organization_id: string
+          payment_date: string
+          reference?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          bank_account_id?: string | null
+          confirmation_reference?: string | null
+          created_at?: string
+          definition_id?: string
+          filing_id?: string | null
+          id?: string
+          journal_entry_id?: string | null
+          organization_id?: string
+          payment_date?: string
+          reference?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ng_tax_remittances_bank_account_id_fkey"
+            columns: ["bank_account_id"]
+            isOneToOne: false
+            referencedRelation: "bank_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ng_tax_remittances_definition_id_fkey"
+            columns: ["definition_id"]
+            isOneToOne: false
+            referencedRelation: "ng_tax_definitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ng_tax_remittances_filing_id_fkey"
+            columns: ["filing_id"]
+            isOneToOne: false
+            referencedRelation: "ng_tax_filings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ng_tax_remittances_journal_entry_id_fkey"
+            columns: ["journal_entry_id"]
+            isOneToOne: false
+            referencedRelation: "detailed_ledger_view"
+            referencedColumns: ["journal_entry_id"]
+          },
+          {
+            foreignKeyName: "ng_tax_remittances_journal_entry_id_fkey"
+            columns: ["journal_entry_id"]
+            isOneToOne: false
+            referencedRelation: "journal_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ng_tax_remittances_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ng_tax_service_classifications: {
+        Row: {
+          code: string
+          created_at: string
+          definition_id: string
+          description: string | null
+          effective_from: string
+          effective_to: string | null
+          id: string
+          is_active: boolean
+          min_threshold: number | null
+          name: string
+          non_resident_rate: number | null
+          organization_id: string | null
+          resident_rate: number
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          definition_id: string
+          description?: string | null
+          effective_from?: string
+          effective_to?: string | null
+          id?: string
+          is_active?: boolean
+          min_threshold?: number | null
+          name: string
+          non_resident_rate?: number | null
+          organization_id?: string | null
+          resident_rate: number
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          definition_id?: string
+          description?: string | null
+          effective_from?: string
+          effective_to?: string | null
+          id?: string
+          is_active?: boolean
+          min_threshold?: number | null
+          name?: string
+          non_resident_rate?: number | null
+          organization_id?: string | null
+          resident_rate?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ng_tax_service_classifications_definition_id_fkey"
+            columns: ["definition_id"]
+            isOneToOne: false
+            referencedRelation: "ng_tax_definitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ng_tax_service_classifications_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ng_tax_transaction_ledger: {
+        Row: {
+          breakdown: Json | null
+          computed_at: string
+          created_at: string
+          created_by: string | null
+          currency: string | null
+          definition_id: string
+          filing_id: string | null
+          id: string
+          journal_entry_id: string | null
+          journal_entry_line_id: string | null
+          organization_id: string
+          rate_version_id: string | null
+          remittance_id: string | null
+          service_classification_id: string | null
+          source_id: string | null
+          source_parent_id: string | null
+          source_type: string
+          status: string
+          tax_amount: number
+          tax_rate: number | null
+          taxable_base: number
+          transaction_date: string
+          updated_at: string
+        }
+        Insert: {
+          breakdown?: Json | null
+          computed_at?: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string | null
+          definition_id: string
+          filing_id?: string | null
+          id?: string
+          journal_entry_id?: string | null
+          journal_entry_line_id?: string | null
+          organization_id: string
+          rate_version_id?: string | null
+          remittance_id?: string | null
+          service_classification_id?: string | null
+          source_id?: string | null
+          source_parent_id?: string | null
+          source_type: string
+          status?: string
+          tax_amount: number
+          tax_rate?: number | null
+          taxable_base: number
+          transaction_date: string
+          updated_at?: string
+        }
+        Update: {
+          breakdown?: Json | null
+          computed_at?: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string | null
+          definition_id?: string
+          filing_id?: string | null
+          id?: string
+          journal_entry_id?: string | null
+          journal_entry_line_id?: string | null
+          organization_id?: string
+          rate_version_id?: string | null
+          remittance_id?: string | null
+          service_classification_id?: string | null
+          source_id?: string | null
+          source_parent_id?: string | null
+          source_type?: string
+          status?: string
+          tax_amount?: number
+          tax_rate?: number | null
+          taxable_base?: number
+          transaction_date?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ng_tax_transaction_ledger_definition_id_fkey"
+            columns: ["definition_id"]
+            isOneToOne: false
+            referencedRelation: "ng_tax_definitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ng_tax_transaction_ledger_filing_id_fkey"
+            columns: ["filing_id"]
+            isOneToOne: false
+            referencedRelation: "ng_tax_filings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ng_tax_transaction_ledger_journal_entry_id_fkey"
+            columns: ["journal_entry_id"]
+            isOneToOne: false
+            referencedRelation: "detailed_ledger_view"
+            referencedColumns: ["journal_entry_id"]
+          },
+          {
+            foreignKeyName: "ng_tax_transaction_ledger_journal_entry_id_fkey"
+            columns: ["journal_entry_id"]
+            isOneToOne: false
+            referencedRelation: "journal_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ng_tax_transaction_ledger_journal_entry_line_id_fkey"
+            columns: ["journal_entry_line_id"]
+            isOneToOne: false
+            referencedRelation: "detailed_ledger_view"
+            referencedColumns: ["line_id"]
+          },
+          {
+            foreignKeyName: "ng_tax_transaction_ledger_journal_entry_line_id_fkey"
+            columns: ["journal_entry_line_id"]
+            isOneToOne: false
+            referencedRelation: "journal_entry_lines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ng_tax_transaction_ledger_journal_entry_line_id_fkey"
+            columns: ["journal_entry_line_id"]
+            isOneToOne: false
+            referencedRelation: "v_je_lines_with_division"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ng_tax_transaction_ledger_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ng_tax_transaction_ledger_rate_version_id_fkey"
+            columns: ["rate_version_id"]
+            isOneToOne: false
+            referencedRelation: "ng_tax_rate_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ng_tax_transaction_ledger_remittance_id_fkey"
+            columns: ["remittance_id"]
+            isOneToOne: false
+            referencedRelation: "ng_tax_remittances"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ng_tax_transaction_ledger_service_classification_id_fkey"
+            columns: ["service_classification_id"]
+            isOneToOne: false
+            referencedRelation: "ng_tax_service_classifications"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       onboarding_tasks: {
         Row: {
           assigned_to: string | null
