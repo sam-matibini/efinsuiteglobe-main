@@ -654,7 +654,11 @@ export default function NigeriaTaxEngine() {
         {/* -------- EXEMPTIONS & RELIEFS -------- */}
         <TabsContent value="exemptions" className="space-y-4">
           <Card>
-            <CardHeader><CardTitle>Organization Exemptions</CardTitle></CardHeader>
+            <CardHeader className="flex-row items-center justify-between">
+              <CardTitle>Organization Exemptions</CardTitle>
+              <Button size="sm" onClick={() => setExOpen(true)} disabled={!orgId}>Add Exemption</Button>
+            </CardHeader>
+
             <CardContent>
               {!orgId ? (
                 <p className="text-muted-foreground">Select an organization.</p>
