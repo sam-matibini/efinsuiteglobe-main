@@ -156,7 +156,7 @@ export function generatePayStubPdf(data: PayStubData): jsPDF {
   y = Math.max(y + 8, addrY + 2);
   doc.setFontSize(10);
   doc.setFont('helvetica', 'bold');
-  doc.text('EMPLOYEE PAY STUB', pageWidth / 2, y, { align: 'center' });
+  doc.text(labels.title, pageWidth / 2, y, { align: 'center' });
 
   // Divider
   y += 4;
@@ -185,7 +185,7 @@ export function generatePayStubPdf(data: PayStubData): jsPDF {
     { text: data.employeeName, bold: true },
     ...empAddress.map((t) => ({ text: t })),
     { text: `Employee #: ${data.employeeNumber}` },
-    { text: `Province: ${data.province}` },
+    { text: `${labels.regionLabel}: ${data.province}` },
   ];
   if (data.department) leftLines.push({ text: `Department: ${data.department}` });
 
@@ -269,10 +269,12 @@ export function generatePayStubPdf(data: PayStubData): jsPDF {
     }
   };
 
-  addDeductionLine('CPP Contribution', data.cppContribution, data.ytdCpp);
-  addDeductionLine('EI Premium', data.eiPremium, data.ytdEi);
-  addDeductionLine('Federal Tax', data.federalTax, data.ytdFederalTax);
-  addDeductionLine('Provincial Tax', data.provincialTax, data.ytdProvincialTax);
+  addDeductionLine(labels.pensionLabel, data.cppContribution, data.ytdCpp);
+  addDeductionLine(labels.socialInsuranceLabel, data.eiPremium, data.ytdEi);
+  addDeductionLine(labels.federalTaxLabel, data.federalTax, data.ytdFederalTax);
+  if (labels.provincialTaxLabel) {
+    addDeductionLine(labels.provincialTaxLabel, data.provincialTax, data.ytdProvincialTax);
+  }
   if (data.otherDeductions > 0) {
     addDeductionLine('Other Deductions', data.otherDeductions, 0);
   }
