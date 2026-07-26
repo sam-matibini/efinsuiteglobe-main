@@ -40,7 +40,7 @@ import { useRoeRecords, type CreateRoEInput } from '@/hooks/useRoeRecords';
 import { useEmployees } from '@/hooks/useEmployees';
 import { useCurrentOrganization } from '@/hooks/useOrganization';
 import { downloadRoePdf, downloadSeparationDocPdf } from '@/lib/generateRoePdf';
-import { usePayrollLocalization } from '@/hooks/usePayrollLocalization';
+
 import { ROE_REASON_CODES } from '@/types/payroll';
 import { format } from 'date-fns';
 import { parseLocalDate } from '@/lib/utils';
