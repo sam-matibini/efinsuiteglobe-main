@@ -363,6 +363,70 @@ export default function NigeriaTaxEngine() {
     onError: (e: any) => toast.error(e.message ?? 'Failed'),
   });
 
+  // ---- Reconciliation report ----
+  const [reconStart, setReconStart] = useState<string>(firstOfMonth(new Date(new Date().getFullYear(), 0, 1)));
+  const [reconEnd, setReconEnd] = useState<string>(lastOfMonth());
+  const { data: recon, refetch: refetchRecon } = useQuery({
+    queryKey: ['ng-tax-recon', orgId, reconStart, reconEnd],
+    enabled: !!orgId,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc('ng_get_reconciliation', {
+        p_organization_id: orgId,
+        p_period_start: reconStart,
+        p_period_end: reconEnd,
+      });
+      if (error) throw error;
+      return (data as any[]) ?? [];
+    },
+  });
+
+  // ---- Submission dialog ----
+  const [subOpen, setSubOpen] = useState(false);
+  const [subFiling, setSubFiling] = useState<any>(null);
+  const [subMode, setSubMode] = useState<SubmissionMode>('manifest');
+  const [subRef, setSubRef] = useState('');
+
+  const runSubmit = useMutation({
+    mutationFn: async () => {
+      if (!subFiling) throw new Error('No filing selected');
+      const defCode = defById.get(subFiling.definition_id)?.code ?? 'NG-TAX';
+      if (subMode === 'manifest') {
+        const manifest = buildFilingManifest(subFiling, defCode);
+        downloadManifest(manifest);
+      }
+      await submitFilingHelper({
+        filingId: subFiling.id,
+        mode: subMode,
+        reference: subRef,
+        payload: { definition_code: defCode, generated_at: new Date().toISOString() },
+      });
+    },
+    onSuccess: () => {
+      toast.success(subMode === 'manifest' ? 'Manifest downloaded and filing marked submitted' : 'Filing marked submitted');
+      setSubOpen(false); setSubFiling(null); setSubRef(''); setSubMode('manifest');
+      qc.invalidateQueries({ queryKey: ['ng-tax-filings', orgId] });
+    },
+    onError: (e: any) => toast.error(e.message ?? 'Submission failed'),
+  });
+
+  const ackFiling = useMutation({
+    mutationFn: async ({ id, ref }: { id: string; ref: string }) => acknowledgeFiling(id, ref),
+    onSuccess: () => {
+      toast.success('Filing acknowledged');
+      qc.invalidateQueries({ queryKey: ['ng-tax-filings', orgId] });
+    },
+    onError: (e: any) => toast.error(e.message ?? 'Failed'),
+  });
+
+  const rejFiling = useMutation({
+    mutationFn: async ({ id, reason }: { id: string; reason: string }) => rejectFiling(id, reason),
+    onSuccess: () => {
+      toast.success('Filing marked rejected');
+      qc.invalidateQueries({ queryKey: ['ng-tax-filings', orgId] });
+    },
+    onError: (e: any) => toast.error(e.message ?? 'Failed'),
+  });
+
 
   return (
     <div className="container mx-auto p-6 space-y-6">
