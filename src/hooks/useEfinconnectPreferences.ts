@@ -38,12 +38,12 @@ export function useEfinconnectPreferences() {
     queryFn: async (): Promise<EfinconnectPreferences> => {
       const { data, error } = await supabase
         .from('organizations')
-        .select('settings')
+        .select('efinconnect_preferences')
         .eq('id', orgId!)
         .maybeSingle();
       if (error) throw error;
-      const settings = (data?.settings ?? {}) as Record<string, unknown>;
-      const raw = (settings.efinconnect ?? {}) as Partial<EfinconnectPreferences>;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const raw = (((data as any)?.efinconnect_preferences ?? {}) as Partial<EfinconnectPreferences>);
       return {
         rails: raw.rails ?? {},
         sections: raw.sections ?? {},
