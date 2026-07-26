@@ -1,32 +1,26 @@
 ## Problem
 
-The Compliance tab reads `public.tax_types` filtered by the org's country. Nigeria (the current org's country) has **0 rows** in `tax_types` and `tax_rates`, so the card shows "No tax types configured" and clicking "Run AI Setup to configure" doesn't help — the AI apply step only writes `organization_tax_settings` referencing `tax_types.id` rows that don't exist.
+Clicking **Subscribe** on the Office Use plan ($0/mo, admin-only) currently calls `openStripeCheckout`, which invokes the `stripe-integration` edge function to create a Stripe Checkout Session. Stripe rejects/complicates $0 subscriptions, and there's no reason to route an internal demo plan through Stripe.
 
-Note: the NG Tax Engine already stores full NG tax logic in `ng_tax_definitions`. The compliance tab reads a different (generic) table, which is why it looks empty.
+## Change
 
-## Fix
+In `src/pages/SubscriptionCheckout.tsx`, short-circuit `handleSubscribe` when the selected plan is the Office Use tier and there is no existing Stripe subscription. Instead of Stripe:
 
-1. Seed Nigeria's `tax_types` + `tax_rates` in `public.tax_types` / `public.tax_rates` so the Compliance tab renders them and AI Setup can enable them for the org:
-   - VAT — 7.5% (consumption, default)
-   - WHT — 10% default (income_tax)
-   - CIT — 30% large / 20% medium / 0% small (income_tax)
-   - TET (Tertiary Education Tax) — 3% (income_tax)
-   - PAYE — progressive placeholder default 7% (payroll)
-   - CGT — 10% (income_tax)
-   - Stamp Duty — 0.75% (other)
+1. Detect Office Use via `(plan.tier ?? deriveTierFromName(plan.name)) === 'office_use'`.
+2. Guard: only admins may activate (already enforced for card visibility, re-check here defensively).
+3. Insert a row into `subscriptions` directly (mirrors the admin `assignSubscription` mutation shape):
+   - `organization_id`, `plan_id = plan.id`
+   - `billing_cycle` = current toggle
+   - `status = 'active'`
+   - `current_period_start = now`, `current_period_end = +1 month/year`
+   - no `stripe_*` fields, no payment method
+4. On success: toast "Office Use plan activated", invalidate `['current-subscription']`, and navigate to `/dashboard` (matching post-checkout behavior).
+5. If an existing Stripe subscription is active and the user switches TO Office Use, still route through the existing `preview-plan-change` / `manage-subscription` flow so Stripe cancels the paid sub cleanly — no change needed there unless testing shows an issue (out of scope for this fix).
 
-   Each linked to Nigeria `country_id = afa3524b-4e7e-4a48-83ab-69648a263259`, with an `effective_from = 2023-01-01`, `is_default = true` on the primary rate, `is_active = true`.
-
-2. After the seed, `useTaxTypes(NG)` returns 7 rows and the card shows a populated table. Existing "Run AI Setup" button already upserts `organization_tax_settings` for every returned tax_type — no code change needed.
-
-3. Small UI polish: in `GlobalComplianceTab.tsx`, compute the rate column from the first `tax_rates` row instead of showing "—". (Requires selecting `tax_rates(*)` in the query.)
-
-## Out of scope
-
-- Seeding tax_types for the other 40+ countries currently at 0 (Canada, Kenya, Burundi already seeded; other jurisdictions can be addressed on request).
-- Any change to the NG Tax Engine (`ng_tax_definitions`) — that stays as the source of truth for calculations; `tax_types` here is just the compliance display/registration list.
+CTA label for Office Use will also change from "Subscribe" to "Activate" for clarity.
 
 ## Files
 
-- **New migration** — seed Nigeria into `tax_types` + `tax_rates`.
-- **`src/components/settings/GlobalComplianceTab.tsx`** — join `tax_rates` and render the default rate.
+- `src/pages/SubscriptionCheckout.tsx` — branch in `handleSubscribe`; small label tweak in the CTA render.
+
+No edge function, DB, or schema changes.
