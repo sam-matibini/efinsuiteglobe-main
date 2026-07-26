@@ -232,19 +232,19 @@ export default function BankingPaymentsDashboard() {
             <Link to="/banking-payments/payment-links"><Link2 className="h-4 w-4 mr-1" />New payment link</Link>
           </Button>
           <Button asChild size="sm" variant="outline">
-            <Link to="/banking-payments/cra-remittance"><Receipt className="h-4 w-4 mr-1" />CRA remittance</Link>
+            <Link to="/banking-payments/cra-remittance"><Receipt className="h-4 w-4 mr-1" />${primaryAuthority} remittance</Link>
           </Button>
         </div>
       </div>
 
       {/* KPI strip */}
       <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-6">
-        <KpiCard label="Paid this month" value={cad(paidThisMonth)} icon={CheckCircle2} accent="text-emerald-600" />
-        <KpiCard label="Outstanding" value={cad(outstanding)} icon={Wallet} />
+        <KpiCard label="Paid this month" value={money(paidThisMonth)} icon={CheckCircle2} accent="text-emerald-600" />
+        <KpiCard label="Outstanding" value={money(outstanding)} icon={Wallet} />
         <KpiCard label="In-flight" value={String(inFlight)} icon={Zap} />
         <KpiCard label="Failed (30d)" value={String(failedLinks.length)} icon={AlertTriangle} accent={failedLinks.length ? 'text-destructive' : ''} />
         <KpiCard label="Avg settle" value={avgSettleHours == null ? '—' : `${avgSettleHours.toFixed(1)}h`} icon={Clock} />
-        <KpiCard label="Fees YTD" value={cad(feesYtd)} icon={TrendingUp} />
+        <KpiCard label="Fees YTD" value={money(feesYtd)} icon={TrendingUp} />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
@@ -269,7 +269,7 @@ export default function BankingPaymentsDashboard() {
                   <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
                   <Tooltip
                     contentStyle={{ background: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 }}
-                    formatter={(v: number) => cad(v)}
+                    formatter={(v: number) => money(v)}
                   />
                   <Area type="monotone" dataKey="total" stroke="hsl(var(--primary))" fill="url(#paidGrad)" strokeWidth={2} />
                 </AreaChart>
@@ -289,7 +289,7 @@ export default function BankingPaymentsDashboard() {
                       <Pie data={methodMix} dataKey="value" nameKey="name" innerRadius={45} outerRadius={75} paddingAngle={2}>
                         {methodMix.map((m) => <Cell key={m.name} fill={METHOD_COLORS[m.name] ?? 'hsl(var(--muted))'} />)}
                       </Pie>
-                      <Tooltip formatter={(v: number) => cad(v)} contentStyle={{ background: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 }} />
+                      <Tooltip formatter={(v: number) => money(v)} contentStyle={{ background: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 }} />
                       <Legend wrapperStyle={{ fontSize: 11 }} formatter={(v: string) => v.charAt(0).toUpperCase() + v.slice(1)} />
                     </PieChart>
                   </ResponsiveContainer>
