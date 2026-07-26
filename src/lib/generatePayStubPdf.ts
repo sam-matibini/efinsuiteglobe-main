@@ -63,14 +63,21 @@ export interface PayStubData {
   companyProvince?: string;
   companyPostalCode?: string;
   companyCountry?: string;
+
+  // Country / locale for labels + currency formatting (defaults to CA / CAD)
+  countryCode?: string;
 }
 
-const formatCurrency = (amount: number): string => {
-  return new Intl.NumberFormat('en-CA', {
-    style: 'currency',
-    currency: 'CAD',
-  }).format(amount);
+const buildFormatCurrency = (countryCode?: string) => {
+  const cc = (countryCode || 'CA').toUpperCase();
+  const loc = getPayrollLocalization(cc);
+  return (amount: number): string =>
+    new Intl.NumberFormat(loc.currencyLocale, {
+      style: 'currency',
+      currency: loc.currencyCode,
+    }).format(amount);
 };
+
 
 const formatDate = (dateStr: string): string => {
   return parseLocalDate(dateStr).toLocaleDateString('en-CA', {
