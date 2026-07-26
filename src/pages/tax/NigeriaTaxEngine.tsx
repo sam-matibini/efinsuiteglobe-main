@@ -588,7 +588,29 @@ export default function NigeriaTaxEngine() {
         {/* -------- REPORTS -------- */}
         <TabsContent value="reports">
           <Card>
-            <CardHeader><CardTitle>Monthly Rollup by Tax Definition</CardTitle></CardHeader>
+            <CardHeader className="flex-row items-center justify-between">
+              <CardTitle>Monthly Rollup by Tax Definition</CardTitle>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={!summary?.length}
+                onClick={() => {
+                  const csv = toCsv(summary ?? [], [
+                    { key: 'period_month', label: 'Month' },
+                    { key: 'definition_code', label: 'Definition' },
+                    { key: 'tax_category', label: 'Category' },
+                    { key: 'transaction_count', label: 'Txns' },
+                    { key: 'total_taxable_base', label: 'Base' },
+                    { key: 'total_tax', label: 'Total Tax' },
+                    { key: 'unfiled_tax', label: 'Unfiled' },
+                    { key: 'filed_tax', label: 'Filed' },
+                    { key: 'remitted_tax', label: 'Remitted' },
+                  ]);
+                  downloadCsv(`ng-tax-rollup-${today}.csv`, csv);
+                }}
+              >Export CSV</Button>
+            </CardHeader>
+
             <CardContent>
               {!orgId ? (
                 <p className="text-muted-foreground">Select an organization.</p>
