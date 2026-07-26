@@ -59,6 +59,7 @@ export const INDUSTRIES: IndustryConfig[] = [
   { value: 'transportation_logistics', label: 'Transportation & Logistics', description: 'Freight, shipping, fleet', icon: 'Truck', accountingFramework: 'ASPE', specializedAccounts: ['Fleet Assets', 'Fuel Costs', 'Freight Revenue'], cogsRequired: true, inventoryRequired: false },
   { value: 'venture_capital', label: 'Venture Capital & Private Equity', description: 'Investment funds, PE firms', icon: 'TrendingUp', accountingFramework: 'IFRS', specializedAccounts: ['Portfolio Investments', 'Carried Interest', 'Management Fees'], cogsRequired: false, inventoryRequired: false },
   { value: 'wholesale', label: 'Wholesale & Distribution', description: 'Wholesale trade, distributors', icon: 'Package', accountingFramework: 'ASPE', specializedAccounts: ['Inventory', 'Freight-In', 'Volume Discounts'], cogsRequired: true, inventoryRequired: true },
+  { value: 'security_intelligence', label: 'Security & Intelligence', description: 'Guarding, investigations, cyber-intel, protective services', icon: 'ShieldCheck', accountingFramework: 'IFRS', specializedAccounts: ['Guarding Services Revenue', 'Guard Wages & Allowances', 'Uniforms & PPE', 'Firearms & Ammunition', 'Surveillance Equipment', 'Regulatory Bond Payable', 'NSCDC Licensing'], cogsRequired: true, inventoryRequired: true },
   { value: 'other', label: 'Other', description: 'Other industries not listed', icon: 'MoreHorizontal', accountingFramework: 'ASPE', specializedAccounts: [], cogsRequired: false, inventoryRequired: false },
 ];
 
