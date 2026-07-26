@@ -51,12 +51,13 @@ export function useNgTaxCalculation() {
   );
 
   const resolveService = useCallback(
-    (code: string, effectiveDate: string) => resolveServiceClassification(code, effectiveDate),
-    [],
+    (code: string, effectiveDate: string) =>
+      resolveServiceClassification(code, effectiveDate, orgId),
+    [orgId],
   );
 
   const reliefs = useCallback(
-    (effectiveDate: string, types?: string[]) => loadReliefs(effectiveDate, orgId, types),
+    (effectiveDate: string) => loadReliefs(effectiveDate, orgId),
     [orgId],
   );
 
