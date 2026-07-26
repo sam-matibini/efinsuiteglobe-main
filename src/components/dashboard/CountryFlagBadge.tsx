@@ -95,6 +95,14 @@ export function CountryFlagBadge() {
       'UNITED STATES': 'US',
       'USA': 'US',
       'US': 'US',
+      'NIGERIA': 'NG',
+      'NG': 'NG',
+      'NGA': 'NG',
+      'UNITED KINGDOM': 'GB',
+      'GREAT BRITAIN': 'GB',
+      'ENGLAND': 'GB',
+      'UK': 'GB',
+      'GB': 'GB',
       'ZAMBIA': 'ZM',
       'ZM': 'ZM',
       'ZMB': 'ZM',
@@ -111,7 +119,7 @@ export function CountryFlagBadge() {
   const countryCode = getCountryCode(countryString);
   const localization = getCountryLocalization(countryCode);
 
-  if (!organization) return null;
+  if (!organization && !scopedCountry) return null;
 
   return (
     <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted/50 border border-border/50">
