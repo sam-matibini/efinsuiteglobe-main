@@ -17,6 +17,7 @@ import { useCraAccounts } from '@/hooks/useCraAccounts';
 import { usePaymentLinks } from '@/hooks/usePaymentLinks';
 import { useCustomerPayments } from '@/hooks/useCustomerPayments';
 import { useCurrencyFormatter } from '@/hooks/useCurrencyFormatter';
+import { useCountryTreasuryConfig } from '@/hooks/useCountryTreasuryConfig';
 import { parseLocalDate } from '@/lib/utils';
 
 const METHOD_COLORS: Record<string, string> = {
@@ -38,6 +39,11 @@ export default function BankingPaymentsDashboard() {
   const { links } = usePaymentLinks();
   const { payments: customerPayments } = useCustomerPayments();
   const fmt = useCurrencyFormatter();
+  const { config, countryCode } = useCountryTreasuryConfig();
+  const primaryAuthority = config.taxPayees[0]?.authority ?? 'Tax';
+  const currency = config.defaultCurrency;
+  const money = (n: number) =>
+    fmt.formatCurrency(n, { showCurrencySymbol: true, currencyOverride: currency });
 
   const today = new Date();
   const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
@@ -167,7 +173,7 @@ export default function BankingPaymentsDashboard() {
       date: p.payment_date,
       ref: p.reference ?? p.invoice?.invoice_number ?? '—',
       amount: Number(p.amount),
-      currency: 'CAD',
+      currency,
       method: p.payment_method ?? 'manual',
       source: p.customer?.name ?? 'Customer payment',
     }));
@@ -176,9 +182,9 @@ export default function BankingPaymentsDashboard() {
       date: (p.paid_at as string | null)?.slice(0, 10) ?? '',
       ref: p.reference,
       amount: Number(p.amount ?? 0),
-      currency: p.currency ?? 'CAD',
+      currency: p.currency ?? currency,
       method: 'eft',
-      source: `CRA · ${p.payment_type.replace('_', ' ')}`,
+      source: `${primaryAuthority} · ${p.payment_type.replace('_', ' ')}`,
     }));
     return rows
       .filter((r) => r.date)
@@ -191,18 +197,28 @@ export default function BankingPaymentsDashboard() {
   const overdue = schedules.filter((s) => s.is_active && s.next_run_date < todayIso);
 
   const tiles = [
-    { title: 'CRA Remittance', href: '/banking-payments/cra-remittance', icon: Receipt },
+    {
+      title: `${primaryAuthority} Remittance`,
+      href: countryCode === 'CA' ? '/banking-payments/cra-remittance' : '/treasury/tax-payments',
+      icon: Receipt,
+    },
     { title: 'AP Payments', href: '/treasury/ap-payments', icon: CreditCard },
     { title: 'Payroll Payments', href: '/treasury/payroll-payments', icon: Users },
     { title: 'Scheduled', href: '/banking-payments/scheduled', icon: Calendar },
     { title: 'Payment History', href: '/banking-payments/history', icon: History },
     { title: 'Payment Links', href: '/banking-payments/payment-links', icon: Link2 },
-    { title: 'CRA Accounts', href: '/banking-payments/cra-accounts', icon: Building2, desc: `${accounts.length} registered` },
+    ...(countryCode === 'CA'
+      ? [{
+          title: 'CRA Accounts',
+          href: '/banking-payments/cra-accounts',
+          icon: Building2,
+          desc: `${accounts.length} registered`,
+        }]
+      : []),
     { title: 'EFT Rails', href: '/banking-payments/eft-rails', icon: Landmark },
   ];
 
-  const cad = (n: number) =>
-    fmt.formatCurrency(n, { showCurrencySymbol: true, currencyOverride: 'CAD' });
+  const money_ = money; // preserved for readability below
 
   return (
     <div className="space-y-6 p-6">
@@ -216,19 +232,19 @@ export default function BankingPaymentsDashboard() {
             <Link to="/banking-payments/payment-links"><Link2 className="h-4 w-4 mr-1" />New payment link</Link>
           </Button>
           <Button asChild size="sm" variant="outline">
-            <Link to="/banking-payments/cra-remittance"><Receipt className="h-4 w-4 mr-1" />CRA remittance</Link>
+            <Link to={countryCode === 'CA' ? '/banking-payments/cra-remittance' : '/treasury/tax-payments'}><Receipt className="h-4 w-4 mr-1" />{primaryAuthority} remittance</Link>
           </Button>
         </div>
       </div>
 
       {/* KPI strip */}
       <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-6">
-        <KpiCard label="Paid this month" value={cad(paidThisMonth)} icon={CheckCircle2} accent="text-emerald-600" />
-        <KpiCard label="Outstanding" value={cad(outstanding)} icon={Wallet} />
+        <KpiCard label="Paid this month" value={money(paidThisMonth)} icon={CheckCircle2} accent="text-emerald-600" />
+        <KpiCard label="Outstanding" value={money(outstanding)} icon={Wallet} />
         <KpiCard label="In-flight" value={String(inFlight)} icon={Zap} />
         <KpiCard label="Failed (30d)" value={String(failedLinks.length)} icon={AlertTriangle} accent={failedLinks.length ? 'text-destructive' : ''} />
         <KpiCard label="Avg settle" value={avgSettleHours == null ? '—' : `${avgSettleHours.toFixed(1)}h`} icon={Clock} />
-        <KpiCard label="Fees YTD" value={cad(feesYtd)} icon={TrendingUp} />
+        <KpiCard label="Fees YTD" value={money(feesYtd)} icon={TrendingUp} />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
@@ -253,7 +269,7 @@ export default function BankingPaymentsDashboard() {
                   <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
                   <Tooltip
                     contentStyle={{ background: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 }}
-                    formatter={(v: number) => cad(v)}
+                    formatter={(v: number) => money(v)}
                   />
                   <Area type="monotone" dataKey="total" stroke="hsl(var(--primary))" fill="url(#paidGrad)" strokeWidth={2} />
                 </AreaChart>
@@ -273,7 +289,7 @@ export default function BankingPaymentsDashboard() {
                       <Pie data={methodMix} dataKey="value" nameKey="name" innerRadius={45} outerRadius={75} paddingAngle={2}>
                         {methodMix.map((m) => <Cell key={m.name} fill={METHOD_COLORS[m.name] ?? 'hsl(var(--muted))'} />)}
                       </Pie>
-                      <Tooltip formatter={(v: number) => cad(v)} contentStyle={{ background: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 }} />
+                      <Tooltip formatter={(v: number) => money(v)} contentStyle={{ background: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 }} />
                       <Legend wrapperStyle={{ fontSize: 11 }} formatter={(v: string) => v.charAt(0).toUpperCase() + v.slice(1)} />
                     </PieChart>
                   </ResponsiveContainer>
