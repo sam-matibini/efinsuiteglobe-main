@@ -29,7 +29,27 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
+
+function toCsv(rows: any[], columns: { key: string; label: string }[]): string {
+  const esc = (v: any) => {
+    const s = v == null ? '' : String(v);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const head = columns.map(c => esc(c.label)).join(',');
+  const body = rows.map(r => columns.map(c => esc(r[c.key])).join(',')).join('\n');
+  return head + '\n' + body;
+}
+function downloadCsv(name: string, csv: string) {
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = name; a.click();
+  URL.revokeObjectURL(url);
+}
+
 
 const categoryColors: Record<string, string> = {
   sales: 'bg-emerald-100 text-emerald-800',
@@ -288,6 +308,38 @@ export default function NigeriaTaxEngine() {
     onError: (e: any) => toast.error(e.message ?? 'Failed to post remittance'),
   });
 
+  // ---- Traceability drawer ----
+  const [traceRow, setTraceRow] = useState<any>(null);
+
+  // ---- Exemption dialog ----
+  const [exOpen, setExOpen] = useState(false);
+  const [exDef, setExDef] = useState('');
+  const [exScope, setExScope] = useState('customer');
+  const [exFrom, setExFrom] = useState(today);
+  const [exTo, setExTo] = useState('');
+  const [exReason, setExReason] = useState('');
+  const createExemption = useMutation({
+    mutationFn: async () => {
+      if (!orgId || !exDef) throw new Error('Select a tax definition');
+      const { error } = await (supabase.from('ng_tax_exemptions') as any).insert({
+        organization_id: orgId,
+        definition_id: exDef,
+        scope: exScope,
+        effective_from: exFrom,
+        effective_to: exTo || null,
+        reason: exReason || null,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('Exemption added');
+      setExOpen(false); setExDef(''); setExReason(''); setExTo('');
+      qc.invalidateQueries({ queryKey: ['ng-tax-exemptions', orgId] });
+    },
+    onError: (e: any) => toast.error(e.message ?? 'Failed'),
+  });
+
+
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div>
@@ -407,6 +459,7 @@ export default function NigeriaTaxEngine() {
                       <TableHead className="text-right">Tax</TableHead>
                       <TableHead>Status</TableHead><TableHead>JE</TableHead>
                       <TableHead>Filing</TableHead>
+                      <TableHead className="text-right">Trace</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -425,10 +478,14 @@ export default function NigeriaTaxEngine() {
                             : <span className="text-muted-foreground text-xs">unlinked</span>}
                         </TableCell>
                         <TableCell className="text-xs font-mono">{l.filing_id ? l.filing_id.slice(0, 8) : '—'}</TableCell>
+                        <TableCell className="text-right">
+                          <Button size="sm" variant="ghost" onClick={() => setTraceRow(l)}>View</Button>
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
+
               )}
             </CardContent>
           </Card>
@@ -531,7 +588,29 @@ export default function NigeriaTaxEngine() {
         {/* -------- REPORTS -------- */}
         <TabsContent value="reports">
           <Card>
-            <CardHeader><CardTitle>Monthly Rollup by Tax Definition</CardTitle></CardHeader>
+            <CardHeader className="flex-row items-center justify-between">
+              <CardTitle>Monthly Rollup by Tax Definition</CardTitle>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={!summary?.length}
+                onClick={() => {
+                  const csv = toCsv(summary ?? [], [
+                    { key: 'period_month', label: 'Month' },
+                    { key: 'definition_code', label: 'Definition' },
+                    { key: 'tax_category', label: 'Category' },
+                    { key: 'transaction_count', label: 'Txns' },
+                    { key: 'total_taxable_base', label: 'Base' },
+                    { key: 'total_tax', label: 'Total Tax' },
+                    { key: 'unfiled_tax', label: 'Unfiled' },
+                    { key: 'filed_tax', label: 'Filed' },
+                    { key: 'remitted_tax', label: 'Remitted' },
+                  ]);
+                  downloadCsv(`ng-tax-rollup-${today}.csv`, csv);
+                }}
+              >Export CSV</Button>
+            </CardHeader>
+
             <CardContent>
               {!orgId ? (
                 <p className="text-muted-foreground">Select an organization.</p>
@@ -575,7 +654,11 @@ export default function NigeriaTaxEngine() {
         {/* -------- EXEMPTIONS & RELIEFS -------- */}
         <TabsContent value="exemptions" className="space-y-4">
           <Card>
-            <CardHeader><CardTitle>Organization Exemptions</CardTitle></CardHeader>
+            <CardHeader className="flex-row items-center justify-between">
+              <CardTitle>Organization Exemptions</CardTitle>
+              <Button size="sm" onClick={() => setExOpen(true)} disabled={!orgId}>Add Exemption</Button>
+            </CardHeader>
+
             <CardContent>
               {!orgId ? (
                 <p className="text-muted-foreground">Select an organization.</p>
@@ -711,6 +794,107 @@ export default function NigeriaTaxEngine() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Exemption dialog */}
+      <Dialog open={exOpen} onOpenChange={setExOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Add Exemption</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Tax definition</Label>
+              <Select value={exDef} onValueChange={setExDef}>
+                <SelectTrigger><SelectValue placeholder="Choose a tax" /></SelectTrigger>
+                <SelectContent>
+                  {(defs ?? []).map((d: any) => (
+                    <SelectItem key={d.id} value={d.id}>{d.code} — {d.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Scope</Label>
+              <Select value={exScope} onValueChange={setExScope}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="customer">Customer</SelectItem>
+                  <SelectItem value="vendor">Vendor</SelectItem>
+                  <SelectItem value="item">Item / service</SelectItem>
+                  <SelectItem value="organization">Whole organization</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Effective from</Label>
+                <Input type="date" value={exFrom} onChange={e => setExFrom(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label>Effective to (optional)</Label>
+                <Input type="date" value={exTo} onChange={e => setExTo(e.target.value)} />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Reason</Label>
+              <Textarea value={exReason} onChange={e => setExReason(e.target.value)} placeholder="e.g. Diplomatic status, export sale, statutory exemption" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setExOpen(false)}>Cancel</Button>
+            <Button onClick={() => createExemption.mutate()} disabled={createExemption.isPending || !exDef}>
+              {createExemption.isPending ? 'Saving…' : 'Save exemption'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Traceability drawer */}
+      <Sheet open={!!traceRow} onOpenChange={(o) => !o && setTraceRow(null)}>
+        <SheetContent className="w-[520px] sm:w-[640px] overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>Tax ledger trace</SheetTitle>
+          </SheetHeader>
+          {traceRow && (
+            <div className="mt-6 space-y-4 text-sm">
+              <div className="grid grid-cols-2 gap-3">
+                <div><Label className="text-xs">Definition</Label><div className="font-mono">{defById.get(traceRow.definition_id)?.code}</div></div>
+                <div><Label className="text-xs">Date</Label><div>{traceRow.transaction_date}</div></div>
+                <div><Label className="text-xs">Base</Label><div>{fmtNaira(traceRow.taxable_base)}</div></div>
+                <div><Label className="text-xs">Rate</Label><div>{traceRow.tax_rate != null ? `${traceRow.tax_rate}%` : '—'}</div></div>
+                <div><Label className="text-xs">Tax</Label><div className="font-medium">{fmtNaira(traceRow.tax_amount)}</div></div>
+                <div><Label className="text-xs">Status</Label><div><Badge className={statusColors[traceRow.status] ?? ''}>{traceRow.status}</Badge></div></div>
+              </div>
+
+              <div>
+                <Label className="text-xs">Source</Label>
+                <div className="font-mono text-xs break-all">{traceRow.source_type} · {traceRow.source_id ?? '—'}</div>
+                {traceRow.source_parent_id && (
+                  <div className="text-xs text-muted-foreground">parent: {traceRow.source_parent_id}</div>
+                )}
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs">Journal entry</Label>
+                {traceRow.journal_entry_id
+                  ? <Link to={`/journal-entries?id=${traceRow.journal_entry_id}`} className="text-primary underline text-xs">Open JE {traceRow.journal_entry_id.slice(0,8)}</Link>
+                  : <div className="text-muted-foreground text-xs">Not linked</div>}
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs">Filing</Label>
+                <div className="font-mono text-xs">{traceRow.filing_id ?? '—'}</div>
+              </div>
+
+              <div>
+                <Label className="text-xs">Calculation breakdown</Label>
+                <pre className="mt-1 text-xs bg-muted p-3 rounded overflow-x-auto">
+{JSON.stringify(traceRow.breakdown, null, 2)}
+                </pre>
+              </div>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
+
