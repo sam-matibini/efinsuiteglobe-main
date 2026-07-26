@@ -14,7 +14,10 @@ import { CheckCircle2, Zap, Star, ExternalLink, ShieldCheck } from 'lucide-react
 import { PadAgreementsCard } from '@/components/treasury/PadAgreementsCard';
 
 
+import { useCountryTreasuryConfig } from '@/hooks/useCountryTreasuryConfig';
+
 export default function TreasurySettings() {
+  const { config } = useCountryTreasuryConfig();
   const { accounts, isLoading, enableStripeAch, enablePaysafeEft, disablePaysafeEft, setDefault } = useFundingBankAccounts();
   const { roles, members, threshold, toggleRole, setThreshold } = useApprovalRoles();
   const isReadOnly = useIsReadOnly();
