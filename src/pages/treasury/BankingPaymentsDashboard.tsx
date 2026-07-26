@@ -232,7 +232,7 @@ export default function BankingPaymentsDashboard() {
             <Link to="/banking-payments/payment-links"><Link2 className="h-4 w-4 mr-1" />New payment link</Link>
           </Button>
           <Button asChild size="sm" variant="outline">
-            <Link to="/banking-payments/cra-remittance"><Receipt className="h-4 w-4 mr-1" />${primaryAuthority} remittance</Link>
+            <Link to={countryCode === 'CA' ? '/banking-payments/cra-remittance' : '/treasury/tax-payments'}><Receipt className="h-4 w-4 mr-1" />{primaryAuthority} remittance</Link>
           </Button>
         </div>
       </div>
