@@ -488,11 +488,15 @@ export default function SubscriptionCheckout() {
           .map((plan) => {
             const price = billingCycle === 'monthly' ? plan.price_monthly : plan.price_yearly;
             const isCurrentPlan = currentSub?.plan_id === plan.id;
-            const priceReady = billingCycle === 'monthly'
-              ? !!plan.stripe_price_id_monthly
-              : !!plan.stripe_price_id_yearly;
             const planTier = (plan.tier || deriveTierFromName(plan.name)) as string;
+            const isOfficeUse = planTier === 'office_use';
+            const priceReady = isOfficeUse || (billingCycle === 'monthly'
+              ? !!plan.stripe_price_id_monthly
+              : !!plan.stripe_price_id_yearly);
             const isHighlighted = highlightTier && planTier === highlightTier;
+            const hasActiveSub = !!currentSub && !!(currentSub as any).stripe_subscription_id;
+            const ctaLabel = isOfficeUse ? 'Activate' : (hasActiveSub ? 'Switch to this plan' : 'Subscribe');
+
             const hasActiveSub = !!currentSub && !!(currentSub as any).stripe_subscription_id;
             const ctaLabel = hasActiveSub ? 'Switch to this plan' : 'Subscribe';
 
