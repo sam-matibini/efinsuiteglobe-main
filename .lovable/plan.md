@@ -1,20 +1,57 @@
+
 ## Goal
 
-Show a loading indicator on the **Prepare & Send** button in `SigningWorkflow` while the eFinSign proxy call is in flight, so users get feedback that their document is being sent.
+Let organization admins generate virtual accounts (multiple, one per currency) via the eFinMoney API. Entry points:
+- **Settings → Organization → Virtual Account** tab
+- **Banking → Virtual Accounts** page
 
-## Changes
+Only the creation menu + list for now — no money-out wiring yet.
 
-**`src/components/docsign/SigningWorkflow.tsx`**
+## Backend
 
-1. Add a local `isSending` state (`useState<boolean>(false)`).
-2. Make `handleSend` async: set `isSending = true`, `await onComplete(recipients, placedFields, settings)`, then reset in a `finally` block. (The parent `handleSigningWorkflowComplete` in `DocSign.tsx` is already `async`, so awaiting it will resolve after the `efinsign-proxy` call completes.)
-3. Update the footer **Prepare & Send** button to:
-   - `disabled={!canSend || isSending}`
-   - Swap the `Send` icon for a spinning `Loader2` when `isSending` is true.
-   - Change the label to `Sending…` while pending.
-4. Also disable the **Previous** button and the step-progress buttons in the header while `isSending` is true so the user can't navigate away mid-send.
+**Secret**
+- Add `EFINCASH_API_KEY` via `add_secret`.
 
-## Out of scope
+**Table: `virtual_accounts`**
+Columns:
+- `organization_id` (fk), `created_by` (uuid)
+- `user_key` (text, unique per org+currency) — we generate as `org_<id>_<currency>`
+- `currency` (text)
+- `email`, `first_name`, `last_name`, `bvn_or_nin` (nullable)
+- `provider` (text, default `efincash`)
+- `provider_account_id`, `account_number`, `bank_name`, `account_name` (nullable — filled from API/webhook)
+- `status` (text: `pending` | `active` | `failed`)
+- `raw_response` (jsonb)
+- standard timestamps
 
-- No changes to `handleSigningWorkflowComplete` in `DocSign.tsx` or to the proxy — the existing toasts still fire on success/error.
-- No changes to the other "Prepare & Send" entry points (dropdown menu, DocumentDetailDialog); those just open the workflow.
+GRANTs + RLS: org members can `SELECT`; only org admins can `INSERT`; `service_role` full access. Unique index on `(organization_id, currency)`.
+
+**Edge function: `efincash-proxy`** (verify_jwt=false, CORS)
+- Action `create_virtual_account`: validates auth + org admin role, inserts row `status=pending`, POSTs to `https://efincash.lenhub.net/v1/flutterwave/flutter/permant/virtual/` with `Authorization: Bearer $EFINCASH_API_KEY`, updates row with account details or `status=failed`, returns result.
+- Zod validation on body.
+
+**Edge function: `efincash-webhook`** (verify_jwt=false, CORS)
+- Accepts POST from eFinCash, looks up row by `user_key` or `provider_account_id`, updates `account_number/bank_name/account_name/status/raw_response`. Logs event.
+
+## Frontend
+
+**Hook `useVirtualAccounts.ts`**
+- `list()` by org, `create(payload)` calls `efincash-proxy`, react-query invalidation.
+
+**Component `CreateVirtualAccountDialog.tsx`**
+- Fields: currency (select: NGN default, plus USD/GBP/EUR), email, first_name, last_name, bvn_or_nin.
+- Prefill from `useAuth` user profile + org owner; all editable.
+- Zod validation; loading state; success toast shows generated account number when returned synchronously.
+
+**Component `VirtualAccountsList.tsx`**
+- Table: currency, account number, bank, status, created date, copy button.
+- "Create Virtual Account" button opens dialog.
+
+**Integration points**
+1. `src/pages/Settings.tsx` (or org settings tabs) → add "Virtual Account" tab rendering `VirtualAccountsList`.
+2. New route `/banking/virtual-accounts` → new page `src/pages/banking/VirtualAccounts.tsx` rendering the same list; add nav entry under Banking; add mapping in `routeModuleMap.ts` (module: `banking`).
+
+## Out of scope (later)
+- Using virtual account balance for payouts / money-out flows
+- Balance sync / transaction feed from eFinCash
+- KYC verification UI beyond passing BVN/NIN
