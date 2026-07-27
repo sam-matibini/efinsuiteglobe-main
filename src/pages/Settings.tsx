@@ -302,6 +302,10 @@ export default function Settings() {
             <Wallet className="w-4 h-4" />
             <span className="hidden sm:inline">Billing</span>
           </TabsTrigger>
+          <TabsTrigger value="virtual-accounts" className="gap-2">
+            <Wallet className="w-4 h-4" />
+            <span className="hidden sm:inline">Virtual Account</span>
+          </TabsTrigger>
           <TabsTrigger value="sales-tax" className="gap-2">
             <Receipt className="w-4 h-4" />
             <span className="hidden sm:inline">Sales Tax</span>
