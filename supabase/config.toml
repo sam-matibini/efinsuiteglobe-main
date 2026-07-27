@@ -187,3 +187,9 @@ verify_jwt = false
 [functions.efinsign-webhook]
 verify_jwt = false
 
+[functions.efincash-proxy]
+verify_jwt = false
+
+[functions.efincash-webhook]
+verify_jwt = false
+
