@@ -43,6 +43,8 @@ import { PlaidLinkDialog } from '@/components/banking/PlaidLinkDialog';
 import { ACHConnectDialog } from '@/components/banking/ACHConnectDialog';
 import { EditBankAccountDialog } from '@/components/banking/EditBankAccountDialog';
 import { FundsTransferDialog } from '@/components/banking/FundsTransferDialog';
+import { CreateVirtualAccountDialog } from '@/components/virtual-accounts/CreateVirtualAccountDialog';
+import { VirtualAccountsList } from '@/components/virtual-accounts/VirtualAccountsList';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
