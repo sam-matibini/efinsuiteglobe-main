@@ -26894,6 +26894,69 @@ export type Database = {
           },
         ]
       }
+      virtual_accounts: {
+        Row: {
+          account_name: string | null
+          account_number: string | null
+          bank_name: string | null
+          bvn_or_nin: string | null
+          created_at: string
+          created_by: string | null
+          currency: string
+          email: string
+          first_name: string | null
+          id: string
+          last_name: string | null
+          organization_id: string
+          provider: string
+          provider_account_id: string | null
+          raw_response: Json | null
+          status: string
+          updated_at: string
+          user_key: string
+        }
+        Insert: {
+          account_name?: string | null
+          account_number?: string | null
+          bank_name?: string | null
+          bvn_or_nin?: string | null
+          created_at?: string
+          created_by?: string | null
+          currency: string
+          email: string
+          first_name?: string | null
+          id?: string
+          last_name?: string | null
+          organization_id: string
+          provider?: string
+          provider_account_id?: string | null
+          raw_response?: Json | null
+          status?: string
+          updated_at?: string
+          user_key: string
+        }
+        Update: {
+          account_name?: string | null
+          account_number?: string | null
+          bank_name?: string | null
+          bvn_or_nin?: string | null
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          email?: string
+          first_name?: string | null
+          id?: string
+          last_name?: string | null
+          organization_id?: string
+          provider?: string
+          provider_account_id?: string | null
+          raw_response?: Json | null
+          status?: string
+          updated_at?: string
+          user_key?: string
+        }
+        Relationships: []
+      }
       voice_call_events: {
         Row: {
           event_data: Json | null
