@@ -60,7 +60,7 @@ Deno.serve(async (req) => {
 
     // Verify user is org admin/owner
     const { data: isAdmin, error: roleErr } = await admin.rpc('is_org_admin_or_owner', {
-      _user_id: userId, _org_id: input.organization_id,
+      p_user_id: userId, p_org_id: input.organization_id,
     });
     if (roleErr || !isAdmin) {
       return new Response(JSON.stringify({ error: 'Forbidden: org admin required' }), {
