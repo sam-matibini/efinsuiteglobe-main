@@ -100,7 +100,7 @@ const PayLink = lazy(() => import("./pages/public/PayLink"));
 const Vendors = lazy(() => import("./pages/Vendors"));
 const Bills = lazy(() => import("./pages/Bills"));
 const BankAccounts = lazy(() => import("./pages/BankAccounts"));
-const VirtualAccounts = lazy(() => import("./pages/banking/VirtualAccounts"));
+
 const BankTransactions = lazy(() => import("./pages/BankTransactions"));
 const AICategorizationInsights = lazy(() => import("./pages/AICategorizationInsights"));
 const AICategorizationHistory = lazy(() => import("./pages/AICategorizationHistory"));
