@@ -27,6 +27,7 @@ import { PaymentSettingsTab } from '@/components/settings/PaymentSettingsTab';
 import { ExecutiveSignerSettingsCard } from '@/components/settings/ExecutiveSignerSettingsCard';
 import { DeleteOrganizationDialog } from '@/components/settings/DeleteOrganizationDialog';
 import { BillingSettingsTab } from '@/components/settings/BillingSettingsTab';
+import { VirtualAccountsList } from '@/components/virtual-accounts/VirtualAccountsList';
 import { Trash2 } from 'lucide-react';
 
 import { useOrganizationContext } from '@/hooks/useOrganizationContext';
@@ -744,6 +745,10 @@ export default function Settings() {
 
         <TabsContent value="billing" className="space-y-6">
           <BillingSettingsTab />
+        </TabsContent>
+
+        <TabsContent value="virtual-accounts" className="space-y-6">
+          <VirtualAccountsList />
         </TabsContent>
 
 
