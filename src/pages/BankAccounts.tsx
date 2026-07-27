@@ -650,6 +650,14 @@ export default function BankAccounts() {
         open={isTransferOpen}
         onOpenChange={setIsTransferOpen}
       />
+
+      {/* Create Virtual Account Dialog (replaces manual Add Account) */}
+      <CreateVirtualAccountDialog open={isAddOpen} onOpenChange={setIsAddOpen} />
+
+      {/* Virtual Accounts list */}
+      <div className="pt-4">
+        <VirtualAccountsList />
+      </div>
     </div>
   );
 }
