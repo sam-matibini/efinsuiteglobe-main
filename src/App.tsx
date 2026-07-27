@@ -339,7 +339,7 @@ const AppRoutes = () => {
     <Route path="/reports/aging" element={<ProtectedRoute><PageWrapper><AgingReports /></PageWrapper></ProtectedRoute>} />
     <Route path="/reports/consolidated" element={<ProtectedRoute><PageWrapper><ConsolidatedStatements /></PageWrapper></ProtectedRoute>} />
     <Route path="/banking/accounts" element={<ProtectedRoute><PageWrapper><BankAccounts /></PageWrapper></ProtectedRoute>} />
-    <Route path="/banking/virtual-accounts" element={<ProtectedRoute><PageWrapper><VirtualAccounts /></PageWrapper></ProtectedRoute>} />
+    
     <Route path="/banking/settlements" element={<ProtectedRoute><PageWrapper><SettlementReconciliation /></PageWrapper></ProtectedRoute>} />
     <Route path="/treasury" element={<ProtectedRoute><PageWrapper><TreasuryDashboard /></PageWrapper></ProtectedRoute>} />
     <Route path="/treasury/tax-payments" element={<ProtectedRoute><PageWrapper><TreasuryTaxPayments /></PageWrapper></ProtectedRoute>} />
