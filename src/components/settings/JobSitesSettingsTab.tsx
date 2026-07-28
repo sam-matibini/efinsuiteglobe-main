@@ -255,6 +255,113 @@ export function JobSitesSettingsTab() {
           </div>
         </CardContent>
       </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Upload className="w-5 h-5" />
+            Bulk import job sites
+          </CardTitle>
+          <CardDescription>
+            Upload a CSV/XLSX file or paste rows to add multiple sites at once.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="flex flex-wrap gap-3">
+            <Button variant="outline" onClick={downloadJobSitesTemplate}>
+              <Download className="w-4 h-4 mr-2" />
+              Download template
+            </Button>
+            <Button variant="outline" onClick={() => fileRef.current?.click()}>
+              <FileUp className="w-4 h-4 mr-2" />
+              Choose file (.csv, .xlsx)
+            </Button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".csv,.xlsx,.xls"
+              className="hidden"
+              onChange={(e) => handleFile(e.target.files?.[0] ?? null)}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="bulk-paste">Or paste rows (one per line: name, code, is_active)</Label>
+            <Textarea
+              id="bulk-paste"
+              rows={4}
+              placeholder={'Head Office, HQ, true\nLagos Branch, LAG'}
+              value={pasted}
+              onChange={(e) => setPasted(e.target.value)}
+            />
+            <Button variant="secondary" size="sm" onClick={handleParsePasted} disabled={!pasted.trim()}>
+              Preview pasted rows
+            </Button>
+          </div>
+
+          {parsed.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="text-sm text-muted-foreground">
+                  {validCount} valid / {parsed.length - validCount} with issues
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="ghost" size="sm" onClick={() => setParsed([])}>
+                    Clear
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={handleImport}
+                    disabled={validCount === 0 || bulkCreateSites.isPending}
+                  >
+                    Import {validCount} site{validCount === 1 ? '' : 's'}
+                  </Button>
+                </div>
+              </div>
+              <div className="rounded-md border max-h-80 overflow-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead className="w-24">Code</TableHead>
+                      <TableHead className="w-24">Active</TableHead>
+                      <TableHead>Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {parsed.map((r, idx) => (
+                      <TableRow key={idx} className={r.error ? 'bg-destructive/5' : ''}>
+                        <TableCell>{r.name}</TableCell>
+                        <TableCell>{r.code || <span className="text-muted-foreground">—</span>}</TableCell>
+                        <TableCell>{r.is_active ? 'Yes' : 'No'}</TableCell>
+                        <TableCell>
+                          {r.error ? (
+                            <Badge variant="destructive">{r.error}</Badge>
+                          ) : (
+                            <Badge variant="secondary">Ready</Badge>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          )}
+
+          {failed.length > 0 && (
+            <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 flex items-center justify-between">
+              <div className="text-sm">
+                {failed.length} row{failed.length === 1 ? '' : 's'} were skipped due to validation issues.
+              </div>
+              <Button variant="outline" size="sm" onClick={() => exportFailedJobSitesCsv(failed)}>
+                <Download className="w-4 h-4 mr-2" />
+                Download failed rows
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
