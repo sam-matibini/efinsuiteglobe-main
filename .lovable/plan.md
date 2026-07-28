@@ -1,32 +1,30 @@
-## Goal
-Capture the 11-digit **National Identification Number (NIN)** issued by NIMC for Nigerian employees, required during onboarding to satisfy NRS documentation rules. NIN is separate from the existing TIN field (which stays as `sin_encrypted` via the generic `nationalId` slot).
+## Problem
 
-## Database
-New migration:
-- Add `employees.nin text` (nullable at column level, enforced by app + trigger for NG only).
-- Add `employees.nin_verified_at timestamptz`, `employees.nin_verified_by uuid` (optional audit fields for future NIMC verification).
-- Add a validation trigger `enforce_nigeria_nin`: when the employee's org country is Nigeria, `nin` must be present and match `^\d{11}$`. Non-NG orgs unaffected.
-- No RLS changes needed (inherits from `employees`).
+The paystub renders in `$` (CAD) for a Nigerian employee instead of `₦`. Root cause is in `src/components/payroll/ViewPayRunDialog.tsx` line 128:
 
-## Frontend
+```ts
+const countryCode = (organization as any)?.country?.code || 'CA';
+```
 
-### Add Employee dialog (`src/components/employees/AddEmployeeDialog.tsx`)
-- Add `nin` to the Zod schema. Use a country-conditional refine: required + `/^\d{11}$/` when active country is `NG`, otherwise optional.
-- Add a NIN input in the Personal tab, shown only when the active country is Nigeria, with placeholder `12345678901`, `maxLength=11`, inputMode numeric, and "* Required by NRS" helper text.
-- Include `nin` in the insert payload.
+`organization.country` is a **string** (e.g. `"Nigeria"`), not an object with `.code` — confirmed in `src/hooks/useOrganization.ts` (`country: string | null`) and in `src/hooks/useCurrencyFormatter.ts`, which correctly reads `organization?.country` directly. So `.code` is always `undefined`, the code falls back to `'CA'`, and `localization.currency` becomes `CAD` — which is then passed into `<PaystubViewer currencyCode={localization.currency} />`.
 
-### Edit Employee dialog (`src/components/employees/EditEmployeeDialog.tsx`)
-- Add `nin` to form state, hydrate from `employee.nin`.
-- Render the same conditional NIN input in the Personal tab.
-- Include `nin` in the update payload and block submit with a toast if Nigeria + missing/invalid.
+## Fix
 
-### Employee profile (`src/pages/employees/EmployeeProfile.tsx`)
-- Display `NIN` in the Personal/Identity section for Nigerian employees.
+In `src/components/payroll/ViewPayRunDialog.tsx`:
 
-### Types
-- After the migration regenerates `src/integrations/supabase/types.ts`, the new field flows through automatically. No manual edit to that file.
+- Replace the broken country-code derivation with the same pattern the rest of the app uses, resolving from the string `organization.country` via `getCountryLocalization` / `getLocaleForCountry` (both already handle full country names and codes).
 
-## Out of scope
-- Live NIMC verification API — leave the audit columns in place but don't call any external service yet.
-- Backfilling NIN for existing Nigerian employees — surfaced only when a user next edits the record (submit will require it).
-- Changing the TIN/`sin_encrypted` field.
+```ts
+const countryCode = (organization as any)?.country || 'CA';
+```
+
+That single change makes `localization.currency` = `NGN` and `locale` = `en-NG` for Nigerian organizations, which flow into `PaystubViewer` and format all amounts (Earnings, Deductions, Net Pay, YTD) with `₦`.
+
+## Verification
+
+- Open a pay run for the Nigerian org shown in the screenshot; confirm all currency values on the paystub render with `₦` and no `$` remains.
+- Confirm Canadian org paystubs still render in `$` (CAD) — the fallback is unchanged.
+
+## Scope
+
+Frontend-only, one-line change in `ViewPayRunDialog.tsx`. No DB, no other components affected (PaystubViewer already accepts `currencyCode`/`locale` props correctly).
