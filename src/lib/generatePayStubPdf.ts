@@ -69,15 +69,7 @@ export interface PayStubData {
   countryCode?: string;
 }
 
-const buildFormatCurrency = (countryCode?: string) => {
-  const cc = (countryCode || 'CA').toUpperCase();
-  const loc = getPayrollLocalization(cc);
-  return (amount: number): string =>
-    new Intl.NumberFormat(loc.currencyLocale, {
-      style: 'currency',
-      currency: loc.currencyCode,
-    }).format(amount);
-};
+const buildFormatCurrency = (countryCode?: string) => buildPdfCurrencyFormatter(countryCode);
 
 
 const formatDate = (dateStr: string): string => {
