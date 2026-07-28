@@ -1,30 +1,37 @@
-## Add State/Province to Job Sites
+## Goal
+Make dropdown fields on the **Edit Employee** dialog searchable (type-to-filter), starting with the Employment tab shown in the screenshot and extending across the whole form.
 
-Extend the Job Sites / Locations feature so each site records a state or province (localized to the active country, e.g. Nigerian states for NG orgs, Canadian provinces for CA).
+## Approach
+Introduce a reusable `SearchableSelect` component (built on the existing shadcn `Command` + `Popover` primitives) that keeps the same value/onChange API as the current `Select`, so swapping is a minimal edit. It will:
+- Render a trigger identical in style to `SelectTrigger`
+- Open a popover with a `CommandInput` search box, filtered `CommandItem` list, and empty state
+- Support placeholder, disabled state, and `max-h-72` scroll
 
-### Database
-- Migration on `public.job_sites`:
-  - Add `state_province text` (nullable — existing rows stay valid).
-  - No enum; use free text so it works across all localized countries (CA, NG, ZM, US, KE, etc.).
+## Fields to convert in `src/components/employees/EditEmployeeDialog.tsx`
+Employment tab:
+- Job Site / Location (from `useJobSites`)
+- State / Province (jurisdictions list)
+- Employment Type
+- Pay Frequency
+- Status
 
-### Types & hook
-- `src/hooks/useJobSites.ts`: add `state_province` to the `JobSite` interface, and to `createSite` / `updateSite` / `bulkCreateSites` payloads.
+Personal tab:
+- Country / any locale selects present
 
-### Settings UI — `JobSitesSettingsTab.tsx`
-- Add a **State/Province** dropdown next to Site name / Code in the add-site row.
-- Populate options from the active country's jurisdictions via `getCountryLocalization(scopedCountry)` (same source used by employee dialogs).
-- Show the new column in the sites table.
-- Edit dialog / inline edit: allow changing state/province.
+Compensation tab:
+- Currency selector, pay type / rate unit selects
 
-### Bulk import — `src/lib/jobSitesBulk.ts`
-- Add `state_province` column to:
-  - CSV template (`downloadJobSitesTemplate`)
-  - Parser (`parseJobSitesFile`, `parsePastedJobSites`) — accept `state`, `province`, `state_province` header aliases.
-  - Validation — warn (not block) if value isn't in the active country's jurisdiction list.
-  - Failed-rows export.
+Guarantors tab:
+- Sex, Status, Relationship, State/Prov, Country selects inside `GuarantorForm.tsx`
 
-### Employee onboarding (optional auto-fill)
-- In `AddEmployeeDialog` / `EditEmployeeDialog`: when a Job Site is selected and the employee's province is empty, pre-fill it from the site's `state_province`. Non-destructive — user can still override.
+Text `Input` fields (Job Title, Department, Hire Date, names, phone, addresses) stay as-is — they're already free-text and don't need a searchable control.
 
-### Out of scope
-- No changes to reports, payroll, or tax logic. State/prov on the site is purely descriptive metadata for now.
+## Technical notes
+- New file: `src/components/ui/searchable-select.tsx`
+- Uses existing `@/components/ui/command` and `@/components/ui/popover`
+- Preserves current form state shape — no changes to `formData` or save handlers
+- Long lists (job sites, provinces, countries, Nigerian states) benefit most; short enums (4 options) still get consistent UX
+
+## Out of scope
+- No DB or business-logic changes
+- No changes to Add Employee dialog unless you want it mirrored (say the word and I'll include it)

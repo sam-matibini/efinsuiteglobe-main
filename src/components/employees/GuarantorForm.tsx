@@ -3,6 +3,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Textarea } from '@/components/ui/textarea';
 import { UserPlus, ShieldCheck, ShieldAlert } from 'lucide-react';
 import type { EmployeeGuarantor } from '@/hooks/useEmployeeGuarantors';
@@ -67,14 +68,16 @@ function GuarantorFields({ value, onChange, title }: Props) {
 
         <div className="space-y-1.5">
           <Label>Sex</Label>
-          <Select value={value.sex ?? ''} onValueChange={(v) => set('sex', v)}>
-            <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="male">Male</SelectItem>
-              <SelectItem value="female">Female</SelectItem>
-              <SelectItem value="other">Other</SelectItem>
-            </SelectContent>
-          </Select>
+          <SearchableSelect
+            value={value.sex ?? ''}
+            onValueChange={(v) => set('sex', v)}
+            options={[
+              { value: 'male', label: 'Male' },
+              { value: 'female', label: 'Female' },
+              { value: 'other', label: 'Other' },
+            ]}
+            placeholder="Select"
+          />
         </div>
 
         <div className="space-y-1.5">
@@ -89,15 +92,17 @@ function GuarantorFields({ value, onChange, title }: Props) {
 
         <div className="space-y-1.5">
           <Label>Marital Status</Label>
-          <Select value={value.marital_status ?? ''} onValueChange={(v) => set('marital_status', v)}>
-            <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="single">Single</SelectItem>
-              <SelectItem value="married">Married</SelectItem>
-              <SelectItem value="divorced">Divorced</SelectItem>
-              <SelectItem value="widowed">Widowed</SelectItem>
-            </SelectContent>
-          </Select>
+          <SearchableSelect
+            value={value.marital_status ?? ''}
+            onValueChange={(v) => set('marital_status', v)}
+            options={[
+              { value: 'single', label: 'Single' },
+              { value: 'married', label: 'Married' },
+              { value: 'divorced', label: 'Divorced' },
+              { value: 'widowed', label: 'Widowed' },
+            ]}
+            placeholder="Select"
+          />
         </div>
 
         <div className="space-y-1.5">
@@ -260,19 +265,19 @@ function GuarantorFields({ value, onChange, title }: Props) {
             {value.confirmed && (
               <div className="space-y-1.5">
                 <Label className="text-xs">Confirmation method</Label>
-                <Select
+                <SearchableSelect
                   value={value.confirmation_method ?? ''}
                   onValueChange={(v) => set('confirmation_method', v)}
-                >
-                  <SelectTrigger className="h-8"><SelectValue placeholder="Select method" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="signature">Signed form</SelectItem>
-                    <SelectItem value="email">Email confirmation</SelectItem>
-                    <SelectItem value="phone">Phone confirmation</SelectItem>
-                    <SelectItem value="in_person">In-person confirmation</SelectItem>
-                    <SelectItem value="manual">Manual / other</SelectItem>
-                  </SelectContent>
-                </Select>
+                  options={[
+                    { value: 'signature', label: 'Signed form' },
+                    { value: 'email', label: 'Email confirmation' },
+                    { value: 'phone', label: 'Phone confirmation' },
+                    { value: 'in_person', label: 'In-person confirmation' },
+                    { value: 'manual', label: 'Manual / other' },
+                  ]}
+                  placeholder="Select method"
+                  className="h-8"
+                />
               </div>
             )}
           </div>
