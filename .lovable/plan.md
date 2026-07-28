@@ -1,50 +1,62 @@
-## Goal
-Make `efincash-webhook` update the virtual account balance whenever eFinCash notifies us of an incoming deposit (or other balance-affecting event), and keep an auditable transaction log.
+## Problem
 
-## Schema changes (migration)
-1. Add to `public.virtual_accounts`:
-   - `balance numeric(18,2) not null default 0`
-2. New table `public.virtual_account_transactions`:
-   - `id uuid pk`
-   - `virtual_account_id uuid → virtual_accounts(id) on delete cascade`
-   - `organization_id uuid` (denormalized for RLS)
-   - `provider_tx_id text` — external reference (idempotency)
-   - `type text` — `credit` | `debit`
-   - `amount numeric(18,2)`
-   - `currency text`
-   - `status text` — `successful` | `pending` | `failed`
-   - `narration text`, `sender_name text`, `sender_bank text`, `sender_account text`
-   - `raw_payload jsonb`
-   - `occurred_at timestamptz`, `created_at`, `updated_at`
-   - Unique index on `(virtual_account_id, provider_tx_id)` for idempotency
-   - GRANTs + RLS: `authenticated` can `SELECT` where they're a member of `organization_id`; only `service_role` can write.
+The real eFinCash response is double-nested and uses different field names than our current parser assumes, so proxied creations end up with `account_number`, `bank_name`, and `provider_account_id` all null, and status defaults to `pending` even on a successful `active` account.
 
-## Edge function: `efincash-webhook`
-Extend the existing handler:
+Actual shape:
 
-1. After matching the `virtual_accounts` row (by `user_key` or `provider_account_id`), inspect the payload for a transaction event. Detect via common eFinCash / Flutterwave fields: `event`/`type` containing `charge`/`transfer`/`credit`/`deposit`, or presence of an `amount` + transaction reference.
-2. Extract normalized fields with fallbacks:
-   - `provider_tx_id`: `data.id | data.tx_ref | data.reference | data.flw_ref`
-   - `amount`: `data.amount | data.amount_settled`
-   - `currency`: `data.currency`
-   - `status`: `data.status` → map `successful`/`success` → `successful`
-   - `narration`, `sender_name` (`data.customer.name` or `data.meta.originatorname`), `sender_bank`, `sender_account`
-   - `occurred_at`: `data.created_at` or now
-3. Upsert into `virtual_account_transactions` on `(virtual_account_id, provider_tx_id)` — makes retries idempotent.
-4. Only on **insert** of a `successful` `credit`, increment `virtual_accounts.balance` by `amount` (single atomic SQL: `UPDATE ... SET balance = balance + $1`). Debits subtract. Pending/failed events are logged but don't move balance.
-5. Preserve existing account-provisioning behavior (setting `account_number`, `bank_name`, `status`) — only run that branch when the payload looks like an account event (no `amount`, or event name mentions `account`/`virtual`).
-6. Always return 200 for known/ignored events so eFinCash doesn't retry storm.
+```text
+{ status, message: { status, message, data: { id, account_number, account_bank_name, reference, status, currency, customer_id, ... } } }
+```
 
-## Frontend
-- `useVirtualAccounts` type: add `balance: number`.
-- `VirtualAccountsList`: show a **Balance** column (formatted with the account currency).
-- No new page; transactions table can be surfaced later.
+Current code reads `providerJson.data` (which is the outer `message` object) and looks for `bank_name` / `accountNumber` — none of which exist.
 
-## Out of scope (ask before adding)
-- Mirroring credits into `bank_accounts` / posting a GL journal entry.
-- A dedicated transactions drill-down UI.
-- Outbound payments/debits from the VAN.
+## Refactor `efincash-proxy`
 
-## Technical notes
-- Webhook remains `verify_jwt = false`; add a lightweight shared-secret header check later if eFinCash supports one (not part of this change unless you confirm the header name).
-- All balance math done in Postgres to avoid race conditions on concurrent webhooks.
+1. Extract a single normalizer used for both the create response and future webhook payloads:
+  ```ts
+   function unwrap(payload: any) {
+     // Peel `{ status, message: { ..., data } }` or `{ data }` or bare object
+     const inner = payload?.message?.data ?? payload?.data ?? payload ?? {};
+     const outerOk = (payload?.status ?? payload?.message?.status ?? '').toString().toLowerCase() === 'success';
+     return { d: inner, outerOk };
+   }
+  ```
+2. Map fields to our schema:
+  - `provider_account_id` ← `d.id` (e.g. `van_aB7ZzKCEfa`) — **this is what the webhook will echo back**, so it must be stored.
+  - `account_number` ← `d.account_number`
+  - `bank_name` ← `d.account_bank_name ?? d.bank_name`
+  - `account_name` ← ``${first_name} ${last_name}``
+    `currency` ← `d.currency ?? input.currency`
+  - `status` ← `d.status === 'active' ? 'active' : (outerOk ? 'pending' : 'failed')`
+3. Success = HTTP 2xx **and** `outerOk` **and** an `account_number` present. Otherwise mark row `failed` and return 502 with the raw provider body.
+4. Keep storing the entire `providerJson` in `raw_response` for debugging.
+5. Minor: drop the dead `providerStatus` reassignment from the auth-token call, and surface a clearer error when the auth-token response has no `key`.
+
+## Refactor `efincash-webhook`
+
+1. Reuse the same `unwrap()` helper (move it to `supabase/functions/_shared/efincash.ts` and import from both functions).
+2. Account-lookup order becomes:
+  - `provider_account_id` = `d.id ?? d.reference` (matches what we stored on create)
+  - fallback: `account_number` = `d.account_number`
+3. Event classification stays as-is (amount presence → transaction branch; otherwise account-update branch), but reads normalized fields:
+  - `amount` ← `d.amount ?? d.amount_settled`
+  - `currency` ← `d.currency`
+  - `provider_tx_id` ← `d.id ?? d.reference ?? d.tx_ref ?? d.flw_ref`
+  - `status` ← `d.status` mapped to `successful | pending | failed`
+  - sender fields from `d.meta.*` fallbacks preserved
+4. Account-update branch: on webhook re-notification of the VAN itself, refresh `account_number`, `bank_name` (`account_bank_name`), `provider_account_id`, and set `status = 'active'` when `d.status === 'active'`.
+5. Continue returning HTTP 200 for all recognized events (no retry storms).
+
+## Shared file
+
+New `supabase/functions/_shared/efincash.ts` exporting `unwrap(payload)` and small helpers `mapAccountFields(d)` / `mapTxFields(d, body)`. Both functions import from it.
+
+## Out of scope
+
+- Signature/shared-secret verification on the webhook.
+- Mirroring VAN credits into `bank_accounts` or the GL.
+- UI changes (`VirtualAccountsList` already renders whatever comes back).
+
+## Verification
+
+After deploy, re-create a GHS virtual account and confirm the DB row has non-null `account_number`, `bank_name = "First Bank Ghana"`, `provider_account_id = "van_..."`, and `status = 'active'`.
