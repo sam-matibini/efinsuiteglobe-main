@@ -17,6 +17,14 @@ const schema = z.object({
   first_name: z.string().trim().min(1, 'Required').max(100),
   last_name: z.string().trim().min(1, 'Required').max(100),
   bvn_or_nin: z.string().trim().max(50).optional().or(z.literal('')),
+}).superRefine((data, ctx) => {
+  if (data.currency === 'NGN' && !data.bvn_or_nin) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['bvn_or_nin'],
+      message: 'BVN or NIN is required for NGN accounts',
+    });
+  }
 });
 
 interface Props {
