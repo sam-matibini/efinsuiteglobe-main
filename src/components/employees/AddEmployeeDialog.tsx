@@ -52,6 +52,9 @@ const createEmployeeSchema = (countryCode: string) => {
     email: z.string().email('Valid email required'),
     phone: z.string().optional(),
     nationalId: z.string().optional(),
+    nin: countryCode === 'NG'
+      ? z.string().regex(/^\d{11}$/, 'NIN must be exactly 11 digits')
+      : z.string().optional(),
     dateOfBirth: z.string().optional(),
     // Mailing address
     addressLine1: z.string().optional(),
