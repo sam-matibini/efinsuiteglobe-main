@@ -7,7 +7,7 @@ export interface VirtualAccount {
   id: string;
   organization_id: string;
   provider: string;
-  user_key: string;
+  
   currency: string;
   email: string;
   first_name: string | null;

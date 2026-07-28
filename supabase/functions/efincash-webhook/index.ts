@@ -17,21 +17,22 @@ Deno.serve(async (req) => {
       .toString()
       .toLowerCase();
 
-    const userKey: string | null = data.user_key ?? body.user_key ?? null;
     const providerAccountId: string | null =
       data.id ?? data.reference ?? data.order_ref ?? body.reference ?? null;
+    const accountNumberLookup: string | null =
+      data.account_number ?? data.accountNumber ?? data.virtual_account_number ?? null;
 
-    if (!userKey && !providerAccountId) {
+    if (!providerAccountId && !accountNumberLookup) {
       return new Response(JSON.stringify({ ok: true, note: 'no identifier' }), {
         status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    // Look up the virtual account row
+    // Look up the virtual account row by provider_account_id or account_number
     const baseSel = admin.from('virtual_accounts').select('id, organization_id, currency, balance').limit(1);
-    const { data: row } = userKey
-      ? await baseSel.eq('user_key', userKey).maybeSingle()
-      : await baseSel.eq('provider_account_id', String(providerAccountId)).maybeSingle();
+    const { data: row } = providerAccountId
+      ? await baseSel.eq('provider_account_id', String(providerAccountId)).maybeSingle()
+      : await baseSel.eq('account_number', String(accountNumberLookup)).maybeSingle();
 
     if (!row) {
       return new Response(JSON.stringify({ ok: true, note: 'no matching account' }), {
