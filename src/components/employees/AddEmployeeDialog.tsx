@@ -2,7 +2,9 @@ import { useState, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { FileText, User, Sparkles } from 'lucide-react';
+import { FileText, User, Sparkles, UserPlus } from 'lucide-react';
+import { GuarantorsForm, EMPTY_GUARANTOR, type GuarantorDraft } from './GuarantorForm';
+import { saveGuarantorsForEmployee } from '@/hooks/useEmployeeGuarantors';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -103,6 +105,8 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
   const [activeTab, setActiveTab] = useState('personal');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedJurisdiction, setSelectedJurisdiction] = useState<string>('');
+  const [guarantor1, setGuarantor1] = useState<GuarantorDraft>(EMPTY_GUARANTOR(1));
+  const [guarantor2, setGuarantor2] = useState<GuarantorDraft>(EMPTY_GUARANTOR(2));
 
   // Determine country from organization
   const countryCode = useMemo(() => {
@@ -351,6 +355,18 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
       }
       // For other countries, we could store in a generic payroll_deductions table
 
+      // Save guarantors (any provided)
+      if (organization?.id) {
+        try {
+          await saveGuarantorsForEmployee(employee.id, organization.id, [
+            { ...guarantor1, guarantor_order: 1, full_name: guarantor1.full_name?.trim() ?? '' },
+            { ...guarantor2, guarantor_order: 2, full_name: guarantor2.full_name?.trim() ?? '' },
+          ]);
+        } catch (gErr: any) {
+          console.warn('Guarantor save warning:', gErr?.message);
+        }
+      }
+
       toast.success(`Employee ${data.firstName} ${data.lastName} added successfully!`);
       form.reset();
       onOpenChange(false);
@@ -593,7 +609,7 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <TabsList className="grid w-full grid-cols-2">
+              <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="personal" className="flex items-center gap-2">
                   <User className="w-4 h-4" />
                   Personal Info
@@ -601,6 +617,10 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
                 <TabsTrigger value="tax" className="flex items-center gap-2">
                   <FileText className="w-4 h-4" />
                   {payrollConfig.taxFormName}
+                </TabsTrigger>
+                <TabsTrigger value="guarantors" className="flex items-center gap-2">
+                  <UserPlus className="w-4 h-4" />
+                  Guarantors
                 </TabsTrigger>
               </TabsList>
 
@@ -992,6 +1012,16 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
 
               {/* Tax Credits Tab */}
               {renderTaxCreditsTab()}
+
+              {/* Guarantors Tab */}
+              <TabsContent value="guarantors" className="space-y-4 mt-4">
+                <GuarantorsForm
+                  first={guarantor1}
+                  second={guarantor2}
+                  onChangeFirst={setGuarantor1}
+                  onChangeSecond={setGuarantor2}
+                />
+              </TabsContent>
             </Tabs>
 
             <div className="flex justify-between pt-6 border-t mt-6">
@@ -1004,23 +1034,26 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
               </Button>
               <div className="flex gap-2">
                 {activeTab === 'tax' && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setActiveTab('personal')}
-                  >
+                  <Button type="button" variant="outline" onClick={() => setActiveTab('personal')}>
+                    Previous
+                  </Button>
+                )}
+                {activeTab === 'guarantors' && (
+                  <Button type="button" variant="outline" onClick={() => setActiveTab('tax')}>
                     Previous
                   </Button>
                 )}
                 {activeTab === 'personal' && (
-                  <Button
-                    type="button"
-                    onClick={() => setActiveTab('tax')}
-                  >
+                  <Button type="button" onClick={() => setActiveTab('tax')}>
                     Next
                   </Button>
                 )}
                 {activeTab === 'tax' && (
+                  <Button type="button" onClick={() => setActiveTab('guarantors')}>
+                    Next
+                  </Button>
+                )}
+                {activeTab === 'guarantors' && (
                   <Button type="submit" disabled={isSubmitting}>
                     {isSubmitting ? 'Adding...' : 'Add Employee'}
                   </Button>

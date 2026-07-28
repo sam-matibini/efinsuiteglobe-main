@@ -20,7 +20,9 @@ import { useQueryClient } from '@tanstack/react-query';
 import { PROVINCE_NAMES, ROE_REASON_CODES } from '@/types/payroll';
 import { Textarea } from '@/components/ui/textarea';
 import { Database } from '@/integrations/supabase/types';
-import { User, Briefcase, DollarSign, FileText, MapPin } from 'lucide-react';
+import { User, Briefcase, DollarSign, FileText, MapPin, UserPlus } from 'lucide-react';
+import { GuarantorsForm, EMPTY_GUARANTOR, type GuarantorDraft } from './GuarantorForm';
+import { useEmployeeGuarantors } from '@/hooks/useEmployeeGuarantors';
 import { Checkbox } from '@/components/ui/checkbox';
 
 type Employee = Database['public']['Tables']['employees']['Row'];
@@ -310,7 +312,7 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="personal" className="flex items-center gap-1 text-xs">
               <User className="w-3.5 h-3.5" />
               Personal
@@ -326,6 +328,10 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
             <TabsTrigger value="tax" className="flex items-center gap-1 text-xs">
               <FileText className="w-3.5 h-3.5" />
               TD1 Tax
+            </TabsTrigger>
+            <TabsTrigger value="guarantors" className="flex items-center gap-1 text-xs">
+              <UserPlus className="w-3.5 h-3.5" />
+              Guarantors
             </TabsTrigger>
           </TabsList>
 
@@ -662,6 +668,10 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
               </div>
             </Card>
           </TabsContent>
+
+          <TabsContent value="guarantors" className="space-y-4 mt-4">
+            <GuarantorsTabContent employeeId={employee.id} />
+          </TabsContent>
         </Tabs>
 
         <DialogFooter>
@@ -672,5 +682,55 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function GuarantorsTabContent({ employeeId }: { employeeId: string }) {
+  const { guarantors, isLoading, upsert } = useEmployeeGuarantors(employeeId);
+
+  const seed = (order: 1 | 2): GuarantorDraft => {
+    const existing = guarantors.find((g) => g.guarantor_order === order);
+    if (!existing) return EMPTY_GUARANTOR(order);
+    const { id: _id, employee_id: _e, organization_id: _o, ...rest } = existing;
+    return { ...EMPTY_GUARANTOR(order), ...rest, guarantor_order: order };
+  };
+
+  const [g1, setG1] = useState<GuarantorDraft>(EMPTY_GUARANTOR(1));
+  const [g2, setG2] = useState<GuarantorDraft>(EMPTY_GUARANTOR(2));
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    if (!isLoading && !hydrated) {
+      setG1(seed(1));
+      setG2(seed(2));
+      setHydrated(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoading, guarantors.length]);
+
+  const save = async (which: 1 | 2) => {
+    const draft = which === 1 ? g1 : g2;
+    if (!draft.full_name?.trim()) {
+      toast.error('Full name is required');
+      return;
+    }
+    await upsert.mutateAsync({ ...draft, employee_id: employeeId });
+    toast.success(`Guarantor ${which} saved`);
+  };
+
+  if (isLoading) return <p className="text-sm text-muted-foreground">Loading guarantors…</p>;
+
+  return (
+    <div className="space-y-4">
+      <GuarantorsForm first={g1} second={g2} onChangeFirst={setG1} onChangeSecond={setG2} />
+      <div className="flex justify-end gap-2">
+        <Button variant="outline" onClick={() => save(1)} disabled={upsert.isPending}>
+          Save 1st Guarantor
+        </Button>
+        <Button onClick={() => save(2)} disabled={upsert.isPending}>
+          Save 2nd Guarantor
+        </Button>
+      </div>
+    </div>
   );
 }
