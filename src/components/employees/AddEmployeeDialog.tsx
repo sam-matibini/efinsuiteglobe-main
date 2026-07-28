@@ -355,6 +355,18 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
       }
       // For other countries, we could store in a generic payroll_deductions table
 
+      // Save guarantors (any provided)
+      if (organization?.id) {
+        try {
+          await saveGuarantorsForEmployee(employee.id, organization.id, [
+            { ...guarantor1, guarantor_order: 1, full_name: guarantor1.full_name?.trim() ?? '' },
+            { ...guarantor2, guarantor_order: 2, full_name: guarantor2.full_name?.trim() ?? '' },
+          ]);
+        } catch (gErr: any) {
+          console.warn('Guarantor save warning:', gErr?.message);
+        }
+      }
+
       toast.success(`Employee ${data.firstName} ${data.lastName} added successfully!`);
       form.reset();
       onOpenChange(false);
