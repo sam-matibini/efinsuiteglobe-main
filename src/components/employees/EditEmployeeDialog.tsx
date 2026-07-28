@@ -668,6 +668,10 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
               </div>
             </Card>
           </TabsContent>
+
+          <TabsContent value="guarantors" className="space-y-4 mt-4">
+            <GuarantorsTabContent employeeId={employee.id} />
+          </TabsContent>
         </Tabs>
 
         <DialogFooter>
