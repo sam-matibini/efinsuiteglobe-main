@@ -209,6 +209,13 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
       return;
     }
 
+    if (!formData.job_site_id) {
+      toast.error('Job Site is required');
+      setActiveTab('employment');
+      return;
+    }
+
+
     setIsSubmitting(true);
     try {
       // Update employee record
