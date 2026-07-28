@@ -9158,7 +9158,7 @@ export type Database = {
           phone: string | null
           postal_code: string | null
           preferred_name: string | null
-          province: Database["public"]["Enums"]["province_code"]
+          province: string
           sin_encrypted: string | null
           status: Database["public"]["Enums"]["employee_status"]
           statutory_profile: Json
@@ -9210,7 +9210,7 @@ export type Database = {
           phone?: string | null
           postal_code?: string | null
           preferred_name?: string | null
-          province?: Database["public"]["Enums"]["province_code"]
+          province?: string
           sin_encrypted?: string | null
           status?: Database["public"]["Enums"]["employee_status"]
           statutory_profile?: Json
@@ -9262,7 +9262,7 @@ export type Database = {
           phone?: string | null
           postal_code?: string | null
           preferred_name?: string | null
-          province?: Database["public"]["Enums"]["province_code"]
+          province?: string
           sin_encrypted?: string | null
           status?: Database["public"]["Enums"]["employee_status"]
           statutory_profile?: Json
