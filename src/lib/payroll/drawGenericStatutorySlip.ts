@@ -32,11 +32,7 @@ export function generateGenericStatutorySlipPdf(data: GenericSlipData): void {
   const M = 14;
 
   const money = (v: number) =>
-    new Intl.NumberFormat(data.currencyLocale, {
-      style: 'currency',
-      currency: data.currencyCode,
-      minimumFractionDigits: 2,
-    }).format(v || 0);
+    formatPdfCurrencyByCode(v || 0, data.currencyCode, data.currencyLocale);
 
   // Header bar
   doc.setFillColor(15, 38, 65);
