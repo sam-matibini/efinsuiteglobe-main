@@ -24,6 +24,7 @@ import { User, Briefcase, DollarSign, FileText, MapPin, UserPlus } from 'lucide-
 import { GuarantorsForm, EMPTY_GUARANTOR, type GuarantorDraft } from './GuarantorForm';
 import { useEmployeeGuarantors } from '@/hooks/useEmployeeGuarantors';
 import { Checkbox } from '@/components/ui/checkbox';
+import { useCurrencyFormatter } from '@/hooks/useCurrencyFormatter';
 
 type Employee = Database['public']['Tables']['employees']['Row'];
 type TD1Row = Database['public']['Tables']['employee_td1']['Row'];
