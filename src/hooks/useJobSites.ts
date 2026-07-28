@@ -92,7 +92,7 @@ export function useJobSites(options?: { activeOnly?: boolean }) {
 
   const bulkCreateSites = useMutation({
     mutationFn: async (
-      inputs: { name: string; code?: string | null; is_active?: boolean }[],
+      inputs: { name: string; code?: string | null; state_province?: string | null; is_active?: boolean }[],
     ) => {
       if (!organization?.id) throw new Error('No organization selected');
       if (inputs.length === 0) return { inserted: 0 };
@@ -100,6 +100,7 @@ export function useJobSites(options?: { activeOnly?: boolean }) {
         organization_id: organization.id,
         name: i.name.trim(),
         code: i.code?.toString().trim() || null,
+        state_province: i.state_province?.toString().trim() || null,
         is_active: i.is_active ?? true,
       }));
       const { data, error } = await supabase
