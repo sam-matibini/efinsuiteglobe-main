@@ -1,26 +1,32 @@
-## Job Locations/Sites
+## Goal
+Capture the 11-digit **National Identification Number (NIN)** issued by NIMC for Nigerian employees, required during onboarding to satisfy NRS documentation rules. NIN is separate from the existing TIN field (which stays as `sin_encrypted` via the generic `nationalId` slot).
 
-Add a simple per-organization list of job sites, manageable in Settings, and require selecting one when creating/editing an employee.
-
-### 1. Database
+## Database
 New migration:
-- `public.job_sites` table: `id`, `organization_id`, `name`, `code` (optional short code), `is_active` (default true), `created_at`, `updated_at`.
-- Unique constraint on `(organization_id, name)`.
-- GRANTs to `authenticated` and `service_role`; RLS scoped to org membership via `is_org_member(organization_id)`.
-- Add `job_site_id uuid` to `public.employees` (nullable at DB level for backward compatibility with existing rows; required only via UI validation).
-- FK `employees.job_site_id -> job_sites.id` (ON DELETE RESTRICT).
+- Add `employees.nin text` (nullable at column level, enforced by app + trigger for NG only).
+- Add `employees.nin_verified_at timestamptz`, `employees.nin_verified_by uuid` (optional audit fields for future NIMC verification).
+- Add a validation trigger `enforce_nigeria_nin`: when the employee's org country is Nigeria, `nin` must be present and match `^\d{11}$`. Non-NG orgs unaffected.
+- No RLS changes needed (inherits from `employees`).
 
-### 2. Settings UI
-- New tab **"Job Sites"** in `src/pages/Settings.tsx` (icon: `MapPin`).
-- New component `src/components/settings/JobSitesSettingsTab.tsx`: list + add/edit/deactivate rows (name, optional code, active toggle).
-- New hook `src/hooks/useJobSites.ts` (list/create/update/deactivate, org-scoped, React Query).
+## Frontend
 
-### 3. Employee onboarding form
-- Add a required **Job Site** select on `AddEmployeeDialog.tsx` and `EditEmployeeDialog.tsx` (Employment tab), populated from `useJobSites` filtered to `is_active`.
-- Block submission with inline error if no site selected.
-- Show job site on `EmployeeProfile.tsx` in the employment info section.
+### Add Employee dialog (`src/components/employees/AddEmployeeDialog.tsx`)
+- Add `nin` to the Zod schema. Use a country-conditional refine: required + `/^\d{11}$/` when active country is `NG`, otherwise optional.
+- Add a NIN input in the Personal tab, shown only when the active country is Nigeria, with placeholder `12345678901`, `maxLength=11`, inputMode numeric, and "* Required by NRS" helper text.
+- Include `nin` in the insert payload.
 
-### Technical notes
-- No changes to payroll or reports in this pass.
-- Existing employees keep `job_site_id = null`; edit dialog will require selection on next save.
-- Localization-agnostic — works for all countries.
+### Edit Employee dialog (`src/components/employees/EditEmployeeDialog.tsx`)
+- Add `nin` to form state, hydrate from `employee.nin`.
+- Render the same conditional NIN input in the Personal tab.
+- Include `nin` in the update payload and block submit with a toast if Nigeria + missing/invalid.
+
+### Employee profile (`src/pages/employees/EmployeeProfile.tsx`)
+- Display `NIN` in the Personal/Identity section for Nigerian employees.
+
+### Types
+- After the migration regenerates `src/integrations/supabase/types.ts`, the new field flows through automatically. No manual edit to that file.
+
+## Out of scope
+- Live NIMC verification API — leave the audit columns in place but don't call any external service yet.
+- Backfilling NIN for existing Nigerian employees — surfaced only when a user next edits the record (submit will require it).
+- Changing the TIN/`sin_encrypted` field.
