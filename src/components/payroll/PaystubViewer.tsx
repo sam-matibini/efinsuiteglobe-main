@@ -120,6 +120,7 @@ export function PaystubViewer({ payStub, companyName, companyLogo, currencyCode,
   });
 
   const generatePdf = async (): Promise<jsPDF> => {
+    const logoDataUrl = await loadImageAsDataUrl(companyLogo || undefined);
     return generatePayStubPdf({
       employeeName: payStub.employeeName,
       employeeNumber: payStub.employeeNumber,
@@ -165,6 +166,8 @@ export function PaystubViewer({ payStub, companyName, companyLogo, currencyCode,
       companyPostalCode: payStub.companyPostalCode,
       companyCountry: payStub.companyCountry,
       countryCode: (payStub.companyCountry || payStub.employeeCountry || 'CA').toUpperCase().slice(0, 2),
+      logoDataUrl,
+      logoMimeType: 'PNG',
     });
   };
 
