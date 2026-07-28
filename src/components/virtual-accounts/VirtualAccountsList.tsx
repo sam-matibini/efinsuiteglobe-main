@@ -55,6 +55,7 @@ export function VirtualAccountsList() {
                 <TableHead>Account number</TableHead>
                 <TableHead>Bank</TableHead>
                 <TableHead>Account name</TableHead>
+                <TableHead className="text-right">Balance</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Created</TableHead>
               </TableRow>
@@ -79,6 +80,12 @@ export function VirtualAccountsList() {
                   </TableCell>
                   <TableCell>{a.bank_name ?? '—'}</TableCell>
                   <TableCell>{a.account_name ?? '—'}</TableCell>
+                  <TableCell className="text-right font-mono">
+                    {new Intl.NumberFormat(undefined, {
+                      style: 'currency',
+                      currency: a.currency || 'USD',
+                    }).format(Number(a.balance ?? 0))}
+                  </TableCell>
                   <TableCell>
                     <Badge variant={statusVariant[a.status] ?? 'outline'}>{a.status}</Badge>
                   </TableCell>

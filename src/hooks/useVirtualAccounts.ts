@@ -18,6 +18,7 @@ export interface VirtualAccount {
   bank_name: string | null;
   account_name: string | null;
   status: 'pending' | 'active' | 'failed';
+  balance: number;
   created_at: string;
   updated_at: string;
 }
