@@ -409,6 +409,22 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
               </div>
             </div>
 
+            {countryCode === 'NG' && (
+              <div className="space-y-2">
+                <Label>National Identification Number (NIN) *</Label>
+                <Input
+                  value={formData.nin}
+                  onChange={e => setFormData({ ...formData, nin: e.target.value.replace(/\D/g, '').slice(0, 11) })}
+                  placeholder="12345678901"
+                  maxLength={11}
+                  inputMode="numeric"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Required by NRS. Must be the 11-digit NIN issued by NIMC.
+                </p>
+              </div>
+            )}
+
             {/* Address */}
             <div className="pt-2 pb-1">
               <h3 className="text-sm font-medium text-muted-foreground flex items-center gap-1"><MapPin className="w-3.5 h-3.5" /> Mailing Address</h3>
