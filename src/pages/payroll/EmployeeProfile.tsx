@@ -252,7 +252,7 @@ export default function EmployeeProfile() {
                   <p className="text-sm text-muted-foreground">Hourly Rate</p>
                   <div className="flex items-center gap-2">
                     <Clock className="w-4 h-4 text-muted-foreground" />
-                    <p className="font-semibold text-xl">${employee.hourly_rate}/hr</p>
+                    <p className="font-semibold text-xl">{currencySymbol}{employee.hourly_rate}/hr</p>
                   </div>
                 </div>
               )}
