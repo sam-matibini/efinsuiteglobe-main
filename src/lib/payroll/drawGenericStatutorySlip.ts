@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf';
 import type { TaxSlip } from '@/hooks/useTaxSlips';
 import { getPayrollPdfConfig, type SlipFieldSpec } from './slipFieldMapping';
+import { formatPdfCurrencyByCode } from './pdfCurrency';
 
 interface GenericSlipData {
   slip: TaxSlip;
