@@ -281,6 +281,10 @@ export default function Settings() {
             <Building2 className="w-4 h-4" />
             <span className="hidden sm:inline">Organization</span>
           </TabsTrigger>
+          <TabsTrigger value="divisions" className="gap-2">
+            <Network className="w-4 h-4" />
+            <span className="hidden sm:inline">Divisions</span>
+          </TabsTrigger>
           <TabsTrigger value="compliance" className="gap-2">
             <Globe className="w-4 h-4" />
             <span className="hidden sm:inline">Compliance</span>
