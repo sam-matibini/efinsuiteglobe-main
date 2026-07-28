@@ -1,13 +1,23 @@
-import { useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { MapPin, Plus, Trash2, Pencil, Check, X } from 'lucide-react';
+import { MapPin, Plus, Trash2, Pencil, Check, X, Upload, Download, FileUp } from 'lucide-react';
 import { useJobSites, type JobSite } from '@/hooks/useJobSites';
+import {
+  downloadJobSitesTemplate,
+  parseJobSitesFile,
+  parsePastedJobSites,
+  exportFailedJobSitesCsv,
+  validateRows,
+  type ValidatedRow,
+} from '@/lib/jobSitesBulk';
+import { toast } from 'sonner';
 
 export function JobSitesSettingsTab() {
   const { jobSites, isLoading, createSite, updateSite, deleteSite } = useJobSites();
