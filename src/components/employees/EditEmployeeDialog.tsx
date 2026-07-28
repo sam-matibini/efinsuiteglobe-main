@@ -297,8 +297,8 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
     }
   };
 
-  const formatCurrency = (val: number) =>
-    new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD', minimumFractionDigits: 0 }).format(val);
+  const { formatWithSymbol } = useCurrencyFormatter();
+  const formatCurrency = (val: number) => formatWithSymbol(val);
 
   if (!employee) return null;
 
