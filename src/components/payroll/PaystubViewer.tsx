@@ -173,32 +173,24 @@ export function PaystubViewer({ payStub, companyName, companyLogo, currencyCode,
     try {
       const doc = await generatePdf();
       doc.autoPrint();
-      const pdfDataUri = doc.output('datauristring');
-      
-      const printWindow = window.open('', '_blank');
-      if (printWindow) {
-        printWindow.document.write(`
-          <html>
-            <head><title>Print Pay Stub - ${payStub.employeeName}</title></head>
-            <body style="margin:0;padding:0;">
-              <iframe
-                src="${pdfDataUri}"
-                style="width:100%;height:100%;border:none;"
-                onload="this.contentWindow.print();">
-              </iframe>
-            </body>
-          </html>
-        `);
-        printWindow.document.close();
-      } else {
-        toast.error('Please allow pop-ups to print');
+      const blob = doc.output('blob');
+      const url = URL.createObjectURL(blob);
+      const printWindow = window.open(url, '_blank', 'noopener,noreferrer');
+      if (!printWindow) {
+        // Popup blocked — fall back to direct download so the user can print locally
+        const filename = `paystub_${payStub.employeeNumber}_${payStub.payDate}.pdf`;
+        doc.save(filename);
+        toast.message('Pop-up blocked — PDF downloaded instead. Open it to print.');
       }
+      // Revoke after the new tab has had time to load the blob
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch (error) {
       toast.error('Failed to generate print document');
     } finally {
       setIsPrinting(false);
     }
   };
+
 
   const handleExportPDF = async () => {
     try {
