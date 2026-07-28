@@ -305,6 +305,7 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
         pay_frequency: data.payFrequency,
         department: data.department || null,
         job_title: data.jobTitle || null,
+        job_site_id: data.jobSiteId,
         annual_salary: data.payType === 'salary' ? data.annualSalary : null,
         hourly_rate: data.payType === 'hourly' ? data.hourlyRate : null,
         status: 'onboarding' as const,
