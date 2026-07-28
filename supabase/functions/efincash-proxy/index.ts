@@ -109,7 +109,7 @@ Deno.serve(async (req) => {
 
     // Call eFinCash
     const payload = {
-      user_key: apiKey,
+      user_key: userKey,
       currency: input.currency,
       email: input.email,
       bvn_or_nin: input.bvn_or_nin ?? null,
@@ -132,8 +132,7 @@ Deno.serve(async (req) => {
       const text = await resp.text();
       try { 
         const data = JSON.parse(text); 
-        accessToken = data?.access_token ?? ''; 
-        console.log('[INFO] eFinCash access token response:', data);
+        accessToken = data?.key ?? ''; 
       } catch { 
         return new Response(JSON.stringify({ error: `[ERROR] Failed to parse access token response: ${text}` }), {
           status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
