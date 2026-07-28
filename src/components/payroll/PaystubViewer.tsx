@@ -23,7 +23,7 @@ import * as XLSX from 'xlsx';
 import eFinSuiteGlobeLogo from '@/assets/efinsuite-globe-logo.png';
 import { copyTextToClipboard, tryOpenInNewTab } from '@/lib/share';
 import { useTwilioShare } from '@/hooks/useTwilioShare';
-import { buildAddressLines, generatePayStubPdf } from '@/lib/generatePayStubPdf';
+import { buildAddressLines, generatePayStubPdf, loadImageAsDataUrl } from '@/lib/generatePayStubPdf';
 import { useCurrencyFormatter } from '@/hooks/useCurrencyFormatter';
 
 interface PayStubData {
@@ -120,6 +120,7 @@ export function PaystubViewer({ payStub, companyName, companyLogo, currencyCode,
   });
 
   const generatePdf = async (): Promise<jsPDF> => {
+    const logoDataUrl = await loadImageAsDataUrl(companyLogo || undefined);
     return generatePayStubPdf({
       employeeName: payStub.employeeName,
       employeeNumber: payStub.employeeNumber,
@@ -165,6 +166,8 @@ export function PaystubViewer({ payStub, companyName, companyLogo, currencyCode,
       companyPostalCode: payStub.companyPostalCode,
       companyCountry: payStub.companyCountry,
       countryCode: (payStub.companyCountry || payStub.employeeCountry || 'CA').toUpperCase().slice(0, 2),
+      logoDataUrl,
+      logoMimeType: 'PNG',
     });
   };
 
