@@ -265,19 +265,19 @@ function GuarantorFields({ value, onChange, title }: Props) {
             {value.confirmed && (
               <div className="space-y-1.5">
                 <Label className="text-xs">Confirmation method</Label>
-                <Select
+                <SearchableSelect
                   value={value.confirmation_method ?? ''}
                   onValueChange={(v) => set('confirmation_method', v)}
-                >
-                  <SelectTrigger className="h-8"><SelectValue placeholder="Select method" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="signature">Signed form</SelectItem>
-                    <SelectItem value="email">Email confirmation</SelectItem>
-                    <SelectItem value="phone">Phone confirmation</SelectItem>
-                    <SelectItem value="in_person">In-person confirmation</SelectItem>
-                    <SelectItem value="manual">Manual / other</SelectItem>
-                  </SelectContent>
-                </Select>
+                  options={[
+                    { value: 'signature', label: 'Signed form' },
+                    { value: 'email', label: 'Email confirmation' },
+                    { value: 'phone', label: 'Phone confirmation' },
+                    { value: 'in_person', label: 'In-person confirmation' },
+                    { value: 'manual', label: 'Manual / other' },
+                  ]}
+                  placeholder="Select method"
+                  className="h-8"
+                />
               </div>
             )}
           </div>
