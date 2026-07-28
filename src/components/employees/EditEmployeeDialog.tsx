@@ -601,94 +601,112 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
             })()}
           </TabsContent>
 
-          {/* TD1 Tax Tab */}
+          {/* TD1 Tax Tab — Canada only. Other countries show a localized note. */}
           <TabsContent value="tax" className="space-y-4 mt-4">
-            {/* Federal TD1 */}
-            <Card className="p-4">
-              <div className="flex items-center justify-between mb-4">
-                <h4 className="font-medium flex items-center gap-2">
-                  <Badge variant="outline" className="bg-primary/10">Federal</Badge>
-                  TD1 - Federal
+            {!isCA && (
+              <Card className="p-4 bg-muted/30">
+                <h4 className="font-medium mb-2 flex items-center gap-2">
+                  <FileText className="w-4 h-4" />
+                  Tax Relief — {countryConfig.name}
                 </h4>
-                <span className="text-sm font-medium">Total: {formatCurrency(federalTotal)}</span>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Basic Personal Amount</Label>
-                  <Input type="number" value={td1Data.basic_personal_amount} onChange={e => setTd1Data({ ...td1Data, basic_personal_amount: parseFloat(e.target.value) || 0 })} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Canada Employment Amount</Label>
-                  <Input type="number" value={td1Data.canada_employment_amount} onChange={e => setTd1Data({ ...td1Data, canada_employment_amount: parseFloat(e.target.value) || 0 })} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Age Amount</Label>
-                  <Input type="number" value={td1Data.age_amount} onChange={e => setTd1Data({ ...td1Data, age_amount: parseFloat(e.target.value) || 0 })} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Disability Amount</Label>
-                  <Input type="number" value={td1Data.disability_amount} onChange={e => setTd1Data({ ...td1Data, disability_amount: parseFloat(e.target.value) || 0 })} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Spouse/Dependant Amount</Label>
-                  <Input type="number" value={td1Data.spouse_amount} onChange={e => setTd1Data({ ...td1Data, spouse_amount: parseFloat(e.target.value) || 0 })} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Tuition Amount</Label>
-                  <Input type="number" value={td1Data.tuition_amount} onChange={e => setTd1Data({ ...td1Data, tuition_amount: parseFloat(e.target.value) || 0 })} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Other Credits</Label>
-                  <Input type="number" value={td1Data.other_credits} onChange={e => setTd1Data({ ...td1Data, other_credits: parseFloat(e.target.value) || 0 })} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Additional Tax Deduction</Label>
-                  <Input type="number" value={td1Data.additional_tax_deduction} onChange={e => setTd1Data({ ...td1Data, additional_tax_deduction: parseFloat(e.target.value) || 0 })} />
-                </div>
-              </div>
-            </Card>
+                <p className="text-sm text-muted-foreground">
+                  {countryCode === 'NG'
+                    ? 'Nigeria does not use a TD1-style tax credit certificate. PAYE is computed automatically each pay run using the Consolidated Relief Allowance (higher of ₦200,000 or 1% of gross, plus 20% of gross) under PITA, with statutory pension and NHF deductions applied before the progressive tax bands.'
+                    : `${countryConfig.name} does not use the Canadian TD1 form. Statutory deductions and reliefs are applied automatically during payroll processing based on ${countryConfig.name} rules.`}
+                </p>
+              </Card>
+            )}
+            {isCA && (
+              <>
+                {/* Federal TD1 */}
+                <Card className="p-4">
+                  <div className="flex items-center justify-between mb-4">
+                    <h4 className="font-medium flex items-center gap-2">
+                      <Badge variant="outline" className="bg-primary/10">Federal</Badge>
+                      TD1 - Federal
+                    </h4>
+                    <span className="text-sm font-medium">Total: {formatCurrency(federalTotal)}</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Basic Personal Amount</Label>
+                      <Input type="number" value={td1Data.basic_personal_amount} onChange={e => setTd1Data({ ...td1Data, basic_personal_amount: parseFloat(e.target.value) || 0 })} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Canada Employment Amount</Label>
+                      <Input type="number" value={td1Data.canada_employment_amount} onChange={e => setTd1Data({ ...td1Data, canada_employment_amount: parseFloat(e.target.value) || 0 })} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Age Amount</Label>
+                      <Input type="number" value={td1Data.age_amount} onChange={e => setTd1Data({ ...td1Data, age_amount: parseFloat(e.target.value) || 0 })} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Disability Amount</Label>
+                      <Input type="number" value={td1Data.disability_amount} onChange={e => setTd1Data({ ...td1Data, disability_amount: parseFloat(e.target.value) || 0 })} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Spouse/Dependant Amount</Label>
+                      <Input type="number" value={td1Data.spouse_amount} onChange={e => setTd1Data({ ...td1Data, spouse_amount: parseFloat(e.target.value) || 0 })} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Tuition Amount</Label>
+                      <Input type="number" value={td1Data.tuition_amount} onChange={e => setTd1Data({ ...td1Data, tuition_amount: parseFloat(e.target.value) || 0 })} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Other Credits</Label>
+                      <Input type="number" value={td1Data.other_credits} onChange={e => setTd1Data({ ...td1Data, other_credits: parseFloat(e.target.value) || 0 })} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Additional Tax Deduction</Label>
+                      <Input type="number" value={td1Data.additional_tax_deduction} onChange={e => setTd1Data({ ...td1Data, additional_tax_deduction: parseFloat(e.target.value) || 0 })} />
+                    </div>
+                  </div>
+                </Card>
 
-            {/* Provincial TD1 */}
-            <Card className="p-4">
-              <div className="flex items-center justify-between mb-4">
-                <h4 className="font-medium flex items-center gap-2">
-                  <Badge variant="outline" className="bg-secondary/50">{formData.province}</Badge>
-                  TD1 - {PROVINCE_NAMES[formData.province as keyof typeof PROVINCE_NAMES] || formData.province}
-                </h4>
-                <span className="text-sm font-medium">Total: {formatCurrency(provincialTotal)}</span>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Basic Personal Amount</Label>
-                  <Input type="number" value={td1Data.prov_basic_personal_amount} onChange={e => setTd1Data({ ...td1Data, prov_basic_personal_amount: parseFloat(e.target.value) || 0 })} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Age Amount</Label>
-                  <Input type="number" value={td1Data.prov_age_amount} onChange={e => setTd1Data({ ...td1Data, prov_age_amount: parseFloat(e.target.value) || 0 })} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Disability Amount</Label>
-                  <Input type="number" value={td1Data.prov_disability_amount} onChange={e => setTd1Data({ ...td1Data, prov_disability_amount: parseFloat(e.target.value) || 0 })} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Spouse/Dependant Amount</Label>
-                  <Input type="number" value={td1Data.prov_spouse_amount} onChange={e => setTd1Data({ ...td1Data, prov_spouse_amount: parseFloat(e.target.value) || 0 })} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Tuition Amount</Label>
-                  <Input type="number" value={td1Data.prov_tuition_amount} onChange={e => setTd1Data({ ...td1Data, prov_tuition_amount: parseFloat(e.target.value) || 0 })} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Other Credits</Label>
-                  <Input type="number" value={td1Data.prov_other_credits} onChange={e => setTd1Data({ ...td1Data, prov_other_credits: parseFloat(e.target.value) || 0 })} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Additional Tax Deduction</Label>
-                  <Input type="number" value={td1Data.prov_additional_tax_deduction} onChange={e => setTd1Data({ ...td1Data, prov_additional_tax_deduction: parseFloat(e.target.value) || 0 })} />
-                </div>
-              </div>
-            </Card>
+                {/* Provincial TD1 */}
+                <Card className="p-4">
+                  <div className="flex items-center justify-between mb-4">
+                    <h4 className="font-medium flex items-center gap-2">
+                      <Badge variant="outline" className="bg-secondary/50">{formData.province}</Badge>
+                      TD1 - {PROVINCE_NAMES[formData.province as keyof typeof PROVINCE_NAMES] || formData.province}
+                    </h4>
+                    <span className="text-sm font-medium">Total: {formatCurrency(provincialTotal)}</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Basic Personal Amount</Label>
+                      <Input type="number" value={td1Data.prov_basic_personal_amount} onChange={e => setTd1Data({ ...td1Data, prov_basic_personal_amount: parseFloat(e.target.value) || 0 })} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Age Amount</Label>
+                      <Input type="number" value={td1Data.prov_age_amount} onChange={e => setTd1Data({ ...td1Data, prov_age_amount: parseFloat(e.target.value) || 0 })} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Disability Amount</Label>
+                      <Input type="number" value={td1Data.prov_disability_amount} onChange={e => setTd1Data({ ...td1Data, prov_disability_amount: parseFloat(e.target.value) || 0 })} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Spouse/Dependant Amount</Label>
+                      <Input type="number" value={td1Data.prov_spouse_amount} onChange={e => setTd1Data({ ...td1Data, prov_spouse_amount: parseFloat(e.target.value) || 0 })} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Tuition Amount</Label>
+                      <Input type="number" value={td1Data.prov_tuition_amount} onChange={e => setTd1Data({ ...td1Data, prov_tuition_amount: parseFloat(e.target.value) || 0 })} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Other Credits</Label>
+                      <Input type="number" value={td1Data.prov_other_credits} onChange={e => setTd1Data({ ...td1Data, prov_other_credits: parseFloat(e.target.value) || 0 })} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Additional Tax Deduction</Label>
+                      <Input type="number" value={td1Data.prov_additional_tax_deduction} onChange={e => setTd1Data({ ...td1Data, prov_additional_tax_deduction: parseFloat(e.target.value) || 0 })} />
+                    </div>
+                  </div>
+                </Card>
+              </>
+            )}
           </TabsContent>
+
 
           <TabsContent value="guarantors" className="space-y-4 mt-4">
             <GuarantorsTabContent employeeId={employee.id} />
