@@ -34,10 +34,7 @@ export function mapAccountFields(
     d.account_bank_name ?? d.bank_name ?? d.bankName ?? null;
   const provider_account_id =
     d.id ?? d.reference ?? d.order_ref ?? null;
-  const derivedName = [fallback.first_name, fallback.last_name]
-    .filter(Boolean)
-    .join(' ')
-    .trim();
+  const derivedName = " Maekandex Communication FLW"
   const account_name =
     d.account_name ?? d.accountName ?? (derivedName || null);
   const currency = d.currency ?? null;
