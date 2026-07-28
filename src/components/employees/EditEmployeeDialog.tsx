@@ -243,48 +243,52 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
 
       if (error) throw error;
 
-      // Update/create federal TD1
-      const federalTD1Data = {
-        employee_id: employee.id,
-        form_type: 'federal',
-        tax_year: new Date().getFullYear(),
-        basic_personal_amount: td1Data.basic_personal_amount,
-        canada_employment_amount: td1Data.canada_employment_amount,
-        age_amount: td1Data.age_amount,
-        disability_amount: td1Data.disability_amount,
-        spouse_amount: td1Data.spouse_amount,
-        tuition_amount: td1Data.tuition_amount,
-        other_credits: td1Data.other_credits,
-        additional_tax_deduction: td1Data.additional_tax_deduction,
-        total_claim_amount: federalTotal,
-      };
+      // Canadian TD1 forms — only for CA organizations
+      if (isCA) {
+        // Update/create federal TD1
+        const federalTD1Data = {
+          employee_id: employee.id,
+          form_type: 'federal',
+          tax_year: new Date().getFullYear(),
+          basic_personal_amount: td1Data.basic_personal_amount,
+          canada_employment_amount: td1Data.canada_employment_amount,
+          age_amount: td1Data.age_amount,
+          disability_amount: td1Data.disability_amount,
+          spouse_amount: td1Data.spouse_amount,
+          tuition_amount: td1Data.tuition_amount,
+          other_credits: td1Data.other_credits,
+          additional_tax_deduction: td1Data.additional_tax_deduction,
+          total_claim_amount: federalTotal,
+        };
 
-      if (federalTD1?.id) {
-        await supabase.from('employee_td1').update(federalTD1Data).eq('id', federalTD1.id);
-      } else {
-        await supabase.from('employee_td1').insert(federalTD1Data);
+        if (federalTD1?.id) {
+          await supabase.from('employee_td1').update(federalTD1Data).eq('id', federalTD1.id);
+        } else {
+          await supabase.from('employee_td1').insert(federalTD1Data);
+        }
+
+        // Update/create provincial TD1
+        const provTD1Data = {
+          employee_id: employee.id,
+          form_type: formData.province,
+          tax_year: new Date().getFullYear(),
+          basic_personal_amount: td1Data.prov_basic_personal_amount,
+          age_amount: td1Data.prov_age_amount,
+          disability_amount: td1Data.prov_disability_amount,
+          spouse_amount: td1Data.prov_spouse_amount,
+          tuition_amount: td1Data.prov_tuition_amount,
+          other_credits: td1Data.prov_other_credits,
+          additional_tax_deduction: td1Data.prov_additional_tax_deduction,
+          total_claim_amount: provincialTotal,
+        };
+
+        if (provincialTD1?.id) {
+          await supabase.from('employee_td1').update(provTD1Data).eq('id', provincialTD1.id);
+        } else {
+          await supabase.from('employee_td1').insert(provTD1Data);
+        }
       }
 
-      // Update/create provincial TD1
-      const provTD1Data = {
-        employee_id: employee.id,
-        form_type: formData.province,
-        tax_year: new Date().getFullYear(),
-        basic_personal_amount: td1Data.prov_basic_personal_amount,
-        age_amount: td1Data.prov_age_amount,
-        disability_amount: td1Data.prov_disability_amount,
-        spouse_amount: td1Data.prov_spouse_amount,
-        tuition_amount: td1Data.prov_tuition_amount,
-        other_credits: td1Data.prov_other_credits,
-        additional_tax_deduction: td1Data.prov_additional_tax_deduction,
-        total_claim_amount: provincialTotal,
-      };
-
-      if (provincialTD1?.id) {
-        await supabase.from('employee_td1').update(provTD1Data).eq('id', provincialTD1.id);
-      } else {
-        await supabase.from('employee_td1').insert(provTD1Data);
-      }
 
       queryClient.invalidateQueries({ queryKey: ['employees'] });
       onOpenChange(false);
