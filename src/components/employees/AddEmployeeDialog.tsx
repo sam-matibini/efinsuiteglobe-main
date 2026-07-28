@@ -956,6 +956,37 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
                   />
                 </div>
 
+                <FormField
+                  control={form.control}
+                  name="jobSiteId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Job Site / Location *</FormLabel>
+                      <Select value={field.value || ''} onValueChange={field.onChange}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue
+                              placeholder={
+                                activeJobSites.length === 0
+                                  ? 'No sites — add one in Settings → Job Sites'
+                                  : 'Select job site'
+                              }
+                            />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {activeJobSites.map((s) => (
+                            <SelectItem key={s.id} value={s.id}>
+                              {s.name}{s.code ? ` (${s.code})` : ''}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
                 <div className="grid grid-cols-3 gap-4">
                   <FormField
                     control={form.control}
