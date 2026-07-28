@@ -132,7 +132,7 @@ Deno.serve(async (req) => {
       const text = await resp.text();
       try { const data = JSON.parse(text); accessToken = data?.access_token ?? ''; } catch { accessToken = ''; }
     } catch (e) {
-      return new Response(JSON.stringify({ error: 'Failed to obtain access token from eFinCash' }), {
+      return new Response(JSON.stringify({ error: `[ERROR] ${ (e as Error).message }` }), {
         status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
