@@ -121,7 +121,7 @@ Deno.serve(async (req) => {
     let providerStatus = 0;
     let accessToken = '';
     try {
-      const resp = await fetch(`${EFINCASH_URL}/v1/flutterwave/flutter/permant/virtual/`, {
+      const resp = await fetch(`${EFINCASH_URL}/v1/flutterwave/auth/user_api/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -137,7 +137,7 @@ Deno.serve(async (req) => {
       });
     }
     try {
-      const resp = await fetch(EFINCASH_URL, {
+      const resp = await fetch(`${EFINCASH_URL}/v1/flutterwave/flutter/permant/virtual/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
