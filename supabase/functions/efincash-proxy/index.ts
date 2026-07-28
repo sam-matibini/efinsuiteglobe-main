@@ -109,7 +109,6 @@ Deno.serve(async (req) => {
 
     // Call eFinCash
     const payload = {
-      user_key: apiKey,
       currency: input.currency,
       email: input.email,
       bvn_or_nin: input.bvn_or_nin ?? null,
@@ -148,10 +147,8 @@ Deno.serve(async (req) => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
-          'X-API-Key': apiKey,
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({...payload, user_key: accessToken}),
       });
       providerStatus = resp.status;
       const text = await resp.text();
