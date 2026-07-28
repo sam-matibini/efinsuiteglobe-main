@@ -26,6 +26,7 @@ import { useEmployeeGuarantors } from '@/hooks/useEmployeeGuarantors';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useCurrencyFormatter } from '@/hooks/useCurrencyFormatter';
 import { useCurrentOrganization } from '@/hooks/useOrganization';
+import { useJobSites } from '@/hooks/useJobSites';
 import { useCountryScope } from '@/hooks/useCountryFilter';
 import { getCountryLocalization, COUNTRY_LOCALIZATIONS } from '@/data/countryLocalizations';
 
