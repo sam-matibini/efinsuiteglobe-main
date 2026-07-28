@@ -333,7 +333,7 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className={`grid w-full ${isCA ? 'grid-cols-5' : 'grid-cols-4'}`}>
             <TabsTrigger value="personal" className="flex items-center gap-1 text-xs">
               <User className="w-3.5 h-3.5" />
               Personal
@@ -346,10 +346,12 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
               <DollarSign className="w-3.5 h-3.5" />
               Compensation
             </TabsTrigger>
-            <TabsTrigger value="tax" className="flex items-center gap-1 text-xs">
-              <FileText className="w-3.5 h-3.5" />
-              TD1 Tax
-            </TabsTrigger>
+            {isCA && (
+              <TabsTrigger value="tax" className="flex items-center gap-1 text-xs">
+                <FileText className="w-3.5 h-3.5" />
+                TD1 Tax
+              </TabsTrigger>
+            )}
             <TabsTrigger value="guarantors" className="flex items-center gap-1 text-xs">
               <UserPlus className="w-3.5 h-3.5" />
               Guarantors
