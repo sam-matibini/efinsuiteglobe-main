@@ -280,6 +280,12 @@ export default function EmployeeProfile() {
                 <p className="text-sm text-muted-foreground">SIN (Last 3 digits)</p>
                 <p className="font-medium">***-***-***</p>
               </div>
+              {(employee as any).nin && (
+                <div>
+                  <p className="text-sm text-muted-foreground">NIN (National Identification Number)</p>
+                  <p className="font-medium">{(employee as any).nin}</p>
+                </div>
+              )}
               <div>
                 <p className="text-sm text-muted-foreground">Province (Employment)</p>
                 <p className="font-medium">{PROVINCE_NAMES[employee.province] || employee.province}</p>
