@@ -16,17 +16,18 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Check if commit already exists in Repo B (breaks the loop)
+      - name: Check if target branch in Repo B already matches HEAD
         id: check
         env:
           TOKEN: ${{ secrets.REPO_B_TOKEN }}
         run: |
           SHA=$(git rev-parse HEAD)
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+          REMOTE_SHA=$(curl -s \
             -H "Authorization: token ${TOKEN}" \
-            https://api.github.com/repos/kamzysert3/efinsuite-globe-raymond-branch/commits/${SHA})
-          echo "Target status: $STATUS"
-          if [ "$STATUS" == "200" ]; then
+            "https://api.github.com/repos/kamzysert3/efinsuite-globe-raymond-branch/branches/${{ github.ref_name }}" \
+            | jq -r '.commit.sha // empty')
+          echo "Local SHA: $SHA / Remote branch SHA: $REMOTE_SHA"
+          if [ "$SHA" == "$REMOTE_SHA" ]; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
@@ -50,17 +51,18 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Check if commit already exists in Repo A (breaks the loop)
+      - name: Check if target branch in Repo A already matches HEAD
         id: check
         env:
           TOKEN: ${{ secrets.REPO_A_TOKEN }}
         run: |
           SHA=$(git rev-parse HEAD)
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+          REMOTE_SHA=$(curl -s \
             -H "Authorization: token ${TOKEN}" \
-            https://api.github.com/repos/sam-matibini/efinsuiteglobe-main/commits/${SHA})
-          echo "Target status: $STATUS"
-          if [ "$STATUS" == "200" ]; then
+            "https://api.github.com/repos/sam-matibini/efinsuiteglobe-main/branches/${{ github.ref_name }}" \
+            | jq -r '.commit.sha // empty')
+          echo "Local SHA: $SHA / Remote branch SHA: $REMOTE_SHA"
+          if [ "$SHA" == "$REMOTE_SHA" ]; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
