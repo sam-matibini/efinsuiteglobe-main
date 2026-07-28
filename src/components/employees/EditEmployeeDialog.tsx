@@ -128,6 +128,7 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
         phone: employee.phone || '',
         date_of_birth: employee.date_of_birth || '',
         sin_encrypted: employee.sin_encrypted || '',
+        nin: (employee as any).nin || '',
         address_line1: employee.address_line1 || '',
         address_line2: employee.address_line2 || '',
         city: employee.city || '',
