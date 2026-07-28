@@ -172,7 +172,7 @@ export function generatePayStubPdf(data: PayStubData): jsPDF {
   nameLines.forEach((line, i) => {
     doc.text(line, nameStartX, headerTop + i * 6);
   });
-  leftY = headerTop + Math.max(nameLines.length * 6, data.logoDataUrl ? 12 : 6);
+  headerLeftY = headerTop + Math.max(nameLines.length * 6, data.logoDataUrl ? 12 : 6);
 
   // Right column: employer mailing address only (no duplicate company name)
   const employerAddress = buildAddressLines({
