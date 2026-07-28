@@ -47,6 +47,22 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
   const [federalTD1, setFederalTD1] = useState<TD1Row | null>(null);
   const [provincialTD1, setProvincialTD1] = useState<TD1Row | null>(null);
 
+  // Country resolution — country scope > org.country > 'CA'
+  const { organization } = useCurrentOrganization();
+  const { country: scopedCountry } = useCountryScope();
+  const countryCode = (() => {
+    const raw = (scopedCountry || organization?.country || 'CA').toString().trim();
+    if (!raw) return 'CA';
+    const upper = raw.toUpperCase();
+    if (COUNTRY_LOCALIZATIONS[upper]) return upper;
+    const match = Object.entries(COUNTRY_LOCALIZATIONS).find(
+      ([, loc]) => loc.name.toLowerCase() === raw.toLowerCase(),
+    );
+    return match?.[0] ?? 'CA';
+  })();
+  const countryConfig = getCountryLocalization(countryCode);
+  const isCA = countryCode === 'CA';
+
   const [formData, setFormData] = useState({
     first_name: '',
     last_name: '',
