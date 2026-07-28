@@ -8512,6 +8512,10 @@ export type Database = {
       }
       employee_guarantors: {
         Row: {
+          confirmation_method: string | null
+          confirmed: boolean
+          confirmed_at: string | null
+          confirmed_by: string | null
           created_at: string
           email: string | null
           employee_id: string
@@ -8538,6 +8542,10 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          confirmation_method?: string | null
+          confirmed?: boolean
+          confirmed_at?: string | null
+          confirmed_by?: string | null
           created_at?: string
           email?: string | null
           employee_id: string
@@ -8564,6 +8572,10 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          confirmation_method?: string | null
+          confirmed?: boolean
+          confirmed_at?: string | null
+          confirmed_by?: string | null
           created_at?: string
           email?: string | null
           employee_id?: string
@@ -9142,6 +9154,7 @@ export type Database = {
           employee_number: string
           employment_type: Database["public"]["Enums"]["employment_type"]
           first_name: string
+          guarantors_confirmed: boolean
           hire_date: string
           hourly_rate: number | null
           id: string
@@ -9194,6 +9207,7 @@ export type Database = {
           employee_number: string
           employment_type?: Database["public"]["Enums"]["employment_type"]
           first_name: string
+          guarantors_confirmed?: boolean
           hire_date: string
           hourly_rate?: number | null
           id?: string
@@ -9246,6 +9260,7 @@ export type Database = {
           employee_number?: string
           employment_type?: Database["public"]["Enums"]["employment_type"]
           first_name?: string
+          guarantors_confirmed?: boolean
           hire_date?: string
           hourly_rate?: number | null
           id?: string
