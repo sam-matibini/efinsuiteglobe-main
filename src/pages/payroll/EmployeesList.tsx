@@ -70,9 +70,10 @@ export default function EmployeesList() {
     return matchesSearch && matchesStatus && matchesDept;
   });
 
+  const { formatWithSymbol } = useCurrencyFormatter();
   const formatCurrency = (value: number | null | undefined) => {
     if (!value) return '-';
-    return new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 }).format(value);
+    return formatWithSymbol(value);
   };
 
   if (isLoading) {
