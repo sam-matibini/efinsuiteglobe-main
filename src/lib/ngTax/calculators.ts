@@ -100,6 +100,7 @@ export function calculatePaye(
     pensionEmployee: number;
     nhfEmployee: number;
     nhisEmployee: number;
+    annualRent?: number;
     lifeAssurancePremium?: number;
     periodsPerYear: number;
   },
@@ -110,6 +111,7 @@ export function calculatePaye(
     pension_employee: input.pensionEmployee,
     nhf_employee: input.nhfEmployee,
     nhis_employee: input.nhisEmployee,
+    annual_rent: input.annualRent ?? 0,
     life_assurance_premium: input.lifeAssurancePremium ?? 0,
   };
   let totalRelief = 0;

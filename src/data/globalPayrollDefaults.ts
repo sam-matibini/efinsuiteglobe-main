@@ -177,7 +177,7 @@ const BURUNDI_CONFIG: CountryPayrollConfig = {
 // Sources: PITA 2011 (as amended), PRA 2014, NHF Act, ECA 2010 (NSITF), ITF Act.
 const NIGERIA_CONFIG: CountryPayrollConfig = {
   taxFormName: 'PAYE Tax Declaration',
-  taxFormDescription: '2025 NRS / State IRS statutory deductions',
+  taxFormDescription: 'NTA 2025 (effective Jan 2026) — NRS / State IRS statutory deductions',
   nationalIdLabel: 'Tax Identification Number (TIN)',
   nationalIdPlaceholder: '12345678-0001',
   autoPopulateLabel: 'Apply NRS Defaults',
@@ -191,13 +191,13 @@ const NIGERIA_CONFIG: CountryPayrollConfig = {
     { code: 'ITF', name: 'ITF', description: 'Industrial Training Fund — 1% of annual payroll (employer-only, ≥5 employees)', employeeRate: 0, employerRate: 1, isEmployeePortion: false, inputType: 'boolean' },
   ],
   jurisdictionalDeductions: [
-    { code: 'PAYE-STATE', name: 'State PAYE', description: 'Progressive PIT withheld per PITA bands', employeeRate: 0, isEmployeePortion: true, inputType: 'rate' },
+    { code: 'PAYE-STATE', name: 'State PAYE', description: 'Progressive PIT withheld per NTA 2025 bands (0–25%)', employeeRate: 0, isEmployeePortion: true, inputType: 'rate' },
   ],
   federalTaxCredits: [
-    { code: 'CRA_FIXED', name: 'Consolidated Relief (Fixed)', defaultAmount: 200000, description: 'Higher of ₦200,000 or 1% of gross (annual)' },
-    { code: 'CRA_VARIABLE_PCT', name: 'Consolidated Relief (Variable %)', defaultAmount: 20, description: '20% of gross emoluments (auto-calculated)' },
-    { code: 'PENSION_RELIEF', name: 'Pension Relief', defaultAmount: 0, description: 'Auto = actual pension contribution' },
+    { code: 'RENT_RELIEF', name: 'Rent Relief (Annual Rent Paid)', defaultAmount: 0, description: 'NTA 2025: 20% of annual rent, capped at ₦500,000 (auto-applied)' },
+    { code: 'PENSION_RELIEF', name: 'Pension Relief', defaultAmount: 0, description: 'Auto = actual pension contribution (8%)' },
     { code: 'NHF_RELIEF', name: 'NHF Relief', defaultAmount: 0, description: 'Auto = actual NHF contribution' },
+    { code: 'NHIS_RELIEF', name: 'NHIS Relief', defaultAmount: 0, description: 'Auto = actual NHIS contribution' },
     { code: 'LIFE_ASSURANCE', name: 'Life Assurance Premium (Annual)', defaultAmount: 0, description: 'Deductible life insurance premium' },
     { code: 'GRATUITY', name: 'Gratuity', defaultAmount: 0, description: 'Exempt gratuity amount' },
   ],
