@@ -52,6 +52,9 @@ const createEmployeeSchema = (countryCode: string) => {
     email: z.string().email('Valid email required'),
     phone: z.string().optional(),
     nationalId: z.string().optional(),
+    nin: countryCode === 'NG'
+      ? z.string().regex(/^\d{11}$/, 'NIN must be exactly 11 digits')
+      : z.string().optional(),
     dateOfBirth: z.string().optional(),
     // Mailing address
     addressLine1: z.string().optional(),
@@ -152,6 +155,7 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
       email: '',
       phone: '',
       nationalId: '',
+      nin: '',
       dateOfBirth: '',
       addressLine1: '',
       addressLine2: '',
@@ -293,6 +297,7 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
         email: data.email,
         phone: data.phone || null,
         sin_encrypted: data.nationalId || null,
+        nin: (data as any).nin || null,
         date_of_birth: data.dateOfBirth || null,
         address_line1: data.addressLine1 || null,
         address_line2: data.addressLine2 || null,
@@ -723,6 +728,30 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
                     )}
                   />
                 </div>
+
+                {countryCode === 'NG' && (
+                  <FormField
+                    control={form.control}
+                    name={'nin' as any}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>National Identification Number (NIN) *</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="12345678901"
+                            maxLength={11}
+                            inputMode="numeric"
+                            {...field}
+                          />
+                        </FormControl>
+                        <p className="text-xs text-muted-foreground">
+                          Required by NRS. Must be the 11-digit NIN issued by NIMC.
+                        </p>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
 
                 {/* Mailing Address */}
                 <div className="pt-2 pb-1">

@@ -9165,6 +9165,9 @@ export type Database = {
           manager_id: string | null
           national_id_encrypted: string | null
           nationality: string | null
+          nin: string | null
+          nin_verified_at: string | null
+          nin_verified_by: string | null
           notes: string | null
           organization_id: string | null
           pay_frequency: Database["public"]["Enums"]["pay_frequency"]
@@ -9219,6 +9222,9 @@ export type Database = {
           manager_id?: string | null
           national_id_encrypted?: string | null
           nationality?: string | null
+          nin?: string | null
+          nin_verified_at?: string | null
+          nin_verified_by?: string | null
           notes?: string | null
           organization_id?: string | null
           pay_frequency?: Database["public"]["Enums"]["pay_frequency"]
@@ -9273,6 +9279,9 @@ export type Database = {
           manager_id?: string | null
           national_id_encrypted?: string | null
           nationality?: string | null
+          nin?: string | null
+          nin_verified_at?: string | null
+          nin_verified_by?: string | null
           notes?: string | null
           organization_id?: string | null
           pay_frequency?: Database["public"]["Enums"]["pay_frequency"]

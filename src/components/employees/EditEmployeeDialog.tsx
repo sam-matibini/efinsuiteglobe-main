@@ -72,6 +72,7 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
     phone: '',
     date_of_birth: '',
     sin_encrypted: '',
+    nin: '',
     // Address
     address_line1: '',
     address_line2: '',
@@ -127,6 +128,7 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
         phone: employee.phone || '',
         date_of_birth: employee.date_of_birth || '',
         sin_encrypted: employee.sin_encrypted || '',
+        nin: (employee as any).nin || '',
         address_line1: employee.address_line1 || '',
         address_line2: employee.address_line2 || '',
         city: employee.city || '',
@@ -215,6 +217,13 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
       return;
     }
 
+    if (countryCode === 'NG' && !/^\d{11}$/.test(formData.nin || '')) {
+      toast.error('National Identification Number (NIN) must be exactly 11 digits');
+      setActiveTab('personal');
+      return;
+    }
+
+
 
     setIsSubmitting(true);
     try {
@@ -226,6 +235,7 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
         phone: formData.phone || null,
         date_of_birth: formData.date_of_birth || null,
         sin_encrypted: formData.sin_encrypted || null,
+        nin: formData.nin || null,
         address_line1: formData.address_line1 || null,
         address_line2: formData.address_line2 || null,
         city: formData.city || null,
@@ -406,6 +416,22 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
                 <Input value={formData.sin_encrypted} onChange={e => setFormData({ ...formData, sin_encrypted: e.target.value })} placeholder="XXX-XXX-XXX" />
               </div>
             </div>
+
+            {countryCode === 'NG' && (
+              <div className="space-y-2">
+                <Label>National Identification Number (NIN) *</Label>
+                <Input
+                  value={formData.nin}
+                  onChange={e => setFormData({ ...formData, nin: e.target.value.replace(/\D/g, '').slice(0, 11) })}
+                  placeholder="12345678901"
+                  maxLength={11}
+                  inputMode="numeric"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Required by NRS. Must be the 11-digit NIN issued by NIMC.
+                </p>
+              </div>
+            )}
 
             {/* Address */}
             <div className="pt-2 pb-1">
