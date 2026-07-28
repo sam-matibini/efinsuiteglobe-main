@@ -297,6 +297,7 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
         email: data.email,
         phone: data.phone || null,
         sin_encrypted: data.nationalId || null,
+        nin: (data as any).nin || null,
         date_of_birth: data.dateOfBirth || null,
         address_line1: data.addressLine1 || null,
         address_line2: data.addressLine2 || null,
