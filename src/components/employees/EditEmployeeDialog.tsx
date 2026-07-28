@@ -26,6 +26,7 @@ import { useEmployeeGuarantors } from '@/hooks/useEmployeeGuarantors';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useCurrencyFormatter } from '@/hooks/useCurrencyFormatter';
 import { useCurrentOrganization } from '@/hooks/useOrganization';
+import { useJobSites } from '@/hooks/useJobSites';
 import { useCountryScope } from '@/hooks/useCountryFilter';
 import { getCountryLocalization, COUNTRY_LOCALIZATIONS } from '@/data/countryLocalizations';
 
@@ -50,6 +51,7 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
   // Country resolution — country scope > org.country > 'CA'
   const { organization } = useCurrentOrganization();
   const { country: scopedCountry } = useCountryScope();
+  const { jobSites: activeJobSites } = useJobSites({ activeOnly: true });
   const countryCode = (() => {
     const raw = (scopedCountry || organization?.country || 'CA').toString().trim();
     if (!raw) return 'CA';
@@ -79,6 +81,7 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
     // Employment
     job_title: '',
     department: '',
+    job_site_id: '',
     province: '',
     employment_type: 'full_time',
     pay_frequency: 'bi_weekly',
@@ -131,6 +134,7 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
         country: employee.country || '',
         job_title: employee.job_title || '',
         department: employee.department || '',
+        job_site_id: (employee as any).job_site_id || '',
         province: employee.province || countryConfig.jurisdictions[0]?.code || 'ON',
         employment_type: employee.employment_type || 'full_time',
         pay_frequency: employee.pay_frequency || 'bi_weekly',
@@ -205,6 +209,13 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
       return;
     }
 
+    if (!formData.job_site_id) {
+      toast.error('Job Site is required');
+      setActiveTab('employment');
+      return;
+    }
+
+
     setIsSubmitting(true);
     try {
       // Update employee record
@@ -222,6 +233,7 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
         country: formData.country || null,
         job_title: formData.job_title || null,
         department: formData.department || null,
+        job_site_id: formData.job_site_id || null,
         province: formData.province as any,
         employment_type: formData.employment_type as any,
         pay_frequency: formData.pay_frequency as any,
@@ -434,6 +446,30 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
                 <Label>Department</Label>
                 <Input value={formData.department} onChange={e => setFormData({ ...formData, department: e.target.value })} />
               </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Job Site / Location *</Label>
+              <Select
+                value={formData.job_site_id}
+                onValueChange={v => setFormData({ ...formData, job_site_id: v })}
+              >
+                <SelectTrigger>
+                  <SelectValue
+                    placeholder={
+                      activeJobSites.length === 0
+                        ? 'No sites — add one in Settings → Job Sites'
+                        : 'Select job site'
+                    }
+                  />
+                </SelectTrigger>
+                <SelectContent className="max-h-72">
+                  {activeJobSites.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name}{s.code ? ` (${s.code})` : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">

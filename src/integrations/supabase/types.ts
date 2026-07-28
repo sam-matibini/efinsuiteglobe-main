@@ -9158,6 +9158,7 @@ export type Database = {
           hire_date: string
           hourly_rate: number | null
           id: string
+          job_site_id: string | null
           job_title: string | null
           last_name: string
           mailing_province: string | null
@@ -9211,6 +9212,7 @@ export type Database = {
           hire_date: string
           hourly_rate?: number | null
           id?: string
+          job_site_id?: string | null
           job_title?: string | null
           last_name: string
           mailing_province?: string | null
@@ -9264,6 +9266,7 @@ export type Database = {
           hire_date?: string
           hourly_rate?: number | null
           id?: string
+          job_site_id?: string | null
           job_title?: string | null
           last_name?: string
           mailing_province?: string | null
@@ -9291,6 +9294,13 @@ export type Database = {
           work_schedule?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "employees_job_site_id_fkey"
+            columns: ["job_site_id"]
+            isOneToOne: false
+            referencedRelation: "job_sites"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "employees_manager_id_fkey"
             columns: ["manager_id"]
@@ -13136,6 +13146,36 @@ export type Database = {
           tax_year?: number
           updated_at?: string
           xml_url?: string | null
+        }
+        Relationships: []
+      }
+      job_sites: {
+        Row: {
+          code: string | null
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          organization_id: string
+          updated_at: string
+        }
+        Insert: {
+          code?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          organization_id: string
+          updated_at?: string
+        }
+        Update: {
+          code?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          organization_id?: string
+          updated_at?: string
         }
         Relationships: []
       }

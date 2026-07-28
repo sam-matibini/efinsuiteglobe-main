@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { Building2, Users, Shield, Palette, Receipt, Plus, MapPin, Phone, Wand2, FileText, Globe, TrendingUp, Check, ChevronsUpDown, RotateCcw, AlertTriangle, CreditCard, Coins, Wallet, Send } from 'lucide-react';
 import { EfinconnectSettingsTab } from '@/components/settings/EfinconnectSettingsTab';
 import { DivisionsSettingsTab } from '@/components/settings/DivisionsSettingsTab';
+import { JobSitesSettingsTab } from '@/components/settings/JobSitesSettingsTab';
 import { Network } from 'lucide-react';
 import { MultiCurrencySettingsTab } from '@/components/settings/MultiCurrencySettingsTab';
 import { TroubleshootingTab } from '@/components/admin/TroubleshootingTab';
@@ -284,6 +285,10 @@ export default function Settings() {
           <TabsTrigger value="divisions" className="gap-2">
             <Network className="w-4 h-4" />
             <span className="hidden sm:inline">Divisions</span>
+          </TabsTrigger>
+          <TabsTrigger value="job-sites" className="gap-2">
+            <MapPin className="w-4 h-4" />
+            <span className="hidden sm:inline">Job Sites</span>
           </TabsTrigger>
           <TabsTrigger value="compliance" className="gap-2">
             <Globe className="w-4 h-4" />
@@ -731,6 +736,10 @@ export default function Settings() {
 
         <TabsContent value="divisions" className="space-y-6">
           <DivisionsSettingsTab />
+        </TabsContent>
+
+        <TabsContent value="job-sites" className="space-y-6">
+          <JobSitesSettingsTab />
         </TabsContent>
 
         <TabsContent value="compliance" className="space-y-6">

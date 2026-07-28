@@ -35,6 +35,7 @@ import {
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useCurrentOrganization } from '@/hooks/useOrganization';
+import { useJobSites } from '@/hooks/useJobSites';
 import { COUNTRY_LOCALIZATIONS, getCountryLocalization } from '@/data/countryLocalizations';
 import { 
   getCountryPayrollConfig, 
@@ -61,6 +62,7 @@ const createEmployeeSchema = (countryCode: string) => {
     mailingCountry: z.string().optional(),
     department: z.string().optional(),
     jobTitle: z.string().optional(),
+    jobSiteId: z.string().min(1, 'Job site is required'),
     employmentType: z.enum(['full_time', 'part_time', 'contract', 'temporary']),
     payFrequency: z.enum(['weekly', 'bi_weekly', 'semi_monthly', 'monthly']),
     jurisdiction: z.string().min(1, 'Location is required'),
@@ -102,6 +104,7 @@ interface AddEmployeeDialogProps {
 
 export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployeeDialogProps) {
   const { organization } = useCurrentOrganization();
+  const { jobSites: activeJobSites } = useJobSites({ activeOnly: true });
   const [activeTab, setActiveTab] = useState('personal');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedJurisdiction, setSelectedJurisdiction] = useState<string>('');
@@ -158,6 +161,7 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
       mailingCountry: '',
       department: '',
       jobTitle: '',
+      jobSiteId: '',
       employmentType: 'full_time' as const,
       payFrequency: 'bi_weekly' as const,
       jurisdiction: jurisdictionCode || countryConfig.jurisdictions[0]?.code || '',
@@ -302,6 +306,7 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
         pay_frequency: data.payFrequency,
         department: data.department || null,
         job_title: data.jobTitle || null,
+        job_site_id: data.jobSiteId,
         annual_salary: data.payType === 'salary' ? data.annualSalary : null,
         hourly_rate: data.payType === 'hourly' ? data.hourlyRate : null,
         status: 'onboarding' as const,
@@ -950,6 +955,37 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
                     )}
                   />
                 </div>
+
+                <FormField
+                  control={form.control}
+                  name="jobSiteId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Job Site / Location *</FormLabel>
+                      <Select value={field.value || ''} onValueChange={field.onChange}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue
+                              placeholder={
+                                activeJobSites.length === 0
+                                  ? 'No sites — add one in Settings → Job Sites'
+                                  : 'Select job site'
+                              }
+                            />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {activeJobSites.map((s) => (
+                            <SelectItem key={s.id} value={s.id}>
+                              {s.name}{s.code ? ` (${s.code})` : ''}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
                 <div className="grid grid-cols-3 gap-4">
                   <FormField
