@@ -25,6 +25,10 @@ import { GuarantorsForm, EMPTY_GUARANTOR, type GuarantorDraft } from './Guaranto
 import { useEmployeeGuarantors } from '@/hooks/useEmployeeGuarantors';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useCurrencyFormatter } from '@/hooks/useCurrencyFormatter';
+import { useCurrentOrganization } from '@/hooks/useOrganization';
+import { useCountryScope } from '@/hooks/useCountryFilter';
+import { getCountryLocalization, COUNTRY_LOCALIZATIONS } from '@/data/countryLocalizations';
+
 
 type Employee = Database['public']['Tables']['employees']['Row'];
 type TD1Row = Database['public']['Tables']['employee_td1']['Row'];
