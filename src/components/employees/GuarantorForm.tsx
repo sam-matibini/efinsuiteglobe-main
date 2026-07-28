@@ -68,14 +68,16 @@ function GuarantorFields({ value, onChange, title }: Props) {
 
         <div className="space-y-1.5">
           <Label>Sex</Label>
-          <Select value={value.sex ?? ''} onValueChange={(v) => set('sex', v)}>
-            <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="male">Male</SelectItem>
-              <SelectItem value="female">Female</SelectItem>
-              <SelectItem value="other">Other</SelectItem>
-            </SelectContent>
-          </Select>
+          <SearchableSelect
+            value={value.sex ?? ''}
+            onValueChange={(v) => set('sex', v)}
+            options={[
+              { value: 'male', label: 'Male' },
+              { value: 'female', label: 'Female' },
+              { value: 'other', label: 'Other' },
+            ]}
+            placeholder="Select"
+          />
         </div>
 
         <div className="space-y-1.5">
