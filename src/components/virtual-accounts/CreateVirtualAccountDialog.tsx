@@ -125,8 +125,13 @@ export function CreateVirtualAccountDialog({ open, onOpenChange }: Props) {
           </div>
 
           <div className="space-y-2">
-            <Label>BVN or NIN <span className="text-muted-foreground text-xs">(optional)</span></Label>
+            <Label>
+              BVN or NIN {currency === 'NGN'
+                ? <span className="text-destructive text-xs">(required)</span>
+                : <span className="text-muted-foreground text-xs">(optional)</span>}
+            </Label>
             <Input value={bvn} onChange={(e) => setBvn(e.target.value)} placeholder="11-digit BVN or NIN" />
+            {errors.bvn_or_nin && <p className="text-xs text-destructive">{errors.bvn_or_nin}</p>}
             <p className="text-xs text-muted-foreground">Required by NGN providers for KYC. Leave blank for non-NGN currencies if not applicable.</p>
           </div>
         </div>
