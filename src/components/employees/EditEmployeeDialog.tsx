@@ -20,7 +20,9 @@ import { useQueryClient } from '@tanstack/react-query';
 import { PROVINCE_NAMES, ROE_REASON_CODES } from '@/types/payroll';
 import { Textarea } from '@/components/ui/textarea';
 import { Database } from '@/integrations/supabase/types';
-import { User, Briefcase, DollarSign, FileText, MapPin } from 'lucide-react';
+import { User, Briefcase, DollarSign, FileText, MapPin, UserPlus } from 'lucide-react';
+import { GuarantorsForm, EMPTY_GUARANTOR, type GuarantorDraft } from './GuarantorForm';
+import { useEmployeeGuarantors } from '@/hooks/useEmployeeGuarantors';
 import { Checkbox } from '@/components/ui/checkbox';
 
 type Employee = Database['public']['Tables']['employees']['Row'];
@@ -310,7 +312,7 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="personal" className="flex items-center gap-1 text-xs">
               <User className="w-3.5 h-3.5" />
               Personal
@@ -326,6 +328,10 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
             <TabsTrigger value="tax" className="flex items-center gap-1 text-xs">
               <FileText className="w-3.5 h-3.5" />
               TD1 Tax
+            </TabsTrigger>
+            <TabsTrigger value="guarantors" className="flex items-center gap-1 text-xs">
+              <UserPlus className="w-3.5 h-3.5" />
+              Guarantors
             </TabsTrigger>
           </TabsList>
 
