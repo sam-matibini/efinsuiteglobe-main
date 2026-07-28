@@ -325,14 +325,22 @@ export default function EmployeeProfile() {
                     <p className="text-sm text-muted-foreground">Province of Employment</p>
                     <p className="font-medium">{PROVINCE_NAMES[employee.province] || employee.province}</p>
                   </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">CPP Exempt</p>
-                    <p className="font-medium">{employee.cpp_exempt ? 'Yes' : 'No'}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">EI Exempt</p>
-                    <p className="font-medium">{employee.ei_exempt ? 'Yes' : 'No'}</p>
-                  </div>
+                  {(() => {
+                    const c = (employee.country || '').toLowerCase();
+                    const isNG = c === 'nigeria' || c === 'ng';
+                    return (
+                      <>
+                        <div>
+                          <p className="text-sm text-muted-foreground">{isNG ? 'Pension Exempt' : 'CPP Exempt'}</p>
+                          <p className="font-medium">{employee.cpp_exempt ? 'Yes' : 'No'}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-muted-foreground">{isNG ? 'NHF Exempt' : 'EI Exempt'}</p>
+                          <p className="font-medium">{employee.ei_exempt ? 'Yes' : 'No'}</p>
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
               );
             })()}
