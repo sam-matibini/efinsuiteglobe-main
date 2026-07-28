@@ -431,12 +431,12 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Province/Territory</Label>
+                <Label>{countryConfig.jurisdictionLabel}</Label>
                 <Select value={formData.province} onValueChange={v => setFormData({ ...formData, province: v })}>
-                  <SelectTrigger><SelectValue placeholder="Select province" /></SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(PROVINCE_NAMES).map(([code, name]) => (
-                      <SelectItem key={code} value={code}>{name}</SelectItem>
+                  <SelectTrigger><SelectValue placeholder={`Select ${countryConfig.jurisdictionLabel.toLowerCase()}`} /></SelectTrigger>
+                  <SelectContent className="max-h-72">
+                    {countryConfig.jurisdictions.map((j) => (
+                      <SelectItem key={j.code} value={j.code}>{j.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
