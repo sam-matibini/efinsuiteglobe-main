@@ -609,7 +609,7 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <TabsList className="grid w-full grid-cols-2">
+              <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="personal" className="flex items-center gap-2">
                   <User className="w-4 h-4" />
                   Personal Info
@@ -617,6 +617,10 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
                 <TabsTrigger value="tax" className="flex items-center gap-2">
                   <FileText className="w-4 h-4" />
                   {payrollConfig.taxFormName}
+                </TabsTrigger>
+                <TabsTrigger value="guarantors" className="flex items-center gap-2">
+                  <UserPlus className="w-4 h-4" />
+                  Guarantors
                 </TabsTrigger>
               </TabsList>
 
