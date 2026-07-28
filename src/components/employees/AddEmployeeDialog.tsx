@@ -155,6 +155,7 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
       email: '',
       phone: '',
       nationalId: '',
+      nin: '',
       dateOfBirth: '',
       addressLine1: '',
       addressLine2: '',
