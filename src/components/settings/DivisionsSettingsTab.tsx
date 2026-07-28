@@ -27,7 +27,7 @@ export function DivisionsSettingsTab() {
             </Link>
           </Button>
           <Button asChild variant="outline" size="sm">
-            <Link to="/division-access">
+            <Link to="/divisions/access">
               <ShieldCheck className="w-4 h-4 mr-2" />
               Manage user access by division
             </Link>
