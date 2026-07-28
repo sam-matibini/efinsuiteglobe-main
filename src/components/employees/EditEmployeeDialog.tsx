@@ -528,38 +528,50 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
             </div>
             <p className="text-xs text-muted-foreground">Set either hourly rate or annual salary (or both if applicable).</p>
 
-            {/* CPP/EI Exemptions */}
-            <Card className="p-4 mt-4">
-              <h4 className="font-medium mb-3">Deduction Exemptions</h4>
-              <div className="space-y-3">
-                <div className="flex items-start space-x-3">
-                  <Checkbox
-                    id="cpp_exempt"
-                    checked={formData.cpp_exempt}
-                    onCheckedChange={(checked) => setFormData({ ...formData, cpp_exempt: checked === true })}
-                  />
-                  <div className="space-y-1 leading-none">
-                    <Label htmlFor="cpp_exempt">CPP Exempt</Label>
-                    <p className="text-xs text-muted-foreground">
-                      Employee is exempt from Canada Pension Plan contributions (e.g., First Nations employees working on reserve)
-                    </p>
+            {/* Deduction Exemptions — country-aware */}
+            {(() => {
+              const c = (formData.country || '').toLowerCase();
+              const isNG = c === 'nigeria' || c === 'ng';
+              const isCA = c === '' || c === 'canada' || c === 'ca';
+              if (!isNG && !isCA) return null;
+              return (
+                <Card className="p-4 mt-4">
+                  <h4 className="font-medium mb-3">Deduction Exemptions</h4>
+                  <div className="space-y-3">
+                    <div className="flex items-start space-x-3">
+                      <Checkbox
+                        id="cpp_exempt"
+                        checked={formData.cpp_exempt}
+                        onCheckedChange={(checked) => setFormData({ ...formData, cpp_exempt: checked === true })}
+                      />
+                      <div className="space-y-1 leading-none">
+                        <Label htmlFor="cpp_exempt">{isNG ? 'Pension Exempt' : 'CPP Exempt'}</Label>
+                        <p className="text-xs text-muted-foreground">
+                          {isNG
+                            ? 'Employee is exempt from Pension Reform Act contributions'
+                            : 'Employee is exempt from Canada Pension Plan contributions (e.g., First Nations employees working on reserve)'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-start space-x-3">
+                      <Checkbox
+                        id="ei_exempt"
+                        checked={formData.ei_exempt}
+                        onCheckedChange={(checked) => setFormData({ ...formData, ei_exempt: checked === true })}
+                      />
+                      <div className="space-y-1 leading-none">
+                        <Label htmlFor="ei_exempt">{isNG ? 'NHF Exempt' : 'EI Exempt'}</Label>
+                        <p className="text-xs text-muted-foreground">
+                          {isNG
+                            ? 'Employee is exempt from National Housing Fund contributions'
+                            : 'Employee is exempt from Employment Insurance premiums'}
+                        </p>
+                      </div>
+                    </div>
                   </div>
-                </div>
-                <div className="flex items-start space-x-3">
-                  <Checkbox
-                    id="ei_exempt"
-                    checked={formData.ei_exempt}
-                    onCheckedChange={(checked) => setFormData({ ...formData, ei_exempt: checked === true })}
-                  />
-                  <div className="space-y-1 leading-none">
-                    <Label htmlFor="ei_exempt">EI Exempt</Label>
-                    <p className="text-xs text-muted-foreground">
-                      Employee is exempt from Employment Insurance premiums
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </Card>
+                </Card>
+              );
+            })()}
           </TabsContent>
 
           {/* TD1 Tax Tab */}
