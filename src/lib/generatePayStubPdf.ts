@@ -198,7 +198,7 @@ export function generatePayStubPdf(data: PayStubData): jsPDF {
   doc.setTextColor(0, 0, 0);
 
   // Sub-title centered — placed safely below whichever column is taller
-  y = Math.max(leftY, addrY) + 6;
+  y = Math.max(headerLeftY, addrY) + 6;
   doc.setFontSize(10);
   doc.setFont('helvetica', 'bold');
   doc.text(labels.title, pageWidth / 2, y, { align: 'center' });
