@@ -264,6 +264,7 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
         status: formData.status as any,
         cpp_exempt: formData.cpp_exempt,
         ei_exempt: formData.ei_exempt,
+        compensation_structure: compStructure as any,
       };
 
       const { error } = await supabase
