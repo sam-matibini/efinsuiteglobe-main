@@ -26,6 +26,10 @@ export interface EmployeeGuarantor {
   office_state?: string | null;
   office_country?: string | null;
   notes?: string | null;
+  confirmed?: boolean;
+  confirmed_at?: string | null;
+  confirmed_by?: string | null;
+  confirmation_method?: string | null;
 }
 
 export function useEmployeeGuarantors(employeeId?: string) {
