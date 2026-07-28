@@ -125,7 +125,7 @@ export function ViewPayRunDialog({ open, onOpenChange, payRun }: ViewPayRunDialo
   };
 
   // Get country-based currency formatting
-  const countryCode = (organization as any)?.country?.code || 'CA';
+  const countryCode = (organization as any)?.country || 'CA';
   const localization = useMemo(() => getCountryLocalization(countryCode), [countryCode]);
   const locale = useMemo(() => getLocaleForCountry(countryCode), [countryCode]);
 
