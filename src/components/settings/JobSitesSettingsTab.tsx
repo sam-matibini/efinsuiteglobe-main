@@ -7,6 +7,7 @@ import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { MapPin, Plus, Trash2, Pencil, Check, X, Upload, Download, FileUp } from 'lucide-react';
 import { useJobSites, type JobSite } from '@/hooks/useJobSites';
 import {
@@ -18,21 +19,45 @@ import {
   type ValidatedRow,
 } from '@/lib/jobSitesBulk';
 import { toast } from 'sonner';
+import { useCountryScope, normalizeCountryCode } from '@/hooks/useCountryFilter';
+import { useCurrentOrganization } from '@/hooks/useOrganization';
+import { getCountryLocalization } from '@/data/countryLocalizations';
+
+const NONE = '__none__';
 
 export function JobSitesSettingsTab() {
   const { jobSites, isLoading, createSite, updateSite, deleteSite, bulkCreateSites } = useJobSites();
+  const { country: scopedCountry } = useCountryScope();
+  const { organization } = useCurrentOrganization();
+
+  const countryCode =
+    scopedCountry || normalizeCountryCode(organization?.country) || 'CA';
+  const loc = getCountryLocalization(countryCode);
+  const jurisdictions = loc.jurisdictions;
+  const jurisdictionLabel = loc.jurisdictionLabel || 'State/Province';
+  const jurNameByCode = useMemo(() => {
+    const m = new Map<string, string>();
+    jurisdictions.forEach((j) => m.set(j.code.toUpperCase(), j.name));
+    return m;
+  }, [jurisdictions]);
+
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
+  const [stateProv, setStateProv] = useState<string>('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [editCode, setEditCode] = useState('');
+  const [editState, setEditState] = useState<string>('');
 
   const [pasted, setPasted] = useState('');
   const [parsed, setParsed] = useState<ValidatedRow[]>([]);
-  const [failed, setFailed] = useState<{ name: string; code: string | null; is_active: boolean; error: string }[]>([]);
+  const [failed, setFailed] = useState<
+    { name: string; code: string | null; state_province: string | null; is_active: boolean; error: string }[]
+  >([]);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const existingNames = useMemo(() => jobSites.map((s) => s.name), [jobSites]);
+  const jurisdictionCodes = useMemo(() => jurisdictions.map((j) => j.code), [jurisdictions]);
 
   const validCount = parsed.filter((r) => !r.error).length;
 
@@ -40,7 +65,7 @@ export function JobSitesSettingsTab() {
     if (!file) return;
     try {
       const rows = await parseJobSitesFile(file);
-      setParsed(validateRows(rows, existingNames));
+      setParsed(validateRows(rows, existingNames, jurisdictionCodes));
       setFailed([]);
     } catch (e) {
       toast.error(`Failed to parse file: ${(e as Error).message}`);
@@ -53,7 +78,7 @@ export function JobSitesSettingsTab() {
       toast.error('No rows detected');
       return;
     }
-    setParsed(validateRows(rows, existingNames));
+    setParsed(validateRows(rows, existingNames, jurisdictionCodes));
     setFailed([]);
   };
 
@@ -62,13 +87,19 @@ export function JobSitesSettingsTab() {
     if (valid.length === 0) return;
     try {
       await bulkCreateSites.mutateAsync(
-        valid.map((r) => ({ name: r.name, code: r.code, is_active: r.is_active })),
+        valid.map((r) => ({
+          name: r.name,
+          code: r.code,
+          state_province: r.state_province,
+          is_active: r.is_active,
+        })),
       );
       const invalid = parsed.filter((r) => r.error);
       setFailed(
         invalid.map((r) => ({
           name: r.name,
           code: r.code,
+          state_province: r.state_province,
           is_active: r.is_active,
           error: r.error!,
         })),
@@ -81,24 +112,40 @@ export function JobSitesSettingsTab() {
     }
   };
 
-
   const handleAdd = async () => {
     if (!name.trim()) return;
-    await createSite.mutateAsync({ name, code: code || null });
+    await createSite.mutateAsync({
+      name,
+      code: code || null,
+      state_province: stateProv || null,
+    });
     setName('');
     setCode('');
+    setStateProv('');
   };
 
   const startEdit = (site: JobSite) => {
     setEditingId(site.id);
     setEditName(site.name);
     setEditCode(site.code || '');
+    setEditState(site.state_province || '');
   };
 
   const saveEdit = async (id: string) => {
     if (!editName.trim()) return;
-    await updateSite.mutateAsync({ id, name: editName.trim(), code: editCode.trim() || null });
+    await updateSite.mutateAsync({
+      id,
+      name: editName.trim(),
+      code: editCode.trim() || null,
+      state_province: editState || null,
+    });
     setEditingId(null);
+  };
+
+  const renderState = (val: string | null | undefined) => {
+    if (!val) return <span className="text-muted-foreground">—</span>;
+    const name = jurNameByCode.get(val.toUpperCase());
+    return name ? `${val} — ${name}` : val;
   };
 
   return (
@@ -116,7 +163,7 @@ export function JobSitesSettingsTab() {
         </CardHeader>
         <CardContent className="space-y-6">
           {/* Add new */}
-          <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr_auto] gap-3 items-end">
+          <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr_auto] gap-3 items-end">
             <div className="space-y-2">
               <Label htmlFor="site-name">Site name *</Label>
               <Input
@@ -137,6 +184,22 @@ export function JobSitesSettingsTab() {
                 maxLength={20}
               />
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="site-state">{jurisdictionLabel} (optional)</Label>
+              <Select value={stateProv || NONE} onValueChange={(v) => setStateProv(v === NONE ? '' : v)}>
+                <SelectTrigger id="site-state">
+                  <SelectValue placeholder={`Select ${jurisdictionLabel.toLowerCase()}`} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE}>— None —</SelectItem>
+                  {jurisdictions.map((j) => (
+                    <SelectItem key={j.code} value={j.code}>
+                      {j.code} — {j.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <Button onClick={handleAdd} disabled={!name.trim() || createSite.isPending}>
               <Plus className="w-4 h-4 mr-2" />
               Add site
@@ -149,7 +212,8 @@ export function JobSitesSettingsTab() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Name</TableHead>
-                  <TableHead className="w-32">Code</TableHead>
+                  <TableHead className="w-24">Code</TableHead>
+                  <TableHead className="w-48">{jurisdictionLabel}</TableHead>
                   <TableHead className="w-32">Active</TableHead>
                   <TableHead className="w-40 text-right">Actions</TableHead>
                 </TableRow>
@@ -157,13 +221,13 @@ export function JobSitesSettingsTab() {
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center text-muted-foreground py-6">
+                    <TableCell colSpan={5} className="text-center text-muted-foreground py-6">
                       Loading…
                     </TableCell>
                   </TableRow>
                 ) : jobSites.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center text-muted-foreground py-6">
+                    <TableCell colSpan={5} className="text-center text-muted-foreground py-6">
                       No job sites yet. Add one above to get started.
                     </TableCell>
                   </TableRow>
@@ -192,6 +256,28 @@ export function JobSitesSettingsTab() {
                             />
                           ) : (
                             site.code || <span className="text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {editing ? (
+                            <Select
+                              value={editState || NONE}
+                              onValueChange={(v) => setEditState(v === NONE ? '' : v)}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="—" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value={NONE}>— None —</SelectItem>
+                                {jurisdictions.map((j) => (
+                                  <SelectItem key={j.code} value={j.code}>
+                                    {j.code} — {j.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            renderState(site.state_province)
                           )}
                         </TableCell>
                         <TableCell>
@@ -263,7 +349,8 @@ export function JobSitesSettingsTab() {
             Bulk import job sites
           </CardTitle>
           <CardDescription>
-            Upload a CSV/XLSX file or paste rows to add multiple sites at once.
+            Upload a CSV/XLSX file or paste rows to add multiple sites at once. State/Province is
+            validated against {loc.name}'s {jurisdictionLabel.toLowerCase()} list.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -286,11 +373,13 @@ export function JobSitesSettingsTab() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="bulk-paste">Or paste rows (one per line: name, code, is_active)</Label>
+            <Label htmlFor="bulk-paste">
+              Or paste rows (one per line: name, code, state_province, is_active)
+            </Label>
             <Textarea
               id="bulk-paste"
               rows={4}
-              placeholder={'Head Office, HQ, true\nLagos Branch, LAG'}
+              placeholder={'Head Office, HQ, LA, true\nLagos Branch, LAG, LA'}
               value={pasted}
               onChange={(e) => setPasted(e.target.value)}
             />
@@ -323,8 +412,9 @@ export function JobSitesSettingsTab() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Name</TableHead>
-                      <TableHead className="w-24">Code</TableHead>
-                      <TableHead className="w-24">Active</TableHead>
+                      <TableHead className="w-20">Code</TableHead>
+                      <TableHead className="w-32">{jurisdictionLabel}</TableHead>
+                      <TableHead className="w-20">Active</TableHead>
                       <TableHead>Status</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -333,10 +423,15 @@ export function JobSitesSettingsTab() {
                       <TableRow key={idx} className={r.error ? 'bg-destructive/5' : ''}>
                         <TableCell>{r.name}</TableCell>
                         <TableCell>{r.code || <span className="text-muted-foreground">—</span>}</TableCell>
+                        <TableCell>
+                          {r.state_province || <span className="text-muted-foreground">—</span>}
+                        </TableCell>
                         <TableCell>{r.is_active ? 'Yes' : 'No'}</TableCell>
                         <TableCell>
                           {r.error ? (
                             <Badge variant="destructive">{r.error}</Badge>
+                          ) : r.warning ? (
+                            <Badge variant="outline">{r.warning}</Badge>
                           ) : (
                             <Badge variant="secondary">Ready</Badge>
                           )}
