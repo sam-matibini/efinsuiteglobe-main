@@ -476,65 +476,70 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
             </div>
             <div className="space-y-2">
               <Label>Job Site / Location *</Label>
-              <Select
+              <SearchableSelect
                 value={formData.job_site_id}
-                onValueChange={v => setFormData({ ...formData, job_site_id: v })}
-              >
-                <SelectTrigger>
-                  <SelectValue
-                    placeholder={
-                      activeJobSites.length === 0
-                        ? 'No sites — add one in Settings → Job Sites'
-                        : 'Select job site'
-                    }
-                  />
-                </SelectTrigger>
-                <SelectContent className="max-h-72">
-                  {activeJobSites.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.name}{s.code ? ` (${s.code})` : ''}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                onValueChange={(v) => setFormData({ ...formData, job_site_id: v })}
+                options={activeJobSites.map((s) => ({
+                  value: s.id,
+                  label: `${s.name}${s.code ? ` (${s.code})` : ''}`,
+                  keywords: [s.code, (s as any).state_province, (s as any).city].filter(Boolean).join(' '),
+                }))}
+                placeholder={
+                  activeJobSites.length === 0
+                    ? 'No sites — add one in Settings → Job Sites'
+                    : 'Select job site'
+                }
+                searchPlaceholder="Search job sites..."
+                emptyText="No matching job sites."
+                disabled={activeJobSites.length === 0}
+              />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>{countryConfig.jurisdictionLabel}</Label>
-                <Select value={formData.province} onValueChange={v => setFormData({ ...formData, province: v })}>
-                  <SelectTrigger><SelectValue placeholder={`Select ${countryConfig.jurisdictionLabel.toLowerCase()}`} /></SelectTrigger>
-                  <SelectContent className="max-h-72">
-                    {countryConfig.jurisdictions.map((j) => (
-                      <SelectItem key={j.code} value={j.code}>{j.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  value={formData.province}
+                  onValueChange={(v) => setFormData({ ...formData, province: v })}
+                  options={countryConfig.jurisdictions.map((j) => ({
+                    value: j.code,
+                    label: j.name,
+                    keywords: j.code,
+                  }))}
+                  placeholder={`Select ${countryConfig.jurisdictionLabel.toLowerCase()}`}
+                  searchPlaceholder={`Search ${countryConfig.jurisdictionLabel.toLowerCase()}...`}
+                />
               </div>
               <div className="space-y-2">
                 <Label>Employment Type</Label>
-                <Select value={formData.employment_type} onValueChange={v => setFormData({ ...formData, employment_type: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="full_time">Full-time</SelectItem>
-                    <SelectItem value="part_time">Part-time</SelectItem>
-                    <SelectItem value="contract">Contract</SelectItem>
-                    <SelectItem value="temporary">Temporary</SelectItem>
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  value={formData.employment_type}
+                  onValueChange={(v) => setFormData({ ...formData, employment_type: v })}
+                  options={[
+                    { value: 'full_time', label: 'Full-time' },
+                    { value: 'part_time', label: 'Part-time' },
+                    { value: 'contract', label: 'Contract' },
+                    { value: 'temporary', label: 'Temporary' },
+                  ]}
+                  placeholder="Select employment type"
+                  searchPlaceholder="Search..."
+                />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Pay Frequency</Label>
-                <Select value={formData.pay_frequency} onValueChange={v => setFormData({ ...formData, pay_frequency: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="weekly">Weekly</SelectItem>
-                    <SelectItem value="bi_weekly">Bi-Weekly</SelectItem>
-                    <SelectItem value="semi_monthly">Semi-Monthly</SelectItem>
-                    <SelectItem value="monthly">Monthly</SelectItem>
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  value={formData.pay_frequency}
+                  onValueChange={(v) => setFormData({ ...formData, pay_frequency: v })}
+                  options={[
+                    { value: 'weekly', label: 'Weekly' },
+                    { value: 'bi_weekly', label: 'Bi-Weekly' },
+                    { value: 'semi_monthly', label: 'Semi-Monthly' },
+                    { value: 'monthly', label: 'Monthly' },
+                  ]}
+                  placeholder="Select pay frequency"
+                  searchPlaceholder="Search..."
+                />
               </div>
               <div className="space-y-2">
                 <Label>Hire Date</Label>
@@ -544,15 +549,18 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Status</Label>
-                <Select value={formData.status} onValueChange={v => setFormData({ ...formData, status: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="onboarding">Onboarding</SelectItem>
-                    <SelectItem value="on_leave">On Leave</SelectItem>
-                    <SelectItem value="terminated">Terminated</SelectItem>
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  value={formData.status}
+                  onValueChange={(v) => setFormData({ ...formData, status: v })}
+                  options={[
+                    { value: 'active', label: 'Active' },
+                    { value: 'onboarding', label: 'Onboarding' },
+                    { value: 'on_leave', label: 'On Leave' },
+                    { value: 'terminated', label: 'Terminated' },
+                  ]}
+                  placeholder="Select status"
+                  searchPlaceholder="Search..."
+                />
               </div>
               {(formData.status === 'terminated' || formData.status === 'on_leave') && (
                 <div className="space-y-2">
