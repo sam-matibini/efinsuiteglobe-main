@@ -586,21 +586,17 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
                   <Label>
                     Reason for Termination <span className="text-destructive">*</span>
                   </Label>
-                  <Select
+                  <SearchableSelect
                     value={formData.termination_reason_code}
-                    onValueChange={v => setFormData({ ...formData, termination_reason_code: v })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select Service Canada / RoE reason code" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.entries(ROE_REASON_CODES).map(([code, label]) => (
-                        <SelectItem key={code} value={code}>
-                          {code} – {label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    onValueChange={(v) => setFormData({ ...formData, termination_reason_code: v })}
+                    options={Object.entries(ROE_REASON_CODES).map(([code, label]) => ({
+                      value: code,
+                      label: `${code} – ${label}`,
+                      keywords: label as string,
+                    }))}
+                    placeholder="Select Service Canada / RoE reason code"
+                    searchPlaceholder="Search reason codes..."
+                  />
                   <p className="text-xs text-muted-foreground">
                     Required by Service Canada for Employment Insurance (EI). This populates the Record of Employment reason code.
                   </p>
