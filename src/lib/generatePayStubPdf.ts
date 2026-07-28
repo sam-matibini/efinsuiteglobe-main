@@ -150,7 +150,7 @@ export function generatePayStubPdf(data: PayStubData): jsPDF {
   const rightColMaxW = pageWidth / 2 - leftMargin - halfGap;
 
   // Left column: optional logo, then company name (wrapped)
-  let leftY = headerTop;
+  let headerLeftY = headerTop;
   let nameStartX = leftMargin;
   if (data.logoDataUrl) {
     try {
