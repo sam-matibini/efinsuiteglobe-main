@@ -37,6 +37,7 @@ import { Database } from '@/integrations/supabase/types';
 import EditEmployeeDialog from '@/components/employees/EditEmployeeDialog';
 import EmployeePayHistoryDialog from '@/components/employees/EmployeePayHistoryDialog';
 import DeleteEmployeeDialog from '@/components/employees/DeleteEmployeeDialog';
+import { useCurrencyFormatter } from '@/hooks/useCurrencyFormatter';
 
 type EmployeeStatus = Database['public']['Enums']['employee_status'];
 
