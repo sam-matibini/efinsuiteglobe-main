@@ -684,3 +684,53 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
     </Dialog>
   );
 }
+
+function GuarantorsTabContent({ employeeId }: { employeeId: string }) {
+  const { guarantors, isLoading, upsert } = useEmployeeGuarantors(employeeId);
+
+  const seed = (order: 1 | 2): GuarantorDraft => {
+    const existing = guarantors.find((g) => g.guarantor_order === order);
+    if (!existing) return EMPTY_GUARANTOR(order);
+    const { id: _id, employee_id: _e, organization_id: _o, ...rest } = existing;
+    return { ...EMPTY_GUARANTOR(order), ...rest, guarantor_order: order };
+  };
+
+  const [g1, setG1] = useState<GuarantorDraft>(EMPTY_GUARANTOR(1));
+  const [g2, setG2] = useState<GuarantorDraft>(EMPTY_GUARANTOR(2));
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    if (!isLoading && !hydrated) {
+      setG1(seed(1));
+      setG2(seed(2));
+      setHydrated(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoading, guarantors.length]);
+
+  const save = async (which: 1 | 2) => {
+    const draft = which === 1 ? g1 : g2;
+    if (!draft.full_name?.trim()) {
+      toast.error('Full name is required');
+      return;
+    }
+    await upsert.mutateAsync({ ...draft, employee_id: employeeId });
+    toast.success(`Guarantor ${which} saved`);
+  };
+
+  if (isLoading) return <p className="text-sm text-muted-foreground">Loading guarantors…</p>;
+
+  return (
+    <div className="space-y-4">
+      <GuarantorsForm first={g1} second={g2} onChangeFirst={setG1} onChangeSecond={setG2} />
+      <div className="flex justify-end gap-2">
+        <Button variant="outline" onClick={() => save(1)} disabled={upsert.isPending}>
+          Save 1st Guarantor
+        </Button>
+        <Button onClick={() => save(2)} disabled={upsert.isPending}>
+          Save 2nd Guarantor
+        </Button>
+      </div>
+    </div>
+  );
+}
