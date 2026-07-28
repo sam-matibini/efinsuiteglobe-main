@@ -9139,6 +9139,7 @@ export type Database = {
           bank_institution: string | null
           bank_transit: string | null
           city: string | null
+          compensation_structure: Json | null
           cost_centre: string | null
           country: string | null
           cpp_exempt: boolean
@@ -9196,6 +9197,7 @@ export type Database = {
           bank_institution?: string | null
           bank_transit?: string | null
           city?: string | null
+          compensation_structure?: Json | null
           cost_centre?: string | null
           country?: string | null
           cpp_exempt?: boolean
@@ -9253,6 +9255,7 @@ export type Database = {
           bank_institution?: string | null
           bank_transit?: string | null
           city?: string | null
+          compensation_structure?: Json | null
           cost_centre?: string | null
           country?: string | null
           cpp_exempt?: boolean

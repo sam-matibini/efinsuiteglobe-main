@@ -30,6 +30,7 @@ import { useCurrentOrganization } from '@/hooks/useOrganization';
 import { useJobSites } from '@/hooks/useJobSites';
 import { useCountryScope } from '@/hooks/useCountryFilter';
 import { getCountryLocalization, COUNTRY_LOCALIZATIONS } from '@/data/countryLocalizations';
+import { CompensationStructureEditor, getDefaultCompensationStructure, type CompensationStructure } from './CompensationStructureEditor';
 
 
 type Employee = Database['public']['Tables']['employees']['Row'];
@@ -120,6 +121,8 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
     prov_additional_tax_deduction: 0,
   });
 
+  const [compStructure, setCompStructure] = useState<CompensationStructure | null>(null);
+
   useEffect(() => {
     if (employee && open) {
       setFormData({
@@ -151,6 +154,10 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
         cpp_exempt: employee.cpp_exempt ?? false,
         ei_exempt: employee.ei_exempt ?? false,
       });
+      const existingComp = (employee as any).compensation_structure as CompensationStructure | null | undefined;
+      setCompStructure(existingComp && existingComp.items?.length
+        ? existingComp
+        : getDefaultCompensationStructure(countryCode));
       setActiveTab('personal');
       if (isCA) loadTD1Data(employee.id);
     }
@@ -257,6 +264,7 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
         status: formData.status as any,
         cpp_exempt: formData.cpp_exempt,
         ei_exempt: formData.ei_exempt,
+        compensation_structure: compStructure as any,
       };
 
       const { error } = await supabase
@@ -627,6 +635,14 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
               </div>
             </div>
             <p className="text-xs text-muted-foreground">Set either hourly rate or annual salary (or both if applicable).</p>
+
+            <CompensationStructureEditor
+              value={compStructure}
+              onChange={setCompStructure}
+              annualSalary={parseFloat(formData.annual_salary) || 0}
+              countryCode={countryCode}
+            />
+
 
             {/* Deduction Exemptions — country-aware */}
             {(() => {
