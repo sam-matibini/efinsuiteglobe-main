@@ -104,6 +104,7 @@ interface AddEmployeeDialogProps {
 
 export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployeeDialogProps) {
   const { organization } = useCurrentOrganization();
+  const { jobSites: activeJobSites } = useJobSites({ activeOnly: true });
   const [activeTab, setActiveTab] = useState('personal');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedJurisdiction, setSelectedJurisdiction] = useState<string>('');
