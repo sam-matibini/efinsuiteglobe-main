@@ -20,12 +20,67 @@ import {
 import { toast } from 'sonner';
 
 export function JobSitesSettingsTab() {
-  const { jobSites, isLoading, createSite, updateSite, deleteSite } = useJobSites();
+  const { jobSites, isLoading, createSite, updateSite, deleteSite, bulkCreateSites } = useJobSites();
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [editCode, setEditCode] = useState('');
+
+  const [pasted, setPasted] = useState('');
+  const [parsed, setParsed] = useState<ValidatedRow[]>([]);
+  const [failed, setFailed] = useState<{ name: string; code: string | null; is_active: boolean; error: string }[]>([]);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const existingNames = useMemo(() => jobSites.map((s) => s.name), [jobSites]);
+
+  const validCount = parsed.filter((r) => !r.error).length;
+
+  const handleFile = async (file: File | null) => {
+    if (!file) return;
+    try {
+      const rows = await parseJobSitesFile(file);
+      setParsed(validateRows(rows, existingNames));
+      setFailed([]);
+    } catch (e) {
+      toast.error(`Failed to parse file: ${(e as Error).message}`);
+    }
+  };
+
+  const handleParsePasted = () => {
+    const rows = parsePastedJobSites(pasted);
+    if (rows.length === 0) {
+      toast.error('No rows detected');
+      return;
+    }
+    setParsed(validateRows(rows, existingNames));
+    setFailed([]);
+  };
+
+  const handleImport = async () => {
+    const valid = parsed.filter((r) => !r.error);
+    if (valid.length === 0) return;
+    try {
+      await bulkCreateSites.mutateAsync(
+        valid.map((r) => ({ name: r.name, code: r.code, is_active: r.is_active })),
+      );
+      const invalid = parsed.filter((r) => r.error);
+      setFailed(
+        invalid.map((r) => ({
+          name: r.name,
+          code: r.code,
+          is_active: r.is_active,
+          error: r.error!,
+        })),
+      );
+      setParsed([]);
+      setPasted('');
+      if (fileRef.current) fileRef.current.value = '';
+    } catch {
+      // toast handled in mutation
+    }
+  };
+
 
   const handleAdd = async () => {
     if (!name.trim()) return;
