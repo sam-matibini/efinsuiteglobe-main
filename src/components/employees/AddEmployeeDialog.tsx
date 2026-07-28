@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { FileText, User, Sparkles, UserPlus } from 'lucide-react';
-import { GuarantorsForm, EMPTY_GUARANTOR, type GuarantorDraft } from './GuarantorForm';
+import { GuarantorsForm, EMPTY_GUARANTOR, isGuarantorComplete, type GuarantorDraft } from './GuarantorForm';
 import { saveGuarantorsForEmployee } from '@/hooks/useEmployeeGuarantors';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
@@ -272,6 +272,12 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
   };
 
   const onSubmit = async (data: EmployeeFormData) => {
+    // Mandatory: both guarantors must be provided AND confirmed
+    if (!isGuarantorComplete(guarantor1) || !isGuarantorComplete(guarantor2)) {
+      setActiveTab('guarantors');
+      toast.error('Both guarantors are required and each must be confirmed before onboarding.');
+      return;
+    }
     setIsSubmitting(true);
     try {
       // For non-Canadian employees, we still store the jurisdiction in province field

@@ -24,6 +24,7 @@ import eFinSuiteGlobeLogo from '@/assets/efinsuite-globe-logo.png';
 import { copyTextToClipboard, tryOpenInNewTab } from '@/lib/share';
 import { useTwilioShare } from '@/hooks/useTwilioShare';
 import { buildAddressLines, generatePayStubPdf } from '@/lib/generatePayStubPdf';
+import { useCurrencyFormatter } from '@/hooks/useCurrencyFormatter';
 
 interface PayStubData {
   id: string;
@@ -76,21 +77,24 @@ interface PaystubViewerProps {
   locale?: string;
 }
 
-export function PaystubViewer({ payStub, companyName, companyLogo, currencyCode = 'CAD', locale = 'en-CA' }: PaystubViewerProps) {
+export function PaystubViewer({ payStub, companyName, companyLogo, currencyCode, locale }: PaystubViewerProps) {
   const [isPrinting, setIsPrinting] = useState(false);
   const { shareWhatsAppNoRecipient, shareSMSNoRecipient } = useTwilioShare();
+  const { currencyCode: orgCurrency, locale: orgLocale } = useCurrencyFormatter();
+  const activeCurrency = currencyCode ?? orgCurrency ?? 'CAD';
+  const activeLocale = locale ?? orgLocale ?? 'en-CA';
 
   const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat(locale, {
+    return new Intl.NumberFormat(activeLocale, {
       style: 'currency',
-      currency: currencyCode,
+      currency: activeCurrency,
       minimumFractionDigits: 2,
     }).format(value);
   };
 
   const formatDate = (dateStr: string) => {
     const [year, month, day] = dateStr.split('-').map(Number);
-    return new Intl.DateTimeFormat('en-CA', {
+    return new Intl.DateTimeFormat(activeLocale, {
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',

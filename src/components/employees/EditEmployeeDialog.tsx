@@ -24,6 +24,7 @@ import { User, Briefcase, DollarSign, FileText, MapPin, UserPlus } from 'lucide-
 import { GuarantorsForm, EMPTY_GUARANTOR, type GuarantorDraft } from './GuarantorForm';
 import { useEmployeeGuarantors } from '@/hooks/useEmployeeGuarantors';
 import { Checkbox } from '@/components/ui/checkbox';
+import { useCurrencyFormatter } from '@/hooks/useCurrencyFormatter';
 
 type Employee = Database['public']['Tables']['employees']['Row'];
 type TD1Row = Database['public']['Tables']['employee_td1']['Row'];
@@ -296,8 +297,8 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
     }
   };
 
-  const formatCurrency = (val: number) =>
-    new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD', minimumFractionDigits: 0 }).format(val);
+  const { formatWithSymbol } = useCurrencyFormatter();
+  const formatCurrency = (val: number) => formatWithSymbol(val);
 
   if (!employee) return null;
 
