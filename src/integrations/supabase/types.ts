@@ -26894,10 +26894,76 @@ export type Database = {
           },
         ]
       }
+      virtual_account_transactions: {
+        Row: {
+          amount: number
+          created_at: string
+          currency: string
+          id: string
+          narration: string | null
+          occurred_at: string
+          organization_id: string
+          provider_tx_id: string | null
+          raw_payload: Json | null
+          sender_account: string | null
+          sender_bank: string | null
+          sender_name: string | null
+          status: string
+          type: string
+          updated_at: string
+          virtual_account_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          currency: string
+          id?: string
+          narration?: string | null
+          occurred_at?: string
+          organization_id: string
+          provider_tx_id?: string | null
+          raw_payload?: Json | null
+          sender_account?: string | null
+          sender_bank?: string | null
+          sender_name?: string | null
+          status?: string
+          type: string
+          updated_at?: string
+          virtual_account_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          currency?: string
+          id?: string
+          narration?: string | null
+          occurred_at?: string
+          organization_id?: string
+          provider_tx_id?: string | null
+          raw_payload?: Json | null
+          sender_account?: string | null
+          sender_bank?: string | null
+          sender_name?: string | null
+          status?: string
+          type?: string
+          updated_at?: string
+          virtual_account_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "virtual_account_transactions_virtual_account_id_fkey"
+            columns: ["virtual_account_id"]
+            isOneToOne: false
+            referencedRelation: "virtual_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       virtual_accounts: {
         Row: {
           account_name: string | null
           account_number: string | null
+          balance: number
           bank_name: string | null
           bvn_or_nin: string | null
           created_at: string
@@ -26918,6 +26984,7 @@ export type Database = {
         Insert: {
           account_name?: string | null
           account_number?: string | null
+          balance?: number
           bank_name?: string | null
           bvn_or_nin?: string | null
           created_at?: string
@@ -26938,6 +27005,7 @@ export type Database = {
         Update: {
           account_name?: string | null
           account_number?: string | null
+          balance?: number
           bank_name?: string | null
           bvn_or_nin?: string | null
           created_at?: string
