@@ -51,6 +51,7 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
   // Country resolution — country scope > org.country > 'CA'
   const { organization } = useCurrentOrganization();
   const { country: scopedCountry } = useCountryScope();
+  const { jobSites: activeJobSites } = useJobSites({ activeOnly: true });
   const countryCode = (() => {
     const raw = (scopedCountry || organization?.country || 'CA').toString().trim();
     if (!raw) return 'CA';
@@ -80,6 +81,7 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
     // Employment
     job_title: '',
     department: '',
+    job_site_id: '',
     province: '',
     employment_type: 'full_time',
     pay_frequency: 'bi_weekly',
