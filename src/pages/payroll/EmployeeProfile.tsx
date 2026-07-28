@@ -28,6 +28,7 @@ import { PROVINCE_NAMES } from '@/types/payroll';
 import { getDefaultTD1Claims } from '@/lib/payrollCalculator';
 import EditEmployeeDialog from '@/components/employees/EditEmployeeDialog';
 import EmployeePayHistoryDialog from '@/components/employees/EmployeePayHistoryDialog';
+import { useCurrencyFormatter } from '@/hooks/useCurrencyFormatter';
 
 export default function EmployeeProfile() {
   const { id } = useParams<{ id: string }>();
