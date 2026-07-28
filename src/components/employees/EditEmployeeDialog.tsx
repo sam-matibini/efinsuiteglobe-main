@@ -154,6 +154,10 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
         cpp_exempt: employee.cpp_exempt ?? false,
         ei_exempt: employee.ei_exempt ?? false,
       });
+      const existingComp = (employee as any).compensation_structure as CompensationStructure | null | undefined;
+      setCompStructure(existingComp && existingComp.items?.length
+        ? existingComp
+        : getDefaultCompensationStructure(countryCode));
       setActiveTab('personal');
       if (isCA) loadTD1Data(employee.id);
     }
