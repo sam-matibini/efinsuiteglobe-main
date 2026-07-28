@@ -27068,7 +27068,6 @@ export type Database = {
           raw_response: Json | null
           status: string
           updated_at: string
-          user_key: string
         }
         Insert: {
           account_name?: string | null
@@ -27089,7 +27088,6 @@ export type Database = {
           raw_response?: Json | null
           status?: string
           updated_at?: string
-          user_key: string
         }
         Update: {
           account_name?: string | null
@@ -27110,7 +27108,6 @@ export type Database = {
           raw_response?: Json | null
           status?: string
           updated_at?: string
-          user_key?: string
         }
         Relationships: []
       }

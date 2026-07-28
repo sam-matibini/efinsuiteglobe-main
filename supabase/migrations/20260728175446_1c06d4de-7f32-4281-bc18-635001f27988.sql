@@ -1,0 +1,1 @@
+ALTER TABLE public.virtual_accounts DROP COLUMN IF EXISTS user_key;
