@@ -8510,6 +8510,95 @@ export type Database = {
           },
         ]
       }
+      employee_guarantors: {
+        Row: {
+          created_at: string
+          email: string | null
+          employee_id: string
+          full_name: string
+          guarantor_order: number
+          id: string
+          marital_status: string | null
+          notes: string | null
+          office_address: string | null
+          office_city: string | null
+          office_country: string | null
+          office_postal_code: string | null
+          office_state: string | null
+          organization_id: string
+          phone_number: string | null
+          profession: string | null
+          relationship: string | null
+          residential_address: string | null
+          residential_city: string | null
+          residential_country: string | null
+          residential_postal_code: string | null
+          residential_state: string | null
+          sex: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          email?: string | null
+          employee_id: string
+          full_name: string
+          guarantor_order: number
+          id?: string
+          marital_status?: string | null
+          notes?: string | null
+          office_address?: string | null
+          office_city?: string | null
+          office_country?: string | null
+          office_postal_code?: string | null
+          office_state?: string | null
+          organization_id: string
+          phone_number?: string | null
+          profession?: string | null
+          relationship?: string | null
+          residential_address?: string | null
+          residential_city?: string | null
+          residential_country?: string | null
+          residential_postal_code?: string | null
+          residential_state?: string | null
+          sex?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          email?: string | null
+          employee_id?: string
+          full_name?: string
+          guarantor_order?: number
+          id?: string
+          marital_status?: string | null
+          notes?: string | null
+          office_address?: string | null
+          office_city?: string | null
+          office_country?: string | null
+          office_postal_code?: string | null
+          office_state?: string | null
+          organization_id?: string
+          phone_number?: string | null
+          profession?: string | null
+          relationship?: string | null
+          residential_address?: string | null
+          residential_city?: string | null
+          residential_country?: string | null
+          residential_postal_code?: string | null
+          residential_state?: string | null
+          sex?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_guarantors_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       employee_import_audit: {
         Row: {
           action: string
