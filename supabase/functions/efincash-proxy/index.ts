@@ -2,7 +2,7 @@ import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { z } from 'npm:zod@3';
 
-const EFINCASH_URL = 'https://efincash.lenhub.net/v1/flutterwave/flutter/permant/virtual/';
+const EFINCASH_URL = 'https://efincash.lenhub.net';
 
 const CreateSchema = z.object({
   organization_id: z.string().uuid(),
@@ -119,12 +119,29 @@ Deno.serve(async (req) => {
 
     let providerJson: any = null;
     let providerStatus = 0;
+    let accessToken = '';
+    try {
+      const resp = await fetch(`${EFINCASH_URL}/v1/flutterwave/flutter/permant/virtual/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ user_key: apiKey }),
+      });
+      providerStatus = resp.status;
+      const text = await resp.text();
+      try { const data = JSON.parse(text); accessToken = data?.access_token ?? ''; } catch { accessToken = ''; }
+    } catch (e) {
+      return new Response(JSON.stringify({ error: 'Failed to obtain access token from eFinCash' }), {
+        status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
     try {
       const resp = await fetch(EFINCASH_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${apiKey}`,
+          Authorization: `Bearer ${accessToken}`,
           'X-API-Key': apiKey,
         },
         body: JSON.stringify(payload),
