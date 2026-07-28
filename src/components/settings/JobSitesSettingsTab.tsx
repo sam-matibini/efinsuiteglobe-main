@@ -1,21 +1,86 @@
-import { useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { MapPin, Plus, Trash2, Pencil, Check, X } from 'lucide-react';
+import { MapPin, Plus, Trash2, Pencil, Check, X, Upload, Download, FileUp } from 'lucide-react';
 import { useJobSites, type JobSite } from '@/hooks/useJobSites';
+import {
+  downloadJobSitesTemplate,
+  parseJobSitesFile,
+  parsePastedJobSites,
+  exportFailedJobSitesCsv,
+  validateRows,
+  type ValidatedRow,
+} from '@/lib/jobSitesBulk';
+import { toast } from 'sonner';
 
 export function JobSitesSettingsTab() {
-  const { jobSites, isLoading, createSite, updateSite, deleteSite } = useJobSites();
+  const { jobSites, isLoading, createSite, updateSite, deleteSite, bulkCreateSites } = useJobSites();
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [editCode, setEditCode] = useState('');
+
+  const [pasted, setPasted] = useState('');
+  const [parsed, setParsed] = useState<ValidatedRow[]>([]);
+  const [failed, setFailed] = useState<{ name: string; code: string | null; is_active: boolean; error: string }[]>([]);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const existingNames = useMemo(() => jobSites.map((s) => s.name), [jobSites]);
+
+  const validCount = parsed.filter((r) => !r.error).length;
+
+  const handleFile = async (file: File | null) => {
+    if (!file) return;
+    try {
+      const rows = await parseJobSitesFile(file);
+      setParsed(validateRows(rows, existingNames));
+      setFailed([]);
+    } catch (e) {
+      toast.error(`Failed to parse file: ${(e as Error).message}`);
+    }
+  };
+
+  const handleParsePasted = () => {
+    const rows = parsePastedJobSites(pasted);
+    if (rows.length === 0) {
+      toast.error('No rows detected');
+      return;
+    }
+    setParsed(validateRows(rows, existingNames));
+    setFailed([]);
+  };
+
+  const handleImport = async () => {
+    const valid = parsed.filter((r) => !r.error);
+    if (valid.length === 0) return;
+    try {
+      await bulkCreateSites.mutateAsync(
+        valid.map((r) => ({ name: r.name, code: r.code, is_active: r.is_active })),
+      );
+      const invalid = parsed.filter((r) => r.error);
+      setFailed(
+        invalid.map((r) => ({
+          name: r.name,
+          code: r.code,
+          is_active: r.is_active,
+          error: r.error!,
+        })),
+      );
+      setParsed([]);
+      setPasted('');
+      if (fileRef.current) fileRef.current.value = '';
+    } catch {
+      // toast handled in mutation
+    }
+  };
+
 
   const handleAdd = async () => {
     if (!name.trim()) return;
@@ -188,6 +253,113 @@ export function JobSitesSettingsTab() {
               </TableBody>
             </Table>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Upload className="w-5 h-5" />
+            Bulk import job sites
+          </CardTitle>
+          <CardDescription>
+            Upload a CSV/XLSX file or paste rows to add multiple sites at once.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="flex flex-wrap gap-3">
+            <Button variant="outline" onClick={downloadJobSitesTemplate}>
+              <Download className="w-4 h-4 mr-2" />
+              Download template
+            </Button>
+            <Button variant="outline" onClick={() => fileRef.current?.click()}>
+              <FileUp className="w-4 h-4 mr-2" />
+              Choose file (.csv, .xlsx)
+            </Button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".csv,.xlsx,.xls"
+              className="hidden"
+              onChange={(e) => handleFile(e.target.files?.[0] ?? null)}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="bulk-paste">Or paste rows (one per line: name, code, is_active)</Label>
+            <Textarea
+              id="bulk-paste"
+              rows={4}
+              placeholder={'Head Office, HQ, true\nLagos Branch, LAG'}
+              value={pasted}
+              onChange={(e) => setPasted(e.target.value)}
+            />
+            <Button variant="secondary" size="sm" onClick={handleParsePasted} disabled={!pasted.trim()}>
+              Preview pasted rows
+            </Button>
+          </div>
+
+          {parsed.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="text-sm text-muted-foreground">
+                  {validCount} valid / {parsed.length - validCount} with issues
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="ghost" size="sm" onClick={() => setParsed([])}>
+                    Clear
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={handleImport}
+                    disabled={validCount === 0 || bulkCreateSites.isPending}
+                  >
+                    Import {validCount} site{validCount === 1 ? '' : 's'}
+                  </Button>
+                </div>
+              </div>
+              <div className="rounded-md border max-h-80 overflow-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead className="w-24">Code</TableHead>
+                      <TableHead className="w-24">Active</TableHead>
+                      <TableHead>Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {parsed.map((r, idx) => (
+                      <TableRow key={idx} className={r.error ? 'bg-destructive/5' : ''}>
+                        <TableCell>{r.name}</TableCell>
+                        <TableCell>{r.code || <span className="text-muted-foreground">—</span>}</TableCell>
+                        <TableCell>{r.is_active ? 'Yes' : 'No'}</TableCell>
+                        <TableCell>
+                          {r.error ? (
+                            <Badge variant="destructive">{r.error}</Badge>
+                          ) : (
+                            <Badge variant="secondary">Ready</Badge>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          )}
+
+          {failed.length > 0 && (
+            <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 flex items-center justify-between">
+              <div className="text-sm">
+                {failed.length} row{failed.length === 1 ? '' : 's'} were skipped due to validation issues.
+              </div>
+              <Button variant="outline" size="sm" onClick={() => exportFailedJobSitesCsv(failed)}>
+                <Download className="w-4 h-4 mr-2" />
+                Download failed rows
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

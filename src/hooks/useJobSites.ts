@@ -88,11 +88,38 @@ export function useJobSites(options?: { activeOnly?: boolean }) {
     onError: (e: Error) => toast.error(`Failed to delete job site: ${e.message}`),
   });
 
+  const bulkCreateSites = useMutation({
+    mutationFn: async (
+      inputs: { name: string; code?: string | null; is_active?: boolean }[],
+    ) => {
+      if (!organization?.id) throw new Error('No organization selected');
+      if (inputs.length === 0) return { inserted: 0 };
+      const payload = inputs.map((i) => ({
+        organization_id: organization.id,
+        name: i.name.trim(),
+        code: i.code?.toString().trim() || null,
+        is_active: i.is_active ?? true,
+      }));
+      const { data, error } = await supabase
+        .from('job_sites' as any)
+        .insert(payload as any)
+        .select();
+      if (error) throw error;
+      return { inserted: (data ?? []).length };
+    },
+    onSuccess: (res) => {
+      invalidate();
+      toast.success(`Imported ${res.inserted} job site${res.inserted === 1 ? '' : 's'}`);
+    },
+    onError: (e: Error) => toast.error(`Bulk import failed: ${e.message}`),
+  });
+
   return {
     jobSites: query.data ?? [],
     isLoading: query.isLoading,
     createSite,
     updateSite,
     deleteSite,
+    bulkCreateSites,
   };
 }
