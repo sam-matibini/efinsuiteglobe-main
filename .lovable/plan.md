@@ -1,27 +1,59 @@
-## Bulk Job Sites Upload
+# Fix: "Failed to upload logo"
 
-Extend the Job Sites settings tab with a bulk import flow, mirroring the existing bulk-invite pattern.
+## Root cause (verified)
 
-### New file: `src/lib/jobSitesBulk.ts`
-- `downloadJobSitesTemplate()` — emits `job-sites-template.csv` with headers `name,code,is_active` plus 2 example rows and a `# name is required; code optional; is_active true/false` comment line.
-- `parseJobSitesFile(file)` — uses `xlsx` (already a dep, see `bulkInviteTemplate.ts`) to read CSV/XLSX into `{ name, code, is_active }[]`, trims values, defaults `is_active` to `true`.
-- `parsePastedJobSites(text)` — one entry per line, `name` or `name,code` or `name,code,is_active`.
-- `exportFailedJobSitesCsv(rows)` — for retry.
+- `OrganizationLogoUpload.tsx` uploads to bucket **`organization-logos`** at path `{organizationId}/logo-*.ext`.
+- The bucket exists and is public (SELECT works), but `storage.objects` has **no INSERT / UPDATE / DELETE policies** scoped to it. Every write is therefore blocked by RLS → the SDK throws → the component toasts "Failed to upload logo".
+- The existing `public_read_organization_logos` policy targets bucket `documents` (folder `organization-logos`), which does not match this upload path — so it doesn't help writes either.
 
-### Update `src/hooks/useJobSites.ts`
-- Add `bulkCreateSites` mutation: accepts `{ name, code, is_active }[]`, dedupes by lowercase name against existing `jobSites`, inserts remaining in one `.insert([...])` call scoped to current org, returns `{ inserted, skipped, failed }`. Invalidates the `job_sites` query and toasts a summary.
+## Fix
 
-### Update `src/components/settings/JobSitesSettingsTab.tsx`
-- Add a "Bulk import" section above the list with:
-  - "Download template" button (calls `downloadJobSitesTemplate`).
-  - File input accepting `.csv,.xlsx,.xls`.
-  - Textarea for paste (one site per line).
-  - Preview table showing parsed rows with per-row validation (missing name, duplicate of existing, duplicate within upload, code >20 chars).
-  - "Import N sites" button (disabled when nothing valid) → calls `bulkCreateSites`.
-  - Result summary with "Download failed rows" link when any fail.
-- Keep the existing single-add form and table unchanged.
+Add org-member-scoped write policies on `storage.objects` for `bucket_id = 'organization-logos'`, keyed off the first path segment being the organization id (matches the code's `${organizationId}/...` layout).
 
-### Technical notes
-- No DB or RLS changes — reuses existing `job_sites` table, org scope, and policies.
-- Validation runs client-side before insert; server-side unique-name guard is not added (matches current single-add behavior).
-- `is_active` parsing accepts `true/false/1/0/yes/no` (case-insensitive), defaults `true`.
+Migration:
+
+```sql
+-- Uploads
+CREATE POLICY "Org members upload organization logos"
+ON storage.objects FOR INSERT TO authenticated
+WITH CHECK (
+  bucket_id = 'organization-logos'
+  AND is_org_member(auth.uid(), ((storage.foldername(name))[1])::uuid)
+);
+
+-- Replace (upsert)
+CREATE POLICY "Org members update organization logos"
+ON storage.objects FOR UPDATE TO authenticated
+USING (
+  bucket_id = 'organization-logos'
+  AND is_org_member(auth.uid(), ((storage.foldername(name))[1])::uuid)
+)
+WITH CHECK (
+  bucket_id = 'organization-logos'
+  AND is_org_member(auth.uid(), ((storage.foldername(name))[1])::uuid)
+);
+
+-- Remove old logo on change / remove
+CREATE POLICY "Org members delete organization logos"
+ON storage.objects FOR DELETE TO authenticated
+USING (
+  bucket_id = 'organization-logos'
+  AND is_org_member(auth.uid(), ((storage.foldername(name))[1])::uuid)
+);
+
+-- Public read policy currently points at the wrong bucket; add one for this bucket
+CREATE POLICY "Public read organization logos bucket"
+ON storage.objects FOR SELECT TO public
+USING (
+  bucket_id = 'organization-logos'
+  AND coalesce((metadata->>'mimetype'), '') LIKE 'image/%'
+);
+```
+
+No frontend changes required — `OrganizationLogoUpload.tsx` will work once RLS allows the write.
+
+## Verification
+
+1. Reload `/settings?tab=organization`, click **Upload Logo**, pick a PNG/JPG < 2MB.
+2. Expect success toast and avatar preview updated; `organizations.logo_url` populated.
+3. Change and remove flows should also succeed (covered by UPDATE + DELETE policies).
