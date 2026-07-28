@@ -1,6 +1,9 @@
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { z } from 'npm:zod@3';
+import { unwrap, mapAccountFields } from '../_shared/efincash.ts';
+
+
 
 const EFINCASH_URL = 'https://efincash.lenhub.net';
 
@@ -126,11 +129,16 @@ Deno.serve(async (req) => {
       });
       providerStatus = resp.status;
       const text = await resp.text();
-      try { 
-        const data = JSON.parse(text); 
-        accessToken = data?.key ?? ''; 
-      } catch { 
+      try {
+        const data = JSON.parse(text);
+        accessToken = data?.key ?? '';
+      } catch {
         return new Response(JSON.stringify({ error: `[ERROR] Failed to parse access token response: ${text}` }), {
+          status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      if (!accessToken) {
+        return new Response(JSON.stringify({ error: 'eFinCash auth did not return an access key' }), {
           status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
@@ -142,10 +150,8 @@ Deno.serve(async (req) => {
     try {
       const resp = await fetch(`${EFINCASH_URL}/v1/flutterwave/flutter/permant/virtual/`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({...payload, user_key: accessToken}),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...payload, user_key: accessToken }),
       });
       providerStatus = resp.status;
       const text = await resp.text();
@@ -154,21 +160,26 @@ Deno.serve(async (req) => {
       providerJson = { error: (e as Error).message };
     }
 
-    const success = providerStatus >= 200 && providerStatus < 300;
-    const d = providerJson?.data ?? providerJson ?? {};
-    const accountNumber = d.account_number ?? d.accountNumber ?? d.virtual_account_number ?? null;
-    const bankName = d.bank_name ?? d.bankName ?? null;
-    const accountName = d.account_name ?? d.accountName ?? null;
-    const providerAccountId = d.id ?? d.reference ?? d.order_ref ?? null;
+    const httpOk = providerStatus >= 200 && providerStatus < 300;
+    const { d, outerOk } = unwrap(providerJson);
+    const fields = mapAccountFields(d, {
+      first_name: input.first_name,
+      last_name: input.last_name,
+    });
+    const success = httpOk && outerOk && !!fields.account_number;
+    const status = success
+      ? (fields.status_raw === 'active' ? 'active' : 'active')
+      : (httpOk && outerOk ? 'pending' : 'failed');
 
     const { data: updated } = await admin
       .from('virtual_accounts')
       .update({
-        status: success ? (accountNumber ? 'active' : 'pending') : 'failed',
-        account_number: accountNumber,
-        bank_name: bankName,
-        account_name: accountName,
-        provider_account_id: providerAccountId ? String(providerAccountId) : null,
+        status,
+        account_number: fields.account_number,
+        bank_name: fields.bank_name,
+        account_name: fields.account_name,
+        provider_account_id: fields.provider_account_id,
+        currency: fields.currency ?? input.currency,
         raw_response: providerJson,
       })
       .eq('id', row.id)

@@ -1,5 +1,6 @@
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { unwrap, mapAccountFields, mapTxFields } from '../_shared/efincash.ts';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -9,18 +10,19 @@ Deno.serve(async (req) => {
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const admin = createClient(supabaseUrl, serviceKey);
 
-    const body = await req.json().catch(() => ({}));
+    const body = await req.json().catch(() => ({} as any));
     console.log('[efincash-webhook] event:', JSON.stringify(body));
 
-    const data = body?.data ?? body ?? {};
-    const eventName: string = (body?.event ?? body?.type ?? data?.event ?? data?.type ?? '')
+    const eventName: string = (body?.event ?? body?.type ?? '')
       .toString()
       .toLowerCase();
 
+    const { d } = unwrap(body);
+
     const providerAccountId: string | null =
-      data.id ?? data.reference ?? data.order_ref ?? body.reference ?? null;
+      d.id ?? d.reference ?? d.order_ref ?? body.reference ?? null;
     const accountNumberLookup: string | null =
-      data.account_number ?? data.accountNumber ?? data.virtual_account_number ?? null;
+      d.account_number ?? d.accountNumber ?? d.virtual_account_number ?? null;
 
     if (!providerAccountId && !accountNumberLookup) {
       return new Response(JSON.stringify({ ok: true, note: 'no identifier' }), {
@@ -28,11 +30,24 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Look up the virtual account row by provider_account_id or account_number
-    const baseSel = admin.from('virtual_accounts').select('id, organization_id, currency, balance').limit(1);
-    const { data: row } = providerAccountId
-      ? await baseSel.eq('provider_account_id', String(providerAccountId)).maybeSingle()
-      : await baseSel.eq('account_number', String(accountNumberLookup)).maybeSingle();
+    // Look up the virtual account row by provider_account_id then account_number
+    let row: any = null;
+    if (providerAccountId) {
+      const { data } = await admin
+        .from('virtual_accounts')
+        .select('id, organization_id, currency, balance')
+        .eq('provider_account_id', String(providerAccountId))
+        .maybeSingle();
+      row = data;
+    }
+    if (!row && accountNumberLookup) {
+      const { data } = await admin
+        .from('virtual_accounts')
+        .select('id, organization_id, currency, balance')
+        .eq('account_number', String(accountNumberLookup))
+        .maybeSingle();
+      row = data;
+    }
 
     if (!row) {
       return new Response(JSON.stringify({ ok: true, note: 'no matching account' }), {
@@ -41,29 +56,29 @@ Deno.serve(async (req) => {
     }
 
     // ---- Detect event type ----
-    const amountRaw = data.amount ?? data.amount_settled ?? body.amount ?? null;
-    const hasAmount = amountRaw !== null && amountRaw !== undefined && !isNaN(Number(amountRaw));
+    const rawAmount = d.amount ?? d.amount_settled ?? null;
+    const hasAmount =
+      rawAmount !== null && rawAmount !== undefined && !isNaN(Number(rawAmount)) && Number(rawAmount) !== 0;
     const looksLikeTx =
-      hasAmount ||
-      /charge|transfer|credit|debit|deposit|payment|inflow|outflow/.test(eventName);
+      hasAmount || /charge|transfer|credit|debit|deposit|payment|inflow|outflow/.test(eventName);
     const looksLikeAccount =
       !hasAmount && /account|virtual|created|provision/.test(eventName);
 
-    // ---- Account provisioning branch (existing behavior) ----
-    if (looksLikeAccount || (!looksLikeTx && !hasAmount)) {
-      const accountNumber = data.account_number ?? data.accountNumber ?? data.virtual_account_number ?? null;
-      const bankName = data.bank_name ?? data.bankName ?? null;
-      const accountName = data.account_name ?? data.accountName ?? null;
-      const statusRaw = (data.status ?? body.status ?? '').toString().toLowerCase();
-      const status = statusRaw.includes('fail') ? 'failed'
-        : statusRaw.includes('active') || accountNumber ? 'active'
+    // ---- Account provisioning / update branch ----
+    if (looksLikeAccount || !looksLikeTx) {
+      const fields = mapAccountFields(d);
+      const status = fields.status_raw.includes('fail')
+        ? 'failed'
+        : fields.status_raw === 'active' || fields.account_number
+        ? 'active'
         : 'pending';
 
       await admin.from('virtual_accounts').update({
-        account_number: accountNumber ?? undefined,
-        bank_name: bankName ?? undefined,
-        account_name: accountName ?? undefined,
-        provider_account_id: providerAccountId ? String(providerAccountId) : undefined,
+        account_number: fields.account_number ?? undefined,
+        bank_name: fields.bank_name ?? undefined,
+        account_name: fields.account_name ?? undefined,
+        provider_account_id: fields.provider_account_id ?? undefined,
+        currency: fields.currency ?? undefined,
         status,
         raw_response: body,
       }).eq('id', row.id);
@@ -74,34 +89,18 @@ Deno.serve(async (req) => {
     }
 
     // ---- Transaction branch ----
-    const amount = Number(amountRaw);
-    const currency = (data.currency ?? row.currency ?? '').toString();
-    const statusRaw = (data.status ?? body.status ?? 'successful').toString().toLowerCase();
-    const status = statusRaw.includes('fail') ? 'failed'
-      : statusRaw.includes('pend') ? 'pending'
-      : 'successful';
-
-    const isDebit = /debit|outflow|withdraw|payout/.test(eventName) ||
-      /debit|outflow|withdraw/.test((data.type ?? '').toString().toLowerCase());
-    const type: 'credit' | 'debit' = isDebit ? 'debit' : 'credit';
-
-    const providerTxId: string | null =
-      data.id ?? data.tx_ref ?? data.reference ?? data.flw_ref ?? body.reference ?? null;
-
-    const senderName = data.customer?.name ?? data.meta?.originatorname ?? data.sender_name ?? null;
-    const senderBank = data.meta?.bankname ?? data.sender_bank ?? null;
-    const senderAccount = data.meta?.originatoraccountnumber ?? data.sender_account ?? null;
-    const narration = data.narration ?? data.description ?? data.remark ?? null;
-    const occurredAt = data.created_at ?? data.transaction_date ?? new Date().toISOString();
+    const tx = mapTxFields(d, eventName);
+    const amount = tx.amount ?? 0;
+    const currency = tx.currency ?? row.currency ?? '';
 
     // Idempotency: has this provider_tx_id already been recorded?
     let alreadyRecorded = false;
-    if (providerTxId) {
+    if (tx.provider_tx_id) {
       const { data: existing } = await admin
         .from('virtual_account_transactions')
         .select('id')
         .eq('virtual_account_id', row.id)
-        .eq('provider_tx_id', String(providerTxId))
+        .eq('provider_tx_id', tx.provider_tx_id)
         .maybeSingle();
       alreadyRecorded = !!existing;
     }
@@ -110,23 +109,22 @@ Deno.serve(async (req) => {
       const { error: insErr } = await admin.from('virtual_account_transactions').insert({
         virtual_account_id: row.id,
         organization_id: row.organization_id,
-        provider_tx_id: providerTxId ? String(providerTxId) : null,
-        type,
+        provider_tx_id: tx.provider_tx_id,
+        type: tx.type,
         amount: Math.abs(amount),
         currency,
-        status,
-        narration,
-        sender_name: senderName,
-        sender_bank: senderBank,
-        sender_account: senderAccount,
+        status: tx.status,
+        narration: tx.narration,
+        sender_name: tx.sender_name,
+        sender_bank: tx.sender_bank,
+        sender_account: tx.sender_account,
         raw_payload: body,
-        occurred_at: occurredAt,
+        occurred_at: tx.occurred_at,
       });
       if (insErr) {
         console.error('[efincash-webhook] insert tx error', insErr);
-      } else if (status === 'successful') {
-        // Atomic balance update via SQL
-        const delta = type === 'credit' ? Math.abs(amount) : -Math.abs(amount);
+      } else if (tx.status === 'successful') {
+        const delta = tx.type === 'credit' ? Math.abs(amount) : -Math.abs(amount);
         const newBalance = Number(row.balance ?? 0) + delta;
         const { error: balErr } = await admin
           .from('virtual_accounts')
