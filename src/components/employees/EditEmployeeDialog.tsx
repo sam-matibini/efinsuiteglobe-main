@@ -235,6 +235,7 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
         phone: formData.phone || null,
         date_of_birth: formData.date_of_birth || null,
         sin_encrypted: formData.sin_encrypted || null,
+        nin: formData.nin || null,
         address_line1: formData.address_line1 || null,
         address_line2: formData.address_line2 || null,
         city: formData.city || null,
