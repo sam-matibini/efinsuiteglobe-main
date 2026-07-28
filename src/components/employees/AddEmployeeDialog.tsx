@@ -2,7 +2,9 @@ import { useState, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { FileText, User, Sparkles } from 'lucide-react';
+import { FileText, User, Sparkles, UserPlus } from 'lucide-react';
+import { GuarantorsForm, EMPTY_GUARANTOR, type GuarantorDraft } from './GuarantorForm';
+import { saveGuarantorsForEmployee } from '@/hooks/useEmployeeGuarantors';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -103,6 +105,8 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
   const [activeTab, setActiveTab] = useState('personal');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedJurisdiction, setSelectedJurisdiction] = useState<string>('');
+  const [guarantor1, setGuarantor1] = useState<GuarantorDraft>(EMPTY_GUARANTOR(1));
+  const [guarantor2, setGuarantor2] = useState<GuarantorDraft>(EMPTY_GUARANTOR(2));
 
   // Determine country from organization
   const countryCode = useMemo(() => {
