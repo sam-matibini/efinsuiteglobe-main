@@ -131,7 +131,7 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
         country: employee.country || '',
         job_title: employee.job_title || '',
         department: employee.department || '',
-        province: employee.province || 'ON',
+        province: employee.province || countryConfig.jurisdictions[0]?.code || 'ON',
         employment_type: employee.employment_type || 'full_time',
         pay_frequency: employee.pay_frequency || 'bi_weekly',
         hire_date: employee.hire_date || '',
@@ -145,7 +145,7 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
         ei_exempt: employee.ei_exempt ?? false,
       });
       setActiveTab('personal');
-      loadTD1Data(employee.id);
+      if (isCA) loadTD1Data(employee.id);
     }
   }, [employee, open]);
 
