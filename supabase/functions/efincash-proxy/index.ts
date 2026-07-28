@@ -130,7 +130,11 @@ Deno.serve(async (req) => {
       });
       providerStatus = resp.status;
       const text = await resp.text();
-      try { const data = JSON.parse(text); accessToken = data?.access_token ?? ''; } catch { accessToken = ''; }
+      try { const data = JSON.parse(text); accessToken = data?.access_token ?? ''; } catch { 
+        return new Response(JSON.stringify({ error: `[ERROR] Failed to parse access token response: ${text}` }), {
+          status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
     } catch (e) {
       return new Response(JSON.stringify({ error: `[ERROR] ${ (e as Error).message }` }), {
         status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
