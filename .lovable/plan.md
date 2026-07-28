@@ -1,37 +1,24 @@
-## Goal
-Make dropdown fields on the **Edit Employee** dialog searchable (type-to-filter), starting with the Employment tab shown in the screenshot and extending across the whole form.
+## Issues
 
-## Approach
-Introduce a reusable `SearchableSelect` component (built on the existing shadcn `Command` + `Popover` primitives) that keeps the same value/onChange API as the current `Select`, so swapping is a minimal edit. It will:
-- Render a trigger identical in style to `SelectTrigger`
-- Open a popover with a `CommandInput` search box, filtered `CommandItem` list, and empty state
-- Support placeholder, disabled state, and `max-h-72` scroll
+1. **"This page has been blocked by Chrome"** appears when clicking **Print** on a pay stub. `PaystubViewer.handlePrint` opens a blank popup and writes an HTML document containing an `<iframe src="data:application/pdf;base64,...">`. Chrome now blocks navigations to `data:` URLs (and about:blank documents that host them), producing the blocked-page screen shown.
+2. **Console warning**: `Function components cannot be given refs … Check the render method of PaystubViewer` — originates from the `<DropdownMenu>` block inside `PaystubViewer`. The Radix trigger tries to attach a ref, and something in the trigger chain is not a `forwardRef`. Low-severity, but easy to eliminate at the same time.
 
-## Fields to convert in `src/components/employees/EditEmployeeDialog.tsx`
-Employment tab:
-- Job Site / Location (from `useJobSites`)
-- State / Province (jurisdictions list)
-- Employment Type
-- Pay Frequency
-- Status
+## Fix
 
-Personal tab:
-- Country / any locale selects present
+### 1. `src/components/payroll/PaystubViewer.tsx` — `handlePrint`
+Replace the `data:` URI + `document.write` popup with a Blob URL flow that Chrome allows:
 
-Compensation tab:
-- Currency selector, pay type / rate unit selects
+- `const blob = doc.output('blob');`
+- `const url = URL.createObjectURL(blob);`
+- `const w = window.open(url, '_blank');` (browser's native PDF viewer handles Print)
+- If popup blocked → toast + fall back to `doc.autoPrint(); doc.save(...)`.
+- `URL.revokeObjectURL(url)` after a short delay / on window close.
 
-Guarantors tab:
-- Sex, Status, Relationship, State/Prov, Country selects inside `GuarantorForm.tsx`
+This removes the `document.write` + `data:` URI pattern that Chrome flags.
 
-Text `Input` fields (Job Title, Department, Hire Date, names, phone, addresses) stay as-is — they're already free-text and don't need a searchable control.
-
-## Technical notes
-- New file: `src/components/ui/searchable-select.tsx`
-- Uses existing `@/components/ui/command` and `@/components/ui/popover`
-- Preserves current form state shape — no changes to `formData` or save handlers
-- Long lists (job sites, provinces, countries, Nigerian states) benefit most; short enums (4 options) still get consistent UX
+### 2. `src/components/payroll/PaystubViewer.tsx` — DropdownMenu ref warning
+Wrap the `View & Share` trigger's `<Button>` inside a `<span>` (or ensure the `Button` is the sole `asChild` child — it already is, so the more reliable fix is to drop `asChild` and pass the icon/label as `DropdownMenuTrigger` children directly styled like a button). This silences the ref warning without changing behavior.
 
 ## Out of scope
-- No DB or business-logic changes
-- No changes to Add Employee dialog unless you want it mirrored (say the word and I'll include it)
+
+No other files or behaviors change. Purely the two presentation fixes above.
