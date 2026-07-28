@@ -396,46 +396,52 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
 
     return (
       <TabsContent value="tax" className="space-y-6 mt-4">
-        {/* CPP/EI Exemptions */}
-        <Card className="p-4">
-          <h4 className="font-medium mb-3">Deduction Exemptions</h4>
-          <div className="space-y-3">
-            <FormField
-              control={form.control}
-              name="cppExempt"
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                  <FormControl>
-                    <Checkbox checked={field.value} onCheckedChange={field.onChange} />
-                  </FormControl>
-                  <div className="space-y-1 leading-none">
-                    <FormLabel>CPP Exempt</FormLabel>
-                    <p className="text-xs text-muted-foreground">
-                      Employee is exempt from Canada Pension Plan contributions (e.g., First Nations employees working on reserve)
-                    </p>
-                  </div>
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="eiExempt"
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                  <FormControl>
-                    <Checkbox checked={field.value} onCheckedChange={field.onChange} />
-                  </FormControl>
-                  <div className="space-y-1 leading-none">
-                    <FormLabel>EI Exempt</FormLabel>
-                    <p className="text-xs text-muted-foreground">
-                      Employee is exempt from Employment Insurance premiums
-                    </p>
-                  </div>
-                </FormItem>
-              )}
-            />
-          </div>
-        </Card>
+        {/* Deduction Exemptions — country-aware */}
+        {(countryCode === 'CA' || countryCode === 'NG') && (
+          <Card className="p-4">
+            <h4 className="font-medium mb-3">Deduction Exemptions</h4>
+            <div className="space-y-3">
+              <FormField
+                control={form.control}
+                name="cppExempt"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                    <FormControl>
+                      <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                    </FormControl>
+                    <div className="space-y-1 leading-none">
+                      <FormLabel>{countryCode === 'NG' ? 'Pension Exempt' : 'CPP Exempt'}</FormLabel>
+                      <p className="text-xs text-muted-foreground">
+                        {countryCode === 'NG'
+                          ? 'Employee is exempt from Pension Reform Act contributions (e.g., fewer than 3 employees, or expatriate exemption)'
+                          : 'Employee is exempt from Canada Pension Plan contributions (e.g., First Nations employees working on reserve)'}
+                      </p>
+                    </div>
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="eiExempt"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                    <FormControl>
+                      <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                    </FormControl>
+                    <div className="space-y-1 leading-none">
+                      <FormLabel>{countryCode === 'NG' ? 'NHF Exempt' : 'EI Exempt'}</FormLabel>
+                      <p className="text-xs text-muted-foreground">
+                        {countryCode === 'NG'
+                          ? 'Employee is exempt from National Housing Fund contributions (e.g., basic salary below ₦3,000/month or non-Nigerian)'
+                          : 'Employee is exempt from Employment Insurance premiums'}
+                      </p>
+                    </div>
+                  </FormItem>
+                )}
+              />
+            </div>
+          </Card>
+        )}
 
         <div className="flex items-center justify-between">
           <div>
