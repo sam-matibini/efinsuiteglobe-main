@@ -35,6 +35,7 @@ import {
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useCurrentOrganization } from '@/hooks/useOrganization';
+import { useJobSites } from '@/hooks/useJobSites';
 import { COUNTRY_LOCALIZATIONS, getCountryLocalization } from '@/data/countryLocalizations';
 import { 
   getCountryPayrollConfig, 
@@ -61,6 +62,7 @@ const createEmployeeSchema = (countryCode: string) => {
     mailingCountry: z.string().optional(),
     department: z.string().optional(),
     jobTitle: z.string().optional(),
+    jobSiteId: z.string().min(1, 'Job site is required'),
     employmentType: z.enum(['full_time', 'part_time', 'contract', 'temporary']),
     payFrequency: z.enum(['weekly', 'bi_weekly', 'semi_monthly', 'monthly']),
     jurisdiction: z.string().min(1, 'Location is required'),
@@ -158,6 +160,7 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
       mailingCountry: '',
       department: '',
       jobTitle: '',
+      jobSiteId: '',
       employmentType: 'full_time' as const,
       payFrequency: 'bi_weekly' as const,
       jurisdiction: jurisdictionCode || countryConfig.jurisdictions[0]?.code || '',
