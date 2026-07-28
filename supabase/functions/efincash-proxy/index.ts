@@ -82,8 +82,6 @@ Deno.serve(async (req) => {
       );
     }
 
-    const userKey = `org_${input.organization_id}_${input.currency.toLowerCase()}`;
-
     // Insert pending row
     const { data: row, error: insertErr } = await admin
       .from('virtual_accounts')
@@ -91,7 +89,6 @@ Deno.serve(async (req) => {
         organization_id: input.organization_id,
         created_by: userId,
         provider: 'efincash',
-        user_key: userKey,
         currency: input.currency,
         email: input.email,
         first_name: input.first_name ?? null,
