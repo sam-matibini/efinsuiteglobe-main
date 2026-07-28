@@ -72,6 +72,7 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
     phone: '',
     date_of_birth: '',
     sin_encrypted: '',
+    nin: '',
     // Address
     address_line1: '',
     address_line2: '',
