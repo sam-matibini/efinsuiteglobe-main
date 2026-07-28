@@ -8,6 +8,7 @@ export interface JobSite {
   organization_id: string;
   name: string;
   code: string | null;
+  state_province: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
