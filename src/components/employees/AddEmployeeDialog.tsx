@@ -272,6 +272,12 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
   };
 
   const onSubmit = async (data: EmployeeFormData) => {
+    // Mandatory: both guarantors must be provided AND confirmed
+    if (!isGuarantorComplete(guarantor1) || !isGuarantorComplete(guarantor2)) {
+      setActiveTab('guarantors');
+      toast.error('Both guarantors are required and each must be confirmed before onboarding.');
+      return;
+    }
     setIsSubmitting(true);
     try {
       // For non-Canadian employees, we still store the jurisdiction in province field
