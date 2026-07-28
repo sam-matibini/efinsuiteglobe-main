@@ -636,6 +636,14 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
             </div>
             <p className="text-xs text-muted-foreground">Set either hourly rate or annual salary (or both if applicable).</p>
 
+            <CompensationStructureEditor
+              value={compStructure}
+              onChange={setCompStructure}
+              annualSalary={parseFloat(formData.annual_salary) || 0}
+              countryCode={countryCode}
+            />
+
+
             {/* Deduction Exemptions — country-aware */}
             {(() => {
               const c = (formData.country || '').toLowerCase();
