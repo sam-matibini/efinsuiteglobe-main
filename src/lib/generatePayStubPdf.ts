@@ -67,6 +67,31 @@ export interface PayStubData {
 
   // Country / locale for labels + currency formatting (defaults to CA / CAD)
   countryCode?: string;
+
+  // Optional preloaded org logo as data URL (PNG/JPEG). If omitted, no logo is drawn.
+  logoDataUrl?: string | null;
+  logoMimeType?: 'PNG' | 'JPEG';
+}
+
+/**
+ * Preload an image URL as a base64 data URL suitable for jsPDF.addImage.
+ * Returns null on any failure (missing url, CORS, network, etc.) so callers can degrade gracefully.
+ */
+export async function loadImageAsDataUrl(url?: string | null): Promise<string | null> {
+  if (!url) return null;
+  try {
+    const res = await fetch(url, { mode: 'cors' });
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    return await new Promise<string | null>((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve((reader.result as string) || null);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
 }
 
 const buildFormatCurrency = (countryCode?: string) => buildPdfCurrencyFormatter(countryCode);
