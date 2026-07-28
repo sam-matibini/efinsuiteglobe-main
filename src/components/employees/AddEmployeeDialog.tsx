@@ -1012,6 +1012,16 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
 
               {/* Tax Credits Tab */}
               {renderTaxCreditsTab()}
+
+              {/* Guarantors Tab */}
+              <TabsContent value="guarantors" className="space-y-4 mt-4">
+                <GuarantorsForm
+                  first={guarantor1}
+                  second={guarantor2}
+                  onChangeFirst={setGuarantor1}
+                  onChangeSecond={setGuarantor2}
+                />
+              </TabsContent>
             </Tabs>
 
             <div className="flex justify-between pt-6 border-t mt-6">
@@ -1024,27 +1034,32 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
               </Button>
               <div className="flex gap-2">
                 {activeTab === 'tax' && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setActiveTab('personal')}
-                  >
+                  <Button type="button" variant="outline" onClick={() => setActiveTab('personal')}>
+                    Previous
+                  </Button>
+                )}
+                {activeTab === 'guarantors' && (
+                  <Button type="button" variant="outline" onClick={() => setActiveTab('tax')}>
                     Previous
                   </Button>
                 )}
                 {activeTab === 'personal' && (
-                  <Button
-                    type="button"
-                    onClick={() => setActiveTab('tax')}
-                  >
+                  <Button type="button" onClick={() => setActiveTab('tax')}>
                     Next
                   </Button>
                 )}
                 {activeTab === 'tax' && (
+                  <Button type="button" onClick={() => setActiveTab('guarantors')}>
+                    Next
+                  </Button>
+                )}
+                {activeTab === 'guarantors' && (
                   <Button type="submit" disabled={isSubmitting}>
                     {isSubmitting ? 'Adding...' : 'Add Employee'}
                   </Button>
                 )}
+              </div>
+            </div>
               </div>
             </div>
           </form>
