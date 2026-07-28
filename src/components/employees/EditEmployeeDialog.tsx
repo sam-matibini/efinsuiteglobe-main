@@ -217,6 +217,13 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
       return;
     }
 
+    if (countryCode === 'NG' && !/^\d{11}$/.test(formData.nin || '')) {
+      toast.error('National Identification Number (NIN) must be exactly 11 digits');
+      setActiveTab('personal');
+      return;
+    }
+
+
 
     setIsSubmitting(true);
     try {
