@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf';
 import { parseLocalDate } from '@/lib/utils';
 import { getPayrollPdfConfig, type RemittanceRowSpec } from './slipFieldMapping';
+import { formatPdfCurrencyByCode } from './pdfCurrency';
 
 export interface GenericRemittanceEmployee {
   name: string;
