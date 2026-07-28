@@ -1,59 +1,30 @@
-# Fix: "Failed to upload logo"
+## Add State/Province to Job Sites
 
-## Root cause (verified)
+Extend the Job Sites / Locations feature so each site records a state or province (localized to the active country, e.g. Nigerian states for NG orgs, Canadian provinces for CA).
 
-- `OrganizationLogoUpload.tsx` uploads to bucket **`organization-logos`** at path `{organizationId}/logo-*.ext`.
-- The bucket exists and is public (SELECT works), but `storage.objects` has **no INSERT / UPDATE / DELETE policies** scoped to it. Every write is therefore blocked by RLS → the SDK throws → the component toasts "Failed to upload logo".
-- The existing `public_read_organization_logos` policy targets bucket `documents` (folder `organization-logos`), which does not match this upload path — so it doesn't help writes either.
+### Database
+- Migration on `public.job_sites`:
+  - Add `state_province text` (nullable — existing rows stay valid).
+  - No enum; use free text so it works across all localized countries (CA, NG, ZM, US, KE, etc.).
 
-## Fix
+### Types & hook
+- `src/hooks/useJobSites.ts`: add `state_province` to the `JobSite` interface, and to `createSite` / `updateSite` / `bulkCreateSites` payloads.
 
-Add org-member-scoped write policies on `storage.objects` for `bucket_id = 'organization-logos'`, keyed off the first path segment being the organization id (matches the code's `${organizationId}/...` layout).
+### Settings UI — `JobSitesSettingsTab.tsx`
+- Add a **State/Province** dropdown next to Site name / Code in the add-site row.
+- Populate options from the active country's jurisdictions via `getCountryLocalization(scopedCountry)` (same source used by employee dialogs).
+- Show the new column in the sites table.
+- Edit dialog / inline edit: allow changing state/province.
 
-Migration:
+### Bulk import — `src/lib/jobSitesBulk.ts`
+- Add `state_province` column to:
+  - CSV template (`downloadJobSitesTemplate`)
+  - Parser (`parseJobSitesFile`, `parsePastedJobSites`) — accept `state`, `province`, `state_province` header aliases.
+  - Validation — warn (not block) if value isn't in the active country's jurisdiction list.
+  - Failed-rows export.
 
-```sql
--- Uploads
-CREATE POLICY "Org members upload organization logos"
-ON storage.objects FOR INSERT TO authenticated
-WITH CHECK (
-  bucket_id = 'organization-logos'
-  AND is_org_member(auth.uid(), ((storage.foldername(name))[1])::uuid)
-);
+### Employee onboarding (optional auto-fill)
+- In `AddEmployeeDialog` / `EditEmployeeDialog`: when a Job Site is selected and the employee's province is empty, pre-fill it from the site's `state_province`. Non-destructive — user can still override.
 
--- Replace (upsert)
-CREATE POLICY "Org members update organization logos"
-ON storage.objects FOR UPDATE TO authenticated
-USING (
-  bucket_id = 'organization-logos'
-  AND is_org_member(auth.uid(), ((storage.foldername(name))[1])::uuid)
-)
-WITH CHECK (
-  bucket_id = 'organization-logos'
-  AND is_org_member(auth.uid(), ((storage.foldername(name))[1])::uuid)
-);
-
--- Remove old logo on change / remove
-CREATE POLICY "Org members delete organization logos"
-ON storage.objects FOR DELETE TO authenticated
-USING (
-  bucket_id = 'organization-logos'
-  AND is_org_member(auth.uid(), ((storage.foldername(name))[1])::uuid)
-);
-
--- Public read policy currently points at the wrong bucket; add one for this bucket
-CREATE POLICY "Public read organization logos bucket"
-ON storage.objects FOR SELECT TO public
-USING (
-  bucket_id = 'organization-logos'
-  AND coalesce((metadata->>'mimetype'), '') LIKE 'image/%'
-);
-```
-
-No frontend changes required — `OrganizationLogoUpload.tsx` will work once RLS allows the write.
-
-## Verification
-
-1. Reload `/settings?tab=organization`, click **Upload Logo**, pick a PNG/JPG < 2MB.
-2. Expect success toast and avatar preview updated; `organizations.logo_url` populated.
-3. Change and remove flows should also succeed (covered by UPDATE + DELETE policies).
+### Out of scope
+- No changes to reports, payroll, or tax logic. State/prov on the site is purely descriptive metadata for now.
