@@ -40,7 +40,7 @@ export function useJobSites(options?: { activeOnly?: boolean }) {
     queryClient.invalidateQueries({ queryKey: ['job_sites', organization?.id] });
 
   const createSite = useMutation({
-    mutationFn: async (input: { name: string; code?: string | null; is_active?: boolean }) => {
+    mutationFn: async (input: { name: string; code?: string | null; state_province?: string | null; is_active?: boolean }) => {
       if (!organization?.id) throw new Error('No organization selected');
       const { data, error } = await supabase
         .from('job_sites' as any)
@@ -48,6 +48,7 @@ export function useJobSites(options?: { activeOnly?: boolean }) {
           organization_id: organization.id,
           name: input.name.trim(),
           code: input.code?.trim() || null,
+          state_province: input.state_province?.trim() || null,
           is_active: input.is_active ?? true,
         } as any)
         .select()
