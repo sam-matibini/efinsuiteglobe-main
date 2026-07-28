@@ -1060,8 +1060,6 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
                 )}
               </div>
             </div>
-              </div>
-            </div>
           </form>
         </Form>
       </DialogContent>
