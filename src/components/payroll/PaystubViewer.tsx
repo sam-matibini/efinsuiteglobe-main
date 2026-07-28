@@ -23,7 +23,7 @@ import * as XLSX from 'xlsx';
 import eFinSuiteGlobeLogo from '@/assets/efinsuite-globe-logo.png';
 import { copyTextToClipboard, tryOpenInNewTab } from '@/lib/share';
 import { useTwilioShare } from '@/hooks/useTwilioShare';
-import { buildAddressLines, generatePayStubPdf } from '@/lib/generatePayStubPdf';
+import { buildAddressLines, generatePayStubPdf, loadImageAsDataUrl } from '@/lib/generatePayStubPdf';
 import { useCurrencyFormatter } from '@/hooks/useCurrencyFormatter';
 
 interface PayStubData {
