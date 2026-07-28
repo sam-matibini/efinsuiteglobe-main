@@ -447,6 +447,30 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
                 <Input value={formData.department} onChange={e => setFormData({ ...formData, department: e.target.value })} />
               </div>
             </div>
+            <div className="space-y-2">
+              <Label>Job Site / Location *</Label>
+              <Select
+                value={formData.job_site_id}
+                onValueChange={v => setFormData({ ...formData, job_site_id: v })}
+              >
+                <SelectTrigger>
+                  <SelectValue
+                    placeholder={
+                      activeJobSites.length === 0
+                        ? 'No sites — add one in Settings → Job Sites'
+                        : 'Select job site'
+                    }
+                  />
+                </SelectTrigger>
+                <SelectContent className="max-h-72">
+                  {activeJobSites.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name}{s.code ? ` (${s.code})` : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>{countryConfig.jurisdictionLabel}</Label>
