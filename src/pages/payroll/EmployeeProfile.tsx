@@ -53,13 +53,10 @@ export default function EmployeeProfile() {
     enabled: !!id,
   });
 
+  const { formatWithSymbol, currencySymbol } = useCurrencyFormatter();
   const formatCurrency = (value: number | null | undefined) => {
     if (!value) return '-';
-    return new Intl.NumberFormat('en-CA', {
-      style: 'currency',
-      currency: 'CAD',
-      minimumFractionDigits: 0,
-    }).format(value);
+    return formatWithSymbol(value);
   };
 
   const formatDate = (dateStr: string | null | undefined) => {
