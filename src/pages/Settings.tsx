@@ -729,6 +729,10 @@ export default function Settings() {
           />
         </TabsContent>
 
+        <TabsContent value="divisions" className="space-y-6">
+          <DivisionsSettingsTab />
+        </TabsContent>
+
         <TabsContent value="compliance" className="space-y-6">
           <GlobalComplianceTab organizationId={organization.id} />
         </TabsContent>
