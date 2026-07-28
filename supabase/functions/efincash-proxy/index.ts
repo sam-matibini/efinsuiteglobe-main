@@ -109,7 +109,7 @@ Deno.serve(async (req) => {
 
     // Call eFinCash
     const payload = {
-      user_key: userKey,
+      user_key: apiKey,
       currency: input.currency,
       email: input.email,
       bvn_or_nin: input.bvn_or_nin ?? null,
