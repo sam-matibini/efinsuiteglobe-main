@@ -729,6 +729,30 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
                   />
                 </div>
 
+                {countryCode === 'NG' && (
+                  <FormField
+                    control={form.control}
+                    name={'nin' as any}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>National Identification Number (NIN) *</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="12345678901"
+                            maxLength={11}
+                            inputMode="numeric"
+                            {...field}
+                          />
+                        </FormControl>
+                        <p className="text-xs text-muted-foreground">
+                          Required by NRS. Must be the 11-digit NIN issued by NIMC.
+                        </p>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+
                 {/* Mailing Address */}
                 <div className="pt-2 pb-1">
                   <h3 className="text-sm font-medium text-muted-foreground">Mailing Address</h3>
