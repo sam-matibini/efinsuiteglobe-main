@@ -30,6 +30,7 @@ import { useCurrentOrganization } from '@/hooks/useOrganization';
 import { useJobSites } from '@/hooks/useJobSites';
 import { useCountryScope } from '@/hooks/useCountryFilter';
 import { getCountryLocalization, COUNTRY_LOCALIZATIONS } from '@/data/countryLocalizations';
+import { CompensationStructureEditor, getDefaultCompensationStructure, type CompensationStructure } from './CompensationStructureEditor';
 
 
 type Employee = Database['public']['Tables']['employees']['Row'];
