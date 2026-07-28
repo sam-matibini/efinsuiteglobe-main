@@ -121,6 +121,8 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
     prov_additional_tax_deduction: 0,
   });
 
+  const [compStructure, setCompStructure] = useState<CompensationStructure | null>(null);
+
   useEffect(() => {
     if (employee && open) {
       setFormData({
