@@ -108,7 +108,9 @@ export function calculateNigeriaAnnualPaye(input: {
     gross,
   );
   const pension = pensionable * 0.08;
-  const nhf = (input.annualBasic || pensionable) * 0.025;
+  // NHF is opt-in (PRA/NHF Act: employee election, 2.5% of basic). Only
+  // apply automatically when caller supplies an explicit basic-salary split.
+  const nhf = input.annualBasic ? input.annualBasic * 0.025 : 0;
   const life = input.annualLifeAssurance || 0;
   const useNta = isNta2025(input.payPeriodStart);
 
