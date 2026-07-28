@@ -1,35 +1,25 @@
-## Add "Taxes & Remittances" section back to eFinconnect
+## Fix Nigeria employee onboarding
 
-### Problem
-
-Tax remittance actions currently live inside the generic **Bills** section of the eFinconnect dashboard (`/treasury`). Users want them broken out into their own dedicated **Taxes & Remittances** section so tax obligations are visible at a glance across every localized country (CA, US, NG, ZM, and any later additions).
-
-### Approach
-
-Purely presentation-layer — split tax cards out of `bills` into a new `taxRemittances` section on `CountryTreasuryConfig`, render it as its own section on `TreasuryDashboard`, and wire it into the existing preference gating.
+The Add/Edit Employee dialogs always render Canada-specific "CPP Exempt / EI Exempt" checkboxes and Canada-branded labels even when the organization country is Nigeria. The PAYE tab also uses ambiguous "CRA" wording (which reads as Canada Revenue Agency, not Nigeria's Consolidated Relief Allowance).
 
 ### Changes
 
-1. **`src/config/countryTreasuryConfig.ts`**
-   - Add `taxRemittances: DashboardActionDef[]` to the `sections` type.
-   - Move the existing tax-remittance cards out of `bills` and into `taxRemittances` for each country:
-     - **CA**: "Pay business taxes" (`/treasury/tax-payments`) + new "CRA Remittance Centre" (`/banking-payments/cra-remittance`) and "Provincial Remittances".
-     - **US**: "Pay business taxes" + "US Remittance Centre" (`/banking-payments/us-remittance`).
-     - **NG**: "Pay NRS taxes", "Pay State (SIRS) taxes", "Pay pension & NHF" (already exist, just relocated).
-     - **ZM**: "Pay ZRA taxes", "Pay NAPSA & NHIMA" (relocated).
-   - Leave non-tax entries ("Pay bills", "Pay salaries") in `bills`.
+1. **`src/components/employees/AddEmployeeDialog.tsx`** — In `renderTaxCreditsTab`, replace the hard-coded CPP/EI "Deduction Exemptions" card with a country-aware block:
+   - **CA**: keep existing CPP Exempt + EI Exempt.
+   - **NG**: render Pension Exempt, NHF Exempt, and NSITF Exempt toggles (all optional, default false; stored in existing tax metadata / new fields on the employee record).
+   - **US / GB / ZM / KE / BI / other**: hide the card (no equivalent statutory exemptions surfaced here).
 
-2. **`src/pages/treasury/TreasuryDashboard.tsx`**
-   - Render a new `<Section title="Taxes & Remittances" />` between **Bills** and **Transfers**, gated by `sectionEnabled('taxRemittances')` and filtered through the existing `filterByAuthority` helper so per-authority toggles still apply.
+2. **`src/components/employees/EditEmployeeDialog.tsx`** — Mirror the same country-aware block around line 533 so edits match the add flow.
 
-3. **`src/hooks/useEfinconnectPreferences.ts`** (light touch)
-   - Add `'taxRemittances'` to the section keys recognized by `sectionEnabled` so users can hide it from `EfinconnectSettingsTab` (defaults to enabled).
+3. **`src/data/globalPayrollDefaults.ts`** (Nigeria block, lines 197–198) — Rename credit labels to disambiguate from Canada Revenue Agency:
+   - `CRA Fixed Portion` → `Consolidated Relief (Fixed)`
+   - `CRA Variable %` → `Consolidated Relief (Variable %)`
+   Descriptions unchanged. These labels flow into the PAYE tab automatically.
 
-4. **`src/components/settings/EfinconnectSettingsTab.tsx`**
-   - Add a toggle row for "Taxes & Remittances" alongside the existing Bills / Transfers / Payments / Governance toggles.
+4. **`src/pages/payroll/EmployeeProfile.tsx`** (line 329) — Show the exemption label based on `countryCode` (`Pension Exempt` for NG, `CPP Exempt` for CA, hide otherwise) so the read-only profile matches.
 
 ### Out of scope
 
-- No changes to underlying tax engines, routes, or database.
-- No new pages — all links point to existing routes (`/treasury/tax-payments`, `/tax/nigeria`, `/banking-payments/cra-remittance`, `/banking-payments/us-remittance`).
-- Countries not currently in `REGISTRY` (KE, BI, GB) — they already fall back to CA and will inherit the new section once their configs are added in a future pass.
+- No schema migrations. NG exemption flags reuse the existing `tax_metadata` JSON on employees (already used for other localized flags); no new columns.
+- No changes to payroll calculation logic — flags are captured for future use and surfaced on the profile only.
+- No changes to the PAYE input fields themselves (Pension Relief, NHF Relief, Life Assurance, Gratuity remain as shown).

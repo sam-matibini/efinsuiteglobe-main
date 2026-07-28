@@ -194,8 +194,8 @@ const NIGERIA_CONFIG: CountryPayrollConfig = {
     { code: 'PAYE-STATE', name: 'State PAYE', description: 'Progressive PIT withheld per PITA bands', employeeRate: 0, isEmployeePortion: true, inputType: 'rate' },
   ],
   federalTaxCredits: [
-    { code: 'CRA_FIXED', name: 'CRA Fixed Portion', defaultAmount: 200000, description: 'Higher of ₦200,000 or 1% of gross (annual)' },
-    { code: 'CRA_VARIABLE_PCT', name: 'CRA Variable %', defaultAmount: 20, description: '20% of gross emoluments (auto-calculated)' },
+    { code: 'CRA_FIXED', name: 'Consolidated Relief (Fixed)', defaultAmount: 200000, description: 'Higher of ₦200,000 or 1% of gross (annual)' },
+    { code: 'CRA_VARIABLE_PCT', name: 'Consolidated Relief (Variable %)', defaultAmount: 20, description: '20% of gross emoluments (auto-calculated)' },
     { code: 'PENSION_RELIEF', name: 'Pension Relief', defaultAmount: 0, description: 'Auto = actual pension contribution' },
     { code: 'NHF_RELIEF', name: 'NHF Relief', defaultAmount: 0, description: 'Auto = actual NHF contribution' },
     { code: 'LIFE_ASSURANCE', name: 'Life Assurance Premium (Annual)', defaultAmount: 0, description: 'Deductible life insurance premium' },
