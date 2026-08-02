@@ -206,7 +206,8 @@ export function CreateDocumentDialog({ open, onOpenChange }: CreateDocumentDialo
       onOpenChange(false);
     } catch (error) {
       console.error('Create document error:', error);
-      toast.error('Failed to create document');
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      toast.error('Failed to create document: ' + message);
     } finally {
       setIsUploading(false);
     }

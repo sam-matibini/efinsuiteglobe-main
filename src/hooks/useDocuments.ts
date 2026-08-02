@@ -174,17 +174,47 @@ export function useCreateDocument() {
   return useMutation({
     mutationFn: async (documentData: { title: string; document_type?: string; file_url?: string; mime_type?: string; file_size?: number }) => {
       if (!user?.id) throw new Error('User not authenticated');
+
+      // Ensure the user is in organization_members before calling the proxy.
+      // The efinsign-proxy edge function checks this table and returns
+      // "Not a member of the specified organization" if the row is missing —
+      // which happens when an org owner was never backfilled into the table.
+      let orgId: string | null = organization?.id || null;
+      if (orgId) {
+        const { data: membership } = await supabase
+          .from('organization_members')
+          .select('id')
+          .eq('organization_id', orgId)
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+        if (!membership) {
+          const { data: orgRow } = await supabase
+            .from('organizations')
+            .select('owner_id')
+            .eq('id', orgId)
+            .maybeSingle();
+
+          if (orgRow?.owner_id === user.id) {
+            await supabase.from('organization_members').insert({
+              organization_id: orgId,
+              user_id: user.id,
+              role: 'owner',
+            });
+          } else {
+            orgId = null;
+          }
+        }
+      }
+
       return await invokeEfinsign<Document>('create_document', {
         ...documentData,
-        organization_id: organization?.id || null,
+        organization_id: orgId,
       });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['documents'] });
       toast.success('Document created successfully');
-    },
-    onError: (error) => {
-      toast.error('Failed to create document: ' + error.message);
     },
   });
 }
