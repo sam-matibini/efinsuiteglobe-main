@@ -325,6 +325,9 @@ export function PaymentSettingsTab() {
           </Button>
         </div>
       </Card>
+
+      {/* Wise bank transfers (independent of Stripe) */}
+      <WiseInvoicePaymentsCard />
     </div>
   );
 }
