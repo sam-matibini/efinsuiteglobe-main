@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Building2, ExternalLink, Loader2 } from 'lucide-react';
+import { Building2, ExternalLink, Loader2, Globe2 } from 'lucide-react';
 import { VisaIcon, MastercardIcon, AmexIcon, InteracIcon } from './PaymentIcons';
+import type { WiseAccountDisplay } from '@/hooks/useWiseReceivingAccounts';
 
-type PaymentTab = 'cc' | 'ach' | 'interac' | null;
+type PaymentTab = 'cc' | 'ach' | 'interac' | 'wise' | null;
 export type InvoicePayMethod = 'cc' | 'ach' | 'interac';
 
 interface PaymentMethodsTabsProps {
@@ -17,6 +18,10 @@ interface PaymentMethodsTabsProps {
   achTransitNumber?: string;
   etransferEmail?: string;
   ccPaymentUrl?: string;
+  /** Wise bank transfer */
+  wiseEnabled?: boolean;
+  wiseAccount?: WiseAccountDisplay | null;
+  wiseReference?: string | null;
   /** Optional: when provided, shows a "Pay $X.XX" button per method that
    *  generates a Paysafe-hosted payment link and opens it. */
   onPay?: (method: InvoicePayMethod) => Promise<void> | void;
