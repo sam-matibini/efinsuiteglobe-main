@@ -20,6 +20,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrganization } from '@/hooks/useOrganization';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { useAuth } from '@/hooks/useAuth';
 import {
   useWiseReceivingAccounts,
   type WiseReceivingAccount,
@@ -47,6 +48,7 @@ export function WiseInvoicePaymentsCard() {
   const { organization } = useCurrentOrganization();
   const queryClient = useQueryClient();
   const { accounts, isLoading, upsertAccount, deleteAccount } = useWiseReceivingAccounts();
+  const { isAdmin } = useAuth();
 
   const org = organization as unknown as Record<string, unknown> | undefined;
   const [wiseEnabled, setWiseEnabled] = useState(false);
@@ -127,15 +129,17 @@ export function WiseInvoicePaymentsCard() {
         Wise Bank Transfers
       </h2>
       <p className="text-sm text-muted-foreground mb-4">
-        Show your Wise receiving bank details on invoices. Deposits into your Wise balance are
-        matched back to invoices automatically using the reference shown to the customer.
+        Invoices can display the platform's Wise receiving bank details for the invoice currency.
+        Deposits are matched back to the right invoice automatically using the unique reference
+        shown to the customer. The receiving accounts themselves are shared platform-wide and can
+        only be managed by platform admins.
       </p>
 
       <div className="flex items-center justify-between p-4 border rounded-lg bg-muted/30">
         <div>
           <p className="font-medium text-foreground">Accept payments via Wise</p>
           <p className="text-sm text-muted-foreground">
-            Adds a "Pay by Wise" section with your bank details and a unique reference
+            Adds a "Pay by Wise" section with the platform bank details and a unique reference
           </p>
         </div>
         <Switch
@@ -150,10 +154,14 @@ export function WiseInvoicePaymentsCard() {
       {wiseEnabled && (
         <div className="mt-4 space-y-3">
           <div className="flex items-center justify-between">
-            <p className="text-sm font-medium text-foreground">Receiving accounts by currency</p>
-            <Button size="sm" variant="outline" onClick={openCreate}>
-              <Plus className="w-3.5 h-3.5 mr-1" /> Add account
-            </Button>
+            <p className="text-sm font-medium text-foreground">
+              Platform receiving accounts by currency
+            </p>
+            {isAdmin && (
+              <Button size="sm" variant="outline" onClick={openCreate}>
+                <Plus className="w-3.5 h-3.5 mr-1" /> Add account
+              </Button>
+            )}
           </div>
 
           {isLoading ? (
@@ -164,8 +172,10 @@ export function WiseInvoicePaymentsCard() {
             <div className="p-4 rounded-lg border border-dashed text-sm text-muted-foreground flex items-start gap-2">
               <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
               <span>
-                No Wise receiving accounts yet. Add at least one so invoices can display transfer
-                instructions.
+                No platform Wise receiving accounts configured yet.{' '}
+                {isAdmin
+                  ? 'Add at least one so invoices can display transfer instructions.'
+                  : 'Ask a platform admin to add one so invoices can display transfer instructions.'}
               </span>
             </div>
           ) : (
@@ -194,14 +204,16 @@ export function WiseInvoicePaymentsCard() {
                       {a.bic_swift ? ` • SWIFT ${a.bic_swift}` : ''}
                     </p>
                   </div>
-                  <div className="flex items-center gap-1 flex-shrink-0">
-                    <Button size="icon" variant="ghost" onClick={() => openEdit(a)}>
-                      <Pencil className="w-4 h-4" />
-                    </Button>
-                    <Button size="icon" variant="ghost" onClick={() => setDeleteTarget(a)}>
-                      <Trash2 className="w-4 h-4 text-destructive" />
-                    </Button>
-                  </div>
+                  {isAdmin && (
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <Button size="icon" variant="ghost" onClick={() => openEdit(a)}>
+                        <Pencil className="w-4 h-4" />
+                      </Button>
+                      <Button size="icon" variant="ghost" onClick={() => setDeleteTarget(a)}>
+                        <Trash2 className="w-4 h-4 text-destructive" />
+                      </Button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -214,7 +226,8 @@ export function WiseInvoicePaymentsCard() {
           <DialogHeader>
             <DialogTitle>{editingId ? 'Edit Wise account' : 'Add Wise account'}</DialogTitle>
             <DialogDescription>
-              These details are shown to customers on invoices issued in this currency.
+              Platform-wide account. These details are shown to customers on every organization's
+              invoices issued in this currency.
             </DialogDescription>
           </DialogHeader>
 
@@ -321,7 +334,7 @@ export function WiseInvoicePaymentsCard() {
         onOpenChange={(open) => !open && setDeleteTarget(null)}
         title="Remove Wise account?"
         itemName={deleteTarget?.currency ? `${deleteTarget.currency} receiving account` : undefined}
-        description="Invoices in this currency will no longer show Wise transfer instructions."
+        description="Invoices in this currency will no longer show Wise transfer instructions for any organization."
         onConfirm={async () => {
           if (deleteTarget) await deleteAccount.mutateAsync(deleteTarget.id);
           setDeleteTarget(null);

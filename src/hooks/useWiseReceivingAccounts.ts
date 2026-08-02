@@ -1,11 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { useCurrentOrganization } from './useOrganization';
 import { toast } from 'sonner';
 
 export interface WiseReceivingAccount {
   id: string;
-  organization_id: string;
   currency: string;
   account_holder_name: string | null;
   bank_name: string | null;
@@ -17,7 +15,6 @@ export interface WiseReceivingAccount {
   institution_address: string | null;
   wise_profile_id: string | null;
   wise_balance_id: string | null;
-  gl_bank_account_id: string | null;
   is_active: boolean;
   notes: string | null;
   created_at: string;
@@ -26,31 +23,31 @@ export interface WiseReceivingAccount {
 
 export type WiseReceivingAccountInput = Omit<
   WiseReceivingAccount,
-  'id' | 'organization_id' | 'created_at' | 'updated_at'
+  'id' | 'created_at' | 'updated_at'
 >;
 
 /**
- * Wise receiving accounts: one row per organization + currency, holding the
- * bank coordinates customers should transfer to plus the Wise profile/balance
- * ids the webhook uses to attribute incoming deposits.
+ * Wise receiving accounts are a PLATFORM-level shared pool: one account per
+ * currency, owned by the platform's Wise profile. Every organization that
+ * enables Wise invoice payments shows the same bank coordinates for a given
+ * currency; payments are attributed via each invoice's unique reference.
+ *
+ * Any authenticated user can read them (they appear on invoices); only platform
+ * admins can create, edit or delete them (enforced by RLS).
  */
 export function useWiseReceivingAccounts() {
-  const { organization } = useCurrentOrganization();
   const queryClient = useQueryClient();
 
   const { data: accounts = [], isLoading } = useQuery({
-    queryKey: ['wise-receiving-accounts', organization?.id],
+    queryKey: ['wise-receiving-accounts'],
     queryFn: async () => {
-      if (!organization?.id) return [];
       const { data, error } = await supabase
         .from('wise_receiving_accounts')
         .select('*')
-        .eq('organization_id', organization.id)
         .order('currency');
       if (error) throw error;
-      return (data ?? []) as WiseReceivingAccount[];
+      return (data ?? []) as unknown as WiseReceivingAccount[];
     },
-    enabled: !!organization?.id,
   });
 
   const invalidate = () =>
@@ -58,9 +55,7 @@ export function useWiseReceivingAccounts() {
 
   const upsertAccount = useMutation({
     mutationFn: async (input: Partial<WiseReceivingAccountInput> & { id?: string }) => {
-      if (!organization?.id) throw new Error('No organization selected');
       const payload = {
-        organization_id: organization.id,
         currency: (input.currency || '').toUpperCase(),
         account_holder_name: input.account_holder_name || null,
         bank_name: input.bank_name || null,
@@ -72,7 +67,6 @@ export function useWiseReceivingAccounts() {
         institution_address: input.institution_address || null,
         wise_profile_id: input.wise_profile_id || null,
         wise_balance_id: input.wise_balance_id || null,
-        gl_bank_account_id: input.gl_bank_account_id || null,
         is_active: input.is_active ?? true,
         notes: input.notes || null,
       };
@@ -80,7 +74,7 @@ export function useWiseReceivingAccounts() {
       if (input.id) {
         const { error } = await supabase
           .from('wise_receiving_accounts')
-          .update(payload)
+          .update(payload as never)
           .eq('id', input.id);
         if (error) throw error;
         return;
@@ -88,7 +82,7 @@ export function useWiseReceivingAccounts() {
 
       const { error } = await supabase
         .from('wise_receiving_accounts')
-        .upsert(payload, { onConflict: 'organization_id,currency' });
+        .upsert(payload as never, { onConflict: 'currency' });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -130,7 +124,7 @@ export interface WiseAccountDisplay {
 
 /**
  * Pick the Wise account to display for an invoice: exact currency match first,
- * otherwise the org's first active account flagged as a currency mismatch.
+ * otherwise the first active account in the shared pool, flagged as a mismatch.
  */
 export function selectWiseAccountForCurrency(
   accounts: WiseReceivingAccount[],
