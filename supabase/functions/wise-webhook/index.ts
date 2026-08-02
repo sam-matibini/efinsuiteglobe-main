@@ -52,24 +52,128 @@ async function verifyWiseSignature(rawBody: string, signatureB64: string, pem: s
   );
 }
 
-/** Normalize the varying `data` shapes across Wise transfer event types. */
-function mapEvent(payload: any) {
-  const d = payload?.data ?? {};
-  const transferId =
-    d.resource?.id ?? d.transfer_id ?? d.transferId ?? d.id ?? payload?.resource?.id ?? null;
-  const profileId =
-    d.resource?.profile_id ?? d.profile_id ?? payload?.resource?.profile_id ?? null;
+type MappedEvent = {
+  event_type: string;
+  subscription_id: string | null;
+  resource_type: string | null;
+  transfer_id: string | null;
+  balance_id: string | null;
+  profile_id: string | null;
+  current_state: string | null;
+  previous_state: string | null;
+  amount: number | null;
+  currency: string | null;
+  post_balance_amount: number | null;
+  transaction_type: string | null;
+  needs_attention: boolean;
+  issue_summary: string | null;
+  active_cases: unknown | null;
+  occurred_at: string | null;
+};
 
-  return {
+const str = (v: unknown) => (v == null ? null : String(v));
+const num = (v: unknown) => (v == null || v === '' || isNaN(Number(v)) ? null : Number(v));
+
+/** Transfer states that represent money not delivered / clawed back. */
+const PROBLEM_STATES = new Set([
+  'cancelled',
+  'funds_refunded',
+  'bounced_back',
+  'charged_back',
+  'unknown',
+]);
+
+/** Normalize the varying `data` shapes across all Wise event types. */
+function mapEvent(payload: any): MappedEvent {
+  const d = payload?.data ?? {};
+  const res = d.resource ?? payload?.resource ?? {};
+
+  const base: MappedEvent = {
     event_type: String(payload?.event_type ?? payload?.eventType ?? 'unknown'),
-    subscription_id: payload?.subscription_id ?? payload?.subscriptionId ?? null,
-    transfer_id: transferId != null ? String(transferId) : null,
-    profile_id: profileId != null ? String(profileId) : null,
-    current_state: d.current_state ?? d.currentState ?? d.state ?? null,
-    previous_state: d.previous_state ?? d.previousState ?? null,
-    occurred_at: d.occurred_at ?? d.occurredAt ?? payload?.sent_at ?? null,
+    subscription_id: str(payload?.subscription_id ?? payload?.subscriptionId),
+    resource_type: str(res.type ?? null),
+    transfer_id: null,
+    balance_id: null,
+    profile_id: str(res.profile_id ?? res.profileId ?? d.profile_id ?? d.profileId),
+    current_state: null,
+    previous_state: null,
+    amount: null,
+    currency: null,
+    post_balance_amount: null,
+    transaction_type: null,
+    needs_attention: false,
+    issue_summary: null,
+    active_cases: null,
+    occurred_at: str(d.occurred_at ?? d.occurredAt ?? payload?.sent_at ?? payload?.sentAt),
   };
+
+  const type = base.event_type;
+
+  // ---- Balance / Account Deposit events -----------------------------------
+  if (type.startsWith('balances#')) {
+    base.resource_type = base.resource_type ?? 'balance';
+    base.balance_id = str(res.id ?? d.balance_id ?? d.balanceId);
+    base.amount = num(d.amount?.value ?? d.amount);
+    base.currency = str(d.amount?.currency ?? d.currency);
+    base.post_balance_amount = num(
+      d.post_transaction_balance_amount?.value ??
+        d.post_transaction_balance_amount ??
+        d.postTransactionBalanceAmount?.value ??
+        d.postTransactionBalanceAmount,
+    );
+    base.transaction_type = str(d.transaction_type ?? d.transactionType);
+    return base;
+  }
+
+  // ---- Transfer events ----------------------------------------------------
+  if (type.startsWith('transfers#')) {
+    base.resource_type = base.resource_type ?? 'transfer';
+    base.transfer_id = str(res.id ?? d.transfer_id ?? d.transferId ?? d.id);
+    base.current_state = str(d.current_state ?? d.currentState ?? d.state);
+    base.previous_state = str(d.previous_state ?? d.previousState);
+    base.amount = num(d.amount?.value ?? d.amount);
+    base.currency = str(d.amount?.currency ?? d.currency);
+
+    if (type.endsWith('#active-cases')) {
+      const cases = d.active_cases ?? d.activeCases ?? [];
+      base.active_cases = cases;
+      const names = (Array.isArray(cases) ? cases : [])
+        .map((c: any) => (typeof c === 'string' ? c : c?.type ?? c?.name ?? 'case'))
+        .filter(Boolean);
+      base.needs_attention = names.length > 0;
+      base.issue_summary = names.length
+        ? `active cases: ${names.join(', ')}`
+        : 'active cases cleared';
+      return base;
+    }
+
+    if (type.endsWith('#payout-failure')) {
+      base.needs_attention = true;
+      const reason =
+        d.failure_reason ?? d.failureReason ?? d.reason ?? d.error_code ?? d.errorCode ?? null;
+      base.issue_summary = reason ? `payout failure: ${reason}` : 'payout failure';
+      return base;
+    }
+
+    if (type.endsWith('#refund')) {
+      base.needs_attention = true;
+      const reason = d.refund_reason ?? d.refundReason ?? d.reason ?? null;
+      base.issue_summary = reason ? `refund: ${reason}` : 'transfer refunded';
+      return base;
+    }
+
+    // state-change and any other transfer event
+    if (base.current_state && PROBLEM_STATES.has(base.current_state)) {
+      base.needs_attention = true;
+      base.issue_summary = `transfer state ${base.current_state}`;
+    }
+    return base;
+  }
+
+  // ---- Anything else: log generically ------------------------------------
+  return base;
 }
+
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -110,7 +214,21 @@ Deno.serve(async (req) => {
     }
 
     const mapped = mapEvent(payload);
-    console.log('[wise-webhook] event', mapped.event_type, 'transfer', mapped.transfer_id, 'state', mapped.current_state);
+    console.log(
+      '[wise-webhook] event',
+      mapped.event_type,
+      'resource',
+      mapped.resource_type,
+      'id',
+      mapped.transfer_id ?? mapped.balance_id,
+      'state',
+      mapped.current_state,
+      'amount',
+      mapped.amount,
+      mapped.currency,
+      mapped.needs_attention ? `ATTENTION: ${mapped.issue_summary}` : '',
+    );
+
 
     // Wise test pings from the dashboard: acknowledge without persisting.
     if (isTest) {
@@ -141,7 +259,13 @@ Deno.serve(async (req) => {
     // the linked journal entry (mirroring treasury-payment-webhook). Intentionally a
     // no-op for now: this deployment only logs events.
 
-    return json({ received: true, duplicate, event_type: mapped.event_type });
+    return json({
+      received: true,
+      duplicate,
+      event_type: mapped.event_type,
+      resource_type: mapped.resource_type,
+      needs_attention: mapped.needs_attention,
+    });
   } catch (e) {
     console.error('[wise-webhook] error', e);
     return json({ error: (e as Error).message }, 500);

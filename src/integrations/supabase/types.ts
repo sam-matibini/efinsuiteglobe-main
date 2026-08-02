@@ -28086,45 +28086,72 @@ export type Database = {
       }
       wise_webhook_events: {
         Row: {
+          active_cases: Json | null
+          amount: number | null
+          balance_id: string | null
+          currency: string | null
           current_state: string | null
           delivery_id: string | null
           event_type: string
           id: string
+          issue_summary: string | null
+          needs_attention: boolean
           occurred_at: string | null
           payload: Json
+          post_balance_amount: number | null
           previous_state: string | null
           profile_id: string | null
           received_at: string
+          resource_type: string | null
           signature_valid: boolean
           subscription_id: string | null
+          transaction_type: string | null
           transfer_id: string | null
         }
         Insert: {
+          active_cases?: Json | null
+          amount?: number | null
+          balance_id?: string | null
+          currency?: string | null
           current_state?: string | null
           delivery_id?: string | null
           event_type: string
           id?: string
+          issue_summary?: string | null
+          needs_attention?: boolean
           occurred_at?: string | null
           payload?: Json
+          post_balance_amount?: number | null
           previous_state?: string | null
           profile_id?: string | null
           received_at?: string
+          resource_type?: string | null
           signature_valid?: boolean
           subscription_id?: string | null
+          transaction_type?: string | null
           transfer_id?: string | null
         }
         Update: {
+          active_cases?: Json | null
+          amount?: number | null
+          balance_id?: string | null
+          currency?: string | null
           current_state?: string | null
           delivery_id?: string | null
           event_type?: string
           id?: string
+          issue_summary?: string | null
+          needs_attention?: boolean
           occurred_at?: string | null
           payload?: Json
+          post_balance_amount?: number | null
           previous_state?: string | null
           profile_id?: string | null
           received_at?: string
+          resource_type?: string | null
           signature_valid?: boolean
           subscription_id?: string | null
+          transaction_type?: string | null
           transfer_id?: string | null
         }
         Relationships: []
