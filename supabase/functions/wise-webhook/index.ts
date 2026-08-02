@@ -214,7 +214,21 @@ Deno.serve(async (req) => {
     }
 
     const mapped = mapEvent(payload);
-    console.log('[wise-webhook] event', mapped.event_type, 'transfer', mapped.transfer_id, 'state', mapped.current_state);
+    console.log(
+      '[wise-webhook] event',
+      mapped.event_type,
+      'resource',
+      mapped.resource_type,
+      'id',
+      mapped.transfer_id ?? mapped.balance_id,
+      'state',
+      mapped.current_state,
+      'amount',
+      mapped.amount,
+      mapped.currency,
+      mapped.needs_attention ? `ATTENTION: ${mapped.issue_summary}` : '',
+    );
+
 
     // Wise test pings from the dashboard: acknowledge without persisting.
     if (isTest) {
