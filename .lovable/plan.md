@@ -1,58 +1,51 @@
 ## Goal
 
-Expand the `wise-webhook` edge function so it handles Wise **Account Deposit** (balance) events and **Transfer Issue** events, in addition to the transfer state-change events it already logs. Deposits are log-only (no balance or ledger changes). Transfer issues are logged and flagged for attention.
+Let customers pay an invoice by Wise transfer: the invoice shows your Wise account details for the invoice's currency plus a unique payment reference, and the existing `wise-webhook` matches incoming deposits to the invoice by that reference and records the payment.
 
-## Events to support
+## What I verified first
 
-Transfers (existing + added):
-- `transfers#state-change` — already handled
-- `transfers#active-cases` — Transfer Issue (compliance/verification cases)
-- `transfers#payout-failure` — Transfer Issue (delivery failed)
-- `transfers#refund` — refunded transfer, treated as an issue
+- `supabase/functions/wise-webhook/index.ts` is the only Wise code today; it verifies the RSA signature and logs events into `wise_webhook_events`, with payment-record updates still a TODO.
+- Its `mapEvent` already handles `balances#credit` / `balances#update` (amount, currency, balance id, post-transaction balance, transaction type), but Wise's balance webhook payload carries **no payer reference** — so the reference must be read back from Wise's API. Since `WISE_API_TOKEN` is already stored, that lookup is available.
+- Invoice payment methods are hardcoded to `cc` / `ach` / `interac` tabs in `src/components/invoices/PaymentMethodsTabs.tsx`, toggled by org settings in `src/components/settings/PaymentSettingsTab.tsx`.
+- Payments are recorded via `useCustomerPayments.createPayment`, which updates the invoice balance/status and posts a cash-vs-AR journal entry.
 
-Balances (Account Deposit):
-- `balances#credit` — money received into a Wise balance
-- `balances#update` — balance amount changed
+## Plan
 
-Unknown/other `event_type` values still get logged with raw payload so nothing is lost.
+### 1. Database
 
-## Database change
+New table `public.wise_receiving_accounts` (one row per organization + currency):
+`organization_id`, `currency`, `account_holder_name`, `bank_name`, `account_number`, `routing_number`, `iban`, `bic_swift`, `sort_code`, `institution_address`, `wise_profile_id`, `wise_balance_id`, `gl_bank_account_id` (link to an existing `bank_accounts` row so the journal entry hits the right cash account), `is_active`, `notes`. GRANTs for `authenticated` + `service_role`, RLS scoped to org membership (members read, org admins/owners write), `updated_at` trigger.
 
-One migration adding nullable columns to `public.wise_webhook_events`:
+Invoice / settings side:
+- `invoices.wise_payment_reference` — unique short code generated on issue (e.g. `INV1042-7F3K`).
+- `wise_enabled` on the org payment settings, next to the existing cc/ach/interac flags.
+- `wise_webhook_events.matched_invoice_id`, `match_status`, `matched_reference` for auditability.
 
-- `resource_type` text — `transfer`, `balance`, `profile`
-- `balance_id` text
-- `amount` numeric, `currency` text
-- `post_balance_amount` numeric — balance after a deposit
-- `transaction_type` text — `credit` / `debit`
-- `needs_attention` boolean default false — set true for issue events
-- `issue_summary` text — short human-readable reason (e.g. "payout failure", "active case: refund_requested")
-- `active_cases` jsonb — raw active-cases array when present
+### 2. Settings UI
 
-Plus indexes on `balance_id` and a partial index on `needs_attention where needs_attention`. Existing grants/RLS (admin-only read via `has_role`) stay unchanged.
+Add a **Wise** section to `PaymentSettingsTab.tsx`: enable toggle plus a per-currency table to add/edit/delete receiving accounts (reusing `ConfirmDeleteDialog`), each row optionally linked to a GL bank account.
 
-## Edge function changes (`supabase/functions/wise-webhook/index.ts`)
+### 3. Invoice display
 
-1. Keep signature verification, test-ping short-circuit, and delivery-ID idempotency exactly as they are.
-2. Replace the single `mapEvent` with a dispatcher on `event_type` prefix:
-   - `transfers#*` → existing transfer mapping, plus:
-     - `active-cases`: capture `data.active_cases`, set `needs_attention = true`, build `issue_summary` from the case types.
-     - `payout-failure`: capture failure details, `needs_attention = true`.
-     - `refund`: capture amount/currency, `needs_attention = true`.
-     - `state-change`: unchanged, `needs_attention = true` only when `current_state` is one of `cancelled`, `funds_refunded`, `bounced_back`, `charged_back`.
-   - `balances#*` → map `resource.id` → `balance_id`, `profile_id`, `amount`, `currency`, `post_transaction_balance_amount` → `post_balance_amount`, `transaction_type`, `occurred_at`. `needs_attention` stays false.
-   - fallback → generic mapping (event type, subscription, profile, occurred_at, raw payload only).
-3. Tolerate both snake_case and camelCase field spellings, as the current code does.
-4. Log a single structured console line per event including resource type and, for issues, the issue summary.
-5. Response body extended with `resource_type` and `needs_attention` so Wise-side debugging is easier.
-6. Keep the existing TODO note that payment-record updates are a later phase.
+Add a Wise tab to `PaymentMethodsTabs.tsx` following the existing pill + expandable-panel pattern. It shows only the populated fields for the account matching the invoice currency (falling back to the default-currency account with a note), and prominently shows the reference the customer must include. Same data wired into `InvoicePreviewTab`, `InvoiceDetailPanel`, the share/public view, and `src/lib/generateInvoicePdf.ts` so the PDF matches the preview.
 
-## Out of scope
+### 4. Reference-based auto-matching in `wise-webhook`
 
-- No changes to bank account or virtual account balances, and no journal entries or transaction rows from deposits.
-- No changes to AP/tax payment records from transfer issues (only the `needs_attention` flag on the event log).
-- No admin UI for viewing these events (can be added later if wanted).
+On a `balances#credit` event:
+1. Resolve the organization from `wise_balance_id` / `wise_profile_id` via `wise_receiving_accounts`.
+2. Call the Wise API with `WISE_API_TOKEN` to fetch the balance statement for a short window around the event (`/v1/profiles/{profileId}/balance-statements/{balanceId}/statement.json`, or the account-statement equivalent) and pull the payer reference/description for the matching credit line. Profile id comes from the stored account row, or is discovered once via `/v2/profiles` and cached there.
+3. Extract the invoice reference from that text and look up `invoices.wise_payment_reference`.
+4. On a match, insert a `customer_payments` row (method `wise`, reference = Wise reference, bank account = the row's `gl_bank_account_id`) using the same balance/status/journal logic as the app, then stamp `matched_invoice_id` and `match_status='matched'`.
+5. Fallback when no reference is found: match a single open invoice with equal amount and currency. Zero or multiple candidates → `match_status='unmatched'` / `'ambiguous'`, no payment recorded.
+6. If the Wise API call fails, log it and fall back to step 5 rather than dropping the event.
 
-## Deployment
+### 5. Manual review surface
 
-Migration first, then update and deploy `wise-webhook`. In the Wise dashboard, subscribe the same endpoint to the balance and transfer-issue event types.
+Add an "Unmatched Wise deposits" list (Payments page) showing unmatched/ambiguous credit events with an action to attach one to an invoice, recording the payment through the normal path.
+
+## Technical notes
+
+- Money-in only; no Wise payouts in this phase.
+- All recorded payments go through the same invoice-update + journal-entry logic so GL, trial balance and AR aging stay correct.
+- Webhook stays idempotent on `delivery_id`, with an extra guard against inserting a duplicate `customer_payments` row for the same event.
+- No new secrets needed — `WISE_API_TOKEN` and `WISE_WEBHOOK_PUBLIC_KEY` are already stored.
