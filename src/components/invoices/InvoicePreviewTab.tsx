@@ -176,6 +176,9 @@ export function InvoicePreviewTab({
   achTransitNumber: achTransitNumberProp,
   etransferEmail,
   ccPaymentUrl,
+  wiseEnabled = false,
+  wiseAccount = null,
+  wiseReference = null,
   // Signature toggles
   showSellerSignature = false,
   showBuyerSignature = false,
