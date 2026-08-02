@@ -59,6 +59,7 @@ import { InvoiceShareDialog } from './InvoiceShareDialog';
 
 import { InvoiceSignatureRequestDialog } from './InvoiceSignatureRequestDialog';
 import { InvoicePreviewTab } from './InvoicePreviewTab';
+import { useWiseReceivingAccounts, selectWiseAccountForCurrency } from '@/hooks/useWiseReceivingAccounts';
 import { useSalesTaxSettings } from '@/hooks/useSalesTax';
 import { generateInvoicePdf, generateInvoicePdfDoc } from '@/lib/generateInvoicePdf';
 import { getDocumentLogoUrl } from '@/lib/getDocumentLogo';
@@ -619,6 +620,9 @@ export function ViewEditInvoiceDialog({ open, onOpenChange, invoice, mode: initi
       achTransitNumber: organization?.invoice_ach_transit_number || undefined,
       etransferEmail: organization?.invoice_etransfer_email || undefined,
       ccPaymentUrl: organization?.invoice_cc_payment_url || undefined,
+      wiseEnabled: !!(organization as unknown as Record<string, unknown>)?.invoice_wise_enabled,
+      wiseAccount: selectWiseAccountForCurrency(wiseAccounts, (invoice as any).currency),
+      wiseReference: (extendedInvoice.wise_payment_reference as string | null) || null,
     };
   };
 
@@ -803,6 +807,9 @@ export function ViewEditInvoiceDialog({ open, onOpenChange, invoice, mode: initi
                     achAccountNumber={organization?.invoice_ach_account_number || undefined}
                     achTransitNumber={organization?.invoice_ach_transit_number || undefined}
                     etransferEmail={organization?.invoice_etransfer_email || undefined}
+                    wiseEnabled={!!(organization as unknown as Record<string, unknown>)?.invoice_wise_enabled}
+                    wiseAccount={selectWiseAccountForCurrency(wiseAccounts, (invoice as any).currency)}
+                    wiseReference={(extendedInvoice.wise_payment_reference as string | null) || null}
                     discountAmount={discountAmount}
                     shippingCharges={watchedShippingCharges}
                     adjustment={watchedAdjustment}
