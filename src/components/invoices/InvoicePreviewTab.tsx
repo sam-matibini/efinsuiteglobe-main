@@ -1,5 +1,6 @@
 import { useMemo, useEffect, useRef } from 'react';
 import { PaymentMethodsTabs } from './PaymentMethodsTabs';
+import type { WiseAccountDisplay } from '@/hooks/useWiseReceivingAccounts';
 import { Card } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
