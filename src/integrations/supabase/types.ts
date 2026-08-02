@@ -28159,13 +28159,11 @@ export type Database = {
           bic_swift: string | null
           created_at: string
           currency: string
-          gl_bank_account_id: string | null
           iban: string | null
           id: string
           institution_address: string | null
           is_active: boolean
           notes: string | null
-          organization_id: string
           routing_number: string | null
           sort_code: string | null
           updated_at: string
@@ -28179,13 +28177,11 @@ export type Database = {
           bic_swift?: string | null
           created_at?: string
           currency: string
-          gl_bank_account_id?: string | null
           iban?: string | null
           id?: string
           institution_address?: string | null
           is_active?: boolean
           notes?: string | null
-          organization_id: string
           routing_number?: string | null
           sort_code?: string | null
           updated_at?: string
@@ -28199,35 +28195,18 @@ export type Database = {
           bic_swift?: string | null
           created_at?: string
           currency?: string
-          gl_bank_account_id?: string | null
           iban?: string | null
           id?: string
           institution_address?: string | null
           is_active?: boolean
           notes?: string | null
-          organization_id?: string
           routing_number?: string | null
           sort_code?: string | null
           updated_at?: string
           wise_balance_id?: string | null
           wise_profile_id?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "wise_receiving_accounts_gl_bank_account_id_fkey"
-            columns: ["gl_bank_account_id"]
-            isOneToOne: false
-            referencedRelation: "bank_accounts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "wise_receiving_accounts_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       wise_webhook_events: {
         Row: {
