@@ -656,7 +656,22 @@ Deno.serve(async (req) => {
         .eq('user_id', userId)
         .eq('organization_id', rawOrgId)
         .maybeSingle();
-      if (!mem) return json({ error: 'Not a member of the specified organization' }, 403);
+      if (!mem) {
+        // Fallback: if the user owns this org but was never backfilled into
+        // organization_members (pre-migration orgs), treat them as a member
+        // and auto-insert the row via the admin client (bypasses RLS).
+        const { data: ownerRow } = await admin
+          .from('organizations')
+          .select('owner_id')
+          .eq('id', rawOrgId)
+          .maybeSingle();
+        if (ownerRow?.owner_id !== userId) {
+          return json({ error: 'Not a member of the specified organization' }, 403);
+        }
+        await admin
+          .from('organization_members')
+          .insert({ organization_id: rawOrgId, user_id: userId, role: 'owner' });
+      }
       orgId = rawOrgId;
     }
 
