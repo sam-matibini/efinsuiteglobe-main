@@ -24,9 +24,33 @@ import {
   CommandList,
 } from '@/components/ui/command';
 import { useCreateDocument } from '@/hooks/useDocuments';
+import { useAuth } from '@/hooks/useAuth';
+import { useCurrentOrganization } from '@/hooks/useOrganization';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+
+// Filename sanitisation per the DocSign spec:
+//   * special chars (em dashes, punctuation) → hyphens
+//   * spaces → underscores
+//   * preserve extension case-normalised to lowercase
+//   * cap the stem length so storage keys stay reasonable
+function sanitiseFilename(name: string): string {
+  const lastDot = name.lastIndexOf('.');
+  const stem = lastDot > 0 ? name.slice(0, lastDot) : name;
+  const ext = lastDot > 0 ? name.slice(lastDot + 1).toLowerCase().replace(/[^a-z0-9]/g, '') : '';
+  const cleanStem = stem
+    .normalize('NFKD')
+    .replace(/[‐-―−]/g, '-') // various dashes / minus → hyphen
+    .replace(/\s+/g, '_')                    // spaces → underscore
+    .replace(/[^a-zA-Z0-9._-]/g, '-')        // anything else → hyphen
+    .replace(/-+/g, '-')                     // collapse hyphens
+    .replace(/^[-_.]+|[-_.]+$/g, '')         // trim leading/trailing junk
+    .slice(0, 80) || 'document';
+  return ext ? `${cleanStem}.${ext}` : cleanStem;
+}
+
+const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;   // 20 MB per spec
 
 interface CreateDocumentDialogProps {
   open: boolean;
@@ -58,6 +82,8 @@ export function CreateDocumentDialog({ open, onOpenChange }: CreateDocumentDialo
   const [typePopoverOpen, setTypePopoverOpen] = useState(false);
   
   const createDocument = useCreateDocument();
+  const { user } = useAuth();
+  const { organization } = useCurrentOrganization();
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -132,18 +158,34 @@ export function CreateDocumentDialog({ open, onOpenChange }: CreateDocumentDialo
 
       // Upload/convert file if provided (all documents should end up as PDF)
       if (file) {
+        if (file.size > MAX_UPLOAD_BYTES) {
+          toast.error('File is larger than 20 MB. Please choose a smaller file.');
+          setIsUploading(false);
+          return;
+        }
+
+        const orgId = organization?.id
+          || (typeof window !== 'undefined' ? window.localStorage.getItem('current_organization_id') : null);
+        if (!orgId || !user?.id) {
+          toast.error('You must be signed in to an organization to upload a document.');
+          setIsUploading(false);
+          return;
+        }
+
         const fileExt = file.name.split('.').pop()?.toLowerCase() || '';
         const isPdf = file.type === 'application/pdf' || fileExt === 'pdf';
 
         if (isPdf) {
-          const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.pdf`;
-          const filePath = `documents/${fileName}`;
+          // Spec: {org_id}/{user_id}/{timestamp}-{sanitised-filename}
+          const safeName = sanitiseFilename(file.name || 'document.pdf');
+          const filePath = `${orgId}/${user.id}/${Date.now()}-${safeName}`;
 
           const { error: uploadError } = await supabase.storage
             .from('docsign-documents')
             .upload(filePath, file, {
               cacheControl: '3600',
               upsert: false,
+              contentType: 'application/pdf',
             });
 
           if (uploadError) {
