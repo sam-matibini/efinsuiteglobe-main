@@ -25,6 +25,7 @@ import { usePaymentLinks } from '@/hooks/usePaymentLinks';
 import { toast } from 'sonner';
 import { differenceInDays } from 'date-fns';
 import { useConfirmDelete } from '@/hooks/useConfirmDelete';
+import { useWiseReceivingAccounts, selectWiseAccountForCurrency } from '@/hooks/useWiseReceivingAccounts';
 
 interface InvoiceDetailPanelProps {
   invoice: Invoice;
@@ -53,6 +54,7 @@ export function InvoiceDetailPanel({
 }: InvoiceDetailPanelProps) {
   const confirmDelete = useConfirmDelete();
   const { organization } = useCurrentOrganization();
+  const { accounts: wiseAccounts } = useWiseReceivingAccounts();
   const { customers } = useCustomers();
   const { lines: invoiceLines } = useInvoiceLines(invoice.id);
   
@@ -384,6 +386,9 @@ export function InvoiceDetailPanel({
           achTransitNumber={organization?.invoice_ach_transit_number || undefined}
           etransferEmail={organization?.invoice_etransfer_email || undefined}
           ccPaymentUrl={organization?.invoice_cc_payment_url || undefined}
+          wiseEnabled={!!(organization as unknown as Record<string, unknown>)?.invoice_wise_enabled}
+          wiseAccount={selectWiseAccountForCurrency(wiseAccounts, invoice.currency)}
+          wiseReference={(invoice as unknown as Record<string, unknown>).wise_payment_reference as string | null}
           discountAmount={Number((invoice as any).discount_amount) || 0}
           shippingCharges={Number((invoice as any).shipping_charges) || 0}
           adjustment={Number((invoice as any).adjustment) || 0}

@@ -107,6 +107,20 @@ interface InvoiceData {
   achTransitNumber?: string;
   etransferEmail?: string;
   ccPaymentUrl?: string;
+  // Wise bank transfer
+  wiseEnabled?: boolean;
+  wiseAccount?: {
+    currency: string;
+    account_holder_name?: string | null;
+    bank_name?: string | null;
+    account_number?: string | null;
+    routing_number?: string | null;
+    iban?: string | null;
+    bic_swift?: string | null;
+    sort_code?: string | null;
+    institution_address?: string | null;
+  } | null;
+  wiseReference?: string | null;
 }
 
 export async function generateInvoicePdf(invoice: InvoiceData): Promise<void> {
@@ -1060,7 +1074,8 @@ async function generateStandardInvoicePdf(
   }
 
   // ==================== ACCEPTED PAYMENT METHODS ====================
-  const hasPaymentMethods = invoice.enableOnlinePayments && (invoice.creditCardEnabled || invoice.achEnabled || invoice.interacEnabled);
+  const hasWise = !!invoice.wiseEnabled && !!invoice.wiseAccount;
+  const hasPaymentMethods = (invoice.enableOnlinePayments && (invoice.creditCardEnabled || invoice.achEnabled || invoice.interacEnabled)) || hasWise;
   if (hasPaymentMethods) {
     if (yPos > pageHeight - 60) {
       doc.addPage();
@@ -1103,6 +1118,7 @@ async function generateStandardInvoicePdf(
     if (invoice.creditCardEnabled) drawBadge('Visa / Mastercard / Amex', invoice.ccPaymentUrl || undefined);
     if (invoice.achEnabled) drawBadge('ACH / EFT Bank Transfer');
     if (invoice.interacEnabled) drawBadge('Interac e-Transfer', invoice.etransferEmail ? `mailto:${invoice.etransferEmail}` : undefined);
+    if (hasWise) drawBadge(`Wise Bank Transfer (${invoice.wiseAccount!.currency})`);
     yPos += 6;
 
     // Add clickable link overlays for badges
@@ -1163,6 +1179,37 @@ async function generateStandardInvoicePdf(
       doc.link(margin, yPos - 2, emailWidth, 4, { url: `mailto:${invoice.etransferEmail}` });
       doc.setTextColor(80, 80, 80);
       yPos += 3.5;
+    }
+
+    if (hasWise) {
+      const w = invoice.wiseAccount!;
+      doc.setFont('helvetica', 'bold');
+      doc.text(`Wise bank transfer (${w.currency})`, margin, yPos);
+      yPos += 3.5;
+      doc.setFont('helvetica', 'normal');
+      const wiseParts: string[] = [];
+      if (w.account_holder_name) wiseParts.push(`Beneficiary: ${w.account_holder_name}`);
+      if (w.bank_name) wiseParts.push(`Bank: ${w.bank_name}`);
+      if (w.account_number) wiseParts.push(`Acct #: ${w.account_number}`);
+      if (w.routing_number) wiseParts.push(`Routing: ${w.routing_number}`);
+      if (w.sort_code) wiseParts.push(`Sort code: ${w.sort_code}`);
+      if (w.iban) wiseParts.push(`IBAN: ${w.iban}`);
+      if (w.bic_swift) wiseParts.push(`BIC/SWIFT: ${w.bic_swift}`);
+      if (w.institution_address) wiseParts.push(`Bank address: ${w.institution_address}`);
+      if (wiseParts.length > 0) {
+        const wiseLines = doc.splitTextToSize(wiseParts.join('   |   '), contentWidth);
+        doc.text(wiseLines.slice(0, 4), margin, yPos);
+        yPos += Math.min(wiseLines.length, 4) * 3 + 1;
+      }
+      if (invoice.wiseReference) {
+        doc.setFont('helvetica', 'bold');
+        doc.text(`Transfer reference: ${invoice.wiseReference}`, margin, yPos);
+        yPos += 3.5;
+        doc.setFont('helvetica', 'italic');
+        doc.text('Include this reference exactly so your payment is matched automatically.', margin, yPos);
+        yPos += 3.5;
+        doc.setFont('helvetica', 'normal');
+      }
     }
 
     doc.setTextColor(0, 0, 0);
