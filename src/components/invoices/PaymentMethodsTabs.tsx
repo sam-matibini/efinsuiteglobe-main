@@ -38,6 +38,14 @@ const fmtMoney = (amount: number, currency: string) => {
   }
 };
 
+const DetailRow = ({ label, value }: { label: string; value: string }) => (
+  <div className="flex gap-2">
+    <span className="text-muted-foreground w-28 flex-shrink-0">{label}</span>
+    <span className="font-medium break-all">{value}</span>
+  </div>
+);
+
+
 export function PaymentMethodsTabs({
   primaryColor,
   creditCardEnabled,
