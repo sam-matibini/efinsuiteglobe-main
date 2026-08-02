@@ -175,14 +175,13 @@ export function useCreateDocument() {
     mutationFn: async (documentData: { title: string; document_type?: string; file_url?: string; mime_type?: string; file_size?: number }) => {
       if (!user?.id) throw new Error('User not authenticated');
 
-      // Get the orgs the user is ACTUALLY a member of.
-      // (Ignore the sidebar's selected org if user isn't a member of it — e.g. platform
-      // admins can view any org, but efinsign-proxy only accepts org members.)
+      // Verify the user is a member of the current org. The DocSign page
+      // shows an upfront banner for the view-only case, so a plain error
+      // here is fine as a safety net.
       const { data: memberships, error: memErr } = await supabase
         .from('organization_members')
-        .select('organization_id, role')
+        .select('organization_id')
         .eq('user_id', user.id);
-
       if (memErr) throw new Error(`Could not load your organizations: ${memErr.message}`);
       if (!memberships || memberships.length === 0) {
         throw new Error('You are not a member of any organization. Create one or ask to be invited.');
@@ -194,11 +193,10 @@ export function useCreateDocument() {
         (typeof window !== 'undefined' ? window.localStorage.getItem('current_organization_id') : null) ||
         null;
 
-      const orgId = preferred && memberOrgIds.includes(preferred) ? preferred : memberOrgIds[0];
-
-      if (preferred && preferred !== orgId) {
-        toast.info('Creating document under an organization you own (the selected one is view-only).');
+      if (!preferred || !memberOrgIds.includes(preferred)) {
+        throw new Error('Switch to an organization you belong to before creating documents.');
       }
+      const orgId = preferred;
 
       return await invokeEfinsign<Document>('create_document', {
         ...documentData,
