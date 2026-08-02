@@ -259,7 +259,13 @@ Deno.serve(async (req) => {
     // the linked journal entry (mirroring treasury-payment-webhook). Intentionally a
     // no-op for now: this deployment only logs events.
 
-    return json({ received: true, duplicate, event_type: mapped.event_type });
+    return json({
+      received: true,
+      duplicate,
+      event_type: mapped.event_type,
+      resource_type: mapped.resource_type,
+      needs_attention: mapped.needs_attention,
+    });
   } catch (e) {
     console.error('[wise-webhook] error', e);
     return json({ error: (e as Error).message }, 500);
