@@ -175,40 +175,29 @@ export function useCreateDocument() {
     mutationFn: async (documentData: { title: string; document_type?: string; file_url?: string; mime_type?: string; file_size?: number }) => {
       if (!user?.id) throw new Error('User not authenticated');
 
-      // Resolve org ID: from hook, then localStorage fallback.
-      let orgId: string | null =
+      // Get the orgs the user is ACTUALLY a member of.
+      // (Ignore the sidebar's selected org if user isn't a member of it — e.g. platform
+      // admins can view any org, but efinsign-proxy only accepts org members.)
+      const { data: memberships, error: memErr } = await supabase
+        .from('organization_members')
+        .select('organization_id, role')
+        .eq('user_id', user.id);
+
+      if (memErr) throw new Error(`Could not load your organizations: ${memErr.message}`);
+      if (!memberships || memberships.length === 0) {
+        throw new Error('You are not a member of any organization. Create one or ask to be invited.');
+      }
+
+      const memberOrgIds = memberships.map((m) => m.organization_id);
+      const preferred =
         organization?.id ||
         (typeof window !== 'undefined' ? window.localStorage.getItem('current_organization_id') : null) ||
         null;
 
-      // If user appears to be missing from organization_members (pre-SQL-migration orgs),
-      // try to auto-insert them as owner. Never nullify orgId based on query failures —
-      // let the edge function do the definitive membership check.
-      if (orgId) {
-        const { data: membership } = await supabase
-          .from('organization_members')
-          .select('id')
-          .eq('organization_id', orgId)
-          .eq('user_id', user.id)
-          .maybeSingle();
+      const orgId = preferred && memberOrgIds.includes(preferred) ? preferred : memberOrgIds[0];
 
-        if (!membership) {
-          const { data: orgRow } = await supabase
-            .from('organizations')
-            .select('owner_id')
-            .eq('id', orgId)
-            .maybeSingle();
-
-          if (orgRow?.owner_id === user.id) {
-            await supabase.from('organization_members').insert({
-              organization_id: orgId,
-              user_id: user.id,
-              role: 'owner',
-            });
-          }
-          // If we can't confirm ownership (query failed / user isn't owner),
-          // keep orgId and let the proxy return a proper 403.
-        }
+      if (preferred && preferred !== orgId) {
+        toast.info('Creating document under an organization you own (the selected one is view-only).');
       }
 
       return await invokeEfinsign<Document>('create_document', {
