@@ -1,0 +1,149 @@
+// Wise webhook receiver (public endpoint).
+// Verifies Wise's X-Signature-SHA256 RSA signature against the Wise webhook
+// public key, then logs every transfer update event to public.wise_webhook_events.
+// Business logic (applying transfer state to payment records) is a placeholder.
+import { corsHeaders as baseCorsHeaders } from 'npm:@supabase/supabase-js@2/cors';
+import { createClient } from 'npm:@supabase/supabase-js@2';
+
+const corsHeaders = {
+  ...baseCorsHeaders,
+  'Access-Control-Allow-Headers':
+    'authorization, x-client-info, apikey, content-type, x-signature-sha256, x-signature, x-delivery-id, x-test-notification',
+};
+
+function json(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
+}
+
+function pemToArrayBuffer(pem: string): Uint8Array {
+  const b64 = pem
+    .replace(/-----BEGIN [A-Z ]+-----/g, '')
+    .replace(/-----END [A-Z ]+-----/g, '')
+    .replace(/\s+/g, '');
+  const raw = atob(b64);
+  const bytes = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+  return bytes;
+}
+
+function base64ToBytes(b64: string): Uint8Array {
+  const raw = atob(b64.replace(/\s+/g, ''));
+  const bytes = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+  return bytes;
+}
+
+async function verifyWiseSignature(rawBody: string, signatureB64: string, pem: string) {
+  const key = await crypto.subtle.importKey(
+    'spki',
+    pemToArrayBuffer(pem),
+    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+    false,
+    ['verify'],
+  );
+  return await crypto.subtle.verify(
+    'RSASSA-PKCS1-v1_5',
+    key,
+    base64ToBytes(signatureB64),
+    new TextEncoder().encode(rawBody),
+  );
+}
+
+/** Normalize the varying `data` shapes across Wise transfer event types. */
+function mapEvent(payload: any) {
+  const d = payload?.data ?? {};
+  const transferId =
+    d.resource?.id ?? d.transfer_id ?? d.transferId ?? d.id ?? payload?.resource?.id ?? null;
+  const profileId =
+    d.resource?.profile_id ?? d.profile_id ?? payload?.resource?.profile_id ?? null;
+
+  return {
+    event_type: String(payload?.event_type ?? payload?.eventType ?? 'unknown'),
+    subscription_id: payload?.subscription_id ?? payload?.subscriptionId ?? null,
+    transfer_id: transferId != null ? String(transferId) : null,
+    profile_id: profileId != null ? String(profileId) : null,
+    current_state: d.current_state ?? d.currentState ?? d.state ?? null,
+    previous_state: d.previous_state ?? d.previousState ?? null,
+    occurred_at: d.occurred_at ?? d.occurredAt ?? payload?.sent_at ?? null,
+  };
+}
+
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+
+  try {
+    const rawBody = await req.text();
+    const signature =
+      req.headers.get('x-signature-sha256') ?? req.headers.get('X-Signature-SHA256') ??
+      req.headers.get('x-signature');
+    const deliveryId = req.headers.get('x-delivery-id');
+    const isTest = (req.headers.get('x-test-notification') ?? '').toLowerCase() === 'true';
+
+    const publicKey = Deno.env.get('WISE_WEBHOOK_PUBLIC_KEY');
+    if (!publicKey) {
+      console.error('[wise-webhook] WISE_WEBHOOK_PUBLIC_KEY is not configured');
+      return json({ error: 'Unauthorized' }, 401);
+    }
+
+    let signatureValid = false;
+    if (signature) {
+      try {
+        signatureValid = await verifyWiseSignature(rawBody, signature, publicKey);
+      } catch (e) {
+        console.error('[wise-webhook] signature verification error', (e as Error).message);
+      }
+    }
+    if (!signatureValid) {
+      console.warn('[wise-webhook] rejected request with invalid/missing signature');
+      return json({ error: 'Invalid signature' }, 401);
+    }
+
+    let payload: any = {};
+    try {
+      payload = rawBody ? JSON.parse(rawBody) : {};
+    } catch {
+      console.error('[wise-webhook] body is not valid JSON');
+      return json({ received: true, note: 'invalid json' }, 200);
+    }
+
+    const mapped = mapEvent(payload);
+    console.log('[wise-webhook] event', mapped.event_type, 'transfer', mapped.transfer_id, 'state', mapped.current_state);
+
+    // Wise test pings from the dashboard: acknowledge without persisting.
+    if (isTest) {
+      return json({ received: true, test: true });
+    }
+
+    const admin = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+    );
+
+    const { error: insertError } = await admin.from('wise_webhook_events').insert({
+      ...mapped,
+      delivery_id: deliveryId,
+      signature_valid: true,
+      payload,
+    });
+
+    // Unique violation on delivery_id => Wise redelivery, safe to ignore.
+    if (insertError && (insertError as any).code !== '23505') {
+      console.error('[wise-webhook] insert error', insertError);
+    }
+    const duplicate = !!insertError && (insertError as any).code === '23505';
+
+    // TODO(next phase): apply transfer state to payment records.
+    // Match `mapped.transfer_id` against ap_payment_batch_items.provider_transfer_id
+    // and tax_payments.provider_transfer_id, then flip to paid/failed and post/reverse
+    // the linked journal entry (mirroring treasury-payment-webhook). Intentionally a
+    // no-op for now: this deployment only logs events.
+
+    return json({ received: true, duplicate, event_type: mapped.event_type });
+  } catch (e) {
+    console.error('[wise-webhook] error', e);
+    return json({ error: (e as Error).message }, 500);
+  }
+});
