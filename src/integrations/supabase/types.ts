@@ -28084,6 +28084,51 @@ export type Database = {
           },
         ]
       }
+      wise_webhook_events: {
+        Row: {
+          current_state: string | null
+          delivery_id: string | null
+          event_type: string
+          id: string
+          occurred_at: string | null
+          payload: Json
+          previous_state: string | null
+          profile_id: string | null
+          received_at: string
+          signature_valid: boolean
+          subscription_id: string | null
+          transfer_id: string | null
+        }
+        Insert: {
+          current_state?: string | null
+          delivery_id?: string | null
+          event_type: string
+          id?: string
+          occurred_at?: string | null
+          payload?: Json
+          previous_state?: string | null
+          profile_id?: string | null
+          received_at?: string
+          signature_valid?: boolean
+          subscription_id?: string | null
+          transfer_id?: string | null
+        }
+        Update: {
+          current_state?: string | null
+          delivery_id?: string | null
+          event_type?: string
+          id?: string
+          occurred_at?: string | null
+          payload?: Json
+          previous_state?: string | null
+          profile_id?: string | null
+          received_at?: string
+          signature_valid?: boolean
+          subscription_id?: string | null
+          transfer_id?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       combined_tax_rates: {

@@ -193,3 +193,7 @@ verify_jwt = false
 [functions.efincash-webhook]
 verify_jwt = false
 
+[functions.wise-webhook]
+verify_jwt = false
+
+
