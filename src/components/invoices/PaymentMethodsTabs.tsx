@@ -137,7 +137,23 @@ export function PaymentMethodsTabs({
               Interac e-Transfer
             </button>
           )}
+          {wiseEnabled && (
+            <button
+              type="button"
+              onClick={() => toggleTab('wise')}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer"
+              style={{
+                borderColor: activeTab === 'wise' ? primaryColor : `${primaryColor}30`,
+                color: primaryColor,
+                backgroundColor: activeTab === 'wise' ? `${primaryColor}12` : 'transparent',
+              }}
+            >
+              <Globe2 className="w-3.5 h-3.5" />
+              Wise Bank Transfer
+            </button>
+          )}
         </div>
+
 
         {/* Credit Card Details */}
         {activeTab === 'cc' && (
