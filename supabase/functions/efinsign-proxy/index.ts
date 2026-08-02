@@ -660,17 +660,36 @@ Deno.serve(async (req) => {
         // Fallback: if the user owns this org but was never backfilled into
         // organization_members (pre-migration orgs), treat them as a member
         // and auto-insert the row via the admin client (bypasses RLS).
-        const { data: ownerRow } = await admin
+        const { data: ownerRow, error: ownerErr } = await admin
           .from('organizations')
           .select('owner_id')
           .eq('id', rawOrgId)
           .maybeSingle();
-        if (ownerRow?.owner_id !== userId) {
-          return json({ error: 'Not a member of the specified organization' }, 403);
+        if (ownerErr) {
+          console.error('efinsign-proxy owner lookup failed:', ownerErr, { userId, rawOrgId });
+          return json({ error: `Membership check failed: ${ownerErr.message}` }, 500);
         }
-        await admin
-          .from('organization_members')
-          .insert({ organization_id: rawOrgId, user_id: userId, role: 'owner' });
+        if (!ownerRow) {
+          return json({ error: `Organization ${rawOrgId} does not exist` }, 404);
+        }
+        if (ownerRow.owner_id !== userId) {
+          // Also check if user has global admin role — admins can act on any org.
+          const { data: isAdminRow } = await admin.rpc('has_role', { _user_id: userId, _role: 'admin' });
+          if (isAdminRow !== true) {
+            console.warn('efinsign-proxy membership denied:', { userId, rawOrgId, ownerId: ownerRow.owner_id });
+            return json({
+              error: `Not a member of the specified organization (owner is ${ownerRow.owner_id ?? 'null'}, you are ${userId})`,
+            }, 403);
+          }
+        } else {
+          const { error: insErr } = await admin
+            .from('organization_members')
+            .insert({ organization_id: rawOrgId, user_id: userId, role: 'owner' });
+          if (insErr) {
+            console.error('efinsign-proxy membership auto-insert failed:', insErr, { userId, rawOrgId });
+            return json({ error: `Could not backfill membership: ${insErr.message}` }, 500);
+          }
+        }
       }
       orgId = rawOrgId;
     }
