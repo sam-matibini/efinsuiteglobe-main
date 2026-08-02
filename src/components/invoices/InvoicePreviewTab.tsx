@@ -92,6 +92,10 @@ interface InvoicePreviewTabProps {
   achTransitNumber?: string;
   etransferEmail?: string;
   ccPaymentUrl?: string;
+  // Wise bank transfer
+  wiseEnabled?: boolean;
+  wiseAccount?: WiseAccountDisplay | null;
+  wiseReference?: string | null;
   // Signature toggles
   showSellerSignature?: boolean;
   showBuyerSignature?: boolean;
