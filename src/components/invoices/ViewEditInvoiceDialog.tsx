@@ -138,6 +138,7 @@ export function ViewEditInvoiceDialog({ open, onOpenChange, invoice, mode: initi
   const [mode, setMode] = useState<'view' | 'edit'>(initialMode);
   const { customers, isLoading: customersLoading } = useCustomers();
   const { organization } = useCurrentOrganization();
+  const { accounts: wiseAccounts } = useWiseReceivingAccounts();
   
   const { data: inventoryItems = [] } = useInventoryItems(organization?.id);
   const { lines: invoiceLines, isLoading: linesLoading } = useInvoiceLines(invoice?.id);
@@ -515,6 +516,7 @@ export function ViewEditInvoiceDialog({ open, onOpenChange, invoice, mode: initi
     buyer_signature_date?: string;
     custom_fields?: { id: string; label: string; value: string; type: 'text' | 'number' | 'date' }[];
     seller_signature_id?: string;
+    wise_payment_reference?: string | null;
   };
 
   // Load seller signature from invoice or default
