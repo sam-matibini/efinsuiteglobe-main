@@ -6951,6 +6951,61 @@ export type Database = {
           },
         ]
       }
+      document_signatures: {
+        Row: {
+          created_at: string
+          document_id: string
+          field_id: string | null
+          id: string
+          image_base64: string
+          ip_address: string | null
+          signer_id: string
+          user_agent: string | null
+        }
+        Insert: {
+          created_at?: string
+          document_id: string
+          field_id?: string | null
+          id?: string
+          image_base64: string
+          ip_address?: string | null
+          signer_id: string
+          user_agent?: string | null
+        }
+        Update: {
+          created_at?: string
+          document_id?: string
+          field_id?: string | null
+          id?: string
+          image_base64?: string
+          ip_address?: string | null
+          signer_id?: string
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_signatures_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "document_signatures_field_id_fkey"
+            columns: ["field_id"]
+            isOneToOne: false
+            referencedRelation: "document_fields"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "document_signatures_signer_id_fkey"
+            columns: ["signer_id"]
+            isOneToOne: false
+            referencedRelation: "document_signers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       document_signers: {
         Row: {
           access_code: string | null
@@ -6988,10 +7043,12 @@ export type Database = {
           role: string | null
           routing_condition: Json | null
           routing_order: number | null
+          self_signed: boolean
           signature_data: string | null
           signed_at: string | null
+          signer_expires_at: string | null
           signing_order: number | null
-          signing_token: string | null
+          signing_token: string
           status: string | null
           updated_at: string
           viewed_at: string | null
@@ -7032,10 +7089,12 @@ export type Database = {
           role?: string | null
           routing_condition?: Json | null
           routing_order?: number | null
+          self_signed?: boolean
           signature_data?: string | null
           signed_at?: string | null
+          signer_expires_at?: string | null
           signing_order?: number | null
-          signing_token?: string | null
+          signing_token?: string
           status?: string | null
           updated_at?: string
           viewed_at?: string | null
@@ -7076,10 +7135,12 @@ export type Database = {
           role?: string | null
           routing_condition?: Json | null
           routing_order?: number | null
+          self_signed?: boolean
           signature_data?: string | null
           signed_at?: string | null
+          signer_expires_at?: string | null
           signing_order?: number | null
-          signing_token?: string | null
+          signing_token?: string
           status?: string | null
           updated_at?: string
           viewed_at?: string | null
@@ -29484,6 +29545,7 @@ export type Database = {
           settlement_count: number
         }[]
       }
+      signer_token: { Args: never; Returns: string }
       subledger_reconciliation: {
         Args: { p_organization_id: string }
         Returns: {
