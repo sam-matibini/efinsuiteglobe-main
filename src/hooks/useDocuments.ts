@@ -141,9 +141,9 @@ export function useDocumentFields(documentId: string | undefined) {
 }
 
 async function invokeEfinsign<T = unknown>(action: string, payload: Record<string, unknown> = {}): Promise<T> {
-  // Auto-inject caller's current organization id if not already present.
+  // Auto-inject caller's current organization id when missing or null.
   const withOrg = { ...payload };
-  if (!('organization_id' in withOrg) && typeof window !== 'undefined') {
+  if (!withOrg.organization_id && typeof window !== 'undefined') {
     const currentOrgId = window.localStorage.getItem('current_organization_id');
     if (currentOrgId) withOrg.organization_id = currentOrgId;
   }
