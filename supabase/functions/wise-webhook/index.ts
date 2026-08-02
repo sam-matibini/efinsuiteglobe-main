@@ -175,6 +175,206 @@ function mapEvent(payload: any): MappedEvent {
 }
 
 
+// ---------------------------------------------------------------------------
+// Invoice auto-matching for incoming Wise deposits
+// ---------------------------------------------------------------------------
+
+/** Pull any customer-supplied reference out of the webhook payload. */
+function referenceFromPayload(payload: any): string | null {
+  const d = payload?.data ?? {};
+  return (
+    str(
+      d.reference_number ??
+        d.referenceNumber ??
+        d.reference ??
+        d.payment_reference ??
+        d.paymentReference ??
+        d.details?.reference ??
+        d.details?.paymentReference,
+    ) ?? null
+  );
+}
+
+/**
+ * Wise balance-credit webhooks omit the payer reference, so look it up on the
+ * balance statement for a small window around the event.
+ */
+async function referenceFromStatement(
+  profileId: string,
+  balanceId: string,
+  currency: string,
+  amount: number,
+  occurredAt: string | null,
+): Promise<string | null> {
+  const token = Deno.env.get('WISE_API_TOKEN');
+  if (!token) {
+    console.warn('[wise-webhook] WISE_API_TOKEN not set; cannot look up statement reference');
+    return null;
+  }
+
+  const center = occurredAt ? new Date(occurredAt) : new Date();
+  const start = new Date(center.getTime() - 3 * 24 * 60 * 60 * 1000).toISOString();
+  const end = new Date(center.getTime() + 24 * 60 * 60 * 1000).toISOString();
+
+  const url =
+    `https://api.wise.com/v1/profiles/${profileId}/balance-statements/${balanceId}/statement.json` +
+    `?currency=${encodeURIComponent(currency)}&intervalStart=${encodeURIComponent(start)}` +
+    `&intervalEnd=${encodeURIComponent(end)}&type=COMPACT`;
+
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) {
+    console.error('[wise-webhook] statement lookup failed', res.status, await res.text());
+    return null;
+  }
+
+  const body = await res.json().catch(() => null);
+  const transactions: any[] = body?.transactions ?? [];
+  const credits = transactions.filter((t) => String(t?.type ?? '').toUpperCase() === 'CREDIT');
+
+  // Prefer the credit whose amount matches the webhook amount exactly.
+  const match =
+    credits.find((t) => Math.abs(Number(t?.amount?.value ?? NaN) - amount) < 0.01) ?? null;
+
+  const candidate = match ?? credits[0] ?? null;
+  if (!candidate) return null;
+
+  return (
+    str(
+      candidate.referenceNumber ??
+        candidate.details?.paymentReference ??
+        candidate.details?.reference ??
+        candidate.details?.description,
+    ) ?? null
+  );
+}
+
+/** Extract an invoice reference token from free-form bank narration. */
+function extractReferenceTokens(raw: string): string[] {
+  const cleaned = raw.toUpperCase();
+  const tokens = cleaned.match(/[A-Z0-9]+-[A-Z0-9]+/g) ?? [];
+  return Array.from(new Set([cleaned.trim(), ...tokens]));
+}
+
+type MatchResult = {
+  match_status: string;
+  matched_invoice_id: string | null;
+  matched_reference: string | null;
+  organization_id: string | null;
+};
+
+/**
+ * Match a Wise deposit to an open invoice via its wise_payment_reference and
+ * record a customer payment. Reference matching is exact (case-insensitive) so
+ * a wrong reference is reported rather than guessed.
+ */
+async function matchDepositToInvoice(
+  admin: any,
+  mapped: MappedEvent,
+  payload: any,
+): Promise<MatchResult> {
+  const result: MatchResult = {
+    match_status: 'unmatched',
+    matched_invoice_id: null,
+    matched_reference: null,
+    organization_id: null,
+  };
+
+  if (!mapped.currency || !mapped.amount || mapped.amount <= 0) {
+    result.match_status = 'not_applicable';
+    return result;
+  }
+
+  // Resolve the organization that owns the receiving balance.
+  let accountQuery = admin
+    .from('wise_receiving_accounts')
+    .select('id, organization_id, wise_profile_id, wise_balance_id, gl_bank_account_id, currency')
+    .eq('is_active', true)
+    .eq('currency', mapped.currency);
+  if (mapped.balance_id) accountQuery = accountQuery.eq('wise_balance_id', mapped.balance_id);
+  else if (mapped.profile_id) accountQuery = accountQuery.eq('wise_profile_id', mapped.profile_id);
+
+  const { data: accounts } = await accountQuery.limit(2);
+  const account = accounts?.[0] ?? null;
+  if (!account) {
+    result.match_status = 'no_receiving_account';
+    return result;
+  }
+  result.organization_id = account.organization_id;
+
+  // Find the payer reference: payload first, then the balance statement.
+  let reference = referenceFromPayload(payload);
+  if (!reference && account.wise_profile_id && account.wise_balance_id) {
+    reference = await referenceFromStatement(
+      account.wise_profile_id,
+      account.wise_balance_id,
+      mapped.currency,
+      mapped.amount,
+      mapped.occurred_at,
+    );
+  }
+  if (!reference) {
+    result.match_status = 'no_reference';
+    return result;
+  }
+  result.matched_reference = reference;
+
+  const candidates = extractReferenceTokens(reference);
+  const { data: invoices } = await admin
+    .from('invoices')
+    .select('id, customer_id, total, amount_paid, balance_due, currency, wise_payment_reference')
+    .eq('organization_id', account.organization_id)
+    .in('wise_payment_reference', candidates)
+    .limit(1);
+
+  const invoice = invoices?.[0] ?? null;
+  if (!invoice) {
+    result.match_status = 'reference_not_found';
+    return result;
+  }
+  result.matched_invoice_id = invoice.id;
+
+  if (invoice.currency && invoice.currency !== mapped.currency) {
+    result.match_status = 'currency_mismatch';
+    return result;
+  }
+
+  // Record the payment against the invoice.
+  const paymentDate = (mapped.occurred_at ?? new Date().toISOString()).slice(0, 10);
+  const { error: paymentError } = await admin.from('customer_payments').insert({
+    organization_id: account.organization_id,
+    customer_id: invoice.customer_id,
+    invoice_id: invoice.id,
+    payment_date: paymentDate,
+    amount: mapped.amount,
+    payment_method: 'wise_bank_transfer',
+    reference: reference,
+    notes: `Auto-matched Wise deposit (balance ${mapped.balance_id ?? 'n/a'})`,
+    bank_account_id: account.gl_bank_account_id ?? null,
+  });
+  if (paymentError) {
+    console.error('[wise-webhook] payment insert error', paymentError);
+    result.match_status = 'payment_insert_failed';
+    return result;
+  }
+
+  const newAmountPaid = Number(invoice.amount_paid ?? 0) + mapped.amount;
+  const newBalance = Number(invoice.total ?? 0) - newAmountPaid;
+  const fullyPaid = newBalance <= 0.005;
+  await admin
+    .from('invoices')
+    .update({
+      amount_paid: newAmountPaid,
+      balance_due: Math.max(0, newBalance),
+      status: fullyPaid ? 'paid' : 'partial',
+      paid_at: fullyPaid ? new Date().toISOString() : null,
+    })
+    .eq('id', invoice.id);
+
+  result.match_status = fullyPaid ? 'paid' : 'partially_paid';
+  return result;
+}
+
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
@@ -240,8 +440,30 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     );
 
+    // Incoming deposits: try to auto-match to an open invoice by reference.
+    let match: MatchResult = {
+      match_status: 'not_applicable',
+      matched_invoice_id: null,
+      matched_reference: null,
+      organization_id: null,
+    };
+    const isDeposit =
+      mapped.event_type.startsWith('balances#') &&
+      (mapped.transaction_type ?? '').toLowerCase() !== 'debit' &&
+      (mapped.amount ?? 0) > 0;
+    if (isDeposit) {
+      try {
+        match = await matchDepositToInvoice(admin, mapped, payload);
+      } catch (e) {
+        console.error('[wise-webhook] invoice matching error', (e as Error).message);
+        match = { ...match, match_status: 'match_error' };
+      }
+      console.log('[wise-webhook] match result', match.match_status, match.matched_reference ?? '');
+    }
+
     const { error: insertError } = await admin.from('wise_webhook_events').insert({
       ...mapped,
+      ...match,
       delivery_id: deliveryId,
       signature_valid: true,
       payload,
@@ -253,7 +475,7 @@ Deno.serve(async (req) => {
     }
     const duplicate = !!insertError && (insertError as any).code === '23505';
 
-    // TODO(next phase): apply transfer state to payment records.
+    // TODO(next phase): apply transfer state to outbound payment records.
     // Match `mapped.transfer_id` against ap_payment_batch_items.provider_transfer_id
     // and tax_payments.provider_transfer_id, then flip to paid/failed and post/reverse
     // the linked journal entry (mirroring treasury-payment-webhook). Intentionally a
@@ -265,6 +487,8 @@ Deno.serve(async (req) => {
       event_type: mapped.event_type,
       resource_type: mapped.resource_type,
       needs_attention: mapped.needs_attention,
+      match_status: match.match_status,
+      matched_invoice_id: match.matched_invoice_id,
     });
   } catch (e) {
     console.error('[wise-webhook] error', e);
