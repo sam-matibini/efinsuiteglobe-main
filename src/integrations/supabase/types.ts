@@ -8512,6 +8512,10 @@ export type Database = {
       }
       employee_guarantors: {
         Row: {
+          confirmation_method: string | null
+          confirmed: boolean
+          confirmed_at: string | null
+          confirmed_by: string | null
           created_at: string
           email: string | null
           employee_id: string
@@ -8538,6 +8542,10 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          confirmation_method?: string | null
+          confirmed?: boolean
+          confirmed_at?: string | null
+          confirmed_by?: string | null
           created_at?: string
           email?: string | null
           employee_id: string
@@ -8564,6 +8572,10 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          confirmation_method?: string | null
+          confirmed?: boolean
+          confirmed_at?: string | null
+          confirmed_by?: string | null
           created_at?: string
           email?: string | null
           employee_id?: string
@@ -9127,6 +9139,7 @@ export type Database = {
           bank_institution: string | null
           bank_transit: string | null
           city: string | null
+          compensation_structure: Json | null
           cost_centre: string | null
           country: string | null
           cpp_exempt: boolean
@@ -9142,15 +9155,20 @@ export type Database = {
           employee_number: string
           employment_type: Database["public"]["Enums"]["employment_type"]
           first_name: string
+          guarantors_confirmed: boolean
           hire_date: string
           hourly_rate: number | null
           id: string
+          job_site_id: string | null
           job_title: string | null
           last_name: string
           mailing_province: string | null
           manager_id: string | null
           national_id_encrypted: string | null
           nationality: string | null
+          nin: string | null
+          nin_verified_at: string | null
+          nin_verified_by: string | null
           notes: string | null
           organization_id: string | null
           pay_frequency: Database["public"]["Enums"]["pay_frequency"]
@@ -9158,7 +9176,7 @@ export type Database = {
           phone: string | null
           postal_code: string | null
           preferred_name: string | null
-          province: Database["public"]["Enums"]["province_code"]
+          province: string
           sin_encrypted: string | null
           status: Database["public"]["Enums"]["employee_status"]
           statutory_profile: Json
@@ -9179,6 +9197,7 @@ export type Database = {
           bank_institution?: string | null
           bank_transit?: string | null
           city?: string | null
+          compensation_structure?: Json | null
           cost_centre?: string | null
           country?: string | null
           cpp_exempt?: boolean
@@ -9194,15 +9213,20 @@ export type Database = {
           employee_number: string
           employment_type?: Database["public"]["Enums"]["employment_type"]
           first_name: string
+          guarantors_confirmed?: boolean
           hire_date: string
           hourly_rate?: number | null
           id?: string
+          job_site_id?: string | null
           job_title?: string | null
           last_name: string
           mailing_province?: string | null
           manager_id?: string | null
           national_id_encrypted?: string | null
           nationality?: string | null
+          nin?: string | null
+          nin_verified_at?: string | null
+          nin_verified_by?: string | null
           notes?: string | null
           organization_id?: string | null
           pay_frequency?: Database["public"]["Enums"]["pay_frequency"]
@@ -9210,7 +9234,7 @@ export type Database = {
           phone?: string | null
           postal_code?: string | null
           preferred_name?: string | null
-          province?: Database["public"]["Enums"]["province_code"]
+          province?: string
           sin_encrypted?: string | null
           status?: Database["public"]["Enums"]["employee_status"]
           statutory_profile?: Json
@@ -9231,6 +9255,7 @@ export type Database = {
           bank_institution?: string | null
           bank_transit?: string | null
           city?: string | null
+          compensation_structure?: Json | null
           cost_centre?: string | null
           country?: string | null
           cpp_exempt?: boolean
@@ -9246,15 +9271,20 @@ export type Database = {
           employee_number?: string
           employment_type?: Database["public"]["Enums"]["employment_type"]
           first_name?: string
+          guarantors_confirmed?: boolean
           hire_date?: string
           hourly_rate?: number | null
           id?: string
+          job_site_id?: string | null
           job_title?: string | null
           last_name?: string
           mailing_province?: string | null
           manager_id?: string | null
           national_id_encrypted?: string | null
           nationality?: string | null
+          nin?: string | null
+          nin_verified_at?: string | null
+          nin_verified_by?: string | null
           notes?: string | null
           organization_id?: string | null
           pay_frequency?: Database["public"]["Enums"]["pay_frequency"]
@@ -9262,7 +9292,7 @@ export type Database = {
           phone?: string | null
           postal_code?: string | null
           preferred_name?: string | null
-          province?: Database["public"]["Enums"]["province_code"]
+          province?: string
           sin_encrypted?: string | null
           status?: Database["public"]["Enums"]["employee_status"]
           statutory_profile?: Json
@@ -9276,6 +9306,13 @@ export type Database = {
           work_schedule?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "employees_job_site_id_fkey"
+            columns: ["job_site_id"]
+            isOneToOne: false
+            referencedRelation: "job_sites"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "employees_manager_id_fkey"
             columns: ["manager_id"]
@@ -13121,6 +13158,39 @@ export type Database = {
           tax_year?: number
           updated_at?: string
           xml_url?: string | null
+        }
+        Relationships: []
+      }
+      job_sites: {
+        Row: {
+          code: string | null
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          organization_id: string
+          state_province: string | null
+          updated_at: string
+        }
+        Insert: {
+          code?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          organization_id: string
+          state_province?: string | null
+          updated_at?: string
+        }
+        Update: {
+          code?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          organization_id?: string
+          state_province?: string | null
+          updated_at?: string
         }
         Relationships: []
       }
