@@ -11,6 +11,7 @@ import { useCurrentOrganization } from '@/hooks/useOrganization';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { EmailSenderSettings } from './EmailSenderSettings';
+import { WiseInvoicePaymentsCard } from './WiseInvoicePaymentsCard';
 
 type ConnectionStatus = 'loading' | 'connected' | 'not-configured' | 'error';
 
