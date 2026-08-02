@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/card';
 import { parseLocalDate } from '@/lib/utils';
 import { useInvoices, Invoice } from '@/hooks/useInvoices';
 import { useCurrentOrganization } from '@/hooks/useOrganization';
+import { useWiseReceivingAccounts, selectWiseAccountForCurrency } from '@/hooks/useWiseReceivingAccounts';
 import { useSalesTaxSettings } from '@/hooks/useSalesTax';
 import { CreateOrganizationDialog } from '@/components/accounts/CreateOrganizationDialog';
 import { CreateInvoiceDialog } from '@/components/invoices/CreateInvoiceDialog';
@@ -31,6 +32,7 @@ import { useConfirmDelete } from '@/hooks/useConfirmDelete';
 export default function Invoices() {
   const confirmDelete = useConfirmDelete();
   const { organization, isLoading: orgLoading } = useCurrentOrganization();
+  const { accounts: wiseAccounts } = useWiseReceivingAccounts();
   const isReadOnly = useIsReadOnly();
   const { 
     invoices, 
@@ -238,6 +240,9 @@ export default function Invoices() {
         achTransitNumber: organization?.invoice_ach_transit_number || undefined,
         etransferEmail: organization?.invoice_etransfer_email || undefined,
         ccPaymentUrl: organization?.invoice_cc_payment_url || undefined,
+        wiseEnabled: !!(organization as unknown as Record<string, unknown>)?.invoice_wise_enabled,
+        wiseAccount: selectWiseAccountForCurrency(wiseAccounts, invoice.currency),
+        wiseReference: ((invoice as unknown as Record<string, unknown>).wise_payment_reference as string | null) || null,
       });
       
       toast.success('Invoice PDF downloaded');
