@@ -175,11 +175,15 @@ export function useCreateDocument() {
     mutationFn: async (documentData: { title: string; document_type?: string; file_url?: string; mime_type?: string; file_size?: number }) => {
       if (!user?.id) throw new Error('User not authenticated');
 
-      // Ensure the user is in organization_members before calling the proxy.
-      // The efinsign-proxy edge function checks this table and returns
-      // "Not a member of the specified organization" if the row is missing —
-      // which happens when an org owner was never backfilled into the table.
-      let orgId: string | null = organization?.id || null;
+      // Resolve org ID: from hook, then localStorage fallback.
+      let orgId: string | null =
+        organization?.id ||
+        (typeof window !== 'undefined' ? window.localStorage.getItem('current_organization_id') : null) ||
+        null;
+
+      // If user appears to be missing from organization_members (pre-SQL-migration orgs),
+      // try to auto-insert them as owner. Never nullify orgId based on query failures —
+      // let the edge function do the definitive membership check.
       if (orgId) {
         const { data: membership } = await supabase
           .from('organization_members')
@@ -201,9 +205,9 @@ export function useCreateDocument() {
               user_id: user.id,
               role: 'owner',
             });
-          } else {
-            orgId = null;
           }
+          // If we can't confirm ownership (query failed / user isn't owner),
+          // keep orgId and let the proxy return a proper 403.
         }
       }
 
