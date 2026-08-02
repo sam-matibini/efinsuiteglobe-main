@@ -570,12 +570,12 @@ export function InvoicePreviewTab({
         )}
 
         {/* Accepted Payment Methods - Clickable Tabs */}
-        {enableOnlinePayments && (creditCardEnabled || achEnabled || interacEnabled) && (
+        {((enableOnlinePayments && (creditCardEnabled || achEnabled || interacEnabled)) || wiseEnabled) && (
           <PaymentMethodsTabs
             primaryColor={primaryColor}
-            creditCardEnabled={creditCardEnabled}
-            achEnabled={achEnabled}
-            interacEnabled={interacEnabled}
+            creditCardEnabled={!!enableOnlinePayments && creditCardEnabled}
+            achEnabled={!!enableOnlinePayments && achEnabled}
+            interacEnabled={!!enableOnlinePayments && interacEnabled}
             ccInstructions={ccInstructions}
             achInstitution={achInstitution}
             achAccountName={achAccountNameProp}
@@ -583,6 +583,9 @@ export function InvoicePreviewTab({
             achTransitNumber={achTransitNumberProp}
             etransferEmail={etransferEmail}
             ccPaymentUrl={ccPaymentUrl}
+            wiseEnabled={wiseEnabled}
+            wiseAccount={wiseAccount}
+            wiseReference={wiseReference}
             onPay={onPayOnline}
             payAmount={onPayOnline ? (balanceDue ?? total) : undefined}
             payCurrency={currency}
