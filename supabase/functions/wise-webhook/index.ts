@@ -284,10 +284,10 @@ async function matchDepositToInvoice(
     return result;
   }
 
-  // Resolve the organization that owns the receiving balance.
+  // Resolve the platform receiving account for this currency (shared pool).
   let accountQuery = admin
     .from('wise_receiving_accounts')
-    .select('id, organization_id, wise_profile_id, wise_balance_id, gl_bank_account_id, currency')
+    .select('id, wise_profile_id, wise_balance_id, currency')
     .eq('is_active', true)
     .eq('currency', mapped.currency);
   if (mapped.balance_id) accountQuery = accountQuery.eq('wise_balance_id', mapped.balance_id);
@@ -299,7 +299,6 @@ async function matchDepositToInvoice(
     result.match_status = 'no_receiving_account';
     return result;
   }
-  result.organization_id = account.organization_id;
 
   // Find the payer reference: payload first, then the balance statement.
   let reference = referenceFromPayload(payload);
@@ -321,8 +320,7 @@ async function matchDepositToInvoice(
   const candidates = extractReferenceTokens(reference);
   const { data: invoices } = await admin
     .from('invoices')
-    .select('id, customer_id, total, amount_paid, balance_due, currency, wise_payment_reference')
-    .eq('organization_id', account.organization_id)
+    .select('id, organization_id, customer_id, total, amount_paid, balance_due, currency, wise_payment_reference')
     .in('wise_payment_reference', candidates)
     .limit(1);
 
@@ -332,6 +330,9 @@ async function matchDepositToInvoice(
     return result;
   }
   result.matched_invoice_id = invoice.id;
+  // The shared receiving pool means the paying organization is determined by
+  // the invoice that owns the reference, not by the receiving account.
+  result.organization_id = invoice.organization_id;
 
   if (invoice.currency && invoice.currency !== mapped.currency) {
     result.match_status = 'currency_mismatch';
@@ -341,7 +342,7 @@ async function matchDepositToInvoice(
   // Record the payment against the invoice.
   const paymentDate = (mapped.occurred_at ?? new Date().toISOString()).slice(0, 10);
   const { error: paymentError } = await admin.from('customer_payments').insert({
-    organization_id: account.organization_id,
+    organization_id: invoice.organization_id,
     customer_id: invoice.customer_id,
     invoice_id: invoice.id,
     payment_date: paymentDate,
@@ -349,7 +350,6 @@ async function matchDepositToInvoice(
     payment_method: 'wise_bank_transfer',
     reference: reference,
     notes: `Auto-matched Wise deposit (balance ${mapped.balance_id ?? 'n/a'})`,
-    bank_account_id: account.gl_bank_account_id ?? null,
   });
   if (paymentError) {
     console.error('[wise-webhook] payment insert error', paymentError);
