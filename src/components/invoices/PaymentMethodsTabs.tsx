@@ -238,6 +238,56 @@ export function PaymentMethodsTabs({
             )}
           </div>
         )}
+
+        {/* Wise Bank Transfer Details */}
+        {activeTab === 'wise' && (
+          <div className="rounded-md p-2.5 text-xs space-y-1" style={{ backgroundColor: `${primaryColor}08` }}>
+            <p className="font-semibold text-muted-foreground mb-1.5">Wise Bank Transfer</p>
+            {wiseAccount ? (
+              <>
+                <DetailRow label="Currency" value={wiseAccount.currency} />
+                {wiseAccount.account_holder_name && (
+                  <DetailRow label="Beneficiary" value={wiseAccount.account_holder_name} />
+                )}
+                {wiseAccount.bank_name && <DetailRow label="Bank" value={wiseAccount.bank_name} />}
+                {wiseAccount.account_number && (
+                  <DetailRow label="Account no." value={wiseAccount.account_number} />
+                )}
+                {wiseAccount.routing_number && (
+                  <DetailRow label="Routing" value={wiseAccount.routing_number} />
+                )}
+                {wiseAccount.sort_code && <DetailRow label="Sort code" value={wiseAccount.sort_code} />}
+                {wiseAccount.iban && <DetailRow label="IBAN" value={wiseAccount.iban} />}
+                {wiseAccount.bic_swift && <DetailRow label="BIC / SWIFT" value={wiseAccount.bic_swift} />}
+                {wiseAccount.institution_address && (
+                  <DetailRow label="Bank address" value={wiseAccount.institution_address} />
+                )}
+                {wiseReference && (
+                  <div className="flex gap-2 pt-1">
+                    <span className="text-muted-foreground w-28 flex-shrink-0">Reference</span>
+                    <span className="font-semibold" style={{ color: primaryColor }}>{wiseReference}</span>
+                  </div>
+                )}
+                <p className="text-muted-foreground italic pt-1">
+                  {wiseReference
+                    ? 'Include the reference exactly as shown so your payment is matched automatically.'
+                    : 'Please quote your invoice number as the transfer reference.'}
+                </p>
+                {wiseAccount.currencyMismatch && (
+                  <p className="text-muted-foreground italic">
+                    These details are for {wiseAccount.currency}. Contact us if you need to pay in the
+                    invoice currency.
+                  </p>
+                )}
+              </>
+            ) : (
+              <p className="text-muted-foreground italic">
+                Wise transfer details not yet configured. Contact us for payment information.
+              </p>
+            )}
+          </div>
+        )}
+
       </div>
     </div>
   );
