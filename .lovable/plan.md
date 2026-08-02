@@ -1,62 +1,41 @@
-## Problem
+# Wise transfer webhook
 
-The real eFinCash response is double-nested and uses different field names than our current parser assumes, so proxied creations end up with `account_number`, `bank_name`, and `provider_account_id` all null, and status defaults to `pending` even on a successful `active` account.
+Add a public edge function that receives Wise transfer update events, verifies authenticity with Wise's public key, and logs every event to a table. Business logic (updating payments) is deliberately left as a placeholder for a later phase.
 
-Actual shape:
+## 1. Database
 
-```text
-{ status, message: { status, message, data: { id, account_number, account_bank_name, reference, status, currency, customer_id, ... } } }
-```
+New table `public.wise_webhook_events`:
+- `id` uuid pk default `gen_random_uuid()`
+- `event_type` text (e.g. `transfers#state-change`)
+- `subscription_id` text, `delivery_id` text (unique — idempotency)
+- `transfer_id` text, `profile_id` text
+- `current_state` text, `previous_state` text, `occurred_at` timestamptz
+- `signature_valid` boolean
+- `payload` jsonb, `received_at` timestamptz default now()
 
-Current code reads `providerJson.data` (which is the outer `message` object) and looks for `bank_name` / `accountNumber` — none of which exist.
+Follows the existing pattern (`stripe_webhook_events`, `efinsign_webhook_events`): grants to `service_role` (all) and `authenticated` (select), RLS enabled, read policy limited to platform admins. Index on `delivery_id` (unique) and `transfer_id`.
 
-## Refactor `efincash-proxy`
+## 2. Edge function `wise-webhook`
 
-1. Extract a single normalizer used for both the create response and future webhook payloads:
-  ```ts
-   function unwrap(payload: any) {
-     // Peel `{ status, message: { ..., data } }` or `{ data }` or bare object
-     const inner = payload?.message?.data ?? payload?.data ?? payload ?? {};
-     const outerOk = (payload?.status ?? payload?.message?.status ?? '').toString().toLowerCase() === 'success';
-     return { d: inner, outerOk };
-   }
-  ```
-2. Map fields to our schema:
-  - `provider_account_id` ← `d.id` (e.g. `van_aB7ZzKCEfa`) — **this is what the webhook will echo back**, so it must be stored.
-  - `account_number` ← `d.account_number`
-  - `bank_name` ← `d.account_bank_name ?? d.bank_name`
-  - `account_name` ← ``${first_name} ${last_name}``
-    `currency` ← `d.currency ?? input.currency`
-  - `status` ← `d.status === 'active' ? 'active' : (outerOk ? 'pending' : 'failed')`
-3. Success = HTTP 2xx **and** `outerOk` **and** an `account_number` present. Otherwise mark row `failed` and return 502 with the raw provider body.
-4. Keep storing the entire `providerJson` in `raw_response` for debugging.
-5. Minor: drop the dead `providerStatus` reassignment from the auth-token call, and surface a clearer error when the auth-token response has no `key`.
+- Public (`verify_jwt = false` in `supabase/config.toml`).
+- Handles `OPTIONS` with CORS headers, allowing the `x-signature-sha256`/`x-delivery-id`/`x-test-notification` headers.
+- Reads the raw body text (needed for signature verification before JSON parsing).
+- Verifies `X-Signature-SHA256` (base64 RSA-SHA256 over the raw body) against Wise's public key using WebCrypto `crypto.subtle.importKey('spki', ...)` + `verify`. The key comes from a new secret `WISE_WEBHOOK_PUBLIC_KEY` (PEM). Invalid signature → 401, no row written.
+- Responds `200` immediately to Wise's test notification pings.
+- Accepts **all transfer update event types** — `transfers#state-change`, `transfers#active-cases`, `transfers#refund`, `transfers#payout-failure` and any other `transfers#*` — normalizing the differing `data` shapes into the columns above; unknown transfer events are still logged with the full payload.
+- Inserts one row per event, ignoring duplicates on `delivery_id` (idempotent redelivery).
+- Placeholder block with a clear `TODO` comment marking where transfer state will later be applied to `ap_payment_batch_items` / `tax_payments` via `provider_transfer_id`. No records are mutated for now.
+- Always returns `200` with `{ received: true }` on successfully verified events so Wise doesn't retry; logs parsing problems to console.
 
-## Refactor `efincash-webhook`
+## 3. Secret
 
-1. Reuse the same `unwrap()` helper (move it to `supabase/functions/_shared/efincash.ts` and import from both functions).
-2. Account-lookup order becomes:
-  - `provider_account_id` = `d.id ?? d.reference` (matches what we stored on create)
-  - fallback: `account_number` = `d.account_number`
-3. Event classification stays as-is (amount presence → transaction branch; otherwise account-update branch), but reads normalized fields:
-  - `amount` ← `d.amount ?? d.amount_settled`
-  - `currency` ← `d.currency`
-  - `provider_tx_id` ← `d.id ?? d.reference ?? d.tx_ref ?? d.flw_ref`
-  - `status` ← `d.status` mapped to `successful | pending | failed`
-  - sender fields from `d.meta.*` fallbacks preserved
-4. Account-update branch: on webhook re-notification of the VAN itself, refresh `account_number`, `bank_name` (`account_bank_name`), `provider_account_id`, and set `status = 'active'` when `d.status === 'active'`.
-5. Continue returning HTTP 200 for all recognized events (no retry storms).
+Request `WISE_WEBHOOK_PUBLIC_KEY` (Wise's sandbox/production webhook public key, PEM format). Until it's set, the function rejects requests with 401 and logs that the key is missing.
 
-## Shared file
+## 4. Deploy
 
-New `supabase/functions/_shared/efincash.ts` exporting `unwrap(payload)` and small helpers `mapAccountFields(d)` / `mapTxFields(d, body)`. Both functions import from it.
+Deploy `wise-webhook`; the callback URL to register in the Wise dashboard is
+`https://<project>.supabase.co/functions/v1/wise-webhook`.
 
-## Out of scope
+## Notes
 
-- Signature/shared-secret verification on the webhook.
-- Mirroring VAN credits into `bank_accounts` or the GL.
-- UI changes (`VirtualAccountsList` already renders whatever comes back).
-
-## Verification
-
-After deploy, re-create a GHS virtual account and confirm the DB row has non-null `account_number`, `bank_name = "First Bank Ghana"`, `provider_account_id = "van_..."`, and `status = 'active'`.
+No frontend changes. No existing payment records are touched in this phase.
