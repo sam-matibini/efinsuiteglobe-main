@@ -63,14 +63,15 @@ export default function Bills() {
   const prefillVendorId = searchParams.get('vendor');
   const [pendingPrefill, setPendingPrefill] = useState<string | null>(null);
 
-  useState(() => {
+  useEffect(() => {
     if (prefillVendorId) {
       setPendingPrefill(prefillVendorId);
       setShowBillDialog(true);
       searchParams.delete('vendor');
       setSearchParams(searchParams, { replace: true });
     }
-  });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefillVendorId]);
 
   const { bills, isLoading, totalOutstanding, overdueAmount, paidThisMonth, updateBillStatus, voidBill } = useBills();
   const { organization } = useCurrentOrganization();
