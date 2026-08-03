@@ -16,6 +16,7 @@ import { useCurrentOrganization } from '@/hooks/useOrganization';
 import { getCountryLocalization } from '@/data/countryLocalizations';
 import { getLocaleForCountry } from '@/lib/localizedCurrencyFormatter';
 import { parseLocalDate } from '@/lib/utils';
+import { PurchaseAttachmentsSection } from '@/components/purchases/PurchaseAttachmentsSection';
 
 interface ViewBillDialogProps {
   open: boolean;
