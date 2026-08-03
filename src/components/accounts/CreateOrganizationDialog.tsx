@@ -201,13 +201,19 @@ export function CreateOrganizationDialog({
 
   const onSubmit = async (values: OrgFormValues) => {
     if (!values.name || !values.country_id) return;
+
+    // Get country info for defaults
+    const country = countries.find(c => c.id === values.country_id);
+
+    // NGN virtual accounts cannot be opened without BVN/NIN.
+    if (country?.default_currency === 'NGN' && !values.bvn_or_nin?.trim()) {
+      form.setError('bvn_or_nin', { message: 'BVN or NIN is required for Nigerian organizations' });
+      return;
+    }
     
     setUploading(true);
     
     try {
-      // Get country info for defaults
-      const country = countries.find(c => c.id === values.country_id);
-      
       // Create organization with country - pass country name/code for address-based compliance
       const org = await createOrg.mutateAsync({ 
         name: values.name,
@@ -216,6 +222,7 @@ export function CreateOrganizationDialog({
         currency: country?.default_currency || 'USD',
         country_name: country?.name,
         country_code: country?.code,
+        bvn_or_nin: values.bvn_or_nin?.trim() || undefined,
       });
       
       // Upload logo if selected
