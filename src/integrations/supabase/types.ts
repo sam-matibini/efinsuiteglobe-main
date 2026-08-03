@@ -19576,6 +19576,7 @@ export type Database = {
       }
       provincial_tax_authorities: {
         Row: {
+          category: string
           code: string
           created_at: string
           id: string
@@ -19585,6 +19586,7 @@ export type Database = {
           website_url: string | null
         }
         Insert: {
+          category?: string
           code: string
           created_at?: string
           id?: string
@@ -19594,6 +19596,7 @@ export type Database = {
           website_url?: string | null
         }
         Update: {
+          category?: string
           code?: string
           created_at?: string
           id?: string
