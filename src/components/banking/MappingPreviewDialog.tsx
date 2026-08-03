@@ -412,6 +412,93 @@ export function MappingPreviewDialog({
       .map(p => normalizeMappedRow(p.mapped));
     onConfirm(normalizedData);
   };
+
+  // ---- Row-level manual corrections -------------------------------------
+  const useSplitColumns = hasDebit || hasCredit;
+
+  const rowMagnitude = (mapped: Record<string, unknown>): number => {
+    const debit = typeof mapped['debit'] === 'number' ? Math.abs(mapped['debit'] as number) : 0;
+    const credit = typeof mapped['credit'] === 'number' ? Math.abs(mapped['credit'] as number) : 0;
+    if (useSplitColumns && (debit || credit)) return debit || credit;
+    const amount = typeof mapped['amount'] === 'number' ? Math.abs(mapped['amount'] as number) : 0;
+    return amount;
+  };
+
+  const typePatch = (mapped: Record<string, unknown>, type: 'deposit' | 'withdrawal') => {
+    const value = rowMagnitude(mapped);
+    if (useSplitColumns) {
+      if (statementType === 'creditcard') {
+        // charge (withdrawal) sits in debit, payment (deposit) in credit
+        return type === 'withdrawal' ? { debit: value, credit: 0 } : { debit: 0, credit: value };
+      }
+      return type === 'deposit' ? { credit: value, debit: 0 } : { credit: 0, debit: value };
+    }
+    // Single signed amount column
+    const signed =
+      statementType === 'creditcard'
+        ? (type === 'withdrawal' ? value : -value)
+        : (type === 'deposit' ? value : -value);
+    return { amount: signed };
+  };
+
+  const setRowType = useCallback(
+    (rowIndex: number, type: 'deposit' | 'withdrawal', applyToMatching = false) => {
+      const target = processedData.find((p) => p.rowIndex === rowIndex);
+      if (!target) return;
+      const key = String(
+        target.mapped['description'] ?? target.mapped['payee_payor'] ?? target.mapped['merchant'] ?? '',
+      )
+        .trim()
+        .toLowerCase();
+
+      setRowOverrides((prev) => {
+        const next = { ...prev };
+        const rows = applyToMatching && key
+          ? processedData.filter(
+              (p) =>
+                String(p.mapped['description'] ?? p.mapped['payee_payor'] ?? p.mapped['merchant'] ?? '')
+                  .trim()
+                  .toLowerCase() === key,
+            )
+          : [target];
+        for (const r of rows) {
+          next[r.rowIndex] = { ...(next[r.rowIndex] ?? {}), ...typePatch(r.mapped, type) };
+        }
+        return next;
+      });
+    },
+    [processedData, statementType, useSplitColumns],
+  );
+
+  const setRowField = useCallback((rowIndex: number, field: string, value: unknown) => {
+    setRowOverrides((prev) => ({
+      ...prev,
+      [rowIndex]: { ...(prev[rowIndex] ?? {}), [field]: value },
+    }));
+  }, []);
+
+  const resetRow = useCallback((rowIndex: number) => {
+    setRowOverrides((prev) => {
+      const next = { ...prev };
+      delete next[rowIndex];
+      return next;
+    });
+  }, []);
+
+  const matchingCount = (mapped: Record<string, unknown>): number => {
+    const key = String(mapped['description'] ?? mapped['payee_payor'] ?? mapped['merchant'] ?? '')
+      .trim()
+      .toLowerCase();
+    if (!key) return 0;
+    return processedData.filter(
+      (p) =>
+        String(p.mapped['description'] ?? p.mapped['payee_payor'] ?? p.mapped['merchant'] ?? '')
+          .trim()
+          .toLowerCase() === key,
+    ).length;
+  };
+  
+
   
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
