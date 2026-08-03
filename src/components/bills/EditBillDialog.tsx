@@ -40,6 +40,13 @@ import { getCountryLocalization } from '@/data/countryLocalizations';
 import { getLocaleForCountry } from '@/lib/localizedCurrencyFormatter';
 import { postBillToGL } from '@/lib/postBillToGL';
 import { reverseLinkedJournalEntry, recalculateAndInvalidate } from '@/hooks/useGLPropagation';
+import {
+  BILL_PAYMENT_TERMS,
+  CUSTOM_TERM_VALUE,
+  computeDueDate,
+  findPaymentTerm,
+  getTermDays,
+} from '@/lib/billPaymentTerms';
 
 const lineSchema = z.object({
   description: z.string().min(1, 'Description is required'),
