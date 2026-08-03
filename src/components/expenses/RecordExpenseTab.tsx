@@ -22,6 +22,10 @@ import { useAnalyzeReceipt } from '@/hooks/useAnalyzeReceipt';
 import { getCountryLocalization } from '@/data/countryLocalizations';
 import { getLocaleForCountry } from '@/lib/localizedCurrencyFormatter';
 import { FormattedNumberInput } from '@/components/ui/formatted-number-input';
+import { PurchaseDocumentsPanel } from '@/components/purchases/PurchaseDocumentsPanel';
+import { InvoiceExtractionReview, type ReviewField } from '@/components/purchases/InvoiceExtractionReview';
+import type { InvoiceExtraction } from '@/lib/purchases/invoiceExtraction';
+import { useStagedPurchaseAttachments } from '@/hooks/useStagedPurchaseAttachments';
 
 interface ExpenseLineItem {
   id: string;
@@ -68,6 +72,10 @@ export function RecordExpenseTab({ onSuccess, onCancel }: RecordExpenseTabProps)
   const [customerId, setCustomerId] = useState<string>('');
   const [reference, setReference] = useState('');
   const [notes, setNotes] = useState('');
+  const staging = useStagedPurchaseAttachments();
+  const [extraction, setExtraction] = useState<InvoiceExtraction | null>(null);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [pendingSummary, setPendingSummary] = useState('');
   const [isBillable, setIsBillable] = useState(false);
   const [isItemized, setIsItemized] = useState(false);
   const [lineItems, setLineItems] = useState<ExpenseLineItem[]>([]);
@@ -277,9 +285,55 @@ export function RecordExpenseTab({ onSuccess, onCancel }: RecordExpenseTabProps)
       })) : undefined,
     };
 
-    await createExpense.mutateAsync(input);
+    const created: any = await createExpense.mutateAsync(input);
+    if (created?.id && organization?.id) {
+      await staging.flush('expense', created.id, organization.id);
+    }
     resetForm();
+    setExtraction(null);
+    setPendingSummary('');
     onSuccess();
+  };
+
+  // ---- Attachments + AI invoice extraction -------------------------------
+  const matchedVendorId = matchVendor(extraction?.vendor_name);
+  const matchedVendor = matchedVendorId
+    ? vendors.find((v) => v.id === matchedVendorId) ?? null
+    : null;
+
+  const reviewFields: ReviewField[] = extraction
+    ? [
+        {
+          key: 'vendor_id',
+          label: 'Vendor',
+          current: vendors.find((v) => v.id === vendorId)?.name ?? '',
+          extracted: matchedVendor?.name ?? '',
+        },
+        { key: 'expense_date', label: 'Expense date', current: expenseDate, extracted: extraction.document_date ?? '' },
+        {
+          key: 'amount',
+          label: 'Amount',
+          current: String(amount || ''),
+          extracted: extraction.grand_total != null ? String(extraction.grand_total) : '',
+        },
+        { key: 'reference', label: 'Reference', current: reference, extracted: extraction.document_number ?? '' },
+        {
+          key: 'notes',
+          label: 'Notes (AI document summary)',
+          current: notes,
+          extracted: pendingSummary ? 'Append AI summary' : '',
+        },
+      ]
+    : [];
+
+  const applyExtraction = (keys: string[]) => {
+    if (!extraction) return;
+    const has = (k: string) => keys.includes(k);
+    if (has('vendor_id') && matchedVendor) setVendorId(matchedVendor.id);
+    if (has('expense_date') && extraction.document_date) setExpenseDate(extraction.document_date);
+    if (has('amount') && extraction.grand_total != null) setAmount(extraction.grand_total);
+    if (has('reference') && extraction.document_number) setReference(extraction.document_number);
+    if (has('notes') && pendingSummary) setNotes((prev) => [prev, pendingSummary].filter(Boolean).join('\n\n'));
   };
 
   const handleSaveAndNew = async () => {
@@ -551,6 +605,26 @@ export function RecordExpenseTab({ onSuccess, onCancel }: RecordExpenseTabProps)
             </div>
           </div>
 
+          {/* Invoice / receipt documents */}
+          <div className="rounded-lg border p-4">
+            <PurchaseDocumentsPanel
+              entityType="expense"
+              organizationId={organization?.id}
+              staging={staging}
+              draftContext={{
+                vendor: vendors.find((v) => v.id === vendorId)?.name ?? null,
+                date: expenseDate || null,
+                currency: localization.currency,
+                total: isItemized ? itemizedTotal : amount,
+              }}
+              onExtraction={(ex, summary) => {
+                setExtraction(ex);
+                setPendingSummary(summary);
+                setReviewOpen(true);
+              }}
+            />
+          </div>
+
           {/* Reporting Tags */}
           <div className="grid grid-cols-[140px_1fr] items-center gap-4">
             <Label className="text-muted-foreground">Reporting Tags</Label>
@@ -692,6 +766,16 @@ export function RecordExpenseTab({ onSuccess, onCancel }: RecordExpenseTabProps)
           Cancel
         </Button>
       </div>
+
+      {extraction && (
+        <InvoiceExtractionReview
+          open={reviewOpen}
+          onOpenChange={setReviewOpen}
+          extraction={extraction}
+          fields={reviewFields}
+          onApply={applyExtraction}
+        />
+      )}
 
       {/* Quick Add Vendor Dialog */}
       <QuickAddVendorDialog

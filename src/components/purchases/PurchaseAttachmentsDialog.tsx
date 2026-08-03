@@ -11,6 +11,8 @@ const ENTITY_LABEL: Record<PurchaseEntityType, string> = {
   bill: 'Bill',
   purchase_order: 'Purchase Order',
   vendor: 'Vendor',
+  recurring_bill: 'Recurring Bill',
+  vendor_credit: 'Vendor Credit',
 };
 
 const NOTES_TABLE: Record<PurchaseEntityType, { table: string; notesColumn: string }> = {
@@ -19,6 +21,8 @@ const NOTES_TABLE: Record<PurchaseEntityType, { table: string; notesColumn: stri
   bill: { table: 'bills', notesColumn: 'notes' },
   purchase_order: { table: 'purchase_orders', notesColumn: 'notes' },
   vendor: { table: 'vendors', notesColumn: 'notes' },
+  recurring_bill: { table: 'recurring_bills', notesColumn: 'notes' },
+  vendor_credit: { table: 'vendor_credits', notesColumn: 'notes' },
 };
 
 interface Props {

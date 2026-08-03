@@ -36,6 +36,9 @@ import { Building2, User, FileText, Loader2 } from 'lucide-react';
 import { useVendors } from '@/hooks/useVendors';
 import { CurrencySelect } from '@/components/currency/CurrencySelect';
 import { cn } from '@/lib/utils';
+import { useCurrentOrganization } from '@/hooks/useOrganization';
+import { PurchaseDocumentsPanel } from '@/components/purchases/PurchaseDocumentsPanel';
+import { useStagedPurchaseAttachments } from '@/hooks/useStagedPurchaseAttachments';
 
 const vendorSchema = z.object({
   vendor_type: z.enum(['organization', 'individual']),
@@ -97,6 +100,8 @@ const COUNTRIES = [
 
 export function AddVendorDialog({ open, onOpenChange }: AddVendorDialogProps) {
   const { createVendor } = useVendors();
+  const { organization } = useCurrentOrganization();
+  const staging = useStagedPurchaseAttachments();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const form = useForm<VendorFormData>({
@@ -137,7 +142,7 @@ export function AddVendorDialog({ open, onOpenChange }: AddVendorDialogProps) {
   const onSubmit = async (data: VendorFormData) => {
     setIsSubmitting(true);
     try {
-      await createVendor.mutateAsync({
+      const vendor: any = await createVendor.mutateAsync({
         name: getDisplayName(data),
         vendor_type: data.vendor_type,
         first_name: data.vendor_type === 'individual' ? data.first_name : undefined,
@@ -158,7 +163,11 @@ export function AddVendorDialog({ open, onOpenChange }: AddVendorDialogProps) {
         default_currency: data.default_currency || undefined,
         notes: data.notes || undefined,
       });
+      if (vendor?.id && organization?.id) {
+        await staging.flush('vendor', vendor.id, organization.id);
+      }
       form.reset();
+      staging.clear();
       onOpenChange(false);
     } finally {
       setIsSubmitting(false);
@@ -560,6 +569,24 @@ export function AddVendorDialog({ open, onOpenChange }: AddVendorDialogProps) {
                 </FormItem>
               )}
             />
+
+            <div className="rounded-lg border p-4">
+              <PurchaseDocumentsPanel
+                entityType="vendor"
+                organizationId={organization?.id}
+                staging={staging}
+                title="Vendor documents"
+              />
+            </div>
+
+            <div className="rounded-lg border p-4">
+              <PurchaseDocumentsPanel
+                entityType="vendor"
+                organizationId={organization?.id}
+                staging={staging}
+                title="Vendor documents"
+              />
+            </div>
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={handleClose}>

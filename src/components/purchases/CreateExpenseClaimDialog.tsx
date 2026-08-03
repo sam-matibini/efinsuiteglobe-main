@@ -18,6 +18,8 @@ import { getLocaleForCountry } from '@/lib/localizedCurrencyFormatter';
 import { SearchableGLAccountSelect } from '@/components/banking/SearchableGLAccountSelect';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Switch } from '@/components/ui/switch';
+import { PurchaseDocumentsPanel } from '@/components/purchases/PurchaseDocumentsPanel';
+import { useStagedPurchaseAttachments } from '@/hooks/useStagedPurchaseAttachments';
 
 interface CreateExpenseClaimDialogProps {
   open: boolean;
@@ -65,6 +67,7 @@ export function CreateExpenseClaimDialog({ open, onOpenChange }: CreateExpenseCl
   const fileInputs = useRef<Record<string, HTMLInputElement | null>>({});
   const [scanningLineId, setScanningLineId] = useState<string | null>(null);
   const [aiFilledFields, setAiFilledFields] = useState<Record<string, Set<string>>>({});
+  const staging = useStagedPurchaseAttachments();
 
   const [employeeId, setEmployeeId] = useState<string>('');
   const [claimDate, setClaimDate] = useState<string>(new Date().toISOString().split('T')[0]);
@@ -172,7 +175,10 @@ export function CreateExpenseClaimDialog({ open, onOpenChange }: CreateExpenseCl
       })),
     };
 
-    await createExpenseClaim.mutateAsync(input);
+    const claim: any = await createExpenseClaim.mutateAsync(input);
+    if (claim?.id && organization?.id) {
+      await staging.flush('expense_claim', claim.id, organization.id);
+    }
     resetForm();
     onOpenChange(false);
   };
@@ -560,6 +566,14 @@ export function CreateExpenseClaimDialog({ open, onOpenChange }: CreateExpenseCl
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 rows={3}
+              />
+            </div>
+
+            <div className="rounded-lg border p-4">
+              <PurchaseDocumentsPanel
+                entityType="expense_claim"
+                organizationId={organization?.id}
+                staging={staging}
               />
             </div>
           </div>

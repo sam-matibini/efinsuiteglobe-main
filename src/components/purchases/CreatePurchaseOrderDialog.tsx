@@ -13,6 +13,11 @@ import { useCurrentOrganization } from '@/hooks/useOrganization';
 import { getCountryLocalization } from '@/data/countryLocalizations';
 import { getLocaleForCountry } from '@/lib/localizedCurrencyFormatter';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { PurchaseDocumentsPanel } from '@/components/purchases/PurchaseDocumentsPanel';
+import { InvoiceExtractionReview, type ReviewField } from '@/components/purchases/InvoiceExtractionReview';
+import { matchVendor, type InvoiceExtraction } from '@/lib/purchases/invoiceExtraction';
+import { useStagedPurchaseAttachments } from '@/hooks/useStagedPurchaseAttachments';
+import { toast } from 'sonner';
 
 interface CreatePurchaseOrderDialogProps {
   open: boolean;
@@ -110,6 +115,66 @@ export function CreatePurchaseOrderDialog({ open, onOpenChange }: CreatePurchase
 
   const total = subtotal + taxTotal;
 
+  // ---- Attachments + AI invoice extraction -------------------------------
+  const staging = useStagedPurchaseAttachments();
+  const [extraction, setExtraction] = useState<InvoiceExtraction | null>(null);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [pendingSummary, setPendingSummary] = useState('');
+
+  const matchedVendor = matchVendor(
+    vendors as Array<{ id: string; name: string }>,
+    extraction?.vendor_name,
+  );
+
+  const reviewFields: ReviewField[] = extraction
+    ? [
+        {
+          key: 'vendor_id',
+          label: 'Vendor',
+          current: vendors.find((v) => v.id === vendorId)?.name ?? '',
+          extracted: matchedVendor?.name ?? '',
+        },
+        { key: 'order_date', label: 'Order date', current: orderDate, extracted: extraction.document_date ?? '' },
+        {
+          key: 'expected_delivery',
+          label: 'Expected delivery',
+          current: expectedDelivery,
+          extracted: extraction.due_date ?? '',
+        },
+        {
+          key: 'notes',
+          label: 'Notes (AI document summary)',
+          current: notes,
+          extracted: pendingSummary ? 'Append AI summary' : '',
+        },
+      ]
+    : [];
+
+  const applyExtraction = (keys: string[], applyLines: boolean) => {
+    if (!extraction) return;
+    const has = (k: string) => keys.includes(k);
+    if (has('vendor_id') && matchedVendor) setVendorId(matchedVendor.id);
+    if (has('order_date') && extraction.document_date) setOrderDate(extraction.document_date);
+    if (has('expected_delivery') && extraction.due_date) setExpectedDelivery(extraction.due_date);
+    if (has('notes') && pendingSummary) setNotes((prev) => [prev, pendingSummary].filter(Boolean).join('\n\n'));
+    if (applyLines && extraction.lines.length > 0) {
+      setLines(
+        extraction.lines.map((l) => ({
+          id: crypto.randomUUID(),
+          description: l.description,
+          product_service_id: null,
+          inventory_item_id: null,
+          quantity_ordered: l.quantity ?? 1,
+          unit_price: l.unit_price ?? 0,
+          discount_percent: 0,
+          tax_rate: l.tax_rate ?? 0,
+        })),
+      );
+    }
+    toast.success('Invoice data applied to the purchase order.');
+  };
+
+
   const resetForm = () => {
     setVendorId('');
     setOrderDate(new Date().toISOString().split('T')[0]);
@@ -153,8 +218,13 @@ export function CreatePurchaseOrderDialog({ open, onOpenChange }: CreatePurchase
       })),
     };
 
-    await createPurchaseOrder.mutateAsync(input);
+    const po: any = await createPurchaseOrder.mutateAsync(input);
+    if (po?.id && organization?.id) {
+      await staging.flush('purchase_order', po.id, organization.id);
+    }
     resetForm();
+    setExtraction(null);
+    setPendingSummary('');
     onOpenChange(false);
   };
 
@@ -341,6 +411,26 @@ export function CreatePurchaseOrderDialog({ open, onOpenChange }: CreatePurchase
                 rows={3}
               />
             </div>
+
+            {/* Documents + AI analysis */}
+            <div className="rounded-lg border p-4">
+              <PurchaseDocumentsPanel
+                entityType="purchase_order"
+                organizationId={organization?.id}
+                staging={staging}
+                draftContext={{
+                  vendor: vendors.find((v) => v.id === vendorId)?.name ?? null,
+                  date: orderDate || null,
+                  currency: localization.currency,
+                  total,
+                }}
+                onExtraction={(ex, summary) => {
+                  setExtraction(ex);
+                  setPendingSummary(summary);
+                  setReviewOpen(true);
+                }}
+              />
+            </div>
           </div>
         </ScrollArea>
 
@@ -355,6 +445,18 @@ export function CreatePurchaseOrderDialog({ open, onOpenChange }: CreatePurchase
             {createPurchaseOrder.isPending ? 'Creating...' : 'Create Purchase Order'}
           </Button>
         </DialogFooter>
+
+        {extraction && (
+          <InvoiceExtractionReview
+            open={reviewOpen}
+            onOpenChange={setReviewOpen}
+            extraction={extraction}
+            fields={reviewFields}
+            supportsLines
+            currentLineCount={lines.length}
+            onApply={applyExtraction}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );

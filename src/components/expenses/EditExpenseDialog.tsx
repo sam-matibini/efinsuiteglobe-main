@@ -15,6 +15,7 @@ import {
 import { useVendors } from '@/hooks/useVendors';
 import { useAccounts } from '@/hooks/useAccounts';
 import { useCurrentOrganization } from '@/hooks/useOrganization';
+import { PurchaseDocumentsPanel } from '@/components/purchases/PurchaseDocumentsPanel';
 import { useExpenses, type Expense } from '@/hooks/useExpenses';
 import { Loader2 } from 'lucide-react';
 
@@ -253,6 +254,14 @@ export function EditExpenseDialog({ expense, open, onOpenChange }: Props) {
             />
             <Label>Billable to customer</Label>
           </div>
+        </div>
+
+        <div className="rounded-lg border p-4">
+          <PurchaseDocumentsPanel
+            entityType="expense"
+            entityId={expense.id}
+            organizationId={organization?.id}
+          />
         </div>
 
         {expense.is_posted && (

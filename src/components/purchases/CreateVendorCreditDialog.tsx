@@ -15,6 +15,11 @@ import { getCountryLocalization } from '@/data/countryLocalizations';
 import { getLocaleForCountry } from '@/lib/localizedCurrencyFormatter';
 import { SearchableGLAccountSelect } from '@/components/banking/SearchableGLAccountSelect';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { PurchaseDocumentsPanel } from '@/components/purchases/PurchaseDocumentsPanel';
+import { InvoiceExtractionReview, type ReviewField } from '@/components/purchases/InvoiceExtractionReview';
+import { matchVendor, type InvoiceExtraction } from '@/lib/purchases/invoiceExtraction';
+import { useStagedPurchaseAttachments } from '@/hooks/useStagedPurchaseAttachments';
+import { toast } from 'sonner';
 
 interface CreateVendorCreditDialogProps {
   open: boolean;
@@ -128,6 +133,58 @@ export function CreateVendorCreditDialog({ open, onOpenChange }: CreateVendorCre
     ]);
   };
 
+  // ---- Attachments + AI credit-note extraction ---------------------------
+  const staging = useStagedPurchaseAttachments();
+  const [extraction, setExtraction] = useState<InvoiceExtraction | null>(null);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [pendingSummary, setPendingSummary] = useState('');
+
+  const matchedVendor = matchVendor(
+    vendors as Array<{ id: string; name: string }>,
+    extraction?.vendor_name,
+  );
+
+  const reviewFields: ReviewField[] = extraction
+    ? [
+        {
+          key: 'vendor_id',
+          label: 'Vendor',
+          current: vendors.find((v) => v.id === vendorId)?.name ?? '',
+          extracted: matchedVendor?.name ?? '',
+        },
+        { key: 'credit_date', label: 'Credit date', current: creditDate, extracted: extraction.document_date ?? '' },
+        { key: 'reason', label: 'Reason', current: reason, extracted: extraction.document_number ? `Credit note ${extraction.document_number}` : '' },
+        {
+          key: 'notes',
+          label: 'Notes (AI document summary)',
+          current: notes,
+          extracted: pendingSummary ? 'Append AI summary' : '',
+        },
+      ]
+    : [];
+
+  const applyExtraction = (keys: string[], applyLines: boolean) => {
+    if (!extraction) return;
+    const has = (k: string) => keys.includes(k);
+    if (has('vendor_id') && matchedVendor) setVendorId(matchedVendor.id);
+    if (has('credit_date') && extraction.document_date) setCreditDate(extraction.document_date);
+    if (has('reason') && extraction.document_number) setReason(`Credit note ${extraction.document_number}`);
+    if (has('notes') && pendingSummary) setNotes((prev) => [prev, pendingSummary].filter(Boolean).join('\n\n'));
+    if (applyLines && extraction.lines.length > 0) {
+      setLines(
+        extraction.lines.map((l) => ({
+          id: crypto.randomUUID(),
+          description: l.description,
+          expense_account_id: null,
+          quantity: l.quantity ?? 1,
+          unit_price: l.unit_price ?? 0,
+          tax_rate: l.tax_rate ?? 0,
+        })),
+      );
+    }
+    toast.success('Document data applied — set GL accounts before saving.');
+  };
+
   const handleSubmit = async () => {
     if (!vendorId) return;
 
@@ -149,8 +206,13 @@ export function CreateVendorCreditDialog({ open, onOpenChange }: CreateVendorCre
       })),
     };
 
-    await createVendorCredit.mutateAsync(input);
+    const credit: any = await createVendorCredit.mutateAsync(input);
+    if (credit?.id && organization?.id) {
+      await staging.flush('vendor_credit', credit.id, organization.id);
+    }
     resetForm();
+    setExtraction(null);
+    setPendingSummary('');
     onOpenChange(false);
   };
 
@@ -360,6 +422,25 @@ export function CreateVendorCreditDialog({ open, onOpenChange }: CreateVendorCre
                 rows={3}
               />
             </div>
+
+            <div className="rounded-lg border p-4">
+              <PurchaseDocumentsPanel
+                entityType="vendor_credit"
+                organizationId={organization?.id}
+                staging={staging}
+                draftContext={{
+                  vendor: vendors.find((v) => v.id === vendorId)?.name ?? null,
+                  date: creditDate || null,
+                  currency: localization.currency,
+                  total,
+                }}
+                onExtraction={(ex, summary) => {
+                  setExtraction(ex);
+                  setPendingSummary(summary);
+                  setReviewOpen(true);
+                }}
+              />
+            </div>
           </div>
         </ScrollArea>
 
@@ -374,6 +455,18 @@ export function CreateVendorCreditDialog({ open, onOpenChange }: CreateVendorCre
             {createVendorCredit.isPending ? 'Creating...' : 'Create Vendor Credit'}
           </Button>
         </DialogFooter>
+
+        {extraction && (
+          <InvoiceExtractionReview
+            open={reviewOpen}
+            onOpenChange={setReviewOpen}
+            extraction={extraction}
+            fields={reviewFields}
+            supportsLines
+            currentLineCount={lines.length}
+            onApply={applyExtraction}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );
