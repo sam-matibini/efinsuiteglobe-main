@@ -139,9 +139,10 @@ export interface VendorPayoutRouting {
   id: string;
   organization_id: string;
   vendor_id: string;
-  payout_provider: 'stripe' | 'wise';
+  payout_provider: 'stripe' | 'wise' | 'efinmoney';
   stripe_connected_account_id: string | null;
   wise_recipient_id: string | null;
+  wallet_id: string | null;
   default_payout_method: string;
 }
 

@@ -183,6 +183,58 @@ Deno.serve(async (req) => {
             },
           });
           if (padErr) throw new Error(padErr.message);
+        } else if (
+          String(b.provider).startsWith('wise') || rail === 'wise_eft' || rail === 'wise_etransfer'
+        ) {
+          const method = rail === 'wise_etransfer' || b.provider === 'wise_etransfer'
+            ? 'etransfer'
+            : (b.provider === 'wise_card' ? 'card' : 'eft');
+
+          const { data: emp } = await sb.from('employees')
+            .select('first_name, last_name, email, bank_institution, bank_transit, bank_account')
+            .eq('id', item.employee_id as string).single();
+          const e = emp as {
+            first_name?: string; last_name?: string; email?: string;
+            bank_institution?: string; bank_transit?: string; bank_account?: string;
+          } | null;
+          const holder = `${e?.first_name ?? ''} ${e?.last_name ?? ''}`.trim();
+          if (!holder) throw new Error('Employee record not found for Wise payout');
+          if (method === 'etransfer' && !e?.email) throw new Error('Employee email required for Wise e-Transfer');
+          if (method === 'eft' && !(e?.bank_account && e?.bank_transit)) {
+            throw new Error('Employee bank details required for Wise EFT payout');
+          }
+
+          // Reuse a saved recipient when one exists for this employee
+          const { data: savedRecipient } = await sb.from('wise_payout_recipients')
+            .select('id').eq('organization_id', b.organization_id as string)
+            .eq('employee_id', item.employee_id as string).maybeSingle();
+
+          const { data: wiseRes, error: wiseErr } = await sb.functions.invoke('wise-create-transfer', {
+            body: {
+              organization_id: b.organization_id,
+              source_type: 'payroll',
+              source_id: batch_id,
+              method,
+              amount: Number(item.amount),
+              currency: item.currency,
+              reference: `Payroll ${b.batch_number}`,
+              recipient_id: (savedRecipient as { id: string } | null)?.id ?? null,
+              recipient: (savedRecipient as { id: string } | null) ? undefined : {
+                employee_id: item.employee_id,
+                account_holder_name: holder,
+                account_number: e?.bank_account ?? null,
+                routing_number: e?.bank_transit ?? null,
+                bank_name: e?.bank_institution ?? null,
+                etransfer_email: e?.email ?? null,
+              },
+            },
+          });
+          if (wiseErr) throw new Error(wiseErr.message);
+          const wr = wiseRes as { transfer?: { id?: string; wise_transfer_id?: string | null } } | null;
+          providerRef = wr?.transfer?.wise_transfer_id ?? wr?.transfer?.id ?? `wise-${item.id}`;
+        } else if (b.provider === 'efinmoney' || rail === 'wallet_efinmoney') {
+          // eFinMoney wallet payouts are recorded as instructed and confirmed in the wallet console.
+          providerRef = `efinmoney-${item.id}`;
         } else if (b.provider === 'paysafe_card' || rail === 'card') {
           throw new Error('Paysafe Card payout for payroll requires an employee card profile; not yet supported.');
         } else if (rail === 'cheque' || rail === 'manual' || rail === 'wire') {

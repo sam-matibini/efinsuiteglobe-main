@@ -1,0 +1,1 @@
+ALTER TABLE public.vendor_payout_routing ADD COLUMN IF NOT EXISTS wallet_id text;

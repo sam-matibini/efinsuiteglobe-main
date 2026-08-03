@@ -62,6 +62,7 @@ Deno.serve(async (req) => {
       const { data, error } = await admin.from('wise_payout_recipients').insert({
         organization_id: orgId,
         vendor_id: r.vendor_id ?? null,
+        employee_id: r.employee_id ?? null,
         currency,
         account_holder_name: r.account_holder_name,
         bank_name: r.bank_name ?? null,

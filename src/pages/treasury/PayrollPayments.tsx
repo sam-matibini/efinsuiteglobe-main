@@ -7,12 +7,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus, Play } from 'lucide-react';
-import { usePayrollPaymentBatches, PayrollBatchProvider } from '@/hooks/usePayrollPaymentBatches';
+import { usePayrollPaymentBatches, PayrollBatchProvider, providerDefaultRail } from '@/hooks/usePayrollPaymentBatches';
 import { usePayRuns } from '@/hooks/usePayRuns';
 import { FundingBankSelect } from '@/components/treasury/FundingBankSelect';
-import { RailPicker } from '@/components/treasury/RailPicker';
+import { RailPicker, PROVIDER_RAILS } from '@/components/treasury/RailPicker';
 import { useFundingBankAccounts, Rail } from '@/hooks/useFundingBankAccounts';
 import { useIsReadOnly } from '@/hooks/useIsReadOnly';
 
@@ -36,7 +36,15 @@ export default function PayrollPayments() {
 
   const eligibleRuns = (payRuns ?? []).filter((r) => ['approved', 'processed'].includes(r.status as string));
   const selectedBank = fundingAccounts.find((a) => a.id === bankId);
-  const availableRails = selectedBank?.railsSupported ?? (['manual', 'cheque'] as Rail[]);
+  const availableRails = [
+    ...(selectedBank?.railsSupported ?? (['manual', 'cheque'] as Rail[])),
+    ...PROVIDER_RAILS,
+  ];
+
+  const changeProvider = (v: PayrollBatchProvider) => {
+    setProvider(v);
+    setRail(providerDefaultRail(v) as Rail);
+  };
 
   const submit = async () => {
     if (!payRunId) return;
@@ -87,17 +95,33 @@ export default function PayrollPayments() {
                   </div>
                   <div>
                     <Label>Provider</Label>
-                    <Select value={provider} onValueChange={(v) => setProvider(v as PayrollBatchProvider)}>
+                    <Select value={provider} onValueChange={(v) => changeProvider(v as PayrollBatchProvider)}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="stripe">Stripe</SelectItem>
-                        <SelectItem value="plaid">Plaid</SelectItem>
-                        <SelectItem value="paysafe_eft">Paysafe EFT</SelectItem>
-                        <SelectItem value="paysafe_card">Paysafe Card (Credit / Debit Visa)</SelectItem>
-                        <SelectItem value="wire">Wire</SelectItem>
-                        <SelectItem value="wallet">Wallet</SelectItem>
-                        <SelectItem value="cheque">Cheque</SelectItem>
-                        <SelectItem value="manual">Manual</SelectItem>
+                        <SelectGroup>
+                          <SelectLabel>Banks & processors</SelectLabel>
+                          <SelectItem value="stripe">Stripe</SelectItem>
+                          <SelectItem value="plaid">Plaid</SelectItem>
+                          <SelectItem value="paysafe_eft">Paysafe EFT</SelectItem>
+                          <SelectItem value="paysafe_card">Paysafe Card (Credit / Debit Visa)</SelectItem>
+                          <SelectItem value="wire">Wire</SelectItem>
+                        </SelectGroup>
+                        <SelectGroup>
+                          <SelectLabel>Wise</SelectLabel>
+                          <SelectItem value="wise_eft">Wise EFT</SelectItem>
+                          <SelectItem value="wise_etransfer">Wise e-Transfer</SelectItem>
+                          <SelectItem value="wise_card">Wise Card payout</SelectItem>
+                        </SelectGroup>
+                        <SelectGroup>
+                          <SelectLabel>Wallets</SelectLabel>
+                          <SelectItem value="wallet">Stripe / Paddle Wallet</SelectItem>
+                          <SelectItem value="efinmoney">eFinMoney Wallet</SelectItem>
+                        </SelectGroup>
+                        <SelectGroup>
+                          <SelectLabel>Other</SelectLabel>
+                          <SelectItem value="cheque">Cheque</SelectItem>
+                          <SelectItem value="manual">Manual</SelectItem>
+                        </SelectGroup>
                       </SelectContent>
                     </Select>
                   </div>
