@@ -575,7 +575,7 @@ export function MappingPreviewDialog({
                   const dupes = matchingCount(preview.mapped);
                   const colSpan = 2 + mappedFields.length + (showTypeColumn ? 1 : 0) + 1;
                   return (
-                  <>
+                  <Fragment key={preview.rowIndex}>
                   <TableRow 
                     key={preview.rowIndex}
                     className={cn(
