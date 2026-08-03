@@ -32,20 +32,25 @@ import {
 import { useVendors } from '@/hooks/useVendors';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrganization } from '@/hooks/useOrganization';
+import { useAccounts } from '@/hooks/useAccounts';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { format, addDays } from 'date-fns';
 import { getCountryLocalization } from '@/data/countryLocalizations';
 import { getLocaleForCountry } from '@/lib/localizedCurrencyFormatter';
 import { recordBillTaxes } from '@/lib/ngTax/integration';
+import { postBillToGL } from '@/lib/postBillToGL';
 
 
 const lineSchema = z.object({
   description: z.string().min(1, 'Description is required'),
+  expense_account_id: z.string().min(1, 'Account is required'),
   quantity: z.coerce.number().min(0.01, 'Quantity must be positive'),
   unit_price: z.coerce.number().min(0, 'Price must be 0 or more'),
   tax_rate: z.coerce.number().min(0).max(100).optional(),
 });
+
 
 const billSchema = z.object({
   vendor_id: z.string().min(1, 'Vendor is required'),
