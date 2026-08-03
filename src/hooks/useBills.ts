@@ -158,6 +158,59 @@ export function useBills() {
     },
   });
 
+  /**
+   * Voids a bill: reverses the linked journal entry (audit-safe) so the GL,
+   * Trial Balance and financial statements no longer include the bill, then
+   * marks the bill as void with a zero balance.
+   */
+  const voidBill = useMutation({
+    mutationFn: async (billId: string) => {
+      const { data: bill, error: fetchError } = await supabase
+        .from('bills')
+        .select('id, status, amount_paid, journal_entry_id, organization_id, notes')
+        .eq('id', billId)
+        .single();
+      if (fetchError) throw fetchError;
+
+      if (bill.status === 'void') throw new Error('This bill is already voided.');
+      if (Number(bill.amount_paid || 0) > 0) {
+        throw new Error('This bill has payments applied. Reverse the payment before voiding.');
+      }
+
+      const orgId = bill.organization_id || currentOrganization?.id;
+
+      if (bill.journal_entry_id && orgId) {
+        await reverseLinkedJournalEntry({
+          journalEntryId: bill.journal_entry_id,
+          organizationId: orgId,
+        });
+      }
+
+      const { error } = await supabase
+        .from('bills')
+        .update({
+          status: 'void',
+          balance_due: 0,
+          journal_entry_id: null,
+          notes: [bill.notes, `Voided on ${new Date().toISOString().split('T')[0]}`]
+            .filter(Boolean)
+            .join('\n'),
+        })
+        .eq('id', billId);
+      if (error) throw error;
+
+      if (orgId) await recalculateAndInvalidate(orgId, queryClient);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['bills'] });
+      toast.success('Bill voided and journal entry reversed');
+    },
+    onError: (error: Error) => {
+      toast.error('Failed to void bill: ' + error.message);
+    },
+  });
+
+
   const deleteBill = useMutation({
     mutationFn: async (billId: string) => {
       // Get the bill to check status
