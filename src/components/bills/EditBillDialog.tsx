@@ -143,6 +143,8 @@ export function EditBillDialog({ open, onOpenChange, bill }: EditBillDialogProps
         return;
       }
 
+      setIsCustomTerm(!!bill.terms && !findPaymentTerm(bill.terms));
+
       form.reset({
         vendor_id: bill.vendor_id ?? '',
         bill_number: bill.bill_number ?? '',
