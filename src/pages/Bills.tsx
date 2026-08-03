@@ -289,7 +289,14 @@ export default function Bills() {
                               Record Payment
                             </DropdownMenuItem>
                           )}
-                          {!isReadOnly && <DropdownMenuItem className="text-destructive">Void Bill</DropdownMenuItem>}
+                          {!isReadOnly && bill.status !== 'void' && (
+                            <DropdownMenuItem
+                              className="text-destructive"
+                              onClick={() => setBillToVoid(bill)}
+                            >
+                              <Ban className="w-4 h-4 mr-2" /> Void Bill
+                            </DropdownMenuItem>
+                          )}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </td>
