@@ -6,9 +6,12 @@ import { toast } from 'sonner';
 
 export type PayrollBatchStatus =
   | 'draft' | 'approved' | 'processing' | 'completed' | 'partial' | 'failed' | 'cancelled';
-export type PayrollBatchProvider = 'stripe' | 'plaid' | 'manual' | 'wire' | 'cheque' | 'wallet' | 'paysafe_eft' | 'paysafe_card';
+export type PayrollBatchProvider =
+  | 'stripe' | 'plaid' | 'manual' | 'wire' | 'cheque' | 'wallet' | 'paysafe_eft' | 'paysafe_card'
+  | 'wise_eft' | 'wise_etransfer' | 'wise_card' | 'efinmoney';
 export type Rail =
-  | 'instant' | 'ach' | 'eft' | 'wire' | 'wallet_stripe' | 'wallet_paddle' | 'cheque' | 'manual' | 'card';
+  | 'instant' | 'ach' | 'eft' | 'wire' | 'wallet_stripe' | 'wallet_paddle' | 'cheque' | 'manual' | 'card'
+  | 'wise_eft' | 'wise_etransfer' | 'wallet_efinmoney';
 export type ApprovalState =
   | 'draft' | 'pending_review' | 'pending_approval' | 'approved' | 'rejected';
 
