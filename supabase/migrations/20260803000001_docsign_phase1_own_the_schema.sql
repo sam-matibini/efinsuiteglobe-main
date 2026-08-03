@@ -219,6 +219,7 @@ DROP POLICY IF EXISTS "Users can delete their documents" ON storage.objects;
 -- Reads: org members (and owners) can read files under their org_id prefix.
 -- Path convention: {org_id}/{user_id}/{ts}-{filename}. Legacy files at
 -- documents/... stay readable to org members for a transition window.
+DROP POLICY IF EXISTS "docsign_read_org_scoped" ON storage.objects;
 CREATE POLICY "docsign_read_org_scoped"
   ON storage.objects FOR SELECT
   TO authenticated
@@ -236,6 +237,7 @@ CREATE POLICY "docsign_read_org_scoped"
   );
 
 -- Writes: only for the caller's own org, under {org_id}/{auth.uid}/...
+DROP POLICY IF EXISTS "docsign_insert_org_scoped" ON storage.objects;
 CREATE POLICY "docsign_insert_org_scoped"
   ON storage.objects FOR INSERT
   TO authenticated
@@ -249,6 +251,7 @@ CREATE POLICY "docsign_insert_org_scoped"
     AND (storage.foldername(name))[2] = auth.uid()::text
   );
 
+DROP POLICY IF EXISTS "docsign_update_org_scoped" ON storage.objects;
 CREATE POLICY "docsign_update_org_scoped"
   ON storage.objects FOR UPDATE
   TO authenticated
@@ -261,6 +264,7 @@ CREATE POLICY "docsign_update_org_scoped"
     )
   );
 
+DROP POLICY IF EXISTS "docsign_delete_org_owner" ON storage.objects;
 CREATE POLICY "docsign_delete_org_owner"
   ON storage.objects FOR DELETE
   TO authenticated
