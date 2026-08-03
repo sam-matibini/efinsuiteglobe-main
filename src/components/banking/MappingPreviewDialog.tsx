@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, Fragment } from 'react';
 import {
-  Eye, Check, AlertTriangle, ChevronLeft, ChevronRight,
+  Eye, Check, AlertTriangle,
   FileCheck, ArrowRight, Edit2, RotateCcw, Pencil, ArrowLeftRight, X
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -200,10 +200,8 @@ export function MappingPreviewDialog({
   onConfirm,
   onBack,
 }: MappingPreviewDialogProps) {
-  const [currentPage, setCurrentPage] = useState(0);
   const [rowOverrides, setRowOverrides] = useState<Record<number, Record<string, unknown>>>({});
   const [editingRow, setEditingRow] = useState<number | null>(null);
-  const pageSize = 20;
   
   const { mappings, dateFormat, numberFormat, invertSign, treatBracketsAsNegative } = mappingConfig;
   
@@ -319,8 +317,8 @@ export function MappingPreviewDialog({
 
   const editedCount = Object.keys(rowOverrides).length;
 
-  const totalPages = Math.ceil(processedData.length / pageSize);
-  const paginatedData = processedData.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
+
+
   
   const errorCount = processedData.filter(p => p.errors.length > 0).length;
   const warningCount = processedData.filter(p => p.warnings.length > 0).length;
@@ -505,7 +503,7 @@ export function MappingPreviewDialog({
   
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[95vw] max-h-[90vh] flex flex-col p-0">
+      <DialogContent className="max-w-[95vw] h-[90vh] max-h-[90vh] flex flex-col p-0 overflow-hidden">
         <DialogHeader className="p-6 pb-0">
           <DialogTitle className="flex items-center gap-2">
             <Eye className="h-5 w-5" />
@@ -546,32 +544,32 @@ export function MappingPreviewDialog({
             </>
           )}
           <span className="text-xs text-muted-foreground ml-auto">
-            Showing rows {currentPage * pageSize + 1}–{Math.min((currentPage + 1) * pageSize, processedData.length)} of {processedData.length}
+            Showing all {processedData.length} row{processedData.length === 1 ? '' : 's'} — scroll to review
           </span>
         </div>
 
         
         {/* Preview Table */}
-        <ScrollArea className="flex-1 min-h-0 h-[calc(100vh-350px)]">
+        <ScrollArea className="flex-1 min-h-0">
           <div className="p-4">
             <Table>
-              <TableHeader>
+              <TableHeader className="sticky top-0 z-20 bg-background">
                 <TableRow>
                   <TableHead className="w-12 sticky left-0 bg-background">#</TableHead>
-                  <TableHead className="w-16">Status</TableHead>
+                  <TableHead className="w-16 bg-background">Status</TableHead>
                   {mappedFields.map(field => (
-                    <TableHead key={field} className="min-w-[120px]">
+                    <TableHead key={field} className="min-w-[120px] bg-background">
                       {getFieldDisplayLabel(field)}
                     </TableHead>
                   ))}
                   {showTypeColumn && (
-                    <TableHead className="min-w-[100px]">Type</TableHead>
+                    <TableHead className="min-w-[100px] bg-background">Type</TableHead>
                   )}
-                  <TableHead className="w-24 text-right">Correct</TableHead>
+                  <TableHead className="w-24 text-right bg-background">Correct</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {paginatedData.map((preview) => {
+                {processedData.map((preview) => {
                   const isEdited = !!rowOverrides[preview.rowIndex];
                   const rowType = deriveType(preview.mapped);
                   const isEditing = editingRow === preview.rowIndex;
@@ -774,31 +772,8 @@ export function MappingPreviewDialog({
           </div>
         </ScrollArea>
 
-        
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="px-6 py-2 border-t border-border flex items-center justify-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setCurrentPage(p => Math.max(0, p - 1))}
-              disabled={currentPage === 0}
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <span className="text-sm text-muted-foreground">
-              Page {currentPage + 1} of {totalPages}
-            </span>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setCurrentPage(p => Math.min(totalPages - 1, p + 1))}
-              disabled={currentPage === totalPages - 1}
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
-        )}
+
+
         
         <DialogFooter className="p-6 pt-4 border-t border-border">
           <Button variant="outline" onClick={onBack}>

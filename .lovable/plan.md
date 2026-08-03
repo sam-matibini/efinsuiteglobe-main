@@ -1,41 +1,25 @@
 ## Goal
 
-No wrongly-mapped row should ever reach the banking transactions table. Every import preview — bank *and* credit card — gets inline row editing plus a type flip, so corrections happen before import.
+The Preview & Validate step should show **every** transaction in one continuous scrollable list — no 20-row page slices, no clipped table — so any row can be found and corrected before import.
 
 ## Current state (verified)
 
-- `MappingPreviewDialog.tsx` (used only by `StatementExtractionDialog`) already has `rowOverrides`, inline edit, Deposit↔Withdrawal flip, and "apply to all matching rows". This is the good pattern.
-- `CreditCardImportDialog.tsx` preview is **read-only**: it renders date / description / amount / type from `classifyCreditCardType` with no way to correct a mis-typed row (e.g. a vendor purchase classified as `payment`), and shows only the first 20 rows.
-- `UnifiedImportDialog.tsx` preview is **read-only** too, for both the bank and the credit-card branch, and truncates at 15 rows.
+- `MappingPreviewDialog.tsx` paginates at `pageSize = 20` (`paginatedData = processedData.slice(...)`) and renders the table inside `<ScrollArea className="flex-1 min-h-0 h-[calc(100vh-350px)]">` inside a `max-h-[90vh]` dialog. The fixed `calc(100vh-350px)` fights the flex layout, so the visible window is short and the last rows sit under the footer (the screenshot shows only 8 of 16 rows).
+- `EditableImportPreview.tsx` (used by `CreditCardImportDialog` and `UnifiedImportDialog`) caps its table at `max-h-[380px]`, which is a small window on a tall screen.
 
 ## The work
 
-**1. Shared editable preview component — `src/components/banking/EditableImportPreview.tsx`**
+**1. `MappingPreviewDialog.tsx`**
+- Drop the page-slicing: render all of `processedData` in one scroll region. Remove the Prev/Next/"Page X of Y" footer controls and the `currentPage`/`pageSize` state.
+- Fix the scroll container: dialog becomes `h-[90vh]` with `flex flex-col`; the scroll region becomes `flex-1 min-h-0` with no fixed `calc()` height, so it grows to fill whatever space the header, stats bar and footer leave.
+- Make the table header `sticky top-0` with a solid background so column labels stay visible while scrolling.
+- Change the counter text to `Showing all N rows` (and keep the valid/errors/corrected badges as-is).
+- Keep horizontal scrolling for wide statements (many mapped columns).
 
-One table used by both import dialogs, driven by a small prop contract:
-- Columns: Date, Description, Payee/Payor, Amount, Type (+ Debit/Credit when a bank statement is in split-amount mode).
-- Per-row pencil opens inline inputs for date, description, payee, amount.
-- Type control:
-  - bank → Deposit ↔ Withdrawal flip button.
-  - credit card → select over `charge / payment / credit / fee / interest` (the five values `transaction_type` accepts), with a one-click flip between `charge` and `payment` for the common case.
-- "Apply this type to all N rows matching this description" for repeat payees (MBFS Auto, MPI Autopac, etc.).
-- "Edited" badge per row, per-row reset, global "Reset all edits", and an edited-count summary.
-- Scrollable full list (no 15/20 truncation) so a bad row late in the statement can still be found and fixed.
-
-**2. Wire into `CreditCardImportDialog.tsx`**
-
-Replace the read-only preview table with `EditableImportPreview` in credit-card mode. Keep `parsedTransactions` as the parsed baseline and hold corrections in a `rowOverrides` map; `handleImport` maps the **merged** rows, so `transaction_type` and `amount` sent to `onImport` are the corrected values. Amount stays an absolute magnitude — polarity is carried by `transaction_type`, per the existing credit-card convention.
-
-**3. Wire into `UnifiedImportDialog.tsx`**
-
-Same component in both branches. The bank branch flips `transaction_type` between `deposit`/`withdrawal` (and swaps debit/credit in split mode); the credit-card branch uses the five-value type select. `handleImport` submits merged rows for both.
-
-**4. Keep `MappingPreviewDialog.tsx` consistent**
-
-Refactor its preview body onto the shared component so all three surfaces behave identically, preserving its existing override merge, validation-error skipping, and reset behaviour. If the refactor risks its validation flow, the fallback is to leave it as-is and match its UX in the new component — no regression to the extraction path either way.
+**2. `EditableImportPreview.tsx`**
+- Replace the fixed `max-h-[380px]` with a viewport-relative cap (`max-h-[60vh]`) so both import dialogs show far more rows on normal screens, with sticky headers on the same pattern.
 
 ## Technical notes
 
-- Corrections are UI-state only, applied at the moment of import; no schema change and no new tables.
-- Classification defaults still come from `classifyCreditCardType` (description-first, sign-fallback) — this adds a manual override layer on top, it does not change the classifier.
-- Nothing in the GL posting path changes; `useCreditCardGL` keeps deriving polarity from `transaction_type`, which is now user-verified.
+- Pure presentation change: no change to `rowOverrides`, validation, type-flip, "apply to all matching rows", or what gets submitted on import.
+- Row counts here are statement-sized (tens to a few hundred), so plain scrolling is fine — no virtualization needed.
