@@ -255,6 +255,16 @@ export function ViewBillDialog({ open, onOpenChange, bill }: ViewBillDialogProps
           </div>
         )}
 
+        <div className="rounded-lg border p-4">
+          <PurchaseAttachmentsSection
+            entityType="bill"
+            entityId={bill.id}
+            organizationId={organization?.id}
+            readOnly
+          />
+        </div>
+
+
         <DialogFooter>
           <Button variant="outline" onClick={handlePrint}>
             <Printer className="w-4 h-4 mr-2" />
