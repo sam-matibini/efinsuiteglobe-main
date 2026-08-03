@@ -52,11 +52,19 @@ export function useApprovalRequest(documentType: ApprovalDocumentType, documentI
   });
 }
 
-const STATUS_COLUMN: Record<ApprovalDocumentType, { table: string; statusField: string }> = {
-  bill: { table: 'bills', statusField: 'approval_status' },
+const STATUS_COLUMN: Record<
+  ApprovalDocumentType,
+  { table: string; statusField: string; lifecycleField?: string }
+> = {
+  // Bills track the approval workflow separately from the lifecycle badge, so
+  // both columns have to move together or an approved bill still reads "Draft".
+  bill: { table: 'bills', statusField: 'approval_status', lifecycleField: 'status' },
   expense: { table: 'expenses', statusField: 'approval_status' },
   expense_claim: { table: 'expense_claims', statusField: 'status' },
 };
+
+/** Lifecycle statuses that an approval is allowed to advance to "approved". */
+const ADVANCEABLE_LIFECYCLE = ['draft', 'pending', 'pending_approval'];
 
 /** Approve (and post to the GL) or reject a purchase document. */
 export function useApprovalActions() {
