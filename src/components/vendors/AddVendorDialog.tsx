@@ -142,7 +142,7 @@ export function AddVendorDialog({ open, onOpenChange }: AddVendorDialogProps) {
   const onSubmit = async (data: VendorFormData) => {
     setIsSubmitting(true);
     try {
-      await createVendor.mutateAsync({
+      const vendor: any = await createVendor.mutateAsync({
         name: getDisplayName(data),
         vendor_type: data.vendor_type,
         first_name: data.vendor_type === 'individual' ? data.first_name : undefined,
@@ -163,6 +163,9 @@ export function AddVendorDialog({ open, onOpenChange }: AddVendorDialogProps) {
         default_currency: data.default_currency || undefined,
         notes: data.notes || undefined,
       });
+      if (vendor?.id && organization?.id) {
+        await staging.flush('vendor', vendor.id, organization.id);
+      }
       form.reset();
       staging.clear();
       onOpenChange(false);
