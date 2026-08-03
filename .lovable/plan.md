@@ -1,25 +1,50 @@
-## Goal
+## What's wrong
 
-Let you correct mis-mapped rows (e.g. "MBFS Auto" lease payment or "MPI Autopac Pmt" shown as a green Deposit) directly in the **Preview & Validate** step, before import — no journal-entry cleanup afterwards.
+Bills carry two separate fields:
 
-## Where it lands
+- `bills.status` — the lifecycle badge shown in the Bills list and in the bill dialog (`draft` / `pending` / `approved` / `paid` / `overdue` / `void`), default `draft`.
+- `bills.approval_status` — the approval workflow state (`pending_approval` / `approved` / `rejected`), default `pending_approval`.
 
-`src/components/banking/MappingPreviewDialog.tsx` — the last gate before rows are imported. `src/components/banking/AdvancedMappingEngine.tsx` Live Preview points users to that step.
+The approve action in `src/hooks/useApprovals.ts` writes only `approval_status: 'approved'` (via the `STATUS_COLUMN` map) and never touches `status`. So an approved, GL-posted bill keeps `status = 'draft'` and the header badge still reads **Draft**, exactly as in your screenshot.
 
-## What the step provides
+Confirmed in the database: the only bill on record is `status = draft`, `approval_status = approved`.
 
-1. **One-click Deposit↔Withdrawal flip** — a flip icon on each row's type badge moves the value between debit and credit and recomputes the signed amount using the existing convention (`credit - debit` for bank, `debit - credit` for credit card), so GL direction follows automatically.
-2. **Inline row editor** — a pencil opens an editor for Transaction Date, Posted Date, Description, Payee/Payor, Reference, Debit, Credit (or the single Amount column when that's what's mapped).
-3. **Apply to all matching rows** — when flipping a type, an option applies the same correction to every row sharing that description/payee, so all MBFS Auto / MPI Autopac lines are fixed in one click.
-4. **Edited badge, per-row reset, and reset-all** — corrections are tracked in a `rowOverrides` map layered on top of the computed rows, so edits survive re-parsing and page changes.
-5. **Live re-validation** — overrides re-run validation, so corrected rows become importable and the valid/error counts update; the override-merged rows are what gets imported.
+`expenses` has the same split (`approval_status` only, no `status` column, so nothing to fix there). `expense_claims` uses a single `status`, which already flips correctly.
+
+## The fix
+
+**1. Approve action also advances the lifecycle status (`src/hooks/useApprovals.ts`)**
+
+When a document reaches fully-approved and posts to the GL, write both fields for bills:
+- `approval_status = 'approved'` (unchanged)
+- `status = 'approved'` — but only when the current status is `draft` or `pending`, so a bill already `paid`, `partial`, or `void` is never regressed.
+
+**2. Reject / return also resets the lifecycle status**
+
+- Returned to preparer → `approval_status = 'draft'`, `status = 'draft'`.
+- Rejected → `approval_status = 'rejected'`, `status = 'void'` is *not* forced; status stays as-is and the rejection is visible via the approval banner (no silent voiding).
+
+**3. New bills show "Pending", not "Draft" (`src/components/bills/CreateBillDialog.tsx`)**
+
+A bill created through the dialog already inserts `approval_status: 'pending_approval'`, so it should insert `status: 'pending'` too — it's awaiting approval, not a draft. Bills saved explicitly as a draft (if that path exists) keep `draft`.
+
+**4. Badge reflects reality (`src/components/bills/ViewBillDialog.tsx`)**
+
+The header badge uses the same colour/label config as the Bills list instead of a raw capitalised string, and shows the approval state when it disagrees with the lifecycle status (e.g. "Rejected"). No duplicate/contradictory signals next to the existing "Approved & posted" panel.
+
+**5. Backfill the existing data**
+
+A migration corrects historical rows so the list isn't wrong for bills approved before this fix:
+
+```sql
+UPDATE public.bills
+SET status = 'approved'
+WHERE approval_status = 'approved'
+  AND status IN ('draft', 'pending');
+```
 
 ## Technical notes
 
-- `rowOverrides: Record<rowIndex, Partial<row>>` merged in a derived pass over the `useMemo` source data, so the parsed source stays the source of truth.
-- Type/sign convention stays owned by the existing normalize/derive helpers; the editor writes debit/credit and lets them derive amount and type.
-- No database or edge-function changes.
-
-## Status
-
-All of the above is already present in `MappingPreviewDialog.tsx` (flip control, inline editor, "Apply this type to all N matching rows", edited badge, resets). Approving this plan means I re-verify it end-to-end against a real statement import and fix anything that doesn't behave as described.
+- `STATUS_COLUMN` in `useApprovals.ts` grows a second, optional `lifecycleField` per document type so bills update both columns in one write and expenses/claims keep their current single-field behaviour.
+- No change to GL posting logic, `src/lib/approvals/posting.ts`, or the approval workflow engine — this is a status-display/state-sync fix.
+- The payment flow that moves a bill to `partial`/`paid` is untouched and still wins over `approved`.

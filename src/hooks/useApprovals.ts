@@ -52,11 +52,19 @@ export function useApprovalRequest(documentType: ApprovalDocumentType, documentI
   });
 }
 
-const STATUS_COLUMN: Record<ApprovalDocumentType, { table: string; statusField: string }> = {
-  bill: { table: 'bills', statusField: 'approval_status' },
+const STATUS_COLUMN: Record<
+  ApprovalDocumentType,
+  { table: string; statusField: string; lifecycleField?: string }
+> = {
+  // Bills track the approval workflow separately from the lifecycle badge, so
+  // both columns have to move together or an approved bill still reads "Draft".
+  bill: { table: 'bills', statusField: 'approval_status', lifecycleField: 'status' },
   expense: { table: 'expenses', statusField: 'approval_status' },
   expense_claim: { table: 'expense_claims', statusField: 'status' },
 };
+
+/** Lifecycle statuses that an approval is allowed to advance to "approved". */
+const ADVANCEABLE_LIFECYCLE = ['draft', 'pending', 'pending_approval'];
 
 /** Approve (and post to the GL) or reject a purchase document. */
 export function useApprovalActions() {
@@ -99,14 +107,28 @@ export function useApprovalActions() {
 
       const journalEntryId = await postApprovedDocument(doc.documentType, organization.id, doc.id);
 
-      const { table, statusField } = STATUS_COLUMN[doc.documentType];
+      const { table, statusField, lifecycleField } = STATUS_COLUMN[doc.documentType];
       const update: Record<string, any> = {
         [statusField]: 'approved',
         approved_by: user.id,
         approved_at: new Date().toISOString(),
         posted_at: new Date().toISOString(),
       };
-      await supabase.from(table as any).update(update).eq('id', doc.id);
+      let query = supabase.from(table as any).update(update).eq('id', doc.id);
+
+      if (lifecycleField) {
+        // Advance the lifecycle badge too, but never regress a bill that is
+        // already paid/partially paid/void.
+        await supabase
+          .from(table as any)
+          .update({ ...update, [lifecycleField]: 'approved' })
+          .eq('id', doc.id)
+          .in(lifecycleField, ADVANCEABLE_LIFECYCLE);
+        // Ensure approval columns land even when the lifecycle guard filtered the row out.
+        query = supabase.from(table as any).update(update).eq('id', doc.id);
+      }
+
+      await query;
 
       return { ...outcome, journalEntryId };
     },
@@ -154,10 +176,16 @@ export function useApprovalActions() {
         comments,
       });
 
-      const { table, statusField } = STATUS_COLUMN[doc.documentType];
+      const { table, statusField, lifecycleField } = STATUS_COLUMN[doc.documentType];
+      const rejectUpdate: Record<string, any> = {
+        [statusField]: action === 'returned' ? 'draft' : 'rejected',
+      };
+      // Returning a document sends it back to the preparer as a draft. A
+      // rejection leaves the lifecycle status alone (never silently voided).
+      if (lifecycleField && action === 'returned') rejectUpdate[lifecycleField] = 'draft';
       await supabase
         .from(table as any)
-        .update({ [statusField]: action === 'returned' ? 'draft' : 'rejected' })
+        .update(rejectUpdate)
         .eq('id', doc.id);
     },
     onSuccess: (_d, vars) => {

@@ -15,7 +15,18 @@ import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrganization } from '@/hooks/useOrganization';
 import { getCountryLocalization } from '@/data/countryLocalizations';
 import { getLocaleForCountry } from '@/lib/localizedCurrencyFormatter';
-import { parseLocalDate } from '@/lib/utils';
+import { parseLocalDate, cn } from '@/lib/utils';
+
+/** Shared with the Bills list so the badge reads the same everywhere. */
+const BILL_STATUS_STYLES: Record<string, string> = {
+  draft: 'bg-muted text-muted-foreground',
+  pending: 'bg-warning/10 text-warning',
+  approved: 'bg-blue-500/10 text-blue-600',
+  partial: 'bg-warning/10 text-warning',
+  paid: 'bg-success/10 text-success',
+  overdue: 'bg-destructive/10 text-destructive',
+  void: 'bg-destructive/10 text-destructive line-through',
+};
 import { PurchaseAttachmentsSection } from '@/components/purchases/PurchaseAttachmentsSection';
 import { ApprovalPanel } from '@/components/approvals/ApprovalPanel';
 
@@ -152,11 +163,14 @@ export function ViewBillDialog({ open, onOpenChange, bill }: ViewBillDialogProps
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[95vw] max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-3">
+          <DialogTitle className="flex items-center gap-3 flex-wrap">
             <span className="font-mono">Bill {bill.bill_number}</span>
-            <Badge variant="secondary" className="capitalize">
+            <Badge className={cn('capitalize', BILL_STATUS_STYLES[bill.status] ?? BILL_STATUS_STYLES.draft)}>
               {bill.status}
             </Badge>
+            {bill.approval_status === 'rejected' && (
+              <Badge className="bg-destructive/10 text-destructive">Rejected</Badge>
+            )}
           </DialogTitle>
           <DialogDescription>{bill.vendor?.name || 'Unknown Vendor'}</DialogDescription>
         </DialogHeader>
