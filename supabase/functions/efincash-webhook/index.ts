@@ -131,6 +131,32 @@ Deno.serve(async (req) => {
           .update({ balance: newBalance })
           .eq('id', row.id);
         if (balErr) console.error('[efincash-webhook] balance update error', balErr);
+
+        // Try to reconcile an incoming deposit against an open invoice using the
+        // narration. When it matches we record the payment + journal entry
+        // (balance was already moved above, so skip the credit).
+        if (tx.type === 'credit') {
+          try {
+            const invoice = await matchInvoiceFromNarration(
+              admin, row.organization_id, tx.narration, currency,
+            );
+            if (invoice) {
+              const recorded = await recordInvoicePayment(admin, {
+                invoice,
+                amount: Math.abs(amount),
+                currency,
+                paymentDate: (tx.occurred_at ?? new Date().toISOString()).slice(0, 10),
+                reference: tx.provider_tx_id ?? `EFC-${Date.now()}`,
+                paymentMethod: 'efincash_bank_transfer',
+                notes: `Auto-matched eFinCash deposit${tx.narration ? `: ${tx.narration}` : ''}`,
+                skipVirtualAccountCredit: true,
+              });
+              console.log('[efincash-webhook] invoice match', invoice.id, recorded.status);
+            }
+          } catch (e) {
+            console.error('[efincash-webhook] invoice reconcile error', (e as Error).message);
+          }
+        }
       }
     }
 
