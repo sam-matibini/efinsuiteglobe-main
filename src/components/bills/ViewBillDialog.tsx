@@ -15,7 +15,18 @@ import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrganization } from '@/hooks/useOrganization';
 import { getCountryLocalization } from '@/data/countryLocalizations';
 import { getLocaleForCountry } from '@/lib/localizedCurrencyFormatter';
-import { parseLocalDate } from '@/lib/utils';
+import { parseLocalDate, cn } from '@/lib/utils';
+
+/** Shared with the Bills list so the badge reads the same everywhere. */
+const BILL_STATUS_STYLES: Record<string, string> = {
+  draft: 'bg-muted text-muted-foreground',
+  pending: 'bg-warning/10 text-warning',
+  approved: 'bg-blue-500/10 text-blue-600',
+  partial: 'bg-warning/10 text-warning',
+  paid: 'bg-success/10 text-success',
+  overdue: 'bg-destructive/10 text-destructive',
+  void: 'bg-destructive/10 text-destructive line-through',
+};
 import { PurchaseAttachmentsSection } from '@/components/purchases/PurchaseAttachmentsSection';
 import { ApprovalPanel } from '@/components/approvals/ApprovalPanel';
 
