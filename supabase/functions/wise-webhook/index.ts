@@ -195,6 +195,70 @@ function referenceFromPayload(payload: any): string | null {
   );
 }
 
+/** Pull the Wise incoming-transfer (deposit) id out of the webhook payload. */
+function incomingTransferIdFromPayload(payload: any): string | null {
+  const d = payload?.data ?? {};
+  const res = d.resource ?? payload?.resource ?? {};
+  return (
+    str(
+      d.incoming_transfer_id ??
+        d.incomingTransferId ??
+        d.transaction_id ??
+        d.transactionId ??
+        d.reference_id ??
+        d.referenceId ??
+        (String(res.type ?? '').toLowerCase().includes('incoming') ? res.id : null),
+    ) ?? null
+  );
+}
+
+/**
+ * Preferred reference source: Wise's incoming-transfers resource exposes the
+ * payer's `unstructuredReference` verbatim, so no narration parsing is needed.
+ * Returns null when the token is missing or the deposit id is unknown.
+ */
+async function referenceFromIncomingTransfer(
+  profileId: string,
+  incomingTransferId: string,
+): Promise<string | null> {
+  const token = Deno.env.get('WISE_API_TOKEN');
+  if (!token) {
+    console.warn('[wise-webhook] WISE_API_TOKEN not set; cannot look up incoming transfer');
+    return null;
+  }
+
+  // Wise exposes the resource both profile-scoped and standalone depending on
+  // account setup; try the profile-scoped path first.
+  const urls = [
+    `https://api.wise.com/v1/profiles/${profileId}/incoming-transfers/${incomingTransferId}`,
+    `https://api.wise.com/v1/incoming-transfers/${incomingTransferId}`,
+  ];
+
+  for (const url of urls) {
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) {
+      console.warn('[wise-webhook] incoming-transfer lookup failed', url, res.status);
+      continue;
+    }
+    const body = await res.json().catch(() => null);
+    if (!body) continue;
+
+    const reference = str(
+      body.unstructuredReference ??
+        body.unstructured_reference ??
+        body.reference ??
+        body.details?.unstructuredReference ??
+        body.details?.reference ??
+        body.details?.paymentReference ??
+        body.details?.description,
+    );
+    if (reference) return reference;
+  }
+
+  return null;
+}
+
+
 /**
  * Wise balance-credit webhooks omit the payer reference, so look it up on the
  * balance statement for a small window around the event.
