@@ -655,6 +655,27 @@ export function CreateBillDialog({ open, onOpenChange }: CreateBillDialogProps) 
               )}
             />
 
+
+            <div className="rounded-lg border p-4">
+              <PurchaseDocumentsPanel
+                entityType="bill"
+                organizationId={organization?.id}
+                staging={staging}
+                draftContext={{
+                  vendor: vendors.find((v) => v.id === form.getValues('vendor_id'))?.name ?? null,
+                  reference: form.getValues('bill_number') || null,
+                  date: form.getValues('bill_date') || null,
+                  currency: localization.currency,
+                  total,
+                }}
+                onExtraction={(ex, summary) => {
+                  setExtraction(ex);
+                  setPendingSummary(summary);
+                  setReviewOpen(true);
+                }}
+              />
+            </div>
+
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancel
@@ -665,6 +686,18 @@ export function CreateBillDialog({ open, onOpenChange }: CreateBillDialogProps) 
             </DialogFooter>
           </form>
         </Form>
+
+        {extraction && (
+          <InvoiceExtractionReview
+            open={reviewOpen}
+            onOpenChange={setReviewOpen}
+            extraction={extraction}
+            fields={reviewFields}
+            supportsLines
+            currentLineCount={fields.length}
+            onApply={applyExtraction}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );
