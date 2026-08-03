@@ -140,31 +140,6 @@ export function useDocumentFields(documentId: string | undefined) {
   });
 }
 
-async function invokeEfinsign<T = unknown>(action: string, payload: Record<string, unknown> = {}): Promise<T> {
-  // Auto-inject caller's current organization id when missing or null.
-  const withOrg = { ...payload };
-  if (!withOrg.organization_id && typeof window !== 'undefined') {
-    const currentOrgId = window.localStorage.getItem('current_organization_id');
-    if (currentOrgId) withOrg.organization_id = currentOrgId;
-  }
-  const { data, error } = await supabase.functions.invoke('efinsign-proxy', {
-    body: { action, payload: withOrg },
-  });
-  if (error) {
-    let msg = error.message || 'eFinSign request failed';
-    try {
-      const ctx = (error as { context?: Response }).context;
-      if (ctx && typeof ctx.json === 'function') {
-        const body = await ctx.json();
-        if (body?.error) msg = body.error;
-      }
-    } catch { /* ignore */ }
-    throw new Error(msg);
-  }
-  if ((data as { error?: string })?.error) throw new Error((data as { error: string }).error);
-  return (data as { data: T }).data;
-}
-
 
 export function useCreateDocument() {
   const queryClient = useQueryClient();
@@ -198,10 +173,18 @@ export function useCreateDocument() {
       }
       const orgId = preferred;
 
-      return await invokeEfinsign<Document>('create_document', {
-        ...documentData,
-        organization_id: orgId,
-      });
+      const { data, error } = await supabase
+        .from('documents')
+        .insert({
+          ...documentData,
+          organization_id: orgId,
+          owner_id: user.id,
+          status: 'draft',
+        })
+        .select()
+        .single();
+      if (error) throw error;
+      return data as Document;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['documents'] });
@@ -215,7 +198,14 @@ export function useUpdateDocument() {
 
   return useMutation({
     mutationFn: async ({ id, title }: { id: string; status?: string; title?: string; expires_at?: string; completed_at?: string }) => {
-      return await invokeEfinsign<Document>('update_document', { id, title });
+      const { data, error } = await supabase
+        .from('documents')
+        .update({ title, updated_at: new Date().toISOString() })
+        .eq('id', id)
+        .select()
+        .single();
+      if (error) throw error;
+      return data as Document;
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['documents'] });
@@ -233,8 +223,9 @@ export function useDeleteDocument() {
 
   return useMutation({
     mutationFn: async (documentId: string) => {
-      const res = await invokeEfinsign<{ success: boolean; remote?: 'deleted' | 'voided' | 'failed' | 'none'; remote_error?: string }>('delete_document', { id: documentId });
-      return { documentId, ...res };
+      const { error } = await supabase.from('documents').delete().eq('id', documentId);
+      if (error) throw error;
+      return { documentId };
     },
     onMutate: async (documentId) => {
       await queryClient.cancelQueries({ queryKey: ['documents'] });
@@ -245,14 +236,8 @@ export function useDeleteDocument() {
       });
       return { previousDocuments };
     },
-    onSuccess: (result) => {
-      if (result.remote === 'voided') {
-        toast.success("Document voided (eFinSign doesn't allow deleting non-draft documents)");
-      } else if (result.remote === 'failed') {
-        toast.warning(`Document deleted locally, but remote cleanup failed: ${result.remote_error ?? 'unknown error'}`);
-      } else {
-        toast.success('Document deleted successfully');
-      }
+    onSuccess: () => {
+      toast.success('Document deleted successfully');
     },
     onError: (error, _documentId, context) => {
       context?.previousDocuments?.forEach(([queryKey, docs]) => queryClient.setQueryData(queryKey, docs));
@@ -267,7 +252,17 @@ export function useAddSigner() {
 
   return useMutation({
     mutationFn: async (signerData: Omit<DocumentSigner, 'id' | 'viewed_at' | 'signed_at' | 'declined_at' | 'decline_reason' | 'consent_given' | 'consent_timestamp' | 'signature_data'>) => {
-      return await invokeEfinsign<DocumentSigner>('add_signer', signerData as unknown as Record<string, unknown>);
+      const { data, error } = await supabase
+        .from('document_signers')
+        .insert({
+          ...signerData,
+          status: signerData.status ?? 'pending',
+          consent_given: false,
+        })
+        .select()
+        .single();
+      if (error) throw error;
+      return data as DocumentSigner;
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['document-signers', data.document_id] });
@@ -282,7 +277,13 @@ export function useAddField() {
 
   return useMutation({
     mutationFn: async (fieldData: Omit<DocumentField, 'id' | 'filled_value' | 'filled_at'>) => {
-      return await invokeEfinsign<DocumentField>('add_field', fieldData as unknown as Record<string, unknown>);
+      const { data, error } = await supabase
+        .from('document_fields')
+        .insert({ ...fieldData, filled_value: null, filled_at: null })
+        .select()
+        .single();
+      if (error) throw error;
+      return data as DocumentField;
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['document-fields', data.document_id] });
@@ -296,7 +297,7 @@ export function useUpdateDocumentField() {
 
   return useMutation({
     mutationFn: async ({
-      fieldId, documentId, assignedSignerId, updates,
+      fieldId, documentId, updates,
     }: {
       fieldId: string;
       documentId: string;
@@ -308,23 +309,11 @@ export function useUpdateDocumentField() {
         position_y?: number;
         width?: number;
         height?: number;
+        assigned_signer_id?: string | null;
       };
     }) => {
-      // filled_value / filled_at are populated by the signer flow, not by eFinSign geometry endpoints —
-      // only forward geometry changes to eFinSign.
-      const geometryKeys = ['position_x', 'position_y', 'width', 'height'] as const;
-      const hasGeometry = geometryKeys.some((k) => k in updates);
-      if (hasGeometry) {
-        await invokeEfinsign('update_field', {
-          id: fieldId,
-          document_id: documentId,
-          assigned_signer_id: assignedSignerId,
-          updates,
-        });
-      } else {
-        const { error } = await supabase.from('document_fields').update(updates).eq('id', fieldId);
-        if (error) throw error;
-      }
+      const { error } = await supabase.from('document_fields').update(updates).eq('id', fieldId);
+      if (error) throw error;
       return { fieldId, documentId };
     },
     onSuccess: (data) => queryClient.invalidateQueries({ queryKey: ['document-fields', data.documentId] }),
@@ -364,7 +353,13 @@ export function useSendDocument() {
 export function useVoidDocument() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (documentId: string) => invokeEfinsign('void', { id: documentId }),
+    mutationFn: async (documentId: string) => {
+      const { error } = await supabase
+        .from('documents')
+        .update({ status: 'voided', updated_at: new Date().toISOString() })
+        .eq('id', documentId);
+      if (error) throw error;
+    },
     onSuccess: (_, documentId) => {
       queryClient.invalidateQueries({ queryKey: ['documents'] });
       queryClient.invalidateQueries({ queryKey: ['document', documentId] });
@@ -375,9 +370,20 @@ export function useVoidDocument() {
 }
 
 export function useRemindDocument() {
+  const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (documentId: string) => invokeEfinsign('remind', { id: documentId }),
-    onSuccess: () => toast.success('Reminder sent to pending signers.'),
+    mutationFn: async (documentId: string) => {
+      const { data, error } = await supabase.functions.invoke('send-for-signing', {
+        body: { document_id: documentId },
+      });
+      if (error) throw new Error(error.message);
+      if ((data as { error?: string })?.error) throw new Error((data as { error: string }).error);
+      return data as { sent: number; total: number };
+    },
+    onSuccess: (data, documentId) => {
+      queryClient.invalidateQueries({ queryKey: ['document-signers', documentId] });
+      toast.success(`Reminder sent to ${data.sent} signer${data.sent !== 1 ? 's' : ''}.`);
+    },
     onError: (error) => toast.error('Failed to send reminder: ' + error.message),
   });
 }
@@ -385,49 +391,73 @@ export function useRemindDocument() {
 export function useRefreshDocumentStatus() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (documentId: string) => invokeEfinsign('refresh_status', { id: documentId }),
-    onSuccess: (_, documentId) => {
+    mutationFn: async (documentId: string) => documentId,
+    onSuccess: (documentId) => {
       queryClient.invalidateQueries({ queryKey: ['document', documentId] });
       queryClient.invalidateQueries({ queryKey: ['document-signers', documentId] });
       queryClient.invalidateQueries({ queryKey: ['documents'] });
-      toast.success('Status refreshed from eFinSign.');
+      toast.success('Status refreshed.');
     },
-    onError: (error) => toast.error('Failed to refresh status: ' + error.message),
   });
 }
 
+// Returns the first-party signing URL for a signer row.
 export function useSignerSigningUrl() {
   return useMutation({
-    mutationFn: async (signerId: string) =>
-      invokeEfinsign<{ signing_url: string; url: string }>('get_signing_url', { signer_id: signerId }),
+    mutationFn: async (signerId: string) => {
+      const { data, error } = await supabase
+        .from('document_signers')
+        .select('signing_token')
+        .eq('id', signerId)
+        .single();
+      if (error) throw error;
+      const token = (data as { signing_token: string }).signing_token;
+      const url = `${window.location.origin}/docsign?token=${token}`;
+      return { signing_url: url, url };
+    },
     onError: (error) => toast.error('Failed to get signing URL: ' + error.message),
   });
 }
 
-// Downloads the signed PDF (or certificate) from eFinSign via the proxy.
-// Returns a browser Blob URL that callers can open or save.
+// Returns a blob URL for the document's stored PDF.
+// After Phase 3b (PDF baking), signed_pdf_url will point to the baked copy.
 export function useDownloadSignedDocument() {
   return useMutation({
-    mutationFn: async ({ documentId, kind = 'signed' }: { documentId: string; kind?: 'signed' | 'certificate' }) => {
-      const res = await invokeEfinsign<{ content_type: string; base64: string; filename: string }>(
-        'download_signed',
-        { id: documentId, kind },
-      );
-      const binary = atob(res.base64);
-      const bytes = new Uint8Array(binary.length);
-      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-      const blob = new Blob([bytes], { type: res.content_type });
-      return { url: URL.createObjectURL(blob), filename: res.filename };
+    mutationFn: async ({ documentId }: { documentId: string; kind?: 'signed' | 'certificate' }) => {
+      const { data: doc, error } = await supabase
+        .from('documents')
+        .select('title, signed_pdf_url, file_url')
+        .eq('id', documentId)
+        .single();
+      if (error) throw error;
+      const fileUrl = (doc as { title: string; signed_pdf_url: string | null; file_url: string | null }).signed_pdf_url
+        || (doc as { title: string; signed_pdf_url: string | null; file_url: string | null }).file_url;
+      if (!fileUrl) throw new Error('No file available for this document');
+      const filename = `${(doc as { title: string }).title ?? 'document'}.pdf`;
+      // Open directly — signed URLs from storage work as download links
+      return { url: fileUrl, filename };
     },
     onError: (error) => toast.error('Failed to download document: ' + error.message),
   });
 }
 
+// Document count from our own DB — replaces the eFinSign usage API.
 export function useEfinsignUsage() {
+  const { organization } = useCurrentOrganization();
   return useQuery({
-    queryKey: ['efinsign-usage'],
-    queryFn: async () =>
-      invokeEfinsign<{ documents_used?: number; documents_limit?: number; signers_used?: number } & Record<string, unknown>>('usage'),
+    queryKey: ['docsign-usage', organization?.id],
+    queryFn: async () => {
+      const [docRes, signerRes] = await Promise.all([
+        supabase.from('documents').select('id', { count: 'exact', head: true }).eq('organization_id', organization!.id),
+        supabase.from('document_signers').select('id', { count: 'exact', head: true }),
+      ]);
+      return {
+        documents_used: docRes.count ?? 0,
+        documents_limit: null,
+        signers_used: signerRes.count ?? 0,
+      };
+    },
+    enabled: !!organization?.id,
     staleTime: 5 * 60 * 1000,
   });
 }

@@ -162,7 +162,7 @@ export function DocumentDetailDialog({ documentId, open, onOpenChange, onPrepare
                 ) : (
                   <RefreshCw className="w-4 h-4 mr-2" />
                 )}
-                Refresh status from eFinSign
+                Refresh status
               </Button>
 
               {document.status === 'completed' && (
