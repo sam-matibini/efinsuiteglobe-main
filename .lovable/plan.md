@@ -1,14 +1,28 @@
-## Problem
+## Goal
 
-In the Edit Bill dialog, the line-items table gives the Tax % column only `w-16`. The header wraps to two lines and the numeric input is clipped, so the tax value is not readable/editable.
+Replace the free-text "Terms" input on bills with a preset dropdown, and auto-set the Due Date from the selected term.
 
-## Change (presentation only, `src/components/bills/EditBillDialog.tsx`)
+## Terms options
 
-1. Widen the Tax % column from `w-16` to `w-20` and give Qty a little more room (`w-16` → `w-20`).
-2. Add `whitespace-nowrap` to the table header cells so "Tax %" stays on one line.
-3. Bump the table's `min-w-[820px]` to `min-w-[900px]` so the wider columns don't squeeze Description; the existing `overflow-x-auto` wrapper keeps it usable on narrow screens.
-4. Give the Tax % input explicit right-aligned sizing (`w-full text-right`) so the value is never clipped inside the cell.
+- Due on receipt (0 days)
+- Net 10, Net 15, Net 30, Net 45, Net 60, Net 90
+- Custom… (reveals a small text input for a custom label; Due Date stays manually editable)
 
-Optionally mirror the same column widths in `CreateBillDialog.tsx` so both forms stay consistent.
+## Implementation
 
-No changes to posting logic, totals, or GL behaviour.
+New shared module `src/lib/billPaymentTerms.ts`:
+- `BILL_PAYMENT_TERMS`: array of `{ value, label, days }` covering the options above.
+- `getTermDays(label)` helper that maps a stored terms string back to a preset (so existing bills like "Net 30" resolve correctly).
+
+`src/components/bills/CreateBillDialog.tsx`:
+- Swap the Terms `Input` for a `Select` populated from `BILL_PAYMENT_TERMS`, plus a "Custom…" entry.
+- On term change, recompute `due_date` = bill date + term days (skipped for Custom).
+- Also recompute due date when Bill Date changes and a preset term is active.
+- Choosing Custom renders an adjacent text input bound to `terms`; Due Date remains user-editable.
+- Default stays "Net 30".
+
+`src/components/bills/EditBillDialog.tsx`:
+- Same Select, initialised from the bill's saved `terms` (falls back to Custom with the stored text when it isn't a preset).
+- Changing the term updates Due Date; existing due date is preserved otherwise.
+
+Stored value in `bills.terms` remains the human-readable label (e.g. "Due on receipt", "Net 45"), so no schema or posting-logic changes are needed.

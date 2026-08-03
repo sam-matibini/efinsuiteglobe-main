@@ -40,6 +40,13 @@ import { getCountryLocalization } from '@/data/countryLocalizations';
 import { getLocaleForCountry } from '@/lib/localizedCurrencyFormatter';
 import { postBillToGL } from '@/lib/postBillToGL';
 import { reverseLinkedJournalEntry, recalculateAndInvalidate } from '@/hooks/useGLPropagation';
+import {
+  BILL_PAYMENT_TERMS,
+  CUSTOM_TERM_VALUE,
+  computeDueDate,
+  findPaymentTerm,
+  getTermDays,
+} from '@/lib/billPaymentTerms';
 
 const lineSchema = z.object({
   description: z.string().min(1, 'Description is required'),
@@ -73,6 +80,7 @@ export function EditBillDialog({ open, onOpenChange, bill }: EditBillDialogProps
   const queryClient = useQueryClient();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingLines, setIsLoadingLines] = useState(false);
+  const [isCustomTerm, setIsCustomTerm] = useState(false);
 
   const countryCode = organization?.country || 'CA';
   const localization = getCountryLocalization(countryCode);
@@ -134,6 +142,8 @@ export function EditBillDialog({ open, onOpenChange, bill }: EditBillDialogProps
         setIsLoadingLines(false);
         return;
       }
+
+      setIsCustomTerm(!!bill.terms && !findPaymentTerm(bill.terms));
 
       form.reset({
         vendor_id: bill.vendor_id ?? '',
@@ -367,7 +377,17 @@ export function EditBillDialog({ open, onOpenChange, bill }: EditBillDialogProps
                     <FormItem>
                       <FormLabel>Bill Date</FormLabel>
                       <FormControl>
-                        <Input type="date" {...field} />
+                        <Input
+                          type="date"
+                          {...field}
+                          onChange={(e) => {
+                            field.onChange(e);
+                            const days = getTermDays(form.getValues('terms'));
+                            if (days !== null && e.target.value) {
+                              form.setValue('due_date', computeDueDate(e.target.value, days));
+                            }
+                          }}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -394,13 +414,54 @@ export function EditBillDialog({ open, onOpenChange, bill }: EditBillDialogProps
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Terms</FormLabel>
-                      <FormControl>
-                        <Input {...field} placeholder="Net 30" />
-                      </FormControl>
+                      <Select
+                        value={isCustomTerm ? CUSTOM_TERM_VALUE : field.value || ''}
+                        onValueChange={(value) => {
+                          if (value === CUSTOM_TERM_VALUE) {
+                            setIsCustomTerm(true);
+                            field.onChange('');
+                            return;
+                          }
+                          setIsCustomTerm(false);
+                          field.onChange(value);
+                          const days = getTermDays(value);
+                          if (days !== null) {
+                            form.setValue(
+                              'due_date',
+                              computeDueDate(form.getValues('bill_date'), days),
+                            );
+                          }
+                        }}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select terms" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {BILL_PAYMENT_TERMS.map((term) => (
+                            <SelectItem key={term.label} value={term.label}>
+                              {term.label}
+                            </SelectItem>
+                          ))}
+                          <SelectItem value={CUSTOM_TERM_VALUE}>Custom…</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {isCustomTerm && (
+                        <FormControl>
+                          <Input
+                            {...field}
+                            value={field.value ?? ''}
+                            className="mt-2"
+                            placeholder="e.g. 2/10 Net 30"
+                          />
+                        </FormControl>
+                      )}
                       <FormMessage />
                     </FormItem>
                   )}
                 />
+
               </div>
 
               <div className="space-y-3">
