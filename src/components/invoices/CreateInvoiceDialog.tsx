@@ -967,7 +967,97 @@ export function CreateInvoiceDialog({ open, onOpenChange }: CreateInvoiceDialogP
                 )}
 
               </div>
-            </div>
+            </TabsContent>
+
+            <TabsContent value="preview" className="flex-1 overflow-y-auto mt-0">
+              <div className="px-6 py-4">
+                <InvoicePreviewTab
+                  documentTitle={form.watch('document_title')}
+                  invoiceNumber={tempInvoiceNumber}
+                  invoiceDate={form.watch('invoice_date')}
+                  dueDate={form.watch('due_date')}
+                  customerName={selectedCustomer?.name}
+                  buyerName={form.watch('buyer_name')}
+                  attentionOf={form.watch('attention_of')}
+                  buyerEmail={selectedCustomer?.email || undefined}
+                  buyerPhone={selectedCustomer?.phone || undefined}
+                  buyerAddress={[
+                    selectedCustomer?.address_line1,
+                    selectedCustomer?.address_line2,
+                    selectedCustomer?.city && selectedCustomer?.province
+                      ? `${selectedCustomer.city}, ${selectedCustomer.province} ${selectedCustomer?.postal_code || ''}`.trim()
+                      : selectedCustomer?.city || selectedCustomer?.province || '',
+                    selectedCustomer?.country,
+                  ].filter(Boolean).join('\n')}
+                  lines={watchedLines}
+                  notes={form.watch('notes')}
+                  terms={form.watch('terms')}
+                  isGstHstExempt={form.watch('is_gst_hst_exempt')}
+                  isPstExempt={form.watch('is_pst_exempt')}
+                  exemptionReason={form.watch('exemption_reason')}
+                  customFields={customFields}
+                  organizationName={organization?.name}
+                  organizationAddress={[
+                    organization?.address_line1,
+                    organization?.city && organization?.province
+                      ? `${organization.city}, ${organization.province}, ${organization?.postal_code || ''}`
+                      : '',
+                    organization?.country,
+                  ].filter(Boolean).join('\n')}
+                  organizationEmail={organization?.email || undefined}
+                  organizationPhone={organization?.phone || undefined}
+                  logoUrl={getDocumentLogoUrl(organization, 'invoice') || undefined}
+                  dealerPermitNumber={form.watch('dealer_permit_number')}
+                  gstHstNumber={form.watch('gst_hst_number')}
+                  pstNumber={form.watch('pst_number')}
+                  currency={localization.currency}
+                  locale={locale}
+                  sellerSignature={sellerSignature}
+                  buyerSignature={buyerSignature}
+                  gstHstRate={taxSettings?.gst_rate ?? 5}
+                  pstRate={taxSettings?.pst_rate ?? 0}
+                  showTaxColumn={(organization as any)?.invoice_show_tax_column ?? true}
+                  balanceDue={total}
+                  discountAmount={discountAmount}
+                  shippingCharges={watchedShipping}
+                  adjustment={watchedAdjustment}
+                  adjustmentLabel={form.watch('adjustment_label')}
+                  orderNumber={form.watch('order_number')}
+                  subject={form.watch('subject')}
+                  templateStyle={((organization as any)?.invoice_template_style as 'modern' | 'classic' | 'minimal' | 'bold') ?? 'modern'}
+                  primaryColor={(organization as any)?.invoice_primary_color ?? '#7c3aed'}
+                  secondaryColor={(organization as any)?.invoice_secondary_color ?? '#a78bfa'}
+                  fontFamily={(organization as any)?.invoice_font_family ?? 'Inter, sans-serif'}
+                  headerAlignment={((organization as any)?.invoice_header_alignment as 'left' | 'center' | 'right') ?? 'left'}
+                  accentStyle={((organization as any)?.invoice_accent_style as 'line' | 'filled' | 'none') ?? 'filled'}
+                  showLogo={(organization as any)?.invoice_show_logo ?? true}
+                  showLineNumbers={(organization as any)?.invoice_show_line_numbers ?? false}
+                  showQuantityColumn={(organization as any)?.invoice_show_quantity_column ?? true}
+                  showRateColumn={(organization as any)?.invoice_show_rate_column ?? true}
+                  footerText={(organization as any)?.invoice_footer ?? ''}
+                  showPaymentInstructions={(organization as any)?.invoice_show_payment_instructions ?? false}
+                  paymentInstructions={(organization as any)?.invoice_payment_instructions ?? ''}
+                  showSellerSignature={showSellerSignature}
+                  showBuyerSignature={showBuyerSignature}
+                  onShowSellerSignatureChange={setShowSellerSignature}
+                  onShowBuyerSignatureChange={setShowBuyerSignature}
+                  enableOnlinePayments={!!(organization as any)?.invoice_enable_online_payments}
+                  creditCardEnabled={!!(organization as any)?.invoice_credit_card_enabled}
+                  achEnabled={!!(organization as any)?.invoice_ach_enabled}
+                  interacEnabled={!!(organization as any)?.invoice_interac_enabled}
+                  ccInstructions={(organization as any)?.invoice_cc_instructions || undefined}
+                  achInstitution={(organization as any)?.invoice_ach_institution || undefined}
+                  achAccountName={(organization as any)?.invoice_ach_account_name || undefined}
+                  achAccountNumber={(organization as any)?.invoice_ach_account_number || undefined}
+                  achTransitNumber={(organization as any)?.invoice_ach_transit_number || undefined}
+                  etransferEmail={(organization as any)?.invoice_etransfer_email || undefined}
+                  wiseEnabled={!!(organization as any)?.invoice_wise_enabled}
+                  wiseAccount={selectWiseAccountForCurrency(wiseAccounts, localization.currency)}
+                />
+              </div>
+            </TabsContent>
+            </Tabs>
+
 
             {/* ── Sticky Footer ── */}
             <div className="flex-shrink-0 border-t px-6 py-3 flex items-center justify-between bg-background">
