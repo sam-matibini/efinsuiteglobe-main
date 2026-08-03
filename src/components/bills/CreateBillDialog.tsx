@@ -168,6 +168,7 @@ export function CreateBillDialog({ open, onOpenChange }: CreateBillDialogProps) 
           data.lines.map((line, idx) => ({
             bill_id: bill.id,
             description: line.description,
+            expense_account_id: line.expense_account_id,
             quantity: line.quantity,
             unit_price: line.unit_price,
             amount: line.quantity * line.unit_price,
@@ -180,13 +181,37 @@ export function CreateBillDialog({ open, onOpenChange }: CreateBillDialogProps) 
 
       if (linesError) throw linesError;
 
+      // Post to the General Ledger — roll the bill back if posting fails so no
+      // un-posted document is left behind.
+      let journalEntryId: string | null = null;
+      try {
+        journalEntryId = await postBillToGL({
+          organizationId: organization.id,
+          billId: bill.id,
+          billNumber: data.bill_number,
+          billDate: data.bill_date,
+          vendorId: data.vendor_id,
+          taxAmount: taxTotal,
+          total,
+          lines: data.lines.map((line) => ({
+            account_id: line.expense_account_id,
+            amount: line.quantity * line.unit_price,
+            description: line.description,
+          })),
+        });
+      } catch (glError) {
+        await supabase.from('bill_lines').delete().eq('bill_id', bill.id);
+        await supabase.from('bills').delete().eq('id', bill.id);
+        throw glError;
+      }
+
       // NG Tax Engine — record WHT + input VAT (no-op for non-NG orgs)
       try {
         await recordBillTaxes({
           organization_id: organization.id,
           bill_id: bill.id,
           bill_date: data.bill_date,
-          journal_entry_id: null,
+          journal_entry_id: journalEntryId,
           lines: (insertedBillLines ?? []).map((l: any) => ({
             id: l.id,
             taxable_amount: Number(l.amount) || 0,
@@ -199,9 +224,12 @@ export function CreateBillDialog({ open, onOpenChange }: CreateBillDialogProps) 
 
 
       queryClient.invalidateQueries({ queryKey: ['bills'] });
-      toast.success('Bill created successfully');
+      queryClient.invalidateQueries({ queryKey: ['journal-entries'] });
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      toast.success('Bill created and posted to the General Ledger');
       form.reset();
       onOpenChange(false);
+
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       toast.error('Failed to create bill: ' + message);
