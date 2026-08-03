@@ -500,7 +500,7 @@ export function EditBillDialog({ open, onOpenChange, bill }: EditBillDialogProps
                                   type="number"
                                   step="0.01"
                                   {...form.register(`lines.${index}.tax_rate`)}
-                                  className="border-0 bg-transparent text-right"
+                                  className="border-0 bg-transparent text-right w-full px-1"
                                 />
                               </td>
                               <td className="p-2 text-right font-mono">
