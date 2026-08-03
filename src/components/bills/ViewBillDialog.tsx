@@ -16,6 +16,7 @@ import { useCurrentOrganization } from '@/hooks/useOrganization';
 import { getCountryLocalization } from '@/data/countryLocalizations';
 import { getLocaleForCountry } from '@/lib/localizedCurrencyFormatter';
 import { parseLocalDate } from '@/lib/utils';
+import { PurchaseAttachmentsSection } from '@/components/purchases/PurchaseAttachmentsSection';
 
 interface ViewBillDialogProps {
   open: boolean;
@@ -254,6 +255,16 @@ export function ViewBillDialog({ open, onOpenChange, bill }: ViewBillDialogProps
             <p className="whitespace-pre-wrap">{bill.notes}</p>
           </div>
         )}
+
+        <div className="rounded-lg border p-4">
+          <PurchaseAttachmentsSection
+            entityType="bill"
+            entityId={bill.id}
+            organizationId={organization?.id}
+            readOnly
+          />
+        </div>
+
 
         <DialogFooter>
           <Button variant="outline" onClick={handlePrint}>

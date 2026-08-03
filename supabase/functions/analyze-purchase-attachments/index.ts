@@ -197,11 +197,15 @@ Deno.serve(async (req) => {
 
     let body: any = {};
     try { body = await req.json(); } catch {}
+    const mode: 'record' | 'draft' = body?.mode === 'draft' ? 'draft' : 'record';
     const entity_type = body?.entity_type as EntityType | undefined;
     const entity_id = body?.entity_id as string | undefined;
     const allowed: EntityType[] = ['expense_claim', 'expense', 'bill', 'purchase_order', 'vendor'];
-    if (!entity_type || !entity_id || !allowed.includes(entity_type)) {
-      return json(400, { error: 'entity_type and entity_id are required' });
+    if (!entity_type || !allowed.includes(entity_type)) {
+      return json(400, { error: 'entity_type is required' });
+    }
+    if (mode === 'record' && !entity_id) {
+      return json(400, { error: 'entity_id is required' });
     }
 
     const admin = createClient(
@@ -209,61 +213,120 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     );
 
-    const loaded = await loadRecordContext(admin, entity_type, entity_id);
-    if (!loaded) return json(404, { error: `${entity_type} not found` });
-    const { organization_id, context } = loaded;
-
-    const { data: member } = await admin
-      .from('organization_members')
-      .select('id')
-      .eq('organization_id', organization_id)
-      .eq('user_id', userId)
-      .maybeSingle();
-    if (!member) return json(403, { error: 'Forbidden: not a member of this organization' });
-
-    const { data: attachments, error: aErr } = await admin
-      .from('purchase_attachments')
-      .select('id, file_name, file_path, mime_type, file_size')
-      .eq('entity_type', entity_type)
-      .eq('entity_id', entity_id)
-      .order('created_at', { ascending: true });
-    if (aErr) return json(500, { error: `Attachments query failed: ${aErr.message}` });
-    if (!attachments || attachments.length === 0) {
-      return json(400, { error: 'No attachments to analyze' });
-    }
-
     const warnings: string[] = [];
     const contentBlocks: any[] = [];
     let used = 0;
+    let organization_id: string;
+    let context: RecordContext;
 
-    for (const att of attachments) {
-      if (used >= MAX_FILES) {
-        warnings.push(`Skipped ${att.file_name}: max ${MAX_FILES} files per analysis`);
-        continue;
-      }
-      if ((att.file_size ?? 0) > MAX_BYTES) {
-        warnings.push(`Skipped ${att.file_name}: exceeds 20MB`);
-        continue;
-      }
-      const mime = att.mime_type || 'application/octet-stream';
-      const isImage = mime.startsWith('image/');
-      const isPdf = mime === 'application/pdf';
-      if (!isImage && !isPdf) {
-        warnings.push(`Skipped ${att.file_name}: unsupported type (${mime})`);
-        continue;
-      }
-      try {
-        const { data: file, error: dErr } = await admin.storage.from(BUCKET).download(att.file_path);
-        if (dErr || !file) {
-          warnings.push(`Skipped ${att.file_name}: download failed (${dErr?.message ?? 'unknown'})`);
+    const LABELS: Record<EntityType, string> = {
+      expense_claim: 'Expense Claim',
+      expense: 'Expense',
+      bill: 'Bill',
+      purchase_order: 'Purchase Order',
+      vendor: 'Vendor',
+    };
+
+    if (mode === 'draft') {
+      organization_id = (body?.organization_id ?? '').toString();
+      if (!organization_id) return json(400, { error: 'organization_id is required for draft mode' });
+
+      const { data: member } = await admin
+        .from('organization_members')
+        .select('id')
+        .eq('organization_id', organization_id)
+        .eq('user_id', userId)
+        .maybeSingle();
+      if (!member) return json(403, { error: 'Forbidden: not a member of this organization' });
+
+      context = {
+        label: `${LABELS[entity_type]} (draft)`,
+        reference: body?.draft_context?.reference ?? null,
+        date: body?.draft_context?.date ?? null,
+        currency: body?.draft_context?.currency ?? null,
+        total: body?.draft_context?.total ?? null,
+        vendor_or_employee: body?.draft_context?.vendor ?? null,
+        status: 'draft',
+        notes: null,
+      };
+
+      const files: any[] = Array.isArray(body?.files) ? body.files : [];
+      if (files.length === 0) return json(400, { error: 'No files supplied for analysis' });
+
+      for (const f of files) {
+        if (used >= MAX_FILES) {
+          warnings.push(`Skipped ${f?.name ?? 'file'}: max ${MAX_FILES} files per analysis`);
           continue;
         }
-        const buf = new Uint8Array(await file.arrayBuffer());
-        const dataUrl = `data:${mime};base64,${bytesToBase64(buf)}`;
-        contentBlocks.push({ type: 'image_url', image_url: { url: dataUrl } });
+        const mime = (f?.mime_type || 'application/octet-stream').toString();
+        const data = (f?.data ?? '').toString();
+        if (!data) continue;
+        // base64 length -> approximate bytes
+        if ((data.length * 3) / 4 > MAX_BYTES) {
+          warnings.push(`Skipped ${f?.name ?? 'file'}: exceeds 20MB`);
+          continue;
+        }
+        if (!mime.startsWith('image/') && mime !== 'application/pdf') {
+          warnings.push(`Skipped ${f?.name ?? 'file'}: unsupported type (${mime})`);
+          continue;
+        }
+        contentBlocks.push({ type: 'image_url', image_url: { url: `data:${mime};base64,${data}` } });
         used += 1;
-      } catch (dl) {
-        warnings.push(`Skipped ${att.file_name}: ${dl instanceof Error ? dl.message : String(dl)}`);
+      }
+    } else {
+      const loaded = await loadRecordContext(admin, entity_type, entity_id!);
+      if (!loaded) return json(404, { error: `${entity_type} not found` });
+      organization_id = loaded.organization_id;
+      context = loaded.context;
+
+      const { data: member } = await admin
+        .from('organization_members')
+        .select('id')
+        .eq('organization_id', organization_id)
+        .eq('user_id', userId)
+        .maybeSingle();
+      if (!member) return json(403, { error: 'Forbidden: not a member of this organization' });
+
+      const { data: attachments, error: aErr } = await admin
+        .from('purchase_attachments')
+        .select('id, file_name, file_path, mime_type, file_size')
+        .eq('entity_type', entity_type)
+        .eq('entity_id', entity_id!)
+        .order('created_at', { ascending: true });
+      if (aErr) return json(500, { error: `Attachments query failed: ${aErr.message}` });
+      if (!attachments || attachments.length === 0) {
+        return json(400, { error: 'No attachments to analyze' });
+      }
+
+      for (const att of attachments) {
+        if (used >= MAX_FILES) {
+          warnings.push(`Skipped ${att.file_name}: max ${MAX_FILES} files per analysis`);
+          continue;
+        }
+        if ((att.file_size ?? 0) > MAX_BYTES) {
+          warnings.push(`Skipped ${att.file_name}: exceeds 20MB`);
+          continue;
+        }
+        const mime = att.mime_type || 'application/octet-stream';
+        const isImage = mime.startsWith('image/');
+        const isPdf = mime === 'application/pdf';
+        if (!isImage && !isPdf) {
+          warnings.push(`Skipped ${att.file_name}: unsupported type (${mime})`);
+          continue;
+        }
+        try {
+          const { data: file, error: dErr } = await admin.storage.from(BUCKET).download(att.file_path);
+          if (dErr || !file) {
+            warnings.push(`Skipped ${att.file_name}: download failed (${dErr?.message ?? 'unknown'})`);
+            continue;
+          }
+          const buf = new Uint8Array(await file.arrayBuffer());
+          const dataUrl = `data:${mime};base64,${bytesToBase64(buf)}`;
+          contentBlocks.push({ type: 'image_url', image_url: { url: dataUrl } });
+          used += 1;
+        } catch (dl) {
+          warnings.push(`Skipped ${att.file_name}: ${dl instanceof Error ? dl.message : String(dl)}`);
+        }
       }
     }
 
@@ -299,8 +362,23 @@ Deno.serve(async (req) => {
       '    "reconciliation_status": "matches"|"minor_variance"|"mismatch"|"unknown",\n' +
       '    "notes": string|null\n' +
       '  },\n' +
+      '  "extraction": {\n' +
+      '    "vendor_name": string|null,\n' +
+      '    "document_number": string|null,\n' +
+      '    "document_date": string|null,\n' +
+      '    "due_date": string|null,\n' +
+      '    "terms": string|null,\n' +
+      '    "currency": string|null,\n' +
+      '    "subtotal": number|null,\n' +
+      '    "tax_total": number|null,\n' +
+      '    "grand_total": number|null,\n' +
+      '    "lines": [{ "description": string, "quantity": number|null, "unit_price": number|null, "tax_rate": number|null }]\n' +
+      '  },\n' +
       '  "narrative": string\n' +
       '}\n' +
+      'Dates must be ISO yyyy-mm-dd. quantity/unit_price/tax_rate are plain numbers ' +
+      '(tax_rate as a percentage, e.g. 13 for 13%). Only include line items actually printed ' +
+      'on the document; return an empty array if none are itemized. ' +
       `Set record_total to ${context.total ?? 'null'} (from context). ` +
       'Compute variance_vs_record = grand_total - record_total when both are known, else null. ' +
       'Use "matches" (<0.01), "minor_variance" (<=2.00), "mismatch" (>2.00), or "unknown". ' +
@@ -338,15 +416,18 @@ Deno.serve(async (req) => {
     if (!raw) return json(500, { error: 'Empty AI response' });
 
     let financial_summary: any = null;
+    let extraction: any = null;
     let narrative = '';
     try {
       const cleaned = raw.replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
       const parsed = JSON.parse(cleaned);
       financial_summary = parsed.financial_summary ?? null;
+      extraction = parsed.extraction ?? null;
       narrative = (parsed.narrative ?? '').toString().trim();
       if (financial_summary && context.total != null) {
         financial_summary.record_total = context.total;
       }
+      if (extraction && !Array.isArray(extraction.lines)) extraction.lines = [];
     } catch {
       narrative = raw;
     }
@@ -386,6 +467,7 @@ Deno.serve(async (req) => {
       summary: summaryText,
       narrative,
       financial_summary,
+      extraction,
       formatted: block,
       files_analyzed: used,
       warnings,
