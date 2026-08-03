@@ -196,6 +196,7 @@ export default function Bills() {
               <SelectItem value="approved">Approved</SelectItem>
               <SelectItem value="paid">Paid</SelectItem>
               <SelectItem value="overdue">Overdue</SelectItem>
+              <SelectItem value="void">Void</SelectItem>
             </SelectContent>
           </Select>
         </div>
