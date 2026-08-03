@@ -464,6 +464,25 @@ export function CreateRecurringBillDialog({ open, onOpenChange }: CreateRecurrin
                 rows={3}
               />
             </div>
+
+            <div className="rounded-lg border p-4">
+              <PurchaseDocumentsPanel
+                entityType="recurring_bill"
+                organizationId={organization?.id}
+                staging={staging}
+                draftContext={{
+                  vendor: vendors.find((v) => v.id === vendorId)?.name ?? null,
+                  date: startDate || null,
+                  currency: localization.currency,
+                  total,
+                }}
+                onExtraction={(ex, summary) => {
+                  setExtraction(ex);
+                  setPendingSummary(summary);
+                  setReviewOpen(true);
+                }}
+              />
+            </div>
           </div>
         </ScrollArea>
 
@@ -478,6 +497,18 @@ export function CreateRecurringBillDialog({ open, onOpenChange }: CreateRecurrin
             {createRecurringBill.isPending ? 'Creating...' : 'Create Recurring Bill'}
           </Button>
         </DialogFooter>
+
+        {extraction && (
+          <InvoiceExtractionReview
+            open={reviewOpen}
+            onOpenChange={setReviewOpen}
+            extraction={extraction}
+            fields={reviewFields}
+            supportsLines
+            currentLineCount={lines.length}
+            onApply={applyExtraction}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );
