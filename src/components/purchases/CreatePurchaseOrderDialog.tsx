@@ -115,6 +115,66 @@ export function CreatePurchaseOrderDialog({ open, onOpenChange }: CreatePurchase
 
   const total = subtotal + taxTotal;
 
+  // ---- Attachments + AI invoice extraction -------------------------------
+  const staging = useStagedPurchaseAttachments();
+  const [extraction, setExtraction] = useState<InvoiceExtraction | null>(null);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [pendingSummary, setPendingSummary] = useState('');
+
+  const matchedVendor = matchVendor(
+    vendors as Array<{ id: string; name: string }>,
+    extraction?.vendor_name,
+  );
+
+  const reviewFields: ReviewField[] = extraction
+    ? [
+        {
+          key: 'vendor_id',
+          label: 'Vendor',
+          current: vendors.find((v) => v.id === vendorId)?.name ?? '',
+          extracted: matchedVendor?.name ?? '',
+        },
+        { key: 'order_date', label: 'Order date', current: orderDate, extracted: extraction.document_date ?? '' },
+        {
+          key: 'expected_delivery',
+          label: 'Expected delivery',
+          current: expectedDelivery,
+          extracted: extraction.due_date ?? '',
+        },
+        {
+          key: 'notes',
+          label: 'Notes (AI document summary)',
+          current: notes,
+          extracted: pendingSummary ? 'Append AI summary' : '',
+        },
+      ]
+    : [];
+
+  const applyExtraction = (keys: string[], applyLines: boolean) => {
+    if (!extraction) return;
+    const has = (k: string) => keys.includes(k);
+    if (has('vendor_id') && matchedVendor) setVendorId(matchedVendor.id);
+    if (has('order_date') && extraction.document_date) setOrderDate(extraction.document_date);
+    if (has('expected_delivery') && extraction.due_date) setExpectedDelivery(extraction.due_date);
+    if (has('notes') && pendingSummary) setNotes((prev) => [prev, pendingSummary].filter(Boolean).join('\n\n'));
+    if (applyLines && extraction.lines.length > 0) {
+      setLines(
+        extraction.lines.map((l) => ({
+          id: crypto.randomUUID(),
+          description: l.description,
+          product_service_id: null,
+          inventory_item_id: null,
+          quantity_ordered: l.quantity ?? 1,
+          unit_price: l.unit_price ?? 0,
+          discount_percent: 0,
+          tax_rate: l.tax_rate ?? 0,
+        })),
+      );
+    }
+    toast.success('Invoice data applied to the purchase order.');
+  };
+
+
   const resetForm = () => {
     setVendorId('');
     setOrderDate(new Date().toISOString().split('T')[0]);
