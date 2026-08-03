@@ -574,7 +574,6 @@ export function CreateExpenseClaimDialog({ open, onOpenChange }: CreateExpenseCl
                 entityType="expense_claim"
                 organizationId={organization?.id}
                 staging={staging}
-                allowAnalysis={false}
               />
             </div>
           </div>
