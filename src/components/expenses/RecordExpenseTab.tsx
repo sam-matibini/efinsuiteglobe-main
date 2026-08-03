@@ -72,6 +72,10 @@ export function RecordExpenseTab({ onSuccess, onCancel }: RecordExpenseTabProps)
   const [customerId, setCustomerId] = useState<string>('');
   const [reference, setReference] = useState('');
   const [notes, setNotes] = useState('');
+  const staging = useStagedPurchaseAttachments();
+  const [extraction, setExtraction] = useState<InvoiceExtraction | null>(null);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [pendingSummary, setPendingSummary] = useState('');
   const [isBillable, setIsBillable] = useState(false);
   const [isItemized, setIsItemized] = useState(false);
   const [lineItems, setLineItems] = useState<ExpenseLineItem[]>([]);
