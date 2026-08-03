@@ -85,12 +85,35 @@ export default function ProvincialRemittanceCentre() {
               <CardTitle className="flex items-center gap-2 text-lg"><MapPin className="h-5 w-5 text-primary" />{jur}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
-              {list.map((a) => (
-                <div key={a.id} className="flex justify-between border-b pb-1 last:border-0">
-                  <span>{a.name}</span>
-                  <Badge variant="outline" className="text-xs">{a.programs.length} prog</Badge>
-                </div>
-              ))}
+              {list.map((a) => {
+                const isUtility = a.category === 'utility';
+                return (
+                  <div key={a.id} className="flex justify-between items-center border-b pb-1 last:border-0 gap-2">
+                    <span className="flex items-center gap-1.5">
+                      {isUtility && <Zap className="h-3.5 w-3.5 text-amber-500" />}
+                      {a.name}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      {isUtility && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-6 px-2 text-xs"
+                          onClick={() => payUtilityBill(a.id, a.name)}
+                        >
+                          Pay bill
+                        </Button>
+                      )}
+                      <Badge
+                        variant={isUtility ? 'secondary' : 'outline'}
+                        className="text-xs"
+                      >
+                        {isUtility ? 'Utility' : `${a.programs.length} prog`}
+                      </Badge>
+                    </div>
+                  </div>
+                );
+              })}
             </CardContent>
           </Card>
         ))}
