@@ -326,13 +326,16 @@ export function CreateBillDialog({ open, onOpenChange }: CreateBillDialogProps) 
       } catch (ngErr) {
         console.warn('NG tax ledger write skipped:', ngErr);
       }
-
+      // Upload any documents staged before the bill existed.
+      await staging.flush('bill', bill.id, organization.id);
 
       queryClient.invalidateQueries({ queryKey: ['bills'] });
       queryClient.invalidateQueries({ queryKey: ['journal-entries'] });
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
       toast.success('Bill created and posted to the General Ledger');
       form.reset();
+      setExtraction(null);
+      setPendingSummary('');
       onOpenChange(false);
 
     } catch (error: unknown) {
