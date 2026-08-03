@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Plus, Search, Download, MoreHorizontal, Check, AlertTriangle, Clock, DollarSign, Send, Paperclip, Sparkles, Eye, Pencil, Ban } from 'lucide-react';
 import { AICategorizeAPDialog } from '@/components/purchases/AICategorizeAPDialog';
 import { PurchaseAttachmentsDialog } from '@/components/purchases/PurchaseAttachmentsDialog';
