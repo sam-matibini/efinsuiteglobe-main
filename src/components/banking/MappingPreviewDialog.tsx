@@ -530,10 +530,23 @@ export function MappingPreviewDialog({
               {warningCount} warnings
             </Badge>
           )}
+          {editedCount > 0 && (
+            <>
+              <Badge variant="outline" className="gap-1 text-amber-600 border-amber-600">
+                <Pencil className="h-3 w-3" />
+                {editedCount} corrected
+              </Badge>
+              <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setRowOverrides({})}>
+                <RotateCcw className="h-3 w-3 mr-1" />
+                Reset all edits
+              </Button>
+            </>
+          )}
           <span className="text-xs text-muted-foreground ml-auto">
             Showing rows {currentPage * pageSize + 1}–{Math.min((currentPage + 1) * pageSize, processedData.length)} of {processedData.length}
           </span>
         </div>
+
         
         {/* Preview Table */}
         <ScrollArea className="flex-1 min-h-0 h-[calc(100vh-350px)]">
