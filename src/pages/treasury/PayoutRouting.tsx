@@ -42,6 +42,10 @@ export default function PayoutRouting() {
   const { accounts: stripeAccounts } = useStripeConnectedAccounts(orgId);
   const { recipients, saveRecipient, transfers } = useWisePayouts();
   const { routing, upsert } = useVendorPayoutRouting();
+  const { isEnabled, toggle } = usePayoutProviderToggles();
+  const walletRoutingCount = routing.filter((r) => r.payout_provider === 'efinmoney').length;
+
+
 
   const vendors = useQuery({
     queryKey: ['vendors-for-payout-routing', orgId],
