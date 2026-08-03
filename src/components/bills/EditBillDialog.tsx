@@ -80,6 +80,7 @@ export function EditBillDialog({ open, onOpenChange, bill }: EditBillDialogProps
   const queryClient = useQueryClient();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingLines, setIsLoadingLines] = useState(false);
+  const [isCustomTerm, setIsCustomTerm] = useState(false);
 
   const countryCode = organization?.country || 'CA';
   const localization = getCountryLocalization(countryCode);
