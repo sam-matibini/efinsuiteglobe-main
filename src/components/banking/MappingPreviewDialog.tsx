@@ -317,8 +317,8 @@ export function MappingPreviewDialog({
 
   const editedCount = Object.keys(rowOverrides).length;
 
-  const totalPages = Math.ceil(processedData.length / pageSize);
-  const paginatedData = processedData.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
+
+
   
   const errorCount = processedData.filter(p => p.errors.length > 0).length;
   const warningCount = processedData.filter(p => p.warnings.length > 0).length;
