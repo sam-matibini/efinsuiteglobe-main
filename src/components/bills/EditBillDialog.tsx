@@ -108,7 +108,7 @@ export function EditBillDialog({ open, onOpenChange, bill }: EditBillDialogProps
     },
   });
 
-  const { fields, append, remove, replace } = useFieldArray({
+  const { fields, append, remove } = useFieldArray({
     control: form.control,
     name: 'lines',
   });
