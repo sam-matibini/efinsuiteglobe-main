@@ -130,6 +130,14 @@ export function CreateBillDialog({ open, onOpenChange, prefillVendorId }: Create
     name: 'lines',
   });
 
+  // Pre-select a vendor when the dialog is opened with one (e.g. "Pay bill"
+  // on a utility payee from the Provincial Remittance Centre).
+  useEffect(() => {
+    if (open && prefillVendorId) {
+      form.setValue('vendor_id', prefillVendorId);
+    }
+  }, [open, prefillVendorId, form]);
+
 
   const watchedLines = form.watch('lines');
   
