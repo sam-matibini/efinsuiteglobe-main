@@ -362,8 +362,23 @@ Deno.serve(async (req) => {
       '    "reconciliation_status": "matches"|"minor_variance"|"mismatch"|"unknown",\n' +
       '    "notes": string|null\n' +
       '  },\n' +
+      '  "extraction": {\n' +
+      '    "vendor_name": string|null,\n' +
+      '    "document_number": string|null,\n' +
+      '    "document_date": string|null,\n' +
+      '    "due_date": string|null,\n' +
+      '    "terms": string|null,\n' +
+      '    "currency": string|null,\n' +
+      '    "subtotal": number|null,\n' +
+      '    "tax_total": number|null,\n' +
+      '    "grand_total": number|null,\n' +
+      '    "lines": [{ "description": string, "quantity": number|null, "unit_price": number|null, "tax_rate": number|null }]\n' +
+      '  },\n' +
       '  "narrative": string\n' +
       '}\n' +
+      'Dates must be ISO yyyy-mm-dd. quantity/unit_price/tax_rate are plain numbers ' +
+      '(tax_rate as a percentage, e.g. 13 for 13%). Only include line items actually printed ' +
+      'on the document; return an empty array if none are itemized. ' +
       `Set record_total to ${context.total ?? 'null'} (from context). ` +
       'Compute variance_vs_record = grand_total - record_total when both are known, else null. ' +
       'Use "matches" (<0.01), "minor_variance" (<=2.00), "mismatch" (>2.00), or "unknown". ' +
