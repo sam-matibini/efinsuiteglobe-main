@@ -38,9 +38,9 @@ export default function PayoutRouting() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('vendors')
-        .select('id, vendor_name')
+        .select('id, name')
         .eq('organization_id', orgId!)
-        .order('vendor_name')
+        .order('name')
         .limit(500);
       if (error) throw error;
       return data ?? [];
@@ -225,11 +225,11 @@ export default function PayoutRouting() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {(vendors.data ?? []).map((v: { id: string; vendor_name: string }) => {
+                  {(vendors.data ?? []).map((v: { id: string; name: string }) => {
                     const row = rowValue(v.id);
                     return (
                       <TableRow key={v.id}>
-                        <TableCell>{v.vendor_name}</TableCell>
+                        <TableCell>{v.name}</TableCell>
                         <TableCell>
                           <Select value={row.provider} onValueChange={(val) => setRow(v.id, { provider: val, target: '' })}>
                             <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
