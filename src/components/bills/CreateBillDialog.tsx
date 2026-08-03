@@ -83,6 +83,7 @@ interface CreateBillDialogProps {
 export function CreateBillDialog({ open, onOpenChange }: CreateBillDialogProps) {
   const { vendors, isLoading: vendorsLoading } = useVendors();
   const { organization } = useCurrentOrganization();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCustomTerm, setIsCustomTerm] = useState(false);
