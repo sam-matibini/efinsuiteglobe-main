@@ -322,6 +322,10 @@ export default function AdminSettings() {
             <DollarSign className="w-4 h-4" />
             <span className="hidden sm:inline">Pricing Plans</span>
           </TabsTrigger>
+          <TabsTrigger value="payments" className="gap-2">
+            <CreditCard className="w-4 h-4" />
+            <span className="hidden sm:inline">Payments</span>
+          </TabsTrigger>
           <TabsTrigger value="security" className="gap-2">
             <Shield className="w-4 h-4" />
             <span className="hidden sm:inline">Security</span>
