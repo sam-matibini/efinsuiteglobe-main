@@ -55,7 +55,22 @@ export default function Bills() {
   const [editBill, setEditBill] = useState<any | null>(null);
   const [billToVoid, setBillToVoid] = useState<any | null>(null);
   const [showAICategorize, setShowAICategorize] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
 
+  // When navigated with ?vendor=<id> (e.g. "Pay bill" from the Provincial
+  // Remittance Centre), auto-open the Create Bill dialog pre-filled with that
+  // vendor.
+  const prefillVendorId = searchParams.get('vendor');
+  const [pendingPrefill, setPendingPrefill] = useState<string | null>(null);
+
+  useState(() => {
+    if (prefillVendorId) {
+      setPendingPrefill(prefillVendorId);
+      setShowBillDialog(true);
+      searchParams.delete('vendor');
+      setSearchParams(searchParams, { replace: true });
+    }
+  });
 
   const { bills, isLoading, totalOutstanding, overdueAmount, paidThisMonth, updateBillStatus, voidBill } = useBills();
   const { organization } = useCurrentOrganization();
