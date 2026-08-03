@@ -96,89 +96,28 @@ export function useBills() {
       
       if (billError) throw billError;
 
-      // Create journal entry for the bill with source document tracking
-      // Debit: Expense accounts (or asset if inventory)
-      // Credit: Accounts Payable
+      // Post the bill to the General Ledger (shared with the Create Bill dialog).
       try {
-        const [defaultAccounts, taxGl] = await Promise.all([
-          getDefaultAccounts(currentOrganization.id),
-          getTaxGlAccounts(currentOrganization.id),
-        ]);
-
-        if (defaultAccounts.ap) {
-          // Find a general expense account
-          const { data: expenseAccount } = await supabase
-            .from('accounts')
-            .select('id')
-            .eq('organization_id', currentOrganization.id)
-            .eq('account_type', 'expense')
-            .eq('is_active', true)
-            .limit(1)
-            .single();
-
-          if (expenseAccount) {
-            const baseDimensions = {
-              vendor_id: input.vendor_id,
-              source_document_type: 'bill',
-              source_document_id: bill.id,
-            };
-
-            const journalLines = [
-              { 
-                account_id: expenseAccount.id, 
-                debit: input.subtotal, 
-                credit: 0, 
-                memo: `Bill ${input.bill_number}`,
-                ...baseDimensions,
-              },
-            ];
-
-            // Add tax debit if applicable (ITC).
-            // ITCs go to the GST/HST Paid (Input Tax Credit) account, not the collected
-            // liability. Prefer the explicit GL configured in sales_tax_settings.
-            const itcAccountId = taxGl.gstPaidAccountId ?? null;
-            if (input.tax_amount > 0 && itcAccountId) {
-              journalLines.push({
-                account_id: itcAccountId,
-                debit: input.tax_amount,
-                credit: 0,
-                memo: `ITC - Bill ${input.bill_number}`,
-                ...baseDimensions,
-              });
-            } else if (input.tax_amount > 0) {
-              console.warn(
-                `Bill ${input.bill_number}: ITC of ${input.tax_amount} not posted — no GST/HST Paid (ITC) GL configured in Sales Tax Settings.`,
-              );
-            }
-            
-            journalLines.push({
-              account_id: defaultAccounts.ap.id,
-              debit: 0,
-              credit: input.total,
-              memo: `Bill ${input.bill_number}`,
-              ...baseDimensions,
-            });
-            
-            const journalEntryId = await createJournalEntry({
-              organizationId: currentOrganization.id,
-              date: billDate,
-              description: `Bill ${input.bill_number} from vendor`,
-              reference: `BILL-${input.bill_number}`,
-              journalType: 'purchase',
-              departmentId: input.department_id || null,
-              lines: journalLines,
-            });
-
-            // Update bill with journal entry ID
-            await supabase
-              .from('bills')
-              .update({ journal_entry_id: journalEntryId })
-              .eq('id', bill.id);
-          }
-        }
+        await postBillToGL({
+          organizationId: currentOrganization.id,
+          billId: bill.id,
+          billNumber: input.bill_number,
+          billDate,
+          vendorId: input.vendor_id,
+          taxAmount: input.tax_amount,
+          total: input.total,
+          departmentId: input.department_id || null,
+          lines:
+            input.lines && input.lines.length > 0
+              ? input.lines
+              : [{ amount: input.subtotal }],
+        });
       } catch (jeError) {
-        console.warn('Could not create journal entry for bill:', jeError);
+        // Roll the bill back so no un-posted document is left behind.
+        await supabase.from('bills').delete().eq('id', bill.id);
+        throw jeError instanceof Error ? jeError : new Error('Failed to post bill to the General Ledger');
       }
+
       
       return bill;
     },
