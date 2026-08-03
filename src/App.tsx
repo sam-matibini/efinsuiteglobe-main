@@ -70,6 +70,7 @@ const StripeConnectedAccounts = lazy(() => import("./pages/treasury/StripeConnec
 const StripeConnectedAccountDetail = lazy(() => import("./pages/treasury/StripeConnectedAccountDetail"));
 const StripeConnectRouting = lazy(() => import("./pages/treasury/StripeConnectRouting"));
 const StripeConnectCompliance = lazy(() => import("./pages/treasury/StripeConnectCompliance"));
+const PayoutRouting = lazy(() => import("./pages/treasury/PayoutRouting"));
 const ComplianceExports = lazy(() => import("./pages/treasury/ComplianceExports"));
 const CashFlowForecast = lazy(() => import("./pages/treasury/CashFlowForecast"));
 const AnomalyInbox = lazy(() => import("./pages/treasury/AnomalyInbox"));
@@ -374,6 +375,7 @@ const AppRoutes = () => {
     <Route path="/banking-payments/stripe-connect/:accountId" element={<ProtectedRoute><PageWrapper><StripeConnectedAccountDetail /></PageWrapper></ProtectedRoute>} />
     <Route path="/banking-payments/compliance-exports" element={<ProtectedRoute><PageWrapper><ComplianceExports /></PageWrapper></ProtectedRoute>} />
     <Route path="/banking-payments/stripe-connect/routing" element={<ProtectedRoute><PageWrapper><StripeConnectRouting /></PageWrapper></ProtectedRoute>} />
+    <Route path="/banking-payments/payout-routing" element={<ProtectedRoute><PageWrapper><PayoutRouting /></PageWrapper></ProtectedRoute>} />
     <Route path="/banking-payments/stripe-connect/compliance" element={<ProtectedRoute><PageWrapper><StripeConnectCompliance /></PageWrapper></ProtectedRoute>} />
     <Route path="/banking-payments/forecast" element={<ProtectedRoute><PageWrapper><CashFlowForecast /></PageWrapper></ProtectedRoute>} />
     <Route path="/banking-payments/anomalies" element={<ProtectedRoute><PageWrapper><AnomalyInbox /></PageWrapper></ProtectedRoute>} />

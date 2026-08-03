@@ -141,9 +141,8 @@ const getNavigation = (payrollLabels: { taxSlips: string; separationDoc: string;
       { label: 'Scheduled', href: '/banking-payments/scheduled', icon: Receipt },
       { label: 'Payment History', href: '/banking-payments/history', icon: Receipt },
       { label: 'Payment Links', href: '/banking-payments/payment-links', icon: Receipt },
-      { label: 'Stripe Connect', href: '/banking-payments/stripe-connect', icon: Link2 },
-      { label: 'Payout Routing', href: '/banking-payments/stripe-connect/routing', icon: Link2 },
-      { label: 'Stripe Compliance', href: '/banking-payments/stripe-connect/compliance', icon: Link2 },
+      { label: 'Payout Routing', href: '/banking-payments/payout-routing', icon: Link2 },
+
       { label: 'Approvals', href: '/treasury/approvals', icon: UserCheck },
       { label: 'CRA Accounts', href: '/banking-payments/cra-accounts', icon: Settings, hideForReadOnly: true, hideForNonCA: true },
       { label: 'Settings', href: '/treasury/settings', icon: Settings, hideForReadOnly: true },

@@ -26787,6 +26787,50 @@ export type Database = {
           },
         ]
       }
+      vendor_payout_routing: {
+        Row: {
+          created_at: string
+          default_payout_method: string
+          id: string
+          organization_id: string
+          payout_provider: string
+          stripe_connected_account_id: string | null
+          updated_at: string
+          vendor_id: string
+          wise_recipient_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          default_payout_method?: string
+          id?: string
+          organization_id: string
+          payout_provider?: string
+          stripe_connected_account_id?: string | null
+          updated_at?: string
+          vendor_id: string
+          wise_recipient_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          default_payout_method?: string
+          id?: string
+          organization_id?: string
+          payout_provider?: string
+          stripe_connected_account_id?: string | null
+          updated_at?: string
+          vendor_id?: string
+          wise_recipient_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vendor_payout_routing_wise_recipient_id_fkey"
+            columns: ["wise_recipient_id"]
+            isOneToOne: false
+            referencedRelation: "wise_payout_recipients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vendor_stripe_connect: {
         Row: {
           connected_account_id: string
@@ -28214,6 +28258,78 @@ export type Database = {
           },
         ]
       }
+      wise_payout_recipients: {
+        Row: {
+          account_holder_name: string
+          account_number: string | null
+          bank_name: string | null
+          bic_swift: string | null
+          country: string | null
+          created_at: string
+          created_by: string | null
+          currency: string
+          employee_id: string | null
+          etransfer_email: string | null
+          iban: string | null
+          id: string
+          metadata: Json
+          nickname: string | null
+          organization_id: string
+          routing_number: string | null
+          sort_code: string | null
+          status: string
+          updated_at: string
+          vendor_id: string | null
+          wise_recipient_id: string | null
+        }
+        Insert: {
+          account_holder_name: string
+          account_number?: string | null
+          bank_name?: string | null
+          bic_swift?: string | null
+          country?: string | null
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          employee_id?: string | null
+          etransfer_email?: string | null
+          iban?: string | null
+          id?: string
+          metadata?: Json
+          nickname?: string | null
+          organization_id: string
+          routing_number?: string | null
+          sort_code?: string | null
+          status?: string
+          updated_at?: string
+          vendor_id?: string | null
+          wise_recipient_id?: string | null
+        }
+        Update: {
+          account_holder_name?: string
+          account_number?: string | null
+          bank_name?: string | null
+          bic_swift?: string | null
+          country?: string | null
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          employee_id?: string | null
+          etransfer_email?: string | null
+          iban?: string | null
+          id?: string
+          metadata?: Json
+          nickname?: string | null
+          organization_id?: string
+          routing_number?: string | null
+          sort_code?: string | null
+          status?: string
+          updated_at?: string
+          vendor_id?: string | null
+          wise_recipient_id?: string | null
+        }
+        Relationships: []
+      }
       wise_receiving_accounts: {
         Row: {
           account_holder_name: string | null
@@ -28270,6 +28386,74 @@ export type Database = {
           wise_profile_id?: string | null
         }
         Relationships: []
+      }
+      wise_transfers: {
+        Row: {
+          amount: number
+          created_at: string
+          created_by: string | null
+          currency: string
+          error: string | null
+          id: string
+          metadata: Json
+          method: string
+          organization_id: string
+          recipient_id: string | null
+          reference: string | null
+          source_id: string | null
+          source_type: string
+          status: string
+          updated_at: string
+          wise_quote_id: string | null
+          wise_transfer_id: string | null
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          error?: string | null
+          id?: string
+          metadata?: Json
+          method?: string
+          organization_id: string
+          recipient_id?: string | null
+          reference?: string | null
+          source_id?: string | null
+          source_type: string
+          status?: string
+          updated_at?: string
+          wise_quote_id?: string | null
+          wise_transfer_id?: string | null
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          error?: string | null
+          id?: string
+          metadata?: Json
+          method?: string
+          organization_id?: string
+          recipient_id?: string | null
+          reference?: string | null
+          source_id?: string | null
+          source_type?: string
+          status?: string
+          updated_at?: string
+          wise_quote_id?: string | null
+          wise_transfer_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wise_transfers_recipient_id_fkey"
+            columns: ["recipient_id"]
+            isOneToOne: false
+            referencedRelation: "wise_payout_recipients"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       wise_webhook_events: {
         Row: {

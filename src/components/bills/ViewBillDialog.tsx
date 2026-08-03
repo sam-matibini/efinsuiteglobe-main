@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
-import { Printer } from 'lucide-react';
+import { Printer, Wallet } from 'lucide-react';
+import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -29,6 +30,7 @@ const BILL_STATUS_STYLES: Record<string, string> = {
 };
 import { PurchaseAttachmentsSection } from '@/components/purchases/PurchaseAttachmentsSection';
 import { ApprovalPanel } from '@/components/approvals/ApprovalPanel';
+import { PayBillDialog } from './PayBillDialog';
 
 interface ViewBillDialogProps {
   open: boolean;
@@ -51,6 +53,7 @@ interface BillLineRow {
 
 export function ViewBillDialog({ open, onOpenChange, bill }: ViewBillDialogProps) {
   const { organization } = useCurrentOrganization();
+  const [payOpen, setPayOpen] = useState(false);
   const countryCode = organization?.country || 'CA';
   const localization = getCountryLocalization(countryCode);
   const locale = getLocaleForCountry(countryCode);
@@ -291,6 +294,12 @@ export function ViewBillDialog({ open, onOpenChange, bill }: ViewBillDialogProps
 
 
         <DialogFooter>
+          {Number(bill.balance_due ?? bill.total ?? 0) > 0 && bill.approval_status === 'approved' && (
+            <Button variant="default" onClick={() => setPayOpen(true)}>
+              <Wallet className="w-4 h-4 mr-2" />
+              Pay bill
+            </Button>
+          )}
           <Button variant="outline" onClick={handlePrint}>
             <Printer className="w-4 h-4 mr-2" />
             Print / PDF
@@ -298,6 +307,7 @@ export function ViewBillDialog({ open, onOpenChange, bill }: ViewBillDialogProps
           <Button onClick={() => onOpenChange(false)}>Close</Button>
         </DialogFooter>
       </DialogContent>
+      <PayBillDialog open={payOpen} onOpenChange={setPayOpen} bill={bill} />
     </Dialog>
   );
 }
