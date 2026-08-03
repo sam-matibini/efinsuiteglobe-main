@@ -145,24 +145,18 @@ export default function PayoutRouting() {
         </TabsList>
 
         <TabsContent value="providers" className="space-y-4 pt-4">
-          <div className="grid gap-4 md:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Globe2 className="h-5 w-5 text-emerald-500" /> Wise
-                  <Badge variant={wiseConnected ? 'default' : 'secondary'}>
-                    {wiseConnected ? 'Active' : 'Not configured'}
-                  </Badge>
-                </CardTitle>
-                <CardDescription>
-                  Payout partner for EFT, e-Transfer, card payouts and payment links — multi-currency, low FX spread.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="text-sm text-muted-foreground">
-                  {recipients.length} saved recipient{recipients.length === 1 ? '' : 's'} ·{' '}
-                  {transfers.length} transfer{transfers.length === 1 ? '' : 's'} recorded
-                </div>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <ProviderTile
+              icon={Globe2}
+              iconClassName="text-emerald-500"
+              title="Wise"
+              description="EFT, e-Transfer, card payouts and payment links — multi-currency, low FX spread."
+              configured={wiseConnected}
+              enabled={isEnabled('wise')}
+              onToggle={(v) => toggle('wise', v)}
+              stat={`${recipients.length} saved recipient${recipients.length === 1 ? '' : 's'} · ${transfers.length} transfer${transfers.length === 1 ? '' : 's'} recorded`}
+            >
+              <div className="space-y-3">
                 <div className="flex gap-2">
                   <Dialog open={recipientOpen} onOpenChange={setRecipientOpen}>
                     <DialogTrigger asChild>
@@ -223,37 +217,98 @@ export default function PayoutRouting() {
                     ))}
                   </div>
                 )}
-              </CardContent>
-            </Card>
+              </div>
+            </ProviderTile>
+
+            <ProviderTile
+              icon={Link2}
+              iconClassName="text-indigo-500"
+              title="Stripe Connect"
+              description="Card acquiring and connected-account transfers for vendors and payroll."
+              configured={stripeAccounts.length > 0}
+              enabled={isEnabled('stripe')}
+              onToggle={(v) => toggle('stripe', v)}
+              stat={`${stripeAccounts.length} connected account${stripeAccounts.length === 1 ? '' : 's'}`}
+            >
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" onClick={() => setParams({ tab: 'accounts' })}>
+                  Manage accounts
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setParams({ tab: 'compliance' })}>
+                  <ShieldCheck className="h-4 w-4 mr-1" /> Compliance
+                </Button>
+              </div>
+            </ProviderTile>
+
+            <ProviderTile
+              icon={Wallet}
+              iconClassName="text-amber-500"
+              title="eFinMoney Wallet"
+              description="Mobile-money wallet payouts for vendors and employees."
+              configured={walletRoutingCount > 0}
+              enabled={isEnabled('efinmoney')}
+              onToggle={(v) => toggle('efinmoney', v)}
+              stat={`${walletRoutingCount} vendor${walletRoutingCount === 1 ? '' : 's'} routed to wallet`}
+            >
+              <Button size="sm" variant="outline" onClick={() => setParams({ tab: 'vendors' })}>
+                Route vendors
+              </Button>
+            </ProviderTile>
+
+            <ProviderTile
+              icon={CreditCard}
+              iconClassName="text-sky-500"
+              title="Paysafe"
+              description="EFT and credit / debit card payouts for payroll batches."
+              configured={isEnabled('paysafe')}
+              enabled={isEnabled('paysafe')}
+              onToggle={(v) => toggle('paysafe', v)}
+            >
+              <Button size="sm" variant="outline" asChild>
+                <Link to="/treasury/payroll-payments">Use in payroll</Link>
+              </Button>
+            </ProviderTile>
+
+            <ProviderTile
+              icon={Building2}
+              iconClassName="text-emerald-600"
+              title="Bank rails (ACH / EFT)"
+              description="Direct bank transfers from your funding accounts via Plaid."
+              configured={isEnabled('plaid')}
+              enabled={isEnabled('plaid')}
+              onToggle={(v) => toggle('plaid', v)}
+            >
+              <Button size="sm" variant="outline" asChild>
+                <Link to="/treasury/funding-accounts">Funding accounts</Link>
+              </Button>
+            </ProviderTile>
 
             <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Link2 className="h-5 w-5 text-indigo-500" /> Stripe Connect
-                  <Badge variant={stripeAccounts.length ? 'default' : 'secondary'}>
-                    {stripeAccounts.length ? 'Active' : 'Not configured'}
-                  </Badge>
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <FileText className="h-5 w-5 text-muted-foreground" /> Offline methods
                 </CardTitle>
-                <CardDescription>
-                  Card acquiring and connected-account transfers for vendors and payroll.
-                </CardDescription>
+                <CardDescription>Wire, cheque and manual payouts recorded outside a provider.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
-                <div className="text-sm text-muted-foreground">
-                  {stripeAccounts.length} connected account{stripeAccounts.length === 1 ? '' : 's'}
-                </div>
-                <div className="flex gap-2">
-                  <Button size="sm" variant="outline" onClick={() => setParams({ tab: 'accounts' })}>
-                    Manage accounts
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => setParams({ tab: 'compliance' })}>
-                    <ShieldCheck className="h-4 w-4 mr-1" /> Compliance
-                  </Button>
-                </div>
+                {OFFLINE_METHODS.map((m) => (
+                  <div key={m.key} className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-sm">
+                      <m.icon className="h-4 w-4 text-muted-foreground" />
+                      <span>{m.label}</span>
+                    </div>
+                    <Switch
+                      checked={isEnabled(m.key)}
+                      onCheckedChange={(v) => toggle(m.key, v)}
+                      aria-label={`Enable ${m.label}`}
+                    />
+                  </div>
+                ))}
               </CardContent>
             </Card>
           </div>
         </TabsContent>
+
 
         <TabsContent value="vendors" className="pt-4">
           <Card>
