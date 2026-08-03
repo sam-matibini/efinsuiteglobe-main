@@ -37,6 +37,7 @@ import {
 } from '@/components/ui/dialog';
 import { AdminIntegrationsTab } from '@/components/admin/AdminIntegrationsTab';
 import { TroubleshootingTab } from '@/components/admin/TroubleshootingTab';
+import { AdminWiseReceivingAccountsCard } from '@/components/admin/AdminWiseReceivingAccountsCard';
 
 interface PricingPlan {
   id: string;
