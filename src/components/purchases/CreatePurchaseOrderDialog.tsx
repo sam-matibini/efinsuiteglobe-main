@@ -218,8 +218,13 @@ export function CreatePurchaseOrderDialog({ open, onOpenChange }: CreatePurchase
       })),
     };
 
-    await createPurchaseOrder.mutateAsync(input);
+    const po: any = await createPurchaseOrder.mutateAsync(input);
+    if (po?.id && organization?.id) {
+      await staging.flush('purchase_order', po.id, organization.id);
+    }
     resetForm();
+    setExtraction(null);
+    setPendingSummary('');
     onOpenChange(false);
   };
 
