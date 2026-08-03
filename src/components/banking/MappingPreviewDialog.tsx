@@ -564,14 +564,23 @@ export function MappingPreviewDialog({
                   {showTypeColumn && (
                     <TableHead className="min-w-[100px]">Type</TableHead>
                   )}
+                  <TableHead className="w-24 text-right">Correct</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {paginatedData.map((preview) => (
+                {paginatedData.map((preview) => {
+                  const isEdited = !!rowOverrides[preview.rowIndex];
+                  const rowType = deriveType(preview.mapped);
+                  const isEditing = editingRow === preview.rowIndex;
+                  const dupes = matchingCount(preview.mapped);
+                  const colSpan = 2 + mappedFields.length + (showTypeColumn ? 1 : 0) + 1;
+                  return (
+                  <>
                   <TableRow 
                     key={preview.rowIndex}
                     className={cn(
-                      preview.errors.length > 0 && "bg-destructive/5"
+                      preview.errors.length > 0 && "bg-destructive/5",
+                      isEdited && "bg-amber-500/5"
                     )}
                   >
                     <TableCell className="font-mono text-xs sticky left-0 bg-inherit">
@@ -581,6 +590,10 @@ export function MappingPreviewDialog({
                       {preview.errors.length > 0 ? (
                         <Badge variant="destructive" className="text-[10px]">
                           Error
+                        </Badge>
+                      ) : isEdited ? (
+                        <Badge variant="outline" className="text-[10px] text-amber-600 border-amber-600">
+                          Edited
                         </Badge>
                       ) : preview.warnings.length > 0 ? (
                         <Badge variant="secondary" className="text-[10px]">
@@ -611,32 +624,148 @@ export function MappingPreviewDialog({
                         </TableCell>
                       );
                     })}
-                    {showTypeColumn && (() => {
-                      const t = deriveType(preview.mapped);
-                      if (!t) {
-                        return (
-                          <TableCell className="text-xs">
-                            <span className="text-muted-foreground">—</span>
-                          </TableCell>
-                        );
-                      }
-                      const isDeposit = t === 'deposit';
-                      return (
-                        <TableCell className="text-xs">
-                          <Badge
-                            variant="outline"
-                            className={cn(
-                              "text-[10px]",
-                              isDeposit ? "text-green-600 border-green-600" : "text-red-600 border-red-600"
-                            )}
+                    {showTypeColumn && (
+                      <TableCell className="text-xs">
+                        {!rowType ? (
+                          <span className="text-muted-foreground">—</span>
+                        ) : (
+                          <div className="flex items-center gap-1">
+                            <Badge
+                              variant="outline"
+                              className={cn(
+                                "text-[10px]",
+                                rowType === 'deposit'
+                                  ? "text-green-600 border-green-600"
+                                  : "text-red-600 border-red-600"
+                              )}
+                            >
+                              {rowType === 'deposit' ? 'Deposit' : 'Withdrawal'}
+                            </Badge>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6"
+                              title="Flip this row between Deposit and Withdrawal"
+                              onClick={() =>
+                                setRowType(
+                                  preview.rowIndex,
+                                  rowType === 'deposit' ? 'withdrawal' : 'deposit',
+                                )
+                              }
+                            >
+                              <ArrowLeftRight className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        )}
+                      </TableCell>
+                    )}
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6"
+                          title="Edit this row"
+                          onClick={() => setEditingRow(isEditing ? null : preview.rowIndex)}
+                        >
+                          {isEditing ? <X className="h-3 w-3" /> : <Pencil className="h-3 w-3" />}
+                        </Button>
+                        {isEdited && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6"
+                            title="Reset this row"
+                            onClick={() => resetRow(preview.rowIndex)}
                           >
-                            {isDeposit ? 'Deposit' : 'Withdrawal'}
-                          </Badge>
-                        </TableCell>
-                      );
-                    })()}
+                            <RotateCcw className="h-3 w-3" />
+                          </Button>
+                        )}
+                      </div>
+                    </TableCell>
                   </TableRow>
-                ))}
+                  {isEditing && (
+                    <TableRow key={`${preview.rowIndex}-editor`} className="bg-muted/40">
+                      <TableCell colSpan={colSpan} className="p-4">
+                        <div className="space-y-3">
+                          <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-4">
+                            {mappedFields.map((field) => {
+                              const isAmount = ['amount', 'debit', 'credit', 'balance', 'foreign_amount'].includes(field);
+                              const val = preview.mapped[field];
+                              return (
+                                <div key={field} className="space-y-1">
+                                  <Label className="text-[11px] text-muted-foreground">
+                                    {getFieldDisplayLabel(field)}
+                                  </Label>
+                                  <Input
+                                    className="h-8 text-xs"
+                                    type={isAmount ? 'number' : field.includes('date') ? 'date' : 'text'}
+                                    step={isAmount ? '0.01' : undefined}
+                                    value={val === undefined || val === null ? '' : String(val)}
+                                    onChange={(e) => {
+                                      const raw = e.target.value;
+                                      if (isAmount) {
+                                        setRowField(
+                                          preview.rowIndex,
+                                          field,
+                                          raw === '' ? null : Number(raw),
+                                        );
+                                      } else {
+                                        setRowField(preview.rowIndex, field, raw);
+                                      }
+                                    }}
+                                  />
+                                </div>
+                              );
+                            })}
+                          </div>
+                          {showTypeColumn && (
+                            <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-border">
+                              <span className="text-xs text-muted-foreground">Transaction type:</span>
+                              <Button
+                                size="sm"
+                                variant={rowType === 'deposit' ? 'default' : 'outline'}
+                                className="h-7 text-xs"
+                                onClick={() => setRowType(preview.rowIndex, 'deposit')}
+                              >
+                                {statementType === 'creditcard' ? 'Payment (Credit)' : 'Deposit (Credit)'}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant={rowType === 'withdrawal' ? 'default' : 'outline'}
+                                className="h-7 text-xs"
+                                onClick={() => setRowType(preview.rowIndex, 'withdrawal')}
+                              >
+                                {statementType === 'creditcard' ? 'Charge (Debit)' : 'Withdrawal (Debit)'}
+                              </Button>
+                              {dupes > 1 && rowType && (
+                                <Button
+                                  size="sm"
+                                  variant="secondary"
+                                  className="h-7 text-xs"
+                                  onClick={() => setRowType(preview.rowIndex, rowType, true)}
+                                >
+                                  Apply this type to all {dupes} matching rows
+                                </Button>
+                              )}
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 text-xs ml-auto"
+                                onClick={() => setEditingRow(null)}
+                              >
+                                Done
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  </>
+                  );
+                })}
+
               </TableBody>
             </Table>
           </div>
