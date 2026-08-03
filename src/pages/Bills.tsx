@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Search, Download, MoreHorizontal, Check, AlertTriangle, Clock, DollarSign, Send, Paperclip, Sparkles } from 'lucide-react';
+import { Plus, Search, Download, MoreHorizontal, Check, AlertTriangle, Clock, DollarSign, Send, Paperclip, Sparkles, Eye, Pencil, Ban } from 'lucide-react';
 import { AICategorizeAPDialog } from '@/components/purchases/AICategorizeAPDialog';
 import { PurchaseAttachmentsDialog } from '@/components/purchases/PurchaseAttachmentsDialog';
 import { Button } from '@/components/ui/button';
@@ -29,6 +29,18 @@ import { getCountryLocalization } from '@/data/countryLocalizations';
 import { getLocaleForCountry } from '@/lib/localizedCurrencyFormatter';
 import { useIsReadOnly } from '@/hooks/useIsReadOnly';
 import { DocumentShareDialog } from '@/components/shared/DocumentShareDialog';
+import { ViewBillDialog } from '@/components/bills/ViewBillDialog';
+import { EditBillDialog } from '@/components/bills/EditBillDialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 export default function Bills() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -38,10 +50,13 @@ export default function Bills() {
   const [selectedBillForPayment, setSelectedBillForPayment] = useState<{ vendorId?: string; billId?: string }>({});
   const [shareBill, setShareBill] = useState<any | null>(null);
   const [docsBill, setDocsBill] = useState<any | null>(null);
+  const [viewBill, setViewBill] = useState<any | null>(null);
+  const [editBill, setEditBill] = useState<any | null>(null);
+  const [billToVoid, setBillToVoid] = useState<any | null>(null);
   const [showAICategorize, setShowAICategorize] = useState(false);
 
 
-  const { bills, isLoading, totalOutstanding, overdueAmount, paidThisMonth, updateBillStatus } = useBills();
+  const { bills, isLoading, totalOutstanding, overdueAmount, paidThisMonth, updateBillStatus, voidBill } = useBills();
   const { organization } = useCurrentOrganization();
   const isReadOnly = useIsReadOnly();
   
@@ -71,6 +86,7 @@ export default function Bills() {
     approved: { label: 'Approved', icon: Check, color: 'bg-blue-500/10 text-blue-600' },
     paid: { label: 'Paid', icon: Check, color: 'bg-success/10 text-success' },
     overdue: { label: 'Overdue', icon: AlertTriangle, color: 'bg-destructive/10 text-destructive' },
+    void: { label: 'Void', icon: Ban, color: 'bg-destructive/10 text-destructive line-through' },
   };
 
   const filteredBills = bills.filter(bill => {
@@ -180,6 +196,7 @@ export default function Bills() {
               <SelectItem value="approved">Approved</SelectItem>
               <SelectItem value="paid">Paid</SelectItem>
               <SelectItem value="overdue">Overdue</SelectItem>
+              <SelectItem value="void">Void</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -244,8 +261,14 @@ export default function Bills() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem>View Bill</DropdownMenuItem>
-                          {!isReadOnly && <DropdownMenuItem>Edit</DropdownMenuItem>}
+                          <DropdownMenuItem onClick={() => setViewBill(bill)}>
+                            <Eye className="w-4 h-4 mr-2" /> View Bill
+                          </DropdownMenuItem>
+                          {!isReadOnly && bill.status !== 'void' && bill.status !== 'paid' && (
+                            <DropdownMenuItem onClick={() => setEditBill(bill)}>
+                              <Pencil className="w-4 h-4 mr-2" /> Edit
+                            </DropdownMenuItem>
+                          )}
                           <DropdownMenuItem onClick={() => setShareBill(bill)}>
                             <Send className="w-4 h-4 mr-2" /> Share
                           </DropdownMenuItem>
@@ -266,7 +289,14 @@ export default function Bills() {
                               Record Payment
                             </DropdownMenuItem>
                           )}
-                          {!isReadOnly && <DropdownMenuItem className="text-destructive">Void Bill</DropdownMenuItem>}
+                          {!isReadOnly && bill.status !== 'void' && (
+                            <DropdownMenuItem
+                              className="text-destructive"
+                              onClick={() => setBillToVoid(bill)}
+                            >
+                              <Ban className="w-4 h-4 mr-2" /> Void Bill
+                            </DropdownMenuItem>
+                          )}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </td>
@@ -323,6 +353,40 @@ export default function Bills() {
         onOpenChange={setShowAICategorize}
         target="bill"
       />
+      <ViewBillDialog
+        open={viewBill !== null}
+        onOpenChange={(o) => !o && setViewBill(null)}
+        bill={viewBill}
+      />
+      <EditBillDialog
+        open={editBill !== null}
+        onOpenChange={(o) => !o && setEditBill(null)}
+        bill={editBill}
+      />
+      <AlertDialog open={billToVoid !== null} onOpenChange={(o) => !o && setBillToVoid(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Void bill {billToVoid?.bill_number}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This reverses the bill's journal entry so it no longer affects the General Ledger,
+              Trial Balance or financial statements. The bill and its reversal stay on record for
+              audit purposes. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (billToVoid) voidBill.mutate(billToVoid.id);
+                setBillToVoid(null);
+              }}
+            >
+              Void Bill
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
