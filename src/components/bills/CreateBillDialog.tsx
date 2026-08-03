@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -78,9 +78,11 @@ type BillFormData = z.infer<typeof billSchema>;
 interface CreateBillDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** When provided, the vendor field is pre-selected once the dialog opens. */
+  prefillVendorId?: string;
 }
 
-export function CreateBillDialog({ open, onOpenChange }: CreateBillDialogProps) {
+export function CreateBillDialog({ open, onOpenChange, prefillVendorId }: CreateBillDialogProps) {
   const { vendors, isLoading: vendorsLoading } = useVendors();
   const { organization } = useCurrentOrganization();
   const { user } = useAuth();
