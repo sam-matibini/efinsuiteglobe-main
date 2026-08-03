@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrganization } from './useOrganization';
 import { toast } from 'sonner';
-import { createJournalEntry, getDefaultAccounts, getTaxGlAccounts } from './useJournalEntryCreation';
+import { postBillToGL, type BillGLLine } from '@/lib/postBillToGL';
 import { parseLocalDate } from '@/lib/utils';
 
 export interface CreateBillInput {
