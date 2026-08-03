@@ -24,7 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Shield, DollarSign, Plus, Trash2, Edit, Plug, Palette, Globe, Loader2, RotateCcw } from 'lucide-react';
+import { Shield, DollarSign, Plus, Trash2, Edit, Plug, Palette, Globe, Loader2, RotateCcw, CreditCard } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
 import {
@@ -37,6 +37,7 @@ import {
 } from '@/components/ui/dialog';
 import { AdminIntegrationsTab } from '@/components/admin/AdminIntegrationsTab';
 import { TroubleshootingTab } from '@/components/admin/TroubleshootingTab';
+import { AdminWiseReceivingAccountsCard } from '@/components/admin/AdminWiseReceivingAccountsCard';
 
 interface PricingPlan {
   id: string;
@@ -321,6 +322,10 @@ export default function AdminSettings() {
             <DollarSign className="w-4 h-4" />
             <span className="hidden sm:inline">Pricing Plans</span>
           </TabsTrigger>
+          <TabsTrigger value="payments" className="gap-2">
+            <CreditCard className="w-4 h-4" />
+            <span className="hidden sm:inline">Payments</span>
+          </TabsTrigger>
           <TabsTrigger value="security" className="gap-2">
             <Shield className="w-4 h-4" />
             <span className="hidden sm:inline">Security</span>
@@ -434,6 +439,11 @@ export default function AdminSettings() {
               </Table>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* Payments Tab */}
+        <TabsContent value="payments">
+          <AdminWiseReceivingAccountsCard />
         </TabsContent>
 
         {/* Security Tab */}
