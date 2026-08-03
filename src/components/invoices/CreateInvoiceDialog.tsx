@@ -373,8 +373,17 @@ export function CreateInvoiceDialog({ open, onOpenChange }: CreateInvoiceDialogP
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="flex-1 flex flex-col overflow-hidden">
-            <div className="flex-1 overflow-y-auto">
+            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'edit' | 'preview')} className="flex-1 flex flex-col overflow-hidden">
+              <div className="px-6 pt-3 flex-shrink-0">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="edit">Edit</TabsTrigger>
+                  <TabsTrigger value="preview">Invoice Preview</TabsTrigger>
+                </TabsList>
+              </div>
+
+            <TabsContent value="edit" className="flex-1 overflow-y-auto mt-0">
               <div className="px-6 py-4 space-y-6">
+
 
                 {/* ── Header Section ── */}
                 <div className="grid grid-cols-[160px_1fr_160px_1fr] gap-x-4 gap-y-3 items-center">
