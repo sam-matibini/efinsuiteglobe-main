@@ -9,7 +9,7 @@ import { Loader2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useVirtualAccounts } from '@/hooks/useVirtualAccounts';
 
-const CURRENCIES = ['NGN', 'USD', 'GBP', 'EUR', 'GHS', 'KES'];
+const CURRENCIES = EFINCASH_CURRENCIES;
 
 const schema = z.object({
   currency: z.string().min(1),
