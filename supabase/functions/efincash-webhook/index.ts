@@ -1,6 +1,56 @@
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { unwrap, mapAccountFields, mapTxFields } from '../_shared/efincash.ts';
+import { recordInvoicePayment, type InvoiceRow } from '../_shared/invoice_payment.ts';
+
+/**
+ * Find an open invoice for this organization whose invoice number or Wise
+ * payment reference appears in the deposit narration. Matching is exact on
+ * whole tokens so a wrong narration is ignored rather than guessed.
+ */
+async function matchInvoiceFromNarration(
+  admin: any,
+  organizationId: string,
+  narration: string | null | undefined,
+  currency: string,
+): Promise<InvoiceRow | null> {
+  if (!narration) return null;
+  const tokens = Array.from(
+    new Set(
+      narration
+        .toUpperCase()
+        .split(/[^A-Z0-9\-_]+/)
+        .filter((t) => t.length >= 4),
+    ),
+  );
+  if (!tokens.length) return null;
+
+  const select = 'id, organization_id, customer_id, total, amount_paid, balance_due, currency, invoice_number, wise_payment_reference';
+
+  const { data: byNumber } = await admin
+    .from('invoices')
+    .select(select)
+    .eq('organization_id', organizationId)
+    .in('invoice_number', tokens)
+    .in('status', ['sent', 'partial', 'overdue', 'draft'])
+    .limit(1);
+
+  let invoice = byNumber?.[0] ?? null;
+  if (!invoice) {
+    const { data: byRef } = await admin
+      .from('invoices')
+      .select(select)
+      .eq('organization_id', organizationId)
+      .in('wise_payment_reference', tokens)
+      .limit(1);
+    invoice = byRef?.[0] ?? null;
+  }
+
+  if (!invoice) return null;
+  if (invoice.currency && invoice.currency !== currency) return null;
+  return invoice as InvoiceRow;
+}
+
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -131,6 +181,32 @@ Deno.serve(async (req) => {
           .update({ balance: newBalance })
           .eq('id', row.id);
         if (balErr) console.error('[efincash-webhook] balance update error', balErr);
+
+        // Try to reconcile an incoming deposit against an open invoice using the
+        // narration. When it matches we record the payment + journal entry
+        // (balance was already moved above, so skip the credit).
+        if (tx.type === 'credit') {
+          try {
+            const invoice = await matchInvoiceFromNarration(
+              admin, row.organization_id, tx.narration, currency,
+            );
+            if (invoice) {
+              const recorded = await recordInvoicePayment(admin, {
+                invoice,
+                amount: Math.abs(amount),
+                currency,
+                paymentDate: (tx.occurred_at ?? new Date().toISOString()).slice(0, 10),
+                reference: tx.provider_tx_id ?? `EFC-${Date.now()}`,
+                paymentMethod: 'efincash_bank_transfer',
+                notes: `Auto-matched eFinCash deposit${tx.narration ? `: ${tx.narration}` : ''}`,
+                skipVirtualAccountCredit: true,
+              });
+              console.log('[efincash-webhook] invoice match', invoice.id, recorded.status);
+            }
+          } catch (e) {
+            console.error('[efincash-webhook] invoice reconcile error', (e as Error).message);
+          }
+        }
       }
     }
 

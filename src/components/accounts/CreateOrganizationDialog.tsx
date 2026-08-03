@@ -40,6 +40,7 @@ const orgSchema = z.object({
   name: z.string().min(1, 'Organization name is required').max(255),
   industry: z.string().min(1, 'Please select an industry'),
   country_id: z.string().min(1, 'Please select a country'),
+  bvn_or_nin: z.string().optional(),
 });
 
 type OrgFormValues = z.infer<typeof orgSchema>;
@@ -200,13 +201,19 @@ export function CreateOrganizationDialog({
 
   const onSubmit = async (values: OrgFormValues) => {
     if (!values.name || !values.country_id) return;
+
+    // Get country info for defaults
+    const country = countries.find(c => c.id === values.country_id);
+
+    // NGN virtual accounts cannot be opened without BVN/NIN.
+    if (country?.default_currency === 'NGN' && !values.bvn_or_nin?.trim()) {
+      form.setError('bvn_or_nin', { message: 'BVN or NIN is required for Nigerian organizations' });
+      return;
+    }
     
     setUploading(true);
     
     try {
-      // Get country info for defaults
-      const country = countries.find(c => c.id === values.country_id);
-      
       // Create organization with country - pass country name/code for address-based compliance
       const org = await createOrg.mutateAsync({ 
         name: values.name,
@@ -215,6 +222,7 @@ export function CreateOrganizationDialog({
         currency: country?.default_currency || 'USD',
         country_name: country?.name,
         country_code: country?.code,
+        bvn_or_nin: values.bvn_or_nin?.trim() || undefined,
       });
       
       // Upload logo if selected
@@ -404,6 +412,27 @@ export function CreateOrganizationDialog({
                 </p>
               </div>
             )}
+
+            {selectedCountry?.default_currency === 'NGN' && (
+              <FormField
+                control={form.control}
+                name="bvn_or_nin"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>BVN or NIN</FormLabel>
+                    <FormControl>
+                      <Input placeholder="11-digit BVN or NIN" {...field} value={field.value ?? ''} />
+                    </FormControl>
+                    <FormDescription>
+                      Required to open the organization's Naira virtual account.
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+
+
 
             <FormField
               control={form.control}

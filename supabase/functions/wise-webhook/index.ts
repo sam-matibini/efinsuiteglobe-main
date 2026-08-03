@@ -4,6 +4,7 @@
 // Business logic (applying transfer state to payment records) is a placeholder.
 import { corsHeaders as baseCorsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { recordInvoicePayment } from '../_shared/invoice_payment.ts';
 
 const corsHeaders = {
   ...baseCorsHeaders,
@@ -412,38 +413,25 @@ async function matchDepositToInvoice(
     return result;
   }
 
-  // Record the payment against the invoice.
+  // Record the payment against the invoice: customer_payments row, invoice
+  // totals, virtual-account balance credit and the cash/AR journal entry.
   const paymentDate = (mapped.occurred_at ?? new Date().toISOString()).slice(0, 10);
-  const { error: paymentError } = await admin.from('customer_payments').insert({
-    organization_id: invoice.organization_id,
-    customer_id: invoice.customer_id,
-    invoice_id: invoice.id,
-    payment_date: paymentDate,
+  const recorded = await recordInvoicePayment(admin, {
+    invoice,
     amount: mapped.amount,
-    payment_method: 'wise_bank_transfer',
-    reference: reference,
+    currency: mapped.currency,
+    paymentDate,
+    reference,
+    paymentMethod: 'wise_bank_transfer',
     notes: `Auto-matched Wise deposit (balance ${mapped.balance_id ?? 'n/a'})`,
   });
-  if (paymentError) {
-    console.error('[wise-webhook] payment insert error', paymentError);
+
+  if (recorded.status === 'payment_insert_failed') {
     result.match_status = 'payment_insert_failed';
     return result;
   }
 
-  const newAmountPaid = Number(invoice.amount_paid ?? 0) + mapped.amount;
-  const newBalance = Number(invoice.total ?? 0) - newAmountPaid;
-  const fullyPaid = newBalance <= 0.005;
-  await admin
-    .from('invoices')
-    .update({
-      amount_paid: newAmountPaid,
-      balance_due: Math.max(0, newBalance),
-      status: fullyPaid ? 'paid' : 'partial',
-      paid_at: fullyPaid ? new Date().toISOString() : null,
-    })
-    .eq('id', invoice.id);
-
-  result.match_status = fullyPaid ? 'paid' : 'partially_paid';
+  result.match_status = recorded.status;
   return result;
 }
 
