@@ -411,6 +411,26 @@ export function CreatePurchaseOrderDialog({ open, onOpenChange }: CreatePurchase
                 rows={3}
               />
             </div>
+
+            {/* Documents + AI analysis */}
+            <div className="rounded-lg border p-4">
+              <PurchaseDocumentsPanel
+                entityType="purchase_order"
+                organizationId={organization?.id}
+                staging={staging}
+                draftContext={{
+                  vendor: vendors.find((v) => v.id === vendorId)?.name ?? null,
+                  date: orderDate || null,
+                  currency: localization.currency,
+                  total,
+                }}
+                onExtraction={(ex, summary) => {
+                  setExtraction(ex);
+                  setPendingSummary(summary);
+                  setReviewOpen(true);
+                }}
+              />
+            </div>
           </div>
         </ScrollArea>
 
@@ -425,6 +445,18 @@ export function CreatePurchaseOrderDialog({ open, onOpenChange }: CreatePurchase
             {createPurchaseOrder.isPending ? 'Creating...' : 'Create Purchase Order'}
           </Button>
         </DialogFooter>
+
+        {extraction && (
+          <InvoiceExtractionReview
+            open={reviewOpen}
+            onOpenChange={setReviewOpen}
+            extraction={extraction}
+            fields={reviewFields}
+            supportsLines
+            currentLineCount={lines.length}
+            onApply={applyExtraction}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );
