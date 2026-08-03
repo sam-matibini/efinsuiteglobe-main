@@ -22,6 +22,10 @@ import { useAnalyzeReceipt } from '@/hooks/useAnalyzeReceipt';
 import { getCountryLocalization } from '@/data/countryLocalizations';
 import { getLocaleForCountry } from '@/lib/localizedCurrencyFormatter';
 import { FormattedNumberInput } from '@/components/ui/formatted-number-input';
+import { PurchaseDocumentsPanel } from '@/components/purchases/PurchaseDocumentsPanel';
+import { InvoiceExtractionReview, type ReviewField } from '@/components/purchases/InvoiceExtractionReview';
+import { matchVendor, type InvoiceExtraction } from '@/lib/purchases/invoiceExtraction';
+import { useStagedPurchaseAttachments } from '@/hooks/useStagedPurchaseAttachments';
 
 interface ExpenseLineItem {
   id: string;
@@ -277,9 +281,25 @@ export function RecordExpenseTab({ onSuccess, onCancel }: RecordExpenseTabProps)
       })) : undefined,
     };
 
-    await createExpense.mutateAsync(input);
+    const created: any = await createExpense.mutateAsync(input);
+    if (created?.id && organization?.id) {
+      await staging.flush('expense', created.id, organization.id);
+    }
     resetForm();
+    setExtraction(null);
+    setPendingSummary('');
     onSuccess();
+  };
+
+  // ---- Attachments + AI invoice extraction -------------------------------
+  const applyExtraction = (keys: string[]) => {
+    if (!extraction) return;
+    const has = (k: string) => keys.includes(k);
+    if (has('vendor_id') && matchedVendor) setVendorId(matchedVendor.id);
+    if (has('expense_date') && extraction.document_date) setExpenseDate(extraction.document_date);
+    if (has('amount') && extraction.total != null) setAmount(extraction.total);
+    if (has('reference') && extraction.document_number) setReference(extraction.document_number);
+    if (has('notes') && pendingSummary) setNotes((prev) => [prev, pendingSummary].filter(Boolean).join('\n\n'));
   };
 
   const handleSaveAndNew = async () => {
@@ -551,6 +571,26 @@ export function RecordExpenseTab({ onSuccess, onCancel }: RecordExpenseTabProps)
             </div>
           </div>
 
+          {/* Invoice / receipt documents */}
+          <div className="rounded-lg border p-4">
+            <PurchaseDocumentsPanel
+              entityType="expense"
+              organizationId={organization?.id}
+              staging={staging}
+              draftContext={{
+                vendor: vendors.find((v) => v.id === vendorId)?.name ?? null,
+                date: expenseDate || null,
+                currency: localization.currency,
+                total: isItemized ? itemizedTotal : amount,
+              }}
+              onExtraction={(ex, summary) => {
+                setExtraction(ex);
+                setPendingSummary(summary);
+                setReviewOpen(true);
+              }}
+            />
+          </div>
+
           {/* Reporting Tags */}
           <div className="grid grid-cols-[140px_1fr] items-center gap-4">
             <Label className="text-muted-foreground">Reporting Tags</Label>
@@ -692,6 +732,16 @@ export function RecordExpenseTab({ onSuccess, onCancel }: RecordExpenseTabProps)
           Cancel
         </Button>
       </div>
+
+      {extraction && (
+        <InvoiceExtractionReview
+          open={reviewOpen}
+          onOpenChange={setReviewOpen}
+          extraction={extraction}
+          fields={reviewFields}
+          onApply={applyExtraction}
+        />
+      )}
 
       {/* Quick Add Vendor Dialog */}
       <QuickAddVendorDialog
