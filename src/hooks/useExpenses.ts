@@ -2,7 +2,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrganization } from './useOrganization';
 import { toast } from 'sonner';
-import { createJournalEntry, getDefaultAccounts } from './useJournalEntryCreation';
 import { requestApproval } from '@/lib/approvals';
 
 export interface Expense {
