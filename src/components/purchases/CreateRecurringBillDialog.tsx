@@ -139,8 +139,69 @@ export function CreateRecurringBillDialog({ open, onOpenChange }: CreateRecurrin
     ]);
   };
 
+  // ---- Attachments + AI invoice extraction -------------------------------
+  const staging = useStagedPurchaseAttachments();
+  const [extraction, setExtraction] = useState<InvoiceExtraction | null>(null);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [pendingSummary, setPendingSummary] = useState('');
+
+  const matchedVendor = matchVendor(
+    vendors as Array<{ id: string; name: string }>,
+    extraction?.vendor_name,
+  );
+
+  const reviewFields: ReviewField[] = extraction
+    ? [
+        {
+          key: 'vendor_id',
+          label: 'Vendor',
+          current: vendors.find((v) => v.id === vendorId)?.name ?? '',
+          extracted: matchedVendor?.name ?? '',
+        },
+        {
+          key: 'template_name',
+          label: 'Template name',
+          current: templateName,
+          extracted: extraction.vendor_name ? `${extraction.vendor_name} recurring bill` : '',
+        },
+        { key: 'start_date', label: 'Start date', current: startDate, extracted: extraction.document_date ?? '' },
+        { key: 'terms', label: 'Terms', current: terms, extracted: extraction.terms ?? '' },
+        {
+          key: 'notes',
+          label: 'Notes (AI document summary)',
+          current: notes,
+          extracted: pendingSummary ? 'Append AI summary' : '',
+        },
+      ]
+    : [];
+
+  const applyExtraction = (keys: string[], applyLines: boolean) => {
+    if (!extraction) return;
+    const has = (k: string) => keys.includes(k);
+    if (has('vendor_id') && matchedVendor) setVendorId(matchedVendor.id);
+    if (has('template_name') && extraction.vendor_name)
+      setTemplateName(`${extraction.vendor_name} recurring bill`);
+    if (has('start_date') && extraction.document_date) setStartDate(extraction.document_date);
+    if (has('terms') && extraction.terms) setTerms(extraction.terms);
+    if (has('notes') && pendingSummary) setNotes((prev) => [prev, pendingSummary].filter(Boolean).join('\n\n'));
+    if (applyLines && extraction.lines.length > 0) {
+      setLines(
+        extraction.lines.map((l) => ({
+          id: crypto.randomUUID(),
+          description: l.description,
+          expense_account_id: null,
+          quantity: l.quantity ?? 1,
+          unit_price: l.unit_price ?? 0,
+          tax_rate: l.tax_rate ?? 0,
+        })),
+      );
+    }
+    toast.success('Invoice data applied — set GL accounts before saving.');
+  };
+
   const handleSubmit = async () => {
     if (!vendorId || !templateName) return;
+
 
     const input: CreateRecurringBillInput = {
       vendor_id: vendorId,
