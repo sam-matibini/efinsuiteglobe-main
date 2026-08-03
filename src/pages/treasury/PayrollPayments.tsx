@@ -100,29 +100,32 @@ export default function PayrollPayments() {
                       <SelectContent>
                         <SelectGroup>
                           <SelectLabel>Banks & processors</SelectLabel>
-                          <SelectItem value="stripe">Stripe</SelectItem>
-                          <SelectItem value="plaid">Plaid</SelectItem>
-                          <SelectItem value="paysafe_eft">Paysafe EFT</SelectItem>
-                          <SelectItem value="paysafe_card">Paysafe Card (Credit / Debit Visa)</SelectItem>
-                          <SelectItem value="wire">Wire</SelectItem>
+                          {isEnabled('stripe') && <SelectItem value="stripe">Stripe</SelectItem>}
+                          {isEnabled('plaid') && <SelectItem value="plaid">Plaid</SelectItem>}
+                          {isEnabled('paysafe') && <SelectItem value="paysafe_eft">Paysafe EFT</SelectItem>}
+                          {isEnabled('paysafe') && <SelectItem value="paysafe_card">Paysafe Card (Credit / Debit Visa)</SelectItem>}
+                          {isEnabled('wire') && <SelectItem value="wire">Wire</SelectItem>}
                         </SelectGroup>
-                        <SelectGroup>
-                          <SelectLabel>Wise</SelectLabel>
-                          <SelectItem value="wise_eft">Wise EFT</SelectItem>
-                          <SelectItem value="wise_etransfer">Wise e-Transfer</SelectItem>
-                          <SelectItem value="wise_card">Wise Card payout</SelectItem>
-                        </SelectGroup>
+                        {isEnabled('wise') && (
+                          <SelectGroup>
+                            <SelectLabel>Wise</SelectLabel>
+                            <SelectItem value="wise_eft">Wise EFT</SelectItem>
+                            <SelectItem value="wise_etransfer">Wise e-Transfer</SelectItem>
+                            <SelectItem value="wise_card">Wise Card payout</SelectItem>
+                          </SelectGroup>
+                        )}
                         <SelectGroup>
                           <SelectLabel>Wallets</SelectLabel>
-                          <SelectItem value="wallet">Stripe / Paddle Wallet</SelectItem>
-                          <SelectItem value="efinmoney">eFinMoney Wallet</SelectItem>
+                          {isEnabled('stripe') && <SelectItem value="wallet">Stripe / Paddle Wallet</SelectItem>}
+                          {isEnabled('efinmoney') && <SelectItem value="efinmoney">eFinMoney Wallet</SelectItem>}
                         </SelectGroup>
                         <SelectGroup>
                           <SelectLabel>Other</SelectLabel>
-                          <SelectItem value="cheque">Cheque</SelectItem>
-                          <SelectItem value="manual">Manual</SelectItem>
+                          {isEnabled('cheque') && <SelectItem value="cheque">Cheque</SelectItem>}
+                          {isEnabled('manual') && <SelectItem value="manual">Manual</SelectItem>}
                         </SelectGroup>
                       </SelectContent>
+
                     </Select>
                   </div>
                 </div>
