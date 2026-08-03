@@ -261,8 +261,14 @@ export default function Bills() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem>View Bill</DropdownMenuItem>
-                          {!isReadOnly && <DropdownMenuItem>Edit</DropdownMenuItem>}
+                          <DropdownMenuItem onClick={() => setViewBill(bill)}>
+                            <Eye className="w-4 h-4 mr-2" /> View Bill
+                          </DropdownMenuItem>
+                          {!isReadOnly && bill.status !== 'void' && bill.status !== 'paid' && (
+                            <DropdownMenuItem onClick={() => setEditBill(bill)}>
+                              <Pencil className="w-4 h-4 mr-2" /> Edit
+                            </DropdownMenuItem>
+                          )}
                           <DropdownMenuItem onClick={() => setShareBill(bill)}>
                             <Send className="w-4 h-4 mr-2" /> Share
                           </DropdownMenuItem>
