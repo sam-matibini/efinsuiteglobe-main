@@ -16,6 +16,8 @@ export interface SearchableSelectOption {
   value: string;
   label: string;
   keywords?: string;
+  /** Optional shorter label rendered in the closed trigger (list keeps `label`). */
+  triggerLabel?: string;
 }
 
 interface SearchableSelectProps {
