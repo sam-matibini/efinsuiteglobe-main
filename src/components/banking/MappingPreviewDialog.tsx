@@ -762,7 +762,7 @@ export function MappingPreviewDialog({
                       </TableCell>
                     </TableRow>
                   )}
-                  </>
+                  </Fragment>
                   );
                 })}
 
