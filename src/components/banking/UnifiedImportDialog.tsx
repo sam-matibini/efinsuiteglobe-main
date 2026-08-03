@@ -245,6 +245,7 @@ export function UnifiedImportDialog({
     setSelectedFile(file);
     const parsed = await parseFile(file);
     setPreviewData(parsed);
+    setBaselineData(parsed.map((r) => ({ ...r })));
     setStep('preview');
   };
 
@@ -267,6 +268,7 @@ export function UnifiedImportDialog({
     setStep('upload');
     setSelectedFile(null);
     setPreviewData([]);
+    setBaselineData([]);
     setErrors([]);
     onOpenChange(false);
   };
@@ -433,6 +435,7 @@ export function UnifiedImportDialog({
                   setStep('upload');
                   setSelectedFile(null);
                   setPreviewData([]);
+                  setBaselineData([]);
                 }}
               >
                 <X className="w-4 h-4" />
