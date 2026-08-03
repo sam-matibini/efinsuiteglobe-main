@@ -406,7 +406,7 @@ export function CreateBillDialog({ open, onOpenChange }: CreateBillDialogProps) 
                                     placeholder={accountsLoading ? 'Loading...' : 'Select account'}
                                     searchPlaceholder="Search chart of accounts..."
                                     emptyText="No postable accounts found."
-                                    className="h-9"
+                                    className="h-9 font-mono text-xs"
                                   />
                                   <FormMessage />
                                 </FormItem>
