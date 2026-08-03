@@ -107,14 +107,28 @@ export function useApprovalActions() {
 
       const journalEntryId = await postApprovedDocument(doc.documentType, organization.id, doc.id);
 
-      const { table, statusField } = STATUS_COLUMN[doc.documentType];
+      const { table, statusField, lifecycleField } = STATUS_COLUMN[doc.documentType];
       const update: Record<string, any> = {
         [statusField]: 'approved',
         approved_by: user.id,
         approved_at: new Date().toISOString(),
         posted_at: new Date().toISOString(),
       };
-      await supabase.from(table as any).update(update).eq('id', doc.id);
+      let query = supabase.from(table as any).update(update).eq('id', doc.id);
+
+      if (lifecycleField) {
+        // Advance the lifecycle badge too, but never regress a bill that is
+        // already paid/partially paid/void.
+        await supabase
+          .from(table as any)
+          .update({ ...update, [lifecycleField]: 'approved' })
+          .eq('id', doc.id)
+          .in(lifecycleField, ADVANCEABLE_LIFECYCLE);
+        // Ensure approval columns land even when the lifecycle guard filtered the row out.
+        query = supabase.from(table as any).update(update).eq('id', doc.id);
+      }
+
+      await query;
 
       return { ...outcome, journalEntryId };
     },
