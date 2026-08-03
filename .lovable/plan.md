@@ -1,69 +1,30 @@
-## Goal
+## 1. Wise and eFinMoney wallet payout providers for payroll
 
-Make Wise a first-class payout partner alongside Stripe across eFinconnect, add Wise-backed bill payment methods (EFT / e-Transfer / card), add a Stripe-style checkout form, and collapse the three Stripe sidebar entries into one "Payout Routing" hub.
+Today the payroll batch dialog (`/treasury/payroll-payments`) offers only Stripe, Plaid, Paysafe EFT/Card, Wire, Wallet, Cheque, Manual — this is enforced by a database check constraint on `payroll_payment_batches.provider`. Rails are similarly constrained on `payroll_payment_items.rail`.
 
-## 1. Sidebar / eFinconnect reorganization
+**Database migration**
+- Extend the `provider` check on `payroll_payment_batches` with: `wise_eft`, `wise_etransfer`, `wise_card`, `efinmoney`.
+- Extend the `rail` check on `payroll_payment_items` with: `wise_eft`, `wise_etransfer`, `wallet_efinmoney`.
 
-`src/components/layout/Sidebar.tsx` — eFinconnect children become:
+**Frontend**
+- `src/hooks/usePayrollPaymentBatches.ts`: add the new values to `PayrollBatchProvider` and `Rail` types; when the chosen provider is a Wise or eFinMoney one, default each employee item's rail accordingly instead of `ach`.
+- `src/pages/treasury/PayrollPayments.tsx`: add the provider options — Wise EFT, Wise e-Transfer, Wise Card payout, eFinMoney Wallet — grouped under a "Wise" / "Wallets" label, and auto-set the default rail when a provider is picked.
+- `src/components/treasury/RailPicker.tsx`: add the three new rails with icons and helper text, and treat Wise/eFinMoney rails as available when the corresponding provider is selected (they are not tied to the funding bank's supported rails).
 
-```text
-Dashboard | CRA Payments | AP Payments | Payroll Payments
-Scheduled | Payment History | Payment Links
-Payout Routing        <- new hub (/banking-payments/payout-routing)
-Approvals | CRA Accounts | Settings
-```
+**Processing**
+- `supabase/functions/treasury-pay-payroll-batch`: route items whose rail is `wise_eft` / `wise_etransfer` through the existing `wise-create-transfer` function (using the employee's saved Wise recipient or inline bank details already stored on the item), and record `wallet_efinmoney` items as instructed/manual wallet payouts pending confirmation, same pattern as the existing fallback. Employees without a Wise destination keep falling back to cheque as today.
 
-Remove the standalone "Stripe Connect", "Payout Routing", "Stripe Compliance" items.
+## 2. Add more vendors in Vendor routing
 
-New page `src/pages/treasury/PayoutRouting.tsx` with tabs:
-- **Providers** — Stripe Connect vs Wise cards (status, connect/manage)
-- **Vendor routing** — existing `StripeConnectRouting` table, extended with a per-vendor provider column (`stripe` | `wise`) and Wise recipient selection
-- **Connected accounts** — existing `StripeConnectedAccounts`
-- **Compliance** — existing `StripeConnectCompliance`
+The Vendor routing tab lists existing vendors only, with no way to add one and no search — long vendor lists are unusable.
 
-Old routes redirect into the corresponding tab so nothing breaks.
-
-## 2. Wise as a payout partner
-
-Database (migration, with GRANTs + RLS scoped to org membership):
-- `wise_payout_recipients` — org_id, vendor_id/employee_id, currency, account holder, IBAN/account+routing/sort code, wise_recipient_id, status
-- `wise_transfers` — org_id, source_type (`bill` | `ap_batch` | `payroll` | `tax` | `payment_link`), source_id, recipient_id, amount, currency, method (`eft` | `etransfer` | `card`), wise_quote_id, wise_transfer_id, reference, status, error
-- extend `vendor_stripe_connect` usage with a `payout_provider` column on a new `vendor_payout_routing` view/table so routing is provider-agnostic
-
-Edge functions:
-- `wise-create-recipient` — creates/upserts a Wise recipient
-- `wise-create-transfer` — quote → transfer → fund, writes `wise_transfers`, records the GL/vendor payment on success
-- extend existing `wise-webhook` to move `wise_transfers` rows through `processing` → `outgoing_payment_sent` / `funds_refunded` and mark the linked bill/batch paid
-
-Secrets: the plan assumes `WISE_API_TOKEN` and `WISE_PROFILE_ID` exist. They are **not** currently in this project's secret store (only `GOOGLE_AI_API_KEY`, `LOVABLE_API_KEY`, `PAYROLL_ENCRYPTION_KEY`), so I'll request them before wiring the live calls. Until they're present, transfers record as `instructed` instead of failing.
-
-## 3. Bill payment methods
-
-- `useAPPaymentBatches` `BatchProvider` gains `wise_eft`, `wise_etransfer`, `wise_card`.
-- `APPayments.tsx` "Create AP Payment Batch" dialog: Provider select grouped as **Wise** (EFT, e-Transfer, Card) / **Stripe** / **Paysafe** / **Manual**; funding-bank field switches to Wise balance currency when a Wise rail is picked.
-- New `PayBillDialog` action on a bill (`ViewBillDialog`) → opens the checkout form (below) with EFT / e-Transfer / Card tabs, posting through `wise-create-transfer` and the existing bill-payment GL path.
-
-## 4. Checkout form (shared)
-
-New `src/components/payments/CheckoutForm.tsx` modelled on the screenshot:
-- express row (Apple Pay / Link) when Stripe is the processor
-- Contact information (email)
-- Payment method card: Card (number / expiry / CVC / cardholder), or EFT bank fields, or e-Transfer email
-- Billing address block (country, address 1/2, city, state, postal) with country-aware labels
-- "Save payment information" checkbox, sticky Pay button with amount
-
-Used in two places:
-- public `/pay/:linkId` page (`PayLink`) — replaces the current inline form
-- in-app bill payment dialog from §3
-
-Card fields stay tokenized by the processor (Stripe Elements / Paysafe.js); no raw PAN touches our DB.
-
-## 5. Payment Links
-
-`PaymentLinks.tsx`: add `wise` alongside existing processors — accepted methods gain **EFT (Wise)** and **e-Transfer (Wise)**, and payout partner selection (Stripe / Wise) per link, persisted in the link metadata and honoured by the checkout page.
+In `src/pages/treasury/PayoutRouting.tsx`:
+- Add a search box above the table filtering vendors by name.
+- Add an **Add vendor** button opening a small dialog (name, email, phone, default currency) that inserts into `public.vendors` for the current organization, invalidates the vendor query, and immediately shows a routing row for the new vendor.
+- Add a **Bulk assign** control: pick a provider + destination + method and apply it to all currently filtered vendors in one save.
+- Include `efinmoney` alongside Wise and Stripe in the per-vendor provider select, with wallet ID as the destination field, so vendor routing matches the payroll providers.
 
 ## Technical notes
-
-- Existing platform-level `wise_receiving_accounts` (inbound invoice payments) is untouched; this adds the outbound payout side.
-- All new tables get `GRANT`s plus org-scoped RLS; edge functions use the service role and verify org membership.
-- Country/localization: Wise method availability filtered by org country using the existing `countryTreasuryConfig` (e-Transfer CA-only, EFT for CA/US/EU/UK, card everywhere).
+- Provider/rail values are plain `text` with check constraints, so widening is a low-risk `ALTER TABLE ... DROP CONSTRAINT / ADD CONSTRAINT` pair; no data migration is needed.
+- Wise API calls still degrade to "instructed" mode when `WISE_API_TOKEN` / `WISE_PROFILE_ID` are unset, as with the existing bill payout path.
+- eFinMoney already exists as a mobile-money institution in `src/data/localizedBankingInstitutions.ts`; the wallet payout will reuse that code (`EFINMONEY`) for labeling.
