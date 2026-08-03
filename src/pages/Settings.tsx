@@ -23,6 +23,7 @@ import { cn } from '@/lib/utils';
 import { SalesTaxSettingsTab } from '@/components/settings/SalesTaxSettingsTab';
 import { OrganizationLogoUpload } from '@/components/settings/OrganizationLogoUpload';
 import { UsersSettingsTab } from '@/components/settings/UsersSettingsTab';
+import { ApprovalsSettingsTab } from '@/components/settings/ApprovalsSettingsTab';
 import { InvoiceTemplateSettingsTab } from '@/components/settings/InvoiceTemplateSettingsTab';
 import { ChartOfAccountsGenerator } from '@/components/settings/ChartOfAccountsGenerator';
 import { GlobalComplianceTab } from '@/components/settings/GlobalComplianceTab';
@@ -330,6 +331,10 @@ export default function Settings() {
           <TabsTrigger value="multi-currency" className="gap-2">
             <Coins className="w-4 h-4" />
             <span className="hidden sm:inline">Multi-Currency</span>
+          </TabsTrigger>
+          <TabsTrigger value="approvals" className="gap-2">
+            <ShieldCheck className="w-4 h-4" />
+            <span className="hidden sm:inline">Approvals</span>
           </TabsTrigger>
           <TabsTrigger value="users" className="gap-2">
             <Users className="w-4 h-4" />
@@ -787,6 +792,10 @@ export default function Settings() {
 
         <TabsContent value="multi-currency" className="space-y-6">
           <MultiCurrencySettingsTab />
+        </TabsContent>
+
+        <TabsContent value="approvals" className="space-y-6">
+          <ApprovalsSettingsTab />
         </TabsContent>
 
         <TabsContent value="users" className="space-y-6">
