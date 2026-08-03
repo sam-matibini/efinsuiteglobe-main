@@ -147,6 +147,99 @@ export function CreateBillDialog({ open, onOpenChange }: CreateBillDialogProps) 
     }).format(value);
   };
 
+  // ---- Attachments + AI invoice extraction -------------------------------
+  const staging = useStagedPurchaseAttachments();
+  const [extraction, setExtraction] = useState<InvoiceExtraction | null>(null);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [pendingSummary, setPendingSummary] = useState('');
+
+  const matchedVendor = matchVendor(vendors as Array<{ id: string; name: string }>, extraction?.vendor_name);
+
+  const reviewFields: ReviewField[] = extraction
+    ? [
+        {
+          key: 'vendor_id',
+          label: 'Vendor',
+          current: vendors.find((v) => v.id === form.getValues('vendor_id'))?.name ?? '',
+          extracted: matchedVendor
+            ? matchedVendor.name
+            : extraction.vendor_name
+            ? `${extraction.vendor_name} (no matching vendor — pick one manually)`
+            : '',
+        },
+        {
+          key: 'bill_number',
+          label: 'Bill number',
+          current: form.getValues('bill_number'),
+          extracted: extraction.document_number ?? '',
+        },
+        {
+          key: 'bill_date',
+          label: 'Bill date',
+          current: form.getValues('bill_date'),
+          extracted: extraction.document_date ?? '',
+        },
+        {
+          key: 'due_date',
+          label: 'Due date',
+          current: form.getValues('due_date'),
+          extracted: extraction.due_date ?? '',
+        },
+        {
+          key: 'terms',
+          label: 'Terms',
+          current: form.getValues('terms') ?? '',
+          extracted: extraction.terms ?? '',
+        },
+        {
+          key: 'notes',
+          label: 'Notes (AI document summary)',
+          current: form.getValues('notes') ?? '',
+          extracted: pendingSummary ? 'Append AI summary' : '',
+        },
+      ].filter((f) => (f.key === 'vendor_id' ? !!matchedVendor : true))
+    : [];
+
+  const applyExtraction = (keys: string[], applyLines: boolean) => {
+    if (!extraction) return;
+    const has = (k: string) => keys.includes(k);
+
+    if (has('vendor_id') && matchedVendor) form.setValue('vendor_id', matchedVendor.id);
+    if (has('bill_number') && extraction.document_number)
+      form.setValue('bill_number', extraction.document_number);
+    if (has('bill_date') && extraction.document_date)
+      form.setValue('bill_date', extraction.document_date);
+    if (has('terms') && extraction.terms) {
+      const preset = BILL_PAYMENT_TERMS.find(
+        (t) => t.label.toLowerCase() === extraction.terms!.toLowerCase(),
+      );
+      form.setValue('terms', preset ? preset.label : extraction.terms);
+      setIsCustomTerm(!preset);
+      const days = preset ? getTermDays(preset.label) : null;
+      if (days != null) {
+        form.setValue('due_date', computeDueDate(form.getValues('bill_date'), days));
+      }
+    }
+    if (has('due_date') && extraction.due_date) form.setValue('due_date', extraction.due_date);
+    if (has('notes') && pendingSummary) {
+      const current = form.getValues('notes') ?? '';
+      form.setValue('notes', [current, pendingSummary].filter(Boolean).join('\n\n'));
+    }
+    if (applyLines && extraction.lines.length > 0) {
+      form.setValue(
+        'lines',
+        extraction.lines.map((l) => ({
+          description: l.description,
+          expense_account_id: '',
+          quantity: l.quantity ?? 1,
+          unit_price: l.unit_price ?? 0,
+          tax_rate: l.tax_rate ?? 0,
+        })),
+      );
+    }
+    toast.success('Invoice data applied — review and select GL accounts before saving.');
+  };
+
   const onSubmit = async (data: BillFormData) => {
     if (!organization?.id) return;
     setIsSubmitting(true);
