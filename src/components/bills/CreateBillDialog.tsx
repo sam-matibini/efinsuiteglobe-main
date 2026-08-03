@@ -347,7 +347,17 @@ export function CreateBillDialog({ open, onOpenChange }: CreateBillDialogProps) 
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() => append({ description: '', quantity: 1, unit_price: 0, tax_rate: 13 })}
+                  onClick={() =>
+                    append({
+                      description: '',
+                      expense_account_id:
+                        form.getValues('lines')?.[fields.length - 1]?.expense_account_id || '',
+                      quantity: 1,
+                      unit_price: 0,
+                      tax_rate: 13,
+                    })
+                  }
+
                 >
                   <Plus className="w-4 h-4 mr-1" />
                   Add Line
