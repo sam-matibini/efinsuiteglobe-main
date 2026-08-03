@@ -383,9 +383,10 @@ export default function PayoutRouting() {
                         <Select value={bulk.provider} onValueChange={(v) => setBulk({ ...bulk, provider: v, target: '' })}>
                           <SelectTrigger><SelectValue /></SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="wise">Wise</SelectItem>
-                            <SelectItem value="stripe">Stripe</SelectItem>
-                            <SelectItem value="efinmoney">eFinMoney wallet</SelectItem>
+                            {isEnabled('wise') && <SelectItem value="wise">Wise</SelectItem>}
+                            {isEnabled('stripe') && <SelectItem value="stripe">Stripe</SelectItem>}
+                            {isEnabled('efinmoney') && <SelectItem value="efinmoney">eFinMoney wallet</SelectItem>}
+
                           </SelectContent>
                         </Select>
                       </div>
