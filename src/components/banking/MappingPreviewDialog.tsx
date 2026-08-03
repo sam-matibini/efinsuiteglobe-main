@@ -509,7 +509,7 @@ export function MappingPreviewDialog({
             Preview & Validate Transactions
           </DialogTitle>
           <DialogDescription>
-            Review the normalized data before importing. Rows with errors will be skipped.
+            Review the normalized data before importing. Use the pencil or flip icon to correct a wrongly classified row (e.g. a payment mapped as a Deposit). Rows with errors will be skipped.
           </DialogDescription>
         </DialogHeader>
         
