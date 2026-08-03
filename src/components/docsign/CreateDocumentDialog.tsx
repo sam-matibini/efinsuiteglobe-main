@@ -55,6 +55,7 @@ const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;   // 20 MB per spec
 interface CreateDocumentDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onCreated?: (documentId: string) => void;
 }
 
 // Sorted alphabetically, with "Other" at the end
@@ -73,7 +74,7 @@ const DOCUMENT_TYPES = [
   { value: 'other', label: 'Other' },
 ];
 
-export function CreateDocumentDialog({ open, onOpenChange }: CreateDocumentDialogProps) {
+export function CreateDocumentDialog({ open, onOpenChange, onCreated }: CreateDocumentDialogProps) {
   const [title, setTitle] = useState('');
   const [documentType, setDocumentType] = useState('contract');
   const [file, setFile] = useState<File | null>(null);
@@ -234,7 +235,7 @@ export function CreateDocumentDialog({ open, onOpenChange }: CreateDocumentDialo
         }
       }
 
-      await createDocument.mutateAsync({
+      const newDoc = await createDocument.mutateAsync({
         title: title.trim(),
         document_type: documentType,
         file_url: fileUrl,
@@ -246,6 +247,11 @@ export function CreateDocumentDialog({ open, onOpenChange }: CreateDocumentDialo
       setDocumentType('contract');
       setFile(null);
       onOpenChange(false);
+
+      // Immediately open the signing workflow so the user can add signers and place fields
+      if (newDoc?.id) {
+        onCreated?.(newDoc.id);
+      }
     } catch (error) {
       console.error('Create document error:', error);
       const message = error instanceof Error ? error.message : 'Unknown error';

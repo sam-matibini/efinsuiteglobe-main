@@ -912,16 +912,26 @@ export default function DocSign() {
                           <p className="text-sm text-muted-foreground">{doc.document_type} • {format(new Date(doc.created_at), 'MMM d, yyyy')}</p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-2">
                         {getStatusBadge(doc.status)}
+                        {normalizeStatus(doc.status) === 'draft' && (
+                          <Button
+                            size="sm"
+                            className="bg-accent hover:bg-accent/90 hidden sm:flex"
+                            onClick={(e) => { e.stopPropagation(); handleOpenSigningWorkflow(doc.id); }}
+                          >
+                            <Send className="w-3 h-3 mr-1.5" />
+                            Prepare &amp; Send
+                          </Button>
+                        )}
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="icon"><MoreVertical className="w-4 h-4" /></Button></DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             {isResendEligible(doc.status) && (
                               <DropdownMenuItem disabled={remindDocument.isPending} onClick={(e) => { e.stopPropagation(); void handleResendDocument(doc.id); }}><Send className="w-4 h-4 mr-2" />Resend</DropdownMenuItem>
                             )}
-                            <DropdownMenuItem 
-                              onClick={(e) => { e.stopPropagation(); setDocumentToDelete({ id: doc.id, title: doc.title }); setDeleteDialogOpen(true); }} 
+                            <DropdownMenuItem
+                              onClick={(e) => { e.stopPropagation(); setDocumentToDelete({ id: doc.id, title: doc.title }); setDeleteDialogOpen(true); }}
                               className="text-destructive"
                             >
                               <Trash2 className="w-4 h-4 mr-2" />Delete
@@ -937,8 +947,8 @@ export default function DocSign() {
                               </>
                             )}
                             {normalizeStatus(doc.status) !== 'completed' && (
-                              <DropdownMenuItem onClick={(e) => { 
-                                e.stopPropagation(); 
+                              <DropdownMenuItem onClick={(e) => {
+                                e.stopPropagation();
                                 updateDocument.mutate({ id: doc.id, status: 'completed', completed_at: new Date().toISOString() });
                               }}>
                                 <CheckCircle className="w-4 h-4 mr-2" />Move to Completed
@@ -1070,7 +1080,7 @@ export default function DocSign() {
         </TabsContent>
       </Tabs>
 
-      <CreateDocumentDialog open={createDialogOpen} onOpenChange={setCreateDialogOpen} />
+      <CreateDocumentDialog open={createDialogOpen} onOpenChange={setCreateDialogOpen} onCreated={(docId) => handleOpenSigningWorkflow(docId)} />
       <DocumentDetailDialog documentId={selectedDocument} open={!!selectedDocument} onOpenChange={(open) => !open && setSelectedDocument(null)} onPrepareAndSend={(docId) => handleOpenSigningWorkflow(docId)} />
       <SignaturePad 
         open={signaturePadOpen} 
