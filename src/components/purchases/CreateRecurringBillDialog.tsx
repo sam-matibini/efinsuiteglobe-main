@@ -224,8 +224,13 @@ export function CreateRecurringBillDialog({ open, onOpenChange }: CreateRecurrin
       })),
     };
 
-    await createRecurringBill.mutateAsync(input);
+    const recurring: any = await createRecurringBill.mutateAsync(input);
+    if (recurring?.id && organization?.id) {
+      await staging.flush('recurring_bill', recurring.id, organization.id);
+    }
     resetForm();
+    setExtraction(null);
+    setPendingSummary('');
     onOpenChange(false);
   };
 
