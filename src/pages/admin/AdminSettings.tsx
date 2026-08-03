@@ -441,6 +441,11 @@ export default function AdminSettings() {
           </Card>
         </TabsContent>
 
+        {/* Payments Tab */}
+        <TabsContent value="payments">
+          <AdminWiseReceivingAccountsCard />
+        </TabsContent>
+
         {/* Security Tab */}
         <TabsContent value="security">
           <Card>
