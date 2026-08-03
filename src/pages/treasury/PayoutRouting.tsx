@@ -9,17 +9,27 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Globe2, Link2, Plus, Save, ShieldCheck } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Building2, CreditCard, FileText, Globe2, Link2, Plus, Save, ScrollText, Send, ShieldCheck, Wallet } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useCurrentOrganization } from '@/hooks/useOrganization';
 import { useStripeConnectedAccounts } from '@/hooks/useStripeConnectedAccounts';
 import { useWisePayouts, useVendorPayoutRouting } from '@/hooks/useWisePayouts';
+import { usePayoutProviderToggles, PayoutProviderKey } from '@/hooks/usePayoutProviderToggles';
+import { ProviderTile } from '@/components/treasury/ProviderTile';
 import StripeConnectedAccounts from './StripeConnectedAccounts';
 import StripeConnectCompliance from './StripeConnectCompliance';
 
 const TABS = ['providers', 'vendors', 'accounts', 'compliance'] as const;
+
+const OFFLINE_METHODS: Array<{ key: PayoutProviderKey; label: string; icon: React.ComponentType<{ className?: string }> }> = [
+  { key: 'wire', label: 'Wire transfer', icon: Send },
+  { key: 'cheque', label: 'Cheque', icon: ScrollText },
+  { key: 'manual', label: 'Manual / outside the system', icon: FileText },
+];
+
 
 export default function PayoutRouting() {
   const [params, setParams] = useSearchParams();
