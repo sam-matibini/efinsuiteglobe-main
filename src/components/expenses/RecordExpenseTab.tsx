@@ -296,12 +296,42 @@ export function RecordExpenseTab({ onSuccess, onCancel }: RecordExpenseTabProps)
   };
 
   // ---- Attachments + AI invoice extraction -------------------------------
+  const matchedVendor = matchVendor(
+    (vendors ?? []) as Array<{ id: string; name: string }>,
+    extraction?.vendor_name,
+  );
+
+  const reviewFields: ReviewField[] = extraction
+    ? [
+        {
+          key: 'vendor_id',
+          label: 'Vendor',
+          current: vendors.find((v) => v.id === vendorId)?.name ?? '',
+          extracted: matchedVendor?.name ?? '',
+        },
+        { key: 'expense_date', label: 'Expense date', current: expenseDate, extracted: extraction.document_date ?? '' },
+        {
+          key: 'amount',
+          label: 'Amount',
+          current: String(amount || ''),
+          extracted: extraction.grand_total != null ? String(extraction.grand_total) : '',
+        },
+        { key: 'reference', label: 'Reference', current: reference, extracted: extraction.document_number ?? '' },
+        {
+          key: 'notes',
+          label: 'Notes (AI document summary)',
+          current: notes,
+          extracted: pendingSummary ? 'Append AI summary' : '',
+        },
+      ]
+    : [];
+
   const applyExtraction = (keys: string[]) => {
     if (!extraction) return;
     const has = (k: string) => keys.includes(k);
     if (has('vendor_id') && matchedVendor) setVendorId(matchedVendor.id);
     if (has('expense_date') && extraction.document_date) setExpenseDate(extraction.document_date);
-    if (has('amount') && extraction.total != null) setAmount(extraction.total);
+    if (has('amount') && extraction.grand_total != null) setAmount(extraction.grand_total);
     if (has('reference') && extraction.document_number) setReference(extraction.document_number);
     if (has('notes') && pendingSummary) setNotes((prev) => [prev, pendingSummary].filter(Boolean).join('\n\n'));
   };
