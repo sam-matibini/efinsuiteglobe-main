@@ -7,7 +7,9 @@ export type PurchaseEntityType =
   | 'expense'
   | 'bill'
   | 'purchase_order'
-  | 'vendor';
+  | 'vendor'
+  | 'recurring_bill'
+  | 'vendor_credit';
 
 export interface PurchaseAttachment {
   id: string;
