@@ -282,7 +282,10 @@ export function MappingPreviewDialog({
   // (or always for credit cards) so users see Deposit/Withdrawal classification.
   const hasDebit = mappedFields.includes('debit');
   const hasCredit = mappedFields.includes('credit');
-  const showTypeColumn = statementType === 'creditcard' || hasDebit || hasCredit;
+  // Also show the Type column (and the flip control) for single signed-amount
+  // statements so any row can be corrected, not just split debit/credit files.
+  const showTypeColumn =
+    statementType === 'creditcard' || hasDebit || hasCredit || mappedFields.includes('amount');
 
   // Apply per-row manual corrections on top of the parsed rows.
   const processedData = useMemo(() => {
