@@ -40,6 +40,7 @@ const orgSchema = z.object({
   name: z.string().min(1, 'Organization name is required').max(255),
   industry: z.string().min(1, 'Please select an industry'),
   country_id: z.string().min(1, 'Please select a country'),
+  bvn_or_nin: z.string().optional(),
 });
 
 type OrgFormValues = z.infer<typeof orgSchema>;
