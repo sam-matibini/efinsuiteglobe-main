@@ -86,6 +86,7 @@ export default function Bills() {
     approved: { label: 'Approved', icon: Check, color: 'bg-blue-500/10 text-blue-600' },
     paid: { label: 'Paid', icon: Check, color: 'bg-success/10 text-success' },
     overdue: { label: 'Overdue', icon: AlertTriangle, color: 'bg-destructive/10 text-destructive' },
+    void: { label: 'Void', icon: Ban, color: 'bg-destructive/10 text-destructive line-through' },
   };
 
   const filteredBills = bills.filter(bill => {
