@@ -32,20 +32,25 @@ import {
 import { useVendors } from '@/hooks/useVendors';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrganization } from '@/hooks/useOrganization';
+import { useAccounts } from '@/hooks/useAccounts';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { format, addDays } from 'date-fns';
 import { getCountryLocalization } from '@/data/countryLocalizations';
 import { getLocaleForCountry } from '@/lib/localizedCurrencyFormatter';
 import { recordBillTaxes } from '@/lib/ngTax/integration';
+import { postBillToGL } from '@/lib/postBillToGL';
 
 
 const lineSchema = z.object({
   description: z.string().min(1, 'Description is required'),
+  expense_account_id: z.string().min(1, 'Account is required'),
   quantity: z.coerce.number().min(0.01, 'Quantity must be positive'),
   unit_price: z.coerce.number().min(0, 'Price must be 0 or more'),
   tax_rate: z.coerce.number().min(0).max(100).optional(),
 });
+
 
 const billSchema = z.object({
   vendor_id: z.string().min(1, 'Vendor is required'),
@@ -74,6 +79,23 @@ export function CreateBillDialog({ open, onOpenChange }: CreateBillDialogProps) 
   const localization = getCountryLocalization(countryCode);
   const locale = getLocaleForCountry(countryCode);
 
+  const { data: accounts = [], isLoading: accountsLoading } = useAccounts(organization?.id);
+
+  // Postable expense / COGS / asset accounts from the Chart of Accounts.
+  const accountOptions = accounts
+    .filter(
+      (a) =>
+        a.is_active !== false &&
+        !a.is_header &&
+        a.posting_allowed !== false &&
+        ['expense', 'cogs', 'other_expense', 'asset'].includes(a.account_type as string),
+    )
+    .map((a) => ({
+      value: a.id,
+      label: `${a.code} — ${a.name}`,
+      keywords: `${a.code} ${a.name}`,
+    }));
+
   const form = useForm<BillFormData>({
     resolver: zodResolver(billSchema),
     defaultValues: {
@@ -83,7 +105,7 @@ export function CreateBillDialog({ open, onOpenChange }: CreateBillDialogProps) 
       due_date: format(addDays(new Date(), 30), 'yyyy-MM-dd'),
       notes: '',
       terms: 'Net 30',
-      lines: [{ description: '', quantity: 1, unit_price: 0, tax_rate: 13 }],
+      lines: [{ description: '', expense_account_id: '', quantity: 1, unit_price: 0, tax_rate: 13 }],
     },
   });
 
@@ -91,6 +113,7 @@ export function CreateBillDialog({ open, onOpenChange }: CreateBillDialogProps) 
     control: form.control,
     name: 'lines',
   });
+
 
   const watchedLines = form.watch('lines');
   
@@ -145,6 +168,7 @@ export function CreateBillDialog({ open, onOpenChange }: CreateBillDialogProps) 
           data.lines.map((line, idx) => ({
             bill_id: bill.id,
             description: line.description,
+            expense_account_id: line.expense_account_id,
             quantity: line.quantity,
             unit_price: line.unit_price,
             amount: line.quantity * line.unit_price,
@@ -157,13 +181,37 @@ export function CreateBillDialog({ open, onOpenChange }: CreateBillDialogProps) 
 
       if (linesError) throw linesError;
 
+      // Post to the General Ledger — roll the bill back if posting fails so no
+      // un-posted document is left behind.
+      let journalEntryId: string | null = null;
+      try {
+        journalEntryId = await postBillToGL({
+          organizationId: organization.id,
+          billId: bill.id,
+          billNumber: data.bill_number,
+          billDate: data.bill_date,
+          vendorId: data.vendor_id,
+          taxAmount: taxTotal,
+          total,
+          lines: data.lines.map((line) => ({
+            account_id: line.expense_account_id,
+            amount: line.quantity * line.unit_price,
+            description: line.description,
+          })),
+        });
+      } catch (glError) {
+        await supabase.from('bill_lines').delete().eq('bill_id', bill.id);
+        await supabase.from('bills').delete().eq('id', bill.id);
+        throw glError;
+      }
+
       // NG Tax Engine — record WHT + input VAT (no-op for non-NG orgs)
       try {
         await recordBillTaxes({
           organization_id: organization.id,
           bill_id: bill.id,
           bill_date: data.bill_date,
-          journal_entry_id: null,
+          journal_entry_id: journalEntryId,
           lines: (insertedBillLines ?? []).map((l: any) => ({
             id: l.id,
             taxable_amount: Number(l.amount) || 0,
@@ -176,9 +224,12 @@ export function CreateBillDialog({ open, onOpenChange }: CreateBillDialogProps) 
 
 
       queryClient.invalidateQueries({ queryKey: ['bills'] });
-      toast.success('Bill created successfully');
+      queryClient.invalidateQueries({ queryKey: ['journal-entries'] });
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      toast.success('Bill created and posted to the General Ledger');
       form.reset();
       onOpenChange(false);
+
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       toast.error('Failed to create bill: ' + message);
@@ -296,7 +347,17 @@ export function CreateBillDialog({ open, onOpenChange }: CreateBillDialogProps) 
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() => append({ description: '', quantity: 1, unit_price: 0, tax_rate: 13 })}
+                  onClick={() =>
+                    append({
+                      description: '',
+                      expense_account_id:
+                        form.getValues('lines')?.[fields.length - 1]?.expense_account_id || '',
+                      quantity: 1,
+                      unit_price: 0,
+                      tax_rate: 13,
+                    })
+                  }
+
                 >
                   <Plus className="w-4 h-4 mr-1" />
                   Add Line
@@ -308,6 +369,7 @@ export function CreateBillDialog({ open, onOpenChange }: CreateBillDialogProps) 
                   <thead className="bg-muted/50">
                     <tr>
                       <th className="text-left p-3">Description</th>
+                      <th className="text-left p-3 w-56">Account</th>
                       <th className="text-right p-3 w-20">Qty</th>
                       <th className="text-right p-3 w-28">Price</th>
                       <th className="text-right p-3 w-20">Tax %</th>
@@ -328,6 +390,26 @@ export function CreateBillDialog({ open, onOpenChange }: CreateBillDialogProps) 
                               {...form.register(`lines.${index}.description`)}
                               placeholder="Description"
                               className="border-0 bg-transparent"
+                            />
+                          </td>
+                          <td className="p-2">
+                            <FormField
+                              control={form.control}
+                              name={`lines.${index}.expense_account_id`}
+                              render={({ field: accField }) => (
+                                <FormItem className="space-y-0">
+                                  <SearchableSelect
+                                    value={accField.value}
+                                    onValueChange={accField.onChange}
+                                    options={accountOptions}
+                                    placeholder={accountsLoading ? 'Loading...' : 'Select account'}
+                                    searchPlaceholder="Search chart of accounts..."
+                                    emptyText="No postable accounts found."
+                                    className="h-9"
+                                  />
+                                  <FormMessage />
+                                </FormItem>
+                              )}
                             />
                           </td>
                           <td className="p-2">
@@ -354,6 +436,7 @@ export function CreateBillDialog({ open, onOpenChange }: CreateBillDialogProps) 
                               className="border-0 bg-transparent text-right"
                             />
                           </td>
+
                           <td className="p-2 text-right font-mono">
                             {formatCurrency(amount)}
                           </td>
