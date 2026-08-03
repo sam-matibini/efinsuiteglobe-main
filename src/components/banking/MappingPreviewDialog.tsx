@@ -276,20 +276,53 @@ export function MappingPreviewDialog({
     });
   }, [sourceData, mappings, dateFormat, numberFormat, invertSign, treatBracketsAsNegative]);
   
+  const mappedFields = mappings.filter(m => m.sourceColumn).map(m => m.targetField);
+
+  // Add a synthetic "Type" column when the statement uses split debit/credit
+  // (or always for credit cards) so users see Deposit/Withdrawal classification.
+  const hasDebit = mappedFields.includes('debit');
+  const hasCredit = mappedFields.includes('credit');
+  const showTypeColumn = statementType === 'creditcard' || hasDebit || hasCredit;
+
+  // Apply per-row manual corrections on top of the parsed rows.
+  const processedData = useMemo(() => {
+    return baseProcessedData.map((p) => {
+      const ov = rowOverrides[p.rowIndex];
+      if (!ov) return p;
+      const mapped = { ...p.mapped, ...ov };
+
+      // Recompute the signed amount whenever debit/credit were corrected
+      if ('debit' in ov || 'credit' in ov) {
+        const debit = typeof mapped['debit'] === 'number' ? (mapped['debit'] as number) : 0;
+        const credit = typeof mapped['credit'] === 'number' ? (mapped['credit'] as number) : 0;
+        mapped['amount'] = statementType === 'creditcard' ? debit - credit : credit - debit;
+      }
+
+      // Drop parse errors for fields the user has corrected, then re-validate required fields
+      const overriddenFields = Object.keys(ov);
+      const errors = p.errors.filter(
+        (e) => !overriddenFields.some((f) => e.includes(`"${f}"`) || e.includes(`field: ${f}`)),
+      );
+      for (const req of mappings.filter((m) => m.isRequired)) {
+        const v = mapped[req.targetField];
+        const missing = v === undefined || v === null || v === '';
+        const already = errors.some((e) => e.includes(`field: ${req.targetField}`));
+        if (missing && !already) errors.push(`Missing required field: ${req.targetField}`);
+      }
+
+      return { ...p, mapped, errors, edited: true } as TransactionPreview & { edited: boolean };
+    });
+  }, [baseProcessedData, rowOverrides, mappings, statementType]);
+
+  const editedCount = Object.keys(rowOverrides).length;
+
   const totalPages = Math.ceil(processedData.length / pageSize);
   const paginatedData = processedData.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
   
   const errorCount = processedData.filter(p => p.errors.length > 0).length;
   const warningCount = processedData.filter(p => p.warnings.length > 0).length;
   const validCount = processedData.filter(p => p.errors.length === 0).length;
-  
-  const mappedFields = mappings.filter(m => m.sourceColumn).map(m => m.targetField);
-  
-  // Add a synthetic "Type" column when the statement uses split debit/credit
-  // (or always for credit cards) so users see Deposit/Withdrawal classification.
-  const hasDebit = mappedFields.includes('debit');
-  const hasCredit = mappedFields.includes('credit');
-  const showTypeColumn = statementType === 'creditcard' || hasDebit || hasCredit;
+
   
   // Display labels for column headers (matching database field names for import)
   const fieldDisplayLabels: Record<string, string> = {
