@@ -326,7 +326,14 @@ export default function Bills() {
       </Card>
 
       {/* Dialogs */}
-      <CreateBillDialog open={showBillDialog} onOpenChange={setShowBillDialog} />
+      <CreateBillDialog
+        open={showBillDialog}
+        onOpenChange={(open) => {
+          setShowBillDialog(open);
+          if (!open) setPendingPrefill(null);
+        }}
+        prefillVendorId={pendingPrefill ?? undefined}
+      />
       <RecordVendorPaymentDialog 
         open={showPaymentDialog} 
         onOpenChange={(open) => {
