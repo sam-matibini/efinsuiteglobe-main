@@ -58,7 +58,6 @@ export function SearchableSelect({
             !selected && 'text-muted-foreground',
             className,
           )}
-        >
           title={selected ? selected.label : undefined}
         >
           <span className="truncate text-left">
