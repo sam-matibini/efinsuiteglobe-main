@@ -272,6 +272,7 @@ export function useBills() {
     createBill,
     updateBillStatus,
     deleteBill,
+    voidBill,
     totalOutstanding,
     overdueAmount,
     paidThisMonth,
