@@ -9,10 +9,10 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus, Play } from 'lucide-react';
-import { usePayrollPaymentBatches, PayrollBatchProvider } from '@/hooks/usePayrollPaymentBatches';
+import { usePayrollPaymentBatches, PayrollBatchProvider, providerDefaultRail } from '@/hooks/usePayrollPaymentBatches';
 import { usePayRuns } from '@/hooks/usePayRuns';
 import { FundingBankSelect } from '@/components/treasury/FundingBankSelect';
-import { RailPicker } from '@/components/treasury/RailPicker';
+import { RailPicker, PROVIDER_RAILS } from '@/components/treasury/RailPicker';
 import { useFundingBankAccounts, Rail } from '@/hooks/useFundingBankAccounts';
 import { useIsReadOnly } from '@/hooks/useIsReadOnly';
 
