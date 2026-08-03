@@ -4,6 +4,7 @@
 // Business logic (applying transfer state to payment records) is a placeholder.
 import { corsHeaders as baseCorsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { recordInvoicePayment } from '../_shared/invoice_payment.ts';
 
 const corsHeaders = {
   ...baseCorsHeaders,
