@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Building2, ExternalLink, Loader2 } from 'lucide-react';
+import { Building2, ExternalLink, Loader2, Globe2 } from 'lucide-react';
 import { VisaIcon, MastercardIcon, AmexIcon, InteracIcon } from './PaymentIcons';
+import type { WiseAccountDisplay } from '@/hooks/useWiseReceivingAccounts';
 
-type PaymentTab = 'cc' | 'ach' | 'interac' | null;
+type PaymentTab = 'cc' | 'ach' | 'interac' | 'wise' | null;
 export type InvoicePayMethod = 'cc' | 'ach' | 'interac';
 
 interface PaymentMethodsTabsProps {
@@ -17,6 +18,10 @@ interface PaymentMethodsTabsProps {
   achTransitNumber?: string;
   etransferEmail?: string;
   ccPaymentUrl?: string;
+  /** Wise bank transfer */
+  wiseEnabled?: boolean;
+  wiseAccount?: WiseAccountDisplay | null;
+  wiseReference?: string | null;
   /** Optional: when provided, shows a "Pay $X.XX" button per method that
    *  generates a Paysafe-hosted payment link and opens it. */
   onPay?: (method: InvoicePayMethod) => Promise<void> | void;
@@ -33,6 +38,14 @@ const fmtMoney = (amount: number, currency: string) => {
   }
 };
 
+const DetailRow = ({ label, value }: { label: string; value: string }) => (
+  <div className="flex gap-2">
+    <span className="text-muted-foreground w-28 flex-shrink-0">{label}</span>
+    <span className="font-medium break-all">{value}</span>
+  </div>
+);
+
+
 export function PaymentMethodsTabs({
   primaryColor,
   creditCardEnabled,
@@ -45,6 +58,9 @@ export function PaymentMethodsTabs({
   achTransitNumber,
   etransferEmail,
   ccPaymentUrl,
+  wiseEnabled = false,
+  wiseAccount = null,
+  wiseReference = null,
   onPay,
   payAmount,
   payCurrency = 'CAD',
@@ -129,7 +145,23 @@ export function PaymentMethodsTabs({
               Interac e-Transfer
             </button>
           )}
+          {wiseEnabled && (
+            <button
+              type="button"
+              onClick={() => toggleTab('wise')}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer"
+              style={{
+                borderColor: activeTab === 'wise' ? primaryColor : `${primaryColor}30`,
+                color: primaryColor,
+                backgroundColor: activeTab === 'wise' ? `${primaryColor}12` : 'transparent',
+              }}
+            >
+              <Globe2 className="w-3.5 h-3.5" />
+              Wise Bank Transfer
+            </button>
+          )}
         </div>
+
 
         {/* Credit Card Details */}
         {activeTab === 'cc' && (
@@ -214,6 +246,56 @@ export function PaymentMethodsTabs({
             )}
           </div>
         )}
+
+        {/* Wise Bank Transfer Details */}
+        {activeTab === 'wise' && (
+          <div className="rounded-md p-2.5 text-xs space-y-1" style={{ backgroundColor: `${primaryColor}08` }}>
+            <p className="font-semibold text-muted-foreground mb-1.5">Wise Bank Transfer</p>
+            {wiseAccount ? (
+              <>
+                <DetailRow label="Currency" value={wiseAccount.currency} />
+                {wiseAccount.account_holder_name && (
+                  <DetailRow label="Beneficiary" value={wiseAccount.account_holder_name} />
+                )}
+                {wiseAccount.bank_name && <DetailRow label="Bank" value={wiseAccount.bank_name} />}
+                {wiseAccount.account_number && (
+                  <DetailRow label="Account no." value={wiseAccount.account_number} />
+                )}
+                {wiseAccount.routing_number && (
+                  <DetailRow label="Routing" value={wiseAccount.routing_number} />
+                )}
+                {wiseAccount.sort_code && <DetailRow label="Sort code" value={wiseAccount.sort_code} />}
+                {wiseAccount.iban && <DetailRow label="IBAN" value={wiseAccount.iban} />}
+                {wiseAccount.bic_swift && <DetailRow label="BIC / SWIFT" value={wiseAccount.bic_swift} />}
+                {wiseAccount.institution_address && (
+                  <DetailRow label="Bank address" value={wiseAccount.institution_address} />
+                )}
+                {wiseReference && (
+                  <div className="flex gap-2 pt-1">
+                    <span className="text-muted-foreground w-28 flex-shrink-0">Reference</span>
+                    <span className="font-semibold" style={{ color: primaryColor }}>{wiseReference}</span>
+                  </div>
+                )}
+                <p className="text-muted-foreground italic pt-1">
+                  {wiseReference
+                    ? 'Include the reference exactly as shown so your payment is matched automatically.'
+                    : 'Please quote your invoice number as the transfer reference.'}
+                </p>
+                {wiseAccount.currencyMismatch && (
+                  <p className="text-muted-foreground italic">
+                    These details are for {wiseAccount.currency}. Contact us if you need to pay in the
+                    invoice currency.
+                  </p>
+                )}
+              </>
+            ) : (
+              <p className="text-muted-foreground italic">
+                Wise transfer details not yet configured. Contact us for payment information.
+              </p>
+            )}
+          </div>
+        )}
+
       </div>
     </div>
   );

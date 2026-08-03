@@ -6951,6 +6951,61 @@ export type Database = {
           },
         ]
       }
+      document_signatures: {
+        Row: {
+          created_at: string
+          document_id: string
+          field_id: string | null
+          id: string
+          image_base64: string
+          ip_address: string | null
+          signer_id: string
+          user_agent: string | null
+        }
+        Insert: {
+          created_at?: string
+          document_id: string
+          field_id?: string | null
+          id?: string
+          image_base64: string
+          ip_address?: string | null
+          signer_id: string
+          user_agent?: string | null
+        }
+        Update: {
+          created_at?: string
+          document_id?: string
+          field_id?: string | null
+          id?: string
+          image_base64?: string
+          ip_address?: string | null
+          signer_id?: string
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_signatures_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "document_signatures_field_id_fkey"
+            columns: ["field_id"]
+            isOneToOne: false
+            referencedRelation: "document_fields"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "document_signatures_signer_id_fkey"
+            columns: ["signer_id"]
+            isOneToOne: false
+            referencedRelation: "document_signers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       document_signers: {
         Row: {
           access_code: string | null
@@ -6988,10 +7043,12 @@ export type Database = {
           role: string | null
           routing_condition: Json | null
           routing_order: number | null
+          self_signed: boolean
           signature_data: string | null
           signed_at: string | null
+          signer_expires_at: string | null
           signing_order: number | null
-          signing_token: string | null
+          signing_token: string
           status: string | null
           updated_at: string
           viewed_at: string | null
@@ -7032,10 +7089,12 @@ export type Database = {
           role?: string | null
           routing_condition?: Json | null
           routing_order?: number | null
+          self_signed?: boolean
           signature_data?: string | null
           signed_at?: string | null
+          signer_expires_at?: string | null
           signing_order?: number | null
-          signing_token?: string | null
+          signing_token?: string
           status?: string | null
           updated_at?: string
           viewed_at?: string | null
@@ -7076,10 +7135,12 @@ export type Database = {
           role?: string | null
           routing_condition?: Json | null
           routing_order?: number | null
+          self_signed?: boolean
           signature_data?: string | null
           signed_at?: string | null
+          signer_expires_at?: string | null
           signing_order?: number | null
-          signing_token?: string | null
+          signing_token?: string
           status?: string | null
           updated_at?: string
           viewed_at?: string | null
@@ -12881,6 +12942,7 @@ export type Database = {
           total: number
           updated_at: string
           vehicle_info: Json | null
+          wise_payment_reference: string | null
         }
         Insert: {
           adjustment?: number | null
@@ -12953,6 +13015,7 @@ export type Database = {
           total?: number
           updated_at?: string
           vehicle_info?: Json | null
+          wise_payment_reference?: string | null
         }
         Update: {
           adjustment?: number | null
@@ -13025,6 +13088,7 @@ export type Database = {
           total?: number
           updated_at?: string
           vehicle_info?: Json | null
+          wise_payment_reference?: string | null
         }
         Relationships: [
           {
@@ -15551,6 +15615,7 @@ export type Database = {
           invoice_stripe_account_id: string | null
           invoice_template_style: string | null
           invoice_template_type: string | null
+          invoice_wise_enabled: boolean
           language: string | null
           legal_name: string | null
           locale: string | null
@@ -15693,6 +15758,7 @@ export type Database = {
           invoice_stripe_account_id?: string | null
           invoice_template_style?: string | null
           invoice_template_type?: string | null
+          invoice_wise_enabled?: boolean
           language?: string | null
           legal_name?: string | null
           locale?: string | null
@@ -15835,6 +15901,7 @@ export type Database = {
           invoice_stripe_account_id?: string | null
           invoice_template_style?: string | null
           invoice_template_type?: string | null
+          invoice_wise_enabled?: boolean
           language?: string | null
           legal_name?: string | null
           locale?: string | null
@@ -28084,6 +28151,162 @@ export type Database = {
           },
         ]
       }
+      wise_receiving_accounts: {
+        Row: {
+          account_holder_name: string | null
+          account_number: string | null
+          bank_name: string | null
+          bic_swift: string | null
+          created_at: string
+          currency: string
+          iban: string | null
+          id: string
+          institution_address: string | null
+          is_active: boolean
+          notes: string | null
+          routing_number: string | null
+          sort_code: string | null
+          updated_at: string
+          wise_balance_id: string | null
+          wise_profile_id: string | null
+        }
+        Insert: {
+          account_holder_name?: string | null
+          account_number?: string | null
+          bank_name?: string | null
+          bic_swift?: string | null
+          created_at?: string
+          currency: string
+          iban?: string | null
+          id?: string
+          institution_address?: string | null
+          is_active?: boolean
+          notes?: string | null
+          routing_number?: string | null
+          sort_code?: string | null
+          updated_at?: string
+          wise_balance_id?: string | null
+          wise_profile_id?: string | null
+        }
+        Update: {
+          account_holder_name?: string | null
+          account_number?: string | null
+          bank_name?: string | null
+          bic_swift?: string | null
+          created_at?: string
+          currency?: string
+          iban?: string | null
+          id?: string
+          institution_address?: string | null
+          is_active?: boolean
+          notes?: string | null
+          routing_number?: string | null
+          sort_code?: string | null
+          updated_at?: string
+          wise_balance_id?: string | null
+          wise_profile_id?: string | null
+        }
+        Relationships: []
+      }
+      wise_webhook_events: {
+        Row: {
+          active_cases: Json | null
+          amount: number | null
+          balance_id: string | null
+          currency: string | null
+          current_state: string | null
+          delivery_id: string | null
+          event_type: string
+          id: string
+          issue_summary: string | null
+          match_status: string | null
+          matched_invoice_id: string | null
+          matched_reference: string | null
+          needs_attention: boolean
+          occurred_at: string | null
+          organization_id: string | null
+          payload: Json
+          post_balance_amount: number | null
+          previous_state: string | null
+          profile_id: string | null
+          received_at: string
+          resource_type: string | null
+          signature_valid: boolean
+          subscription_id: string | null
+          transaction_type: string | null
+          transfer_id: string | null
+        }
+        Insert: {
+          active_cases?: Json | null
+          amount?: number | null
+          balance_id?: string | null
+          currency?: string | null
+          current_state?: string | null
+          delivery_id?: string | null
+          event_type: string
+          id?: string
+          issue_summary?: string | null
+          match_status?: string | null
+          matched_invoice_id?: string | null
+          matched_reference?: string | null
+          needs_attention?: boolean
+          occurred_at?: string | null
+          organization_id?: string | null
+          payload?: Json
+          post_balance_amount?: number | null
+          previous_state?: string | null
+          profile_id?: string | null
+          received_at?: string
+          resource_type?: string | null
+          signature_valid?: boolean
+          subscription_id?: string | null
+          transaction_type?: string | null
+          transfer_id?: string | null
+        }
+        Update: {
+          active_cases?: Json | null
+          amount?: number | null
+          balance_id?: string | null
+          currency?: string | null
+          current_state?: string | null
+          delivery_id?: string | null
+          event_type?: string
+          id?: string
+          issue_summary?: string | null
+          match_status?: string | null
+          matched_invoice_id?: string | null
+          matched_reference?: string | null
+          needs_attention?: boolean
+          occurred_at?: string | null
+          organization_id?: string | null
+          payload?: Json
+          post_balance_amount?: number | null
+          previous_state?: string | null
+          profile_id?: string | null
+          received_at?: string
+          resource_type?: string | null
+          signature_valid?: boolean
+          subscription_id?: string | null
+          transaction_type?: string | null
+          transfer_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wise_webhook_events_matched_invoice_id_fkey"
+            columns: ["matched_invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wise_webhook_events_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       combined_tax_rates: {
@@ -29301,6 +29524,7 @@ export type Database = {
           settlement_count: number
         }[]
       }
+      signer_token: { Args: never; Returns: string }
       subledger_reconciliation: {
         Args: { p_organization_id: string }
         Returns: {

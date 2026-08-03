@@ -137,6 +137,16 @@ export interface CreateInvoiceInput {
   }[];
 }
 
+/**
+ * Build a short, unique reference customers quote on Wise transfers.
+ * Format: <invoice number, alphanumeric>-<4 random chars>
+ */
+function buildWisePaymentReference(invoiceNumber: string): string {
+  const base = (invoiceNumber || 'INV').replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(-12);
+  const suffix = Math.random().toString(36).slice(2, 6).toUpperCase();
+  return `${base}-${suffix}`;
+}
+
 export function useInvoices() {
   const { organization } = useCurrentOrganization();
   const queryClient = useQueryClient();
@@ -270,6 +280,8 @@ export function useInvoices() {
           status: 'issued',
           issued_at: new Date().toISOString(),
           department_id: input.department_id || null,
+          // Unique reference used to auto-match incoming Wise bank transfers
+          wise_payment_reference: buildWisePaymentReference(invoiceNumber),
         }])
         .select()
         .single();
@@ -417,6 +429,13 @@ export function useInvoices() {
       
       const updates: Partial<Invoice> = { status };
       
+      // Ensure a Wise transfer reference exists before the invoice reaches a customer
+      if (!currentInvoice.wise_payment_reference) {
+        (updates as Record<string, unknown>).wise_payment_reference = buildWisePaymentReference(
+          currentInvoice.invoice_number,
+        );
+      }
+
       if (status === 'sent') {
         updates.sent_at = new Date().toISOString();
       } else if (status === 'paid') {

@@ -117,6 +117,7 @@ const getNavigation = (payrollLabels: { taxSlips: string; separationDoc: string;
     requiredModules: ['banking'],
     children: [
       { label: 'Accounts', href: '/banking/accounts', icon: PiggyBank },
+      
       { label: 'Credit Cards', href: '/banking/credit-cards', icon: CreditCard },
       { label: 'Transactions', href: '/banking/transactions', icon: ArrowLeftRight },
       { label: 'AI Rules', href: '/banking/rules', icon: Sparkles, hideForReadOnly: true },

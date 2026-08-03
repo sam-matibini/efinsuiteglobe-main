@@ -1,5 +1,6 @@
 import { useMemo, useEffect, useRef } from 'react';
 import { PaymentMethodsTabs } from './PaymentMethodsTabs';
+import type { WiseAccountDisplay } from '@/hooks/useWiseReceivingAccounts';
 import { Card } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
@@ -92,6 +93,10 @@ interface InvoicePreviewTabProps {
   achTransitNumber?: string;
   etransferEmail?: string;
   ccPaymentUrl?: string;
+  // Wise bank transfer
+  wiseEnabled?: boolean;
+  wiseAccount?: WiseAccountDisplay | null;
+  wiseReference?: string | null;
   // Signature toggles
   showSellerSignature?: boolean;
   showBuyerSignature?: boolean;
@@ -171,6 +176,9 @@ export function InvoicePreviewTab({
   achTransitNumber: achTransitNumberProp,
   etransferEmail,
   ccPaymentUrl,
+  wiseEnabled = false,
+  wiseAccount = null,
+  wiseReference = null,
   // Signature toggles
   showSellerSignature = false,
   showBuyerSignature = false,
@@ -562,12 +570,12 @@ export function InvoicePreviewTab({
         )}
 
         {/* Accepted Payment Methods - Clickable Tabs */}
-        {enableOnlinePayments && (creditCardEnabled || achEnabled || interacEnabled) && (
+        {((enableOnlinePayments && (creditCardEnabled || achEnabled || interacEnabled)) || wiseEnabled) && (
           <PaymentMethodsTabs
             primaryColor={primaryColor}
-            creditCardEnabled={creditCardEnabled}
-            achEnabled={achEnabled}
-            interacEnabled={interacEnabled}
+            creditCardEnabled={!!enableOnlinePayments && creditCardEnabled}
+            achEnabled={!!enableOnlinePayments && achEnabled}
+            interacEnabled={!!enableOnlinePayments && interacEnabled}
             ccInstructions={ccInstructions}
             achInstitution={achInstitution}
             achAccountName={achAccountNameProp}
@@ -575,6 +583,9 @@ export function InvoicePreviewTab({
             achTransitNumber={achTransitNumberProp}
             etransferEmail={etransferEmail}
             ccPaymentUrl={ccPaymentUrl}
+            wiseEnabled={wiseEnabled}
+            wiseAccount={wiseAccount}
+            wiseReference={wiseReference}
             onPay={onPayOnline}
             payAmount={onPayOnline ? (balanceDue ?? total) : undefined}
             payCurrency={currency}

@@ -31,6 +31,7 @@ import { PaymentSettingsTab } from '@/components/settings/PaymentSettingsTab';
 import { ExecutiveSignerSettingsCard } from '@/components/settings/ExecutiveSignerSettingsCard';
 import { DeleteOrganizationDialog } from '@/components/settings/DeleteOrganizationDialog';
 import { BillingSettingsTab } from '@/components/settings/BillingSettingsTab';
+import { VirtualAccountsList } from '@/components/virtual-accounts/VirtualAccountsList';
 import { Trash2 } from 'lucide-react';
 
 import { useOrganizationContext } from '@/hooks/useOrganizationContext';
@@ -317,6 +318,10 @@ export default function Settings() {
           <TabsTrigger value="billing" className="gap-2">
             <Wallet className="w-4 h-4" />
             <span className="hidden sm:inline">Billing</span>
+          </TabsTrigger>
+          <TabsTrigger value="virtual-accounts" className="gap-2">
+            <Wallet className="w-4 h-4" />
+            <span className="hidden sm:inline">Virtual Account</span>
           </TabsTrigger>
           <TabsTrigger value="sales-tax" className="gap-2">
             <Receipt className="w-4 h-4" />
@@ -768,6 +773,10 @@ export default function Settings() {
 
         <TabsContent value="billing" className="space-y-6">
           <BillingSettingsTab />
+        </TabsContent>
+
+        <TabsContent value="virtual-accounts" className="space-y-6">
+          <VirtualAccountsList />
         </TabsContent>
 
 
