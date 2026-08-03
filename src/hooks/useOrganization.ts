@@ -246,6 +246,24 @@ export function useCreateOrganization() {
       
       if (memberError) throw memberError;
       
+      // Auto-provision an eFinCash virtual account in the country's currency
+      // (falls back to USD when the provider doesn't support it). Non-blocking:
+      // the org is usable even if the provider call fails.
+      try {
+        const vaCurrency = resolveVirtualAccountCurrency(currency);
+        await supabase.functions.invoke('efincash-proxy', {
+          body: {
+            organization_id: org.id,
+            currency: vaCurrency,
+            email: user.email,
+            first_name: name,
+            bvn_or_nin: bvn_or_nin || null,
+          },
+        });
+      } catch (e) {
+        console.error('[useCreateOrganization] virtual account provisioning failed', e);
+      }
+      
       return org;
     },
     onSuccess: () => {
