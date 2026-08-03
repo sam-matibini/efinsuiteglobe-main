@@ -2,6 +2,7 @@
 // Called from the signing page after a signer submits their signature.
 // Checks whether all signers are done; if so, marks the document completed
 // and emails everyone. Otherwise emails the owner a progress update.
+// Fires document.signed and (when all done) document.completed webhooks.
 //
 // Auth: x-signer-token header (same token used on the signing page).
 // No user JWT required — signers are not Supabase auth users.
@@ -37,6 +38,47 @@ async function sendEmail(to: string, subject: string, html: string): Promise<voi
     body: JSON.stringify({ from: FROM_EMAIL, to: [to], subject, html }),
   });
   if (!res.ok) console.error(`Resend ${res.status}:`, await res.text().catch(() => ''));
+}
+
+// Fire webhooks registered for this org that subscribe to the given event.
+// Failures are logged but never thrown — webhooks must not block the main flow.
+async function fireWebhooks(organizationId: string, event: string, payload: unknown): Promise<void> {
+  const { data: hooks } = await admin
+    .from('document_webhooks')
+    .select('id, url, secret')
+    .eq('organization_id', organizationId)
+    .eq('is_active', true)
+    .contains('events', [event]);
+
+  if (!hooks || hooks.length === 0) return;
+
+  const body = JSON.stringify({ event, created_at: new Date().toISOString(), data: payload });
+
+  await Promise.allSettled(
+    hooks.map(async (hook: { id: string; url: string; secret: string | null }) => {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'X-EfinSuite-Event': event,
+      };
+
+      if (hook.secret) {
+        const key = await crypto.subtle.importKey(
+          'raw',
+          new TextEncoder().encode(hook.secret),
+          { name: 'HMAC', hash: 'SHA-256' },
+          false,
+          ['sign'],
+        );
+        const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(body));
+        headers['X-EfinSuite-Signature'] = `sha256=${Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, '0')).join('')}`;
+      }
+
+      const res = await fetch(hook.url, { method: 'POST', headers, body });
+      if (!res.ok) {
+        console.warn(`webhook ${hook.id} → ${hook.url} returned ${res.status}`);
+      }
+    }),
+  );
 }
 
 Deno.serve(async (req) => {
@@ -92,6 +134,15 @@ Deno.serve(async (req) => {
   const { data: ownerData } = await admin.auth.admin.getUserById(doc.owner_id);
   const ownerEmail = ownerData?.user?.email;
 
+  // Always fire document.signed for this signer (fire-and-forget)
+  fireWebhooks(doc.organization_id, 'document.signed', {
+    document_id: doc.id,
+    title: doc.title,
+    organization_id: doc.organization_id,
+    signer: { id: signer.id, email: signer.email, name: signer.name },
+    remaining_signers: pending.length,
+  }).catch(e => console.warn('fireWebhooks document.signed:', e));
+
   if (allDone) {
     // Mark document completed
     await admin
@@ -119,6 +170,15 @@ Deno.serve(async (req) => {
         completionHtml({ recipientName: 'Document owner', documentTitle: doc.title, orgName, docUrl }),
       );
     }
+
+    // Fire document.completed webhook (fire-and-forget)
+    fireWebhooks(doc.organization_id, 'document.completed', {
+      document_id: doc.id,
+      title: doc.title,
+      organization_id: doc.organization_id,
+      completed_at: new Date().toISOString(),
+      signers: (allSigners ?? []).map(s => ({ id: s.id, email: s.email, name: s.name, status: s.status })),
+    }).catch(e => console.warn('fireWebhooks document.completed:', e));
 
     return json({ status: 'completed', message: 'Document completed. Emails sent to all parties.' });
   }

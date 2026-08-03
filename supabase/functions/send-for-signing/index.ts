@@ -2,6 +2,7 @@
 // Called by the frontend "Send" button. Emails each pending signer their
 // unique first-party signing link (/docsign?token=...) via Resend.
 // Updates signer status → sent, document status → sent.
+// Fires document.sent webhook after emails go out.
 //
 // Requires: RESEND_API_KEY secret, RESEND_FROM_EMAIL secret (optional).
 // Authorization: caller must be document owner or org member.
@@ -40,6 +41,47 @@ async function sendEmail(to: string, subject: string, html: string): Promise<voi
     const err = await res.text().catch(() => 'unknown');
     throw new Error(`Resend ${res.status}: ${err}`);
   }
+}
+
+// Fire webhooks registered for this org that subscribe to the given event.
+// Failures are logged but never thrown — webhooks must not block the main flow.
+async function fireWebhooks(organizationId: string, event: string, payload: unknown): Promise<void> {
+  const { data: hooks } = await admin
+    .from('document_webhooks')
+    .select('id, url, secret')
+    .eq('organization_id', organizationId)
+    .eq('is_active', true)
+    .contains('events', [event]);
+
+  if (!hooks || hooks.length === 0) return;
+
+  const body = JSON.stringify({ event, created_at: new Date().toISOString(), data: payload });
+
+  await Promise.allSettled(
+    hooks.map(async (hook: { id: string; url: string; secret: string | null }) => {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'X-EfinSuite-Event': event,
+      };
+
+      if (hook.secret) {
+        const key = await crypto.subtle.importKey(
+          'raw',
+          new TextEncoder().encode(hook.secret),
+          { name: 'HMAC', hash: 'SHA-256' },
+          false,
+          ['sign'],
+        );
+        const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(body));
+        headers['X-EfinSuite-Signature'] = `sha256=${Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, '0')).join('')}`;
+      }
+
+      const res = await fetch(hook.url, { method: 'POST', headers, body });
+      if (!res.ok) {
+        console.warn(`webhook ${hook.id} → ${hook.url} returned ${res.status}`);
+      }
+    }),
+  );
 }
 
 function signingEmailHtml({
@@ -174,6 +216,14 @@ Deno.serve(async (req) => {
   const sentCount = results.filter(r => r.status === 'sent').length;
   if (sentCount > 0) {
     await admin.from('documents').update({ status: 'sent' }).eq('id', documentId);
+
+    // Fire document.sent webhook (fire-and-forget)
+    fireWebhooks(doc.organization_id, 'document.sent', {
+      document_id: doc.id,
+      title: doc.title,
+      organization_id: doc.organization_id,
+      sent_to: results.filter(r => r.status === 'sent').map(r => r.email),
+    }).catch(e => console.warn('fireWebhooks document.sent:', e));
   }
 
   return json({ sent: sentCount, total: signers.length, results });
