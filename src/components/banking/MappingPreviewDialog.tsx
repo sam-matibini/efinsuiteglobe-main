@@ -201,12 +201,15 @@ export function MappingPreviewDialog({
   onBack,
 }: MappingPreviewDialogProps) {
   const [currentPage, setCurrentPage] = useState(0);
+  const [rowOverrides, setRowOverrides] = useState<Record<number, Record<string, unknown>>>({});
+  const [editingRow, setEditingRow] = useState<number | null>(null);
   const pageSize = 20;
   
   const { mappings, dateFormat, numberFormat, invertSign, treatBracketsAsNegative } = mappingConfig;
   
   // Process all data with mappings
-  const processedData = useMemo(() => {
+  const baseProcessedData = useMemo(() => {
+
     return sourceData.map((row, rowIndex) => {
       const mapped: Record<string, unknown> = {};
       const errors: string[] = [];
