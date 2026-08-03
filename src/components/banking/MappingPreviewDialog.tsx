@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, Fragment } from 'react';
 import {
-  Eye, Check, AlertTriangle, ChevronLeft, ChevronRight,
+  Eye, Check, AlertTriangle,
   FileCheck, ArrowRight, Edit2, RotateCcw, Pencil, ArrowLeftRight, X
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -503,7 +503,7 @@ export function MappingPreviewDialog({
   
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[95vw] max-h-[90vh] flex flex-col p-0">
+      <DialogContent className="max-w-[95vw] h-[90vh] max-h-[90vh] flex flex-col p-0 overflow-hidden">
         <DialogHeader className="p-6 pb-0">
           <DialogTitle className="flex items-center gap-2">
             <Eye className="h-5 w-5" />
