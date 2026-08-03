@@ -66,6 +66,53 @@ export default function PayoutRouting() {
   const setRow = (vendorId: string, patch: Partial<{ provider: string; target: string; method: string }>) =>
     setDraft((d) => ({ ...d, [vendorId]: { ...rowValue(vendorId), ...patch } }));
 
+  const [vendorSearch, setVendorSearch] = useState('');
+  const filteredVendors = useMemo(() => {
+    const q = vendorSearch.trim().toLowerCase();
+    const list = (vendors.data ?? []) as Array<{ id: string; name: string }>;
+    return q ? list.filter((v) => v.name?.toLowerCase().includes(q)) : list;
+  }, [vendors.data, vendorSearch]);
+
+  const [vendorOpen, setVendorOpen] = useState(false);
+  const [savingVendor, setSavingVendor] = useState(false);
+  const [newVendor, setNewVendor] = useState({ name: '', email: '', phone: '', default_currency: 'CAD' });
+
+  const addVendor = async () => {
+    if (!orgId || !newVendor.name.trim()) return;
+    setSavingVendor(true);
+    const { error } = await supabase.from('vendors').insert({
+      organization_id: orgId,
+      name: newVendor.name.trim(),
+      email: newVendor.email || null,
+      phone: newVendor.phone || null,
+      default_currency: newVendor.default_currency || null,
+    });
+    setSavingVendor(false);
+    if (error) { toast.error(`Could not add vendor: ${error.message}`); return; }
+    toast.success('Vendor added');
+    setNewVendor({ name: '', email: '', phone: '', default_currency: 'CAD' });
+    setVendorOpen(false);
+    vendors.refetch();
+  };
+
+  const saveRow = (vendorId: string, row: { provider: string; target: string; method: string }) =>
+    upsert.mutate({
+      vendor_id: vendorId,
+      payout_provider: row.provider as 'wise' | 'stripe' | 'efinmoney',
+      wise_recipient_id: row.provider === 'wise' ? row.target || null : null,
+      stripe_connected_account_id: row.provider === 'stripe' ? row.target || null : null,
+      wallet_id: row.provider === 'efinmoney' ? row.target || null : null,
+      default_payout_method: row.method,
+    });
+
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulk, setBulk] = useState({ provider: 'wise', target: '', method: 'eft' });
+  const applyBulk = () => {
+    filteredVendors.forEach((v) => saveRow(v.id, bulk));
+    setBulkOpen(false);
+  };
+
+
   const [newRecipient, setNewRecipient] = useState({
     account_holder_name: '',
     currency: 'CAD',
