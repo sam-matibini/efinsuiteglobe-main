@@ -1,30 +1,25 @@
-## 1. Wise and eFinMoney wallet payout providers for payroll
+## Goal
+Turn the Providers tab of `/banking-payments/payout-routing` from two static cards into a tile grid where every payout provider has its own tile with an on/off toggle.
 
-Today the payroll batch dialog (`/treasury/payroll-payments`) offers only Stripe, Plaid, Paysafe EFT/Card, Wire, Wallet, Cheque, Manual — this is enforced by a database check constraint on `payroll_payment_batches.provider`. Rails are similarly constrained on `payroll_payment_items.rail`.
+## Tiles
+A responsive grid (1 / 2 / 3 columns) of provider tiles:
+- **Wise** — EFT, e-Transfer, card payouts, payment links (keeps Add recipient + Open Wise + recipient list)
+- **Stripe Connect** — card acquiring, connected-account transfers (keeps Manage accounts + Compliance)
+- **eFinMoney Wallet** — wallet payouts for vendors and payroll
+- **Paysafe** — EFT / card payouts
+- **Plaid / Bank (ACH-EFT)** — direct bank rails
+- **Wire**, **Cheque**, **Manual** — grouped as a compact "Offline methods" tile with individual switches
 
-**Database migration**
-- Extend the `provider` check on `payroll_payment_batches` with: `wise_eft`, `wise_etransfer`, `wise_card`, `efinmoney`.
-- Extend the `rail` check on `payroll_payment_items` with: `wise_eft`, `wise_etransfer`, `wallet_efinmoney`.
+Each tile shows: icon + name, a status badge (Active / Off / Not configured), one-line description, a live stat line (e.g. "1 saved recipient · 0 transfers"), its action buttons, and a `Switch` in the top-right corner.
 
-**Frontend**
-- `src/hooks/usePayrollPaymentBatches.ts`: add the new values to `PayrollBatchProvider` and `Rail` types; when the chosen provider is a Wise or eFinMoney one, default each employee item's rail accordingly instead of `ach`.
-- `src/pages/treasury/PayrollPayments.tsx`: add the provider options — Wise EFT, Wise e-Transfer, Wise Card payout, eFinMoney Wallet — grouped under a "Wise" / "Wallets" label, and auto-set the default rail when a provider is picked.
-- `src/components/treasury/RailPicker.tsx`: add the three new rails with icons and helper text, and treat Wise/eFinMoney rails as available when the corresponding provider is selected (they are not tied to the funding bank's supported rails).
-
-**Processing**
-- `supabase/functions/treasury-pay-payroll-batch`: route items whose rail is `wise_eft` / `wise_etransfer` through the existing `wise-create-transfer` function (using the employee's saved Wise recipient or inline bank details already stored on the item), and record `wallet_efinmoney` items as instructed/manual wallet payouts pending confirmation, same pattern as the existing fallback. Employees without a Wise destination keep falling back to cheque as today.
-
-## 2. Add more vendors in Vendor routing
-
-The Vendor routing tab lists existing vendors only, with no way to add one and no search — long vendor lists are unusable.
-
-In `src/pages/treasury/PayoutRouting.tsx`:
-- Add a search box above the table filtering vendors by name.
-- Add an **Add vendor** button opening a small dialog (name, email, phone, default currency) that inserts into `public.vendors` for the current organization, invalidates the vendor query, and immediately shows a routing row for the new vendor.
-- Add a **Bulk assign** control: pick a provider + destination + method and apply it to all currently filtered vendors in one save.
-- Include `efinmoney` alongside Wise and Stripe in the per-vendor provider select, with wallet ID as the destination field, so vendor routing matches the payroll providers.
+## Toggle behaviour
+- The switch enables/disables the provider for this organization; when off, the tile dims, its action buttons are disabled, and the badge reads **Off**.
+- State persists in the existing `organizations.efinconnect_preferences` JSON under a new `payout_providers` key (`{ wise: true, stripe: true, efinmoney: false, ... }`), so no migration is needed.
+- Defaults when the key is absent: Wise and Stripe on, everything else off.
+- Disabled providers are filtered out of the provider dropdowns in the Vendor routing tab and in the payroll batch dialog, so the toggle actually shapes what users can pick.
 
 ## Technical notes
-- Provider/rail values are plain `text` with check constraints, so widening is a low-risk `ALTER TABLE ... DROP CONSTRAINT / ADD CONSTRAINT` pair; no data migration is needed.
-- Wise API calls still degrade to "instructed" mode when `WISE_API_TOKEN` / `WISE_PROFILE_ID` are unset, as with the existing bill payout path.
-- eFinMoney already exists as a mobile-money institution in `src/data/localizedBankingInstitutions.ts`; the wallet payout will reuse that code (`EFINMONEY`) for labeling.
+- New hook `src/hooks/usePayoutProviderToggles.ts`: reads `efinconnect_preferences` from the current organization, exposes `enabled` map + `setEnabled(provider, value)` mutation that merges into the JSON and invalidates the organization query.
+- `src/pages/treasury/PayoutRouting.tsx`: extract a small local `ProviderTile` component (props: icon, title, description, badge, enabled, onToggle, children) and render the tiles from a config array; existing Wise dialog and Stripe buttons move inside their tiles unchanged.
+- Filtering in `PayoutRouting.tsx` vendor rows and `src/pages/treasury/PayrollPayments.tsx` provider select reads the same hook.
+- Uses `@/components/ui/switch`; all colors via semantic tokens.
