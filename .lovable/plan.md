@@ -1,50 +1,41 @@
-## What's wrong
+## Goal
 
-Bills carry two separate fields:
+No wrongly-mapped row should ever reach the banking transactions table. Every import preview — bank *and* credit card — gets inline row editing plus a type flip, so corrections happen before import.
 
-- `bills.status` — the lifecycle badge shown in the Bills list and in the bill dialog (`draft` / `pending` / `approved` / `paid` / `overdue` / `void`), default `draft`.
-- `bills.approval_status` — the approval workflow state (`pending_approval` / `approved` / `rejected`), default `pending_approval`.
+## Current state (verified)
 
-The approve action in `src/hooks/useApprovals.ts` writes only `approval_status: 'approved'` (via the `STATUS_COLUMN` map) and never touches `status`. So an approved, GL-posted bill keeps `status = 'draft'` and the header badge still reads **Draft**, exactly as in your screenshot.
+- `MappingPreviewDialog.tsx` (used only by `StatementExtractionDialog`) already has `rowOverrides`, inline edit, Deposit↔Withdrawal flip, and "apply to all matching rows". This is the good pattern.
+- `CreditCardImportDialog.tsx` preview is **read-only**: it renders date / description / amount / type from `classifyCreditCardType` with no way to correct a mis-typed row (e.g. a vendor purchase classified as `payment`), and shows only the first 20 rows.
+- `UnifiedImportDialog.tsx` preview is **read-only** too, for both the bank and the credit-card branch, and truncates at 15 rows.
 
-Confirmed in the database: the only bill on record is `status = draft`, `approval_status = approved`.
+## The work
 
-`expenses` has the same split (`approval_status` only, no `status` column, so nothing to fix there). `expense_claims` uses a single `status`, which already flips correctly.
+**1. Shared editable preview component — `src/components/banking/EditableImportPreview.tsx`**
 
-## The fix
+One table used by both import dialogs, driven by a small prop contract:
+- Columns: Date, Description, Payee/Payor, Amount, Type (+ Debit/Credit when a bank statement is in split-amount mode).
+- Per-row pencil opens inline inputs for date, description, payee, amount.
+- Type control:
+  - bank → Deposit ↔ Withdrawal flip button.
+  - credit card → select over `charge / payment / credit / fee / interest` (the five values `transaction_type` accepts), with a one-click flip between `charge` and `payment` for the common case.
+- "Apply this type to all N rows matching this description" for repeat payees (MBFS Auto, MPI Autopac, etc.).
+- "Edited" badge per row, per-row reset, global "Reset all edits", and an edited-count summary.
+- Scrollable full list (no 15/20 truncation) so a bad row late in the statement can still be found and fixed.
 
-**1. Approve action also advances the lifecycle status (`src/hooks/useApprovals.ts`)**
+**2. Wire into `CreditCardImportDialog.tsx`**
 
-When a document reaches fully-approved and posts to the GL, write both fields for bills:
-- `approval_status = 'approved'` (unchanged)
-- `status = 'approved'` — but only when the current status is `draft` or `pending`, so a bill already `paid`, `partial`, or `void` is never regressed.
+Replace the read-only preview table with `EditableImportPreview` in credit-card mode. Keep `parsedTransactions` as the parsed baseline and hold corrections in a `rowOverrides` map; `handleImport` maps the **merged** rows, so `transaction_type` and `amount` sent to `onImport` are the corrected values. Amount stays an absolute magnitude — polarity is carried by `transaction_type`, per the existing credit-card convention.
 
-**2. Reject / return also resets the lifecycle status**
+**3. Wire into `UnifiedImportDialog.tsx`**
 
-- Returned to preparer → `approval_status = 'draft'`, `status = 'draft'`.
-- Rejected → `approval_status = 'rejected'`, `status = 'void'` is *not* forced; status stays as-is and the rejection is visible via the approval banner (no silent voiding).
+Same component in both branches. The bank branch flips `transaction_type` between `deposit`/`withdrawal` (and swaps debit/credit in split mode); the credit-card branch uses the five-value type select. `handleImport` submits merged rows for both.
 
-**3. New bills show "Pending", not "Draft" (`src/components/bills/CreateBillDialog.tsx`)**
+**4. Keep `MappingPreviewDialog.tsx` consistent**
 
-A bill created through the dialog already inserts `approval_status: 'pending_approval'`, so it should insert `status: 'pending'` too — it's awaiting approval, not a draft. Bills saved explicitly as a draft (if that path exists) keep `draft`.
-
-**4. Badge reflects reality (`src/components/bills/ViewBillDialog.tsx`)**
-
-The header badge uses the same colour/label config as the Bills list instead of a raw capitalised string, and shows the approval state when it disagrees with the lifecycle status (e.g. "Rejected"). No duplicate/contradictory signals next to the existing "Approved & posted" panel.
-
-**5. Backfill the existing data**
-
-A migration corrects historical rows so the list isn't wrong for bills approved before this fix:
-
-```sql
-UPDATE public.bills
-SET status = 'approved'
-WHERE approval_status = 'approved'
-  AND status IN ('draft', 'pending');
-```
+Refactor its preview body onto the shared component so all three surfaces behave identically, preserving its existing override merge, validation-error skipping, and reset behaviour. If the refactor risks its validation flow, the fallback is to leave it as-is and match its UX in the new component — no regression to the extraction path either way.
 
 ## Technical notes
 
-- `STATUS_COLUMN` in `useApprovals.ts` grows a second, optional `lifecycleField` per document type so bills update both columns in one write and expenses/claims keep their current single-field behaviour.
-- No change to GL posting logic, `src/lib/approvals/posting.ts`, or the approval workflow engine — this is a status-display/state-sync fix.
-- The payment flow that moves a bill to `partial`/`paid` is untouched and still wins over `approved`.
+- Corrections are UI-state only, applied at the moment of import; no schema change and no new tables.
+- Classification defaults still come from `classifyCreditCardType` (description-first, sign-fallback) — this adds a manual override layer on top, it does not change the classifier.
+- Nothing in the GL posting path changes; `useCreditCardGL` keeps deriving polarity from `transaction_type`, which is now user-verified.

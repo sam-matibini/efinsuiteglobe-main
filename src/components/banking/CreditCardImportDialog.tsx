@@ -25,6 +25,7 @@ import { useCurrentOrganization } from '@/hooks/useOrganization';
 import { getCountryLocalization } from '@/data/countryLocalizations';
 import { getLocaleForCountry } from '@/lib/localizedCurrencyFormatter';
 import { classifyCreditCardType, normalizeCreditCardAmount } from '@/lib/creditCardImportNormalizer';
+import { EditableImportPreview } from './EditableImportPreview';
 
 interface CreditCardImportDialogProps {
   open: boolean;
@@ -51,6 +52,7 @@ export function CreditCardImportDialog({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [parsedTransactions, setParsedTransactions] = useState<ParsedTransaction[]>([]);
+  const [baselineTransactions, setBaselineTransactions] = useState<ParsedTransaction[]>([]);
   const [parseError, setParseError] = useState<string | null>(null);
   const [dateColumn, setDateColumn] = useState('Date');
   const [descriptionColumn, setDescriptionColumn] = useState('Description');
@@ -151,6 +153,7 @@ export function CreditCardImportDialog({
           return;
         }
         setParsedTransactions(transactions);
+        setBaselineTransactions(transactions.map((t) => ({ ...t })));
         setStep('preview');
         return;
       }
@@ -168,6 +171,7 @@ export function CreditCardImportDialog({
 
       const transactions = mapRowsToTransactions(jsonData);
       setParsedTransactions(transactions);
+      setBaselineTransactions(transactions.map((t) => ({ ...t })));
       setStep('preview');
     } catch (err) {
       setIsExtracting(false);
@@ -209,6 +213,7 @@ export function CreditCardImportDialog({
   const handleClose = () => {
     setFile(null);
     setParsedTransactions([]);
+    setBaselineTransactions([]);
     setParseError(null);
     setStep('upload');
     onOpenChange(false);
@@ -309,35 +314,14 @@ export function CreditCardImportDialog({
               </Button>
             </div>
 
-            <div className="max-h-[300px] overflow-auto border rounded-lg">
-              <table className="w-full text-sm">
-                <thead className="bg-muted sticky top-0">
-                  <tr>
-                    <th className="text-left p-2">Date</th>
-                    <th className="text-left p-2">Description</th>
-                    <th className="text-right p-2">Amount</th>
-                    <th className="text-left p-2">Type</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {parsedTransactions.slice(0, 20).map((t, i) => (
-                    <tr key={i} className="border-t">
-                      <td className="p-2">{t.date}</td>
-                      <td className="p-2 max-w-[200px] truncate">{t.description}</td>
-                      <td className="p-2 text-right">{formatCurrency(t.amount)}</td>
-                      <td className="p-2 capitalize">{t.type}</td>
-                    </tr>
-                  ))}
-                  {parsedTransactions.length > 20 && (
-                    <tr className="border-t">
-                      <td colSpan={4} className="p-2 text-center text-muted-foreground">
-                        ... and {parsedTransactions.length - 20} more
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+            <EditableImportPreview
+              mode="credit-card"
+              rows={parsedTransactions}
+              baselineRows={baselineTransactions}
+              onChange={setParsedTransactions}
+              formatCurrency={formatCurrency}
+              showPayee={false}
+            />
 
             <div className="flex justify-end gap-3">
               <Button variant="outline" onClick={handleClose}>Cancel</Button>

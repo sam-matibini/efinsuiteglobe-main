@@ -20,6 +20,8 @@ import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
 import { classifyCreditCardType } from '@/lib/creditCardImportNormalizer';
+import { EditableImportPreview } from './EditableImportPreview';
+
 
 export type ImportAccountType = 'bank' | 'credit-card';
 
@@ -65,6 +67,8 @@ export function UnifiedImportDialog({
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [dateFormat, setDateFormat] = useState('yyyy-mm-dd');
   const [previewData, setPreviewData] = useState<(ParsedBankTransaction | ParsedCreditCardTransaction)[]>([]);
+  const [baselineData, setBaselineData] = useState<(ParsedBankTransaction | ParsedCreditCardTransaction)[]>([]);
+
   const [errors, setErrors] = useState<string[]>([]);
   
   // Column mapping state
@@ -241,6 +245,7 @@ export function UnifiedImportDialog({
     setSelectedFile(file);
     const parsed = await parseFile(file);
     setPreviewData(parsed);
+    setBaselineData(parsed.map((r) => ({ ...r })));
     setStep('preview');
   };
 
@@ -263,6 +268,7 @@ export function UnifiedImportDialog({
     setStep('upload');
     setSelectedFile(null);
     setPreviewData([]);
+    setBaselineData([]);
     setErrors([]);
     onOpenChange(false);
   };
@@ -429,6 +435,7 @@ export function UnifiedImportDialog({
                   setStep('upload');
                   setSelectedFile(null);
                   setPreviewData([]);
+                  setBaselineData([]);
                 }}
               >
                 <X className="w-4 h-4" />
@@ -453,44 +460,15 @@ export function UnifiedImportDialog({
               </div>
             )}
 
-            {/* Preview Table */}
-            <div className="border rounded-lg overflow-hidden max-h-64 overflow-y-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-muted/50 sticky top-0">
-                  <tr>
-                    <th className="text-left p-2 font-medium">Date</th>
-                    <th className="text-left p-2 font-medium">Description</th>
-                    <th className="text-left p-2 font-medium">Payee</th>
-                    <th className="text-right p-2 font-medium">Amount</th>
-                    <th className="text-left p-2 font-medium">Type</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {previewData.slice(0, 15).map((tx, idx) => {
-                    const isPositive = isCreditCard 
-                      ? (tx as ParsedCreditCardTransaction).type === 'payment' || (tx as ParsedCreditCardTransaction).type === 'credit'
-                      : (tx as ParsedBankTransaction).type === 'deposit';
-                    
-                    return (
-                      <tr key={idx} className="border-t border-border">
-                        <td className="p-2 text-muted-foreground">{tx.date}</td>
-                        <td className="p-2 text-foreground max-w-[200px] truncate">{tx.description}</td>
-                        <td className="p-2 text-muted-foreground">{tx.payee_payor || '-'}</td>
-                        <td className={`p-2 text-right font-mono ${isPositive ? 'text-success' : 'text-foreground'}`}>
-                          {isPositive ? '+' : '-'}{formatCurrency(tx.amount)}
-                        </td>
-                        <td className="p-2 capitalize text-muted-foreground">{tx.type}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-              {previewData.length > 15 && (
-                <div className="p-2 text-center text-sm text-muted-foreground bg-muted/30">
-                  ...and {previewData.length - 15} more transactions
-                </div>
-              )}
-            </div>
+            {/* Editable Preview Table */}
+            <EditableImportPreview
+              mode={isCreditCard ? 'credit-card' : 'bank'}
+              rows={previewData}
+              baselineRows={baselineData}
+              onChange={setPreviewData}
+              formatCurrency={formatCurrency}
+            />
+
 
             {/* Summary */}
             <div className="flex items-center justify-between text-sm">
