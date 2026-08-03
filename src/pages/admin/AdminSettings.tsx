@@ -24,7 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Shield, DollarSign, Plus, Trash2, Edit, Plug, Palette, Globe, Loader2, RotateCcw } from 'lucide-react';
+import { Shield, DollarSign, Plus, Trash2, Edit, Plug, Palette, Globe, Loader2, RotateCcw, CreditCard } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
 import {
