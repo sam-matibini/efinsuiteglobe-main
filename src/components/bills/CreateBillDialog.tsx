@@ -365,15 +365,15 @@ export function CreateBillDialog({ open, onOpenChange }: CreateBillDialogProps) 
                 </Button>
               </div>
 
-              <div className="border rounded-lg overflow-hidden">
-                <table className="w-full text-sm">
+              <div className="border rounded-lg overflow-x-auto">
+                <table className="w-full min-w-[820px] text-sm">
                   <thead className="bg-muted/50">
                     <tr>
-                      <th className="text-left p-3">Description</th>
-                      <th className="text-left p-3 w-56">Account</th>
-                      <th className="text-right p-3 w-20">Qty</th>
-                      <th className="text-right p-3 w-28">Price</th>
-                      <th className="text-right p-3 w-20">Tax %</th>
+                      <th className="text-left p-3 min-w-[220px]">Description</th>
+                      <th className="text-left p-3 w-40">Account</th>
+                      <th className="text-right p-3 w-16">Qty</th>
+                      <th className="text-right p-3 w-24">Price</th>
+                      <th className="text-right p-3 w-16">Tax %</th>
                       <th className="text-right p-3 w-28">Amount</th>
                       <th className="w-10"></th>
                     </tr>
