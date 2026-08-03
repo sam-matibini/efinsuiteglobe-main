@@ -171,81 +171,122 @@ export function AdminWiseReceivingAccountsCard() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="space-y-5">
             <div>
-              <Label className="text-xs text-muted-foreground">Currency *</Label>
-              <Input
-                value={form.currency}
-                onChange={(e) => set('currency')(e.target.value.toUpperCase())}
-                placeholder="e.g. USD"
-                maxLength={3}
-                className="mt-1.5"
-              />
+              <p className="text-xs font-medium text-foreground mb-2">Always required</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs text-muted-foreground">Currency *</Label>
+                  <Input
+                    value={form.currency}
+                    onChange={(e) => set('currency')(e.target.value.toUpperCase())}
+                    placeholder="e.g. USD"
+                    maxLength={3}
+                    className="mt-1.5"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Account holder name</Label>
+                  <Input
+                    value={form.account_holder_name}
+                    onChange={(e) => set('account_holder_name')(e.target.value)}
+                    placeholder="e.g. Acme Inc."
+                    className="mt-1.5"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Bank name</Label>
+                  <Input value={form.bank_name} onChange={(e) => set('bank_name')(e.target.value)} className="mt-1.5" />
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">
+                    Account number <span className="text-muted-foreground/70">(or IBAN below)</span>
+                  </Label>
+                  <Input value={form.account_number} onChange={(e) => set('account_number')(e.target.value)} className="mt-1.5" />
+                </div>
+              </div>
             </div>
+
             <div>
-              <Label className="text-xs text-muted-foreground">Account holder name</Label>
-              <Input
-                value={form.account_holder_name}
-                onChange={(e) => set('account_holder_name')(e.target.value)}
-                placeholder="e.g. Acme Inc."
-                className="mt-1.5"
-              />
+              <p className="text-xs font-medium text-foreground mb-1">
+                Local routing — fill in only what Wise shows for this currency
+              </p>
+              <p className="text-xs text-muted-foreground mb-2">
+                Wise gives different coordinates per currency. Leave the rest blank.
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs text-muted-foreground">
+                    Routing / ACH / transit number <span className="text-muted-foreground/70">USD, CAD</span>
+                  </Label>
+                  <Input
+                    value={form.routing_number}
+                    onChange={(e) => set('routing_number')(e.target.value)}
+                    placeholder="CAD: institution + branch, e.g. 070500001"
+                    className="mt-1.5"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">
+                    Sort code <span className="text-muted-foreground/70">GBP</span>
+                  </Label>
+                  <Input value={form.sort_code} onChange={(e) => set('sort_code')(e.target.value)} className="mt-1.5" />
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">
+                    IBAN <span className="text-muted-foreground/70">EUR and most non-UK European currencies</span>
+                  </Label>
+                  <Input value={form.iban} onChange={(e) => set('iban')(e.target.value)} className="mt-1.5" />
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">
+                    BIC / SWIFT <span className="text-muted-foreground/70">international transfers</span>
+                  </Label>
+                  <Input value={form.bic_swift} onChange={(e) => set('bic_swift')(e.target.value)} className="mt-1.5" />
+                </div>
+                <div className="md:col-span-2">
+                  <Label className="text-xs text-muted-foreground">Bank name and address</Label>
+                  <Input
+                    value={form.institution_address}
+                    onChange={(e) => set('institution_address')(e.target.value)}
+                    placeholder="As shown on the Wise account details page"
+                    className="mt-1.5"
+                  />
+                </div>
+              </div>
             </div>
-            <div>
-              <Label className="text-xs text-muted-foreground">Bank name</Label>
-              <Input value={form.bank_name} onChange={(e) => set('bank_name')(e.target.value)} className="mt-1.5" />
-            </div>
-            <div>
-              <Label className="text-xs text-muted-foreground">Account number</Label>
-              <Input value={form.account_number} onChange={(e) => set('account_number')(e.target.value)} className="mt-1.5" />
-            </div>
-            <div>
-              <Label className="text-xs text-muted-foreground">Routing / ACH number</Label>
-              <Input value={form.routing_number} onChange={(e) => set('routing_number')(e.target.value)} className="mt-1.5" />
-            </div>
-            <div>
-              <Label className="text-xs text-muted-foreground">Sort code</Label>
-              <Input value={form.sort_code} onChange={(e) => set('sort_code')(e.target.value)} className="mt-1.5" />
-            </div>
-            <div>
-              <Label className="text-xs text-muted-foreground">IBAN</Label>
-              <Input value={form.iban} onChange={(e) => set('iban')(e.target.value)} className="mt-1.5" />
-            </div>
-            <div>
-              <Label className="text-xs text-muted-foreground">BIC / SWIFT</Label>
-              <Input value={form.bic_swift} onChange={(e) => set('bic_swift')(e.target.value)} className="mt-1.5" />
-            </div>
-            <div className="md:col-span-2">
-              <Label className="text-xs text-muted-foreground">Institution address</Label>
-              <Input
-                value={form.institution_address}
-                onChange={(e) => set('institution_address')(e.target.value)}
-                className="mt-1.5"
-              />
-            </div>
-            <div>
-              <Label className="text-xs text-muted-foreground">Wise profile ID</Label>
-              <Input
-                value={form.wise_profile_id}
-                onChange={(e) => set('wise_profile_id')(e.target.value)}
-                placeholder="Used for auto-matching"
-                className="mt-1.5"
-              />
-            </div>
-            <div>
-              <Label className="text-xs text-muted-foreground">Wise balance ID</Label>
-              <Input
-                value={form.wise_balance_id}
-                onChange={(e) => set('wise_balance_id')(e.target.value)}
-                placeholder="Used for auto-matching"
-                className="mt-1.5"
-              />
-            </div>
-            <div className="md:col-span-2">
-              <Label className="text-xs text-muted-foreground">Notes (shown internally)</Label>
-              <Textarea value={form.notes} onChange={(e) => set('notes')(e.target.value)} className="mt-1.5" />
-            </div>
-            <div className="md:col-span-2 flex items-center justify-between p-3 border rounded-lg">
+
+            <details className="rounded-lg border p-3">
+              <summary className="text-xs font-medium text-foreground cursor-pointer">
+                Advanced — auto-matching &amp; internal notes (optional)
+              </summary>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+                <div>
+                  <Label className="text-xs text-muted-foreground">Wise profile ID</Label>
+                  <Input
+                    value={form.wise_profile_id}
+                    onChange={(e) => set('wise_profile_id')(e.target.value)}
+                    placeholder="From Wise settings — enables auto-matching"
+                    className="mt-1.5"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Wise balance ID</Label>
+                  <Input
+                    value={form.wise_balance_id}
+                    onChange={(e) => set('wise_balance_id')(e.target.value)}
+                    placeholder="From Wise API — enables auto-matching"
+                    className="mt-1.5"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <Label className="text-xs text-muted-foreground">Notes (internal only)</Label>
+                  <Textarea value={form.notes} onChange={(e) => set('notes')(e.target.value)} className="mt-1.5" />
+                </div>
+              </div>
+            </details>
+
+            <div className="flex items-center justify-between p-3 border rounded-lg">
               <div>
                 <p className="text-sm font-medium">Active</p>
                 <p className="text-xs text-muted-foreground">Inactive accounts are hidden from invoices</p>
@@ -256,6 +297,7 @@ export function AdminWiseReceivingAccountsCard() {
               />
             </div>
           </div>
+
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>
