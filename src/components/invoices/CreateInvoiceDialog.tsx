@@ -59,6 +59,10 @@ import { PaymentTermsCombobox } from './PaymentTermsCombobox';
 import { TaxRateCombobox } from './TaxRateCombobox';
 import { DescriptionSearchCombobox } from './DescriptionSearchCombobox';
 import { useStripeHealth } from '@/hooks/useStripeHealth';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { InvoicePreviewTab } from './InvoicePreviewTab';
+import { useWiseReceivingAccounts, selectWiseAccountForCurrency } from '@/hooks/useWiseReceivingAccounts';
+import { getDocumentLogoUrl } from '@/lib/getDocumentLogo';
 
 const lineSchema = z.object({
   description: z.string().min(1, 'Description is required'),
