@@ -1,10 +1,12 @@
-import { useState, useMemo } from 'react';
-import { 
-  Eye, Check, AlertTriangle, ChevronLeft, ChevronRight, 
-  FileCheck, ArrowRight, Edit2, RotateCcw
+import { useState, useMemo, useCallback, Fragment } from 'react';
+import {
+  Eye, Check, AlertTriangle, ChevronLeft, ChevronRight,
+  FileCheck, ArrowRight, Edit2, RotateCcw, Pencil, ArrowLeftRight, X
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Dialog,
@@ -23,12 +25,13 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
-import { 
-  ColumnMappingAdvanced, 
+import {
+  ColumnMappingAdvanced,
   MappingConfig,
   DateFormat,
-  NumberFormat 
+  NumberFormat
 } from './AdvancedMappingEngine';
+
 
 interface TransactionPreview {
   rowIndex: number;
@@ -198,12 +201,15 @@ export function MappingPreviewDialog({
   onBack,
 }: MappingPreviewDialogProps) {
   const [currentPage, setCurrentPage] = useState(0);
+  const [rowOverrides, setRowOverrides] = useState<Record<number, Record<string, unknown>>>({});
+  const [editingRow, setEditingRow] = useState<number | null>(null);
   const pageSize = 20;
   
   const { mappings, dateFormat, numberFormat, invertSign, treatBracketsAsNegative } = mappingConfig;
   
   // Process all data with mappings
-  const processedData = useMemo(() => {
+  const baseProcessedData = useMemo(() => {
+
     return sourceData.map((row, rowIndex) => {
       const mapped: Record<string, unknown> = {};
       const errors: string[] = [];
@@ -270,20 +276,53 @@ export function MappingPreviewDialog({
     });
   }, [sourceData, mappings, dateFormat, numberFormat, invertSign, treatBracketsAsNegative]);
   
+  const mappedFields = mappings.filter(m => m.sourceColumn).map(m => m.targetField);
+
+  // Add a synthetic "Type" column when the statement uses split debit/credit
+  // (or always for credit cards) so users see Deposit/Withdrawal classification.
+  const hasDebit = mappedFields.includes('debit');
+  const hasCredit = mappedFields.includes('credit');
+  const showTypeColumn = statementType === 'creditcard' || hasDebit || hasCredit;
+
+  // Apply per-row manual corrections on top of the parsed rows.
+  const processedData = useMemo(() => {
+    return baseProcessedData.map((p) => {
+      const ov = rowOverrides[p.rowIndex];
+      if (!ov) return p;
+      const mapped = { ...p.mapped, ...ov };
+
+      // Recompute the signed amount whenever debit/credit were corrected
+      if ('debit' in ov || 'credit' in ov) {
+        const debit = typeof mapped['debit'] === 'number' ? (mapped['debit'] as number) : 0;
+        const credit = typeof mapped['credit'] === 'number' ? (mapped['credit'] as number) : 0;
+        mapped['amount'] = statementType === 'creditcard' ? debit - credit : credit - debit;
+      }
+
+      // Drop parse errors for fields the user has corrected, then re-validate required fields
+      const overriddenFields = Object.keys(ov);
+      const errors = p.errors.filter(
+        (e) => !overriddenFields.some((f) => e.includes(`"${f}"`) || e.includes(`field: ${f}`)),
+      );
+      for (const req of mappings.filter((m) => m.isRequired)) {
+        const v = mapped[req.targetField];
+        const missing = v === undefined || v === null || v === '';
+        const already = errors.some((e) => e.includes(`field: ${req.targetField}`));
+        if (missing && !already) errors.push(`Missing required field: ${req.targetField}`);
+      }
+
+      return { ...p, mapped, errors, edited: true } as TransactionPreview & { edited: boolean };
+    });
+  }, [baseProcessedData, rowOverrides, mappings, statementType]);
+
+  const editedCount = Object.keys(rowOverrides).length;
+
   const totalPages = Math.ceil(processedData.length / pageSize);
   const paginatedData = processedData.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
   
   const errorCount = processedData.filter(p => p.errors.length > 0).length;
   const warningCount = processedData.filter(p => p.warnings.length > 0).length;
   const validCount = processedData.filter(p => p.errors.length === 0).length;
-  
-  const mappedFields = mappings.filter(m => m.sourceColumn).map(m => m.targetField);
-  
-  // Add a synthetic "Type" column when the statement uses split debit/credit
-  // (or always for credit cards) so users see Deposit/Withdrawal classification.
-  const hasDebit = mappedFields.includes('debit');
-  const hasCredit = mappedFields.includes('credit');
-  const showTypeColumn = statementType === 'creditcard' || hasDebit || hasCredit;
+
   
   // Display labels for column headers (matching database field names for import)
   const fieldDisplayLabels: Record<string, string> = {
@@ -373,6 +412,93 @@ export function MappingPreviewDialog({
       .map(p => normalizeMappedRow(p.mapped));
     onConfirm(normalizedData);
   };
+
+  // ---- Row-level manual corrections -------------------------------------
+  const useSplitColumns = hasDebit || hasCredit;
+
+  const rowMagnitude = (mapped: Record<string, unknown>): number => {
+    const debit = typeof mapped['debit'] === 'number' ? Math.abs(mapped['debit'] as number) : 0;
+    const credit = typeof mapped['credit'] === 'number' ? Math.abs(mapped['credit'] as number) : 0;
+    if (useSplitColumns && (debit || credit)) return debit || credit;
+    const amount = typeof mapped['amount'] === 'number' ? Math.abs(mapped['amount'] as number) : 0;
+    return amount;
+  };
+
+  const typePatch = (mapped: Record<string, unknown>, type: 'deposit' | 'withdrawal') => {
+    const value = rowMagnitude(mapped);
+    if (useSplitColumns) {
+      if (statementType === 'creditcard') {
+        // charge (withdrawal) sits in debit, payment (deposit) in credit
+        return type === 'withdrawal' ? { debit: value, credit: 0 } : { debit: 0, credit: value };
+      }
+      return type === 'deposit' ? { credit: value, debit: 0 } : { credit: 0, debit: value };
+    }
+    // Single signed amount column
+    const signed =
+      statementType === 'creditcard'
+        ? (type === 'withdrawal' ? value : -value)
+        : (type === 'deposit' ? value : -value);
+    return { amount: signed };
+  };
+
+  const setRowType = useCallback(
+    (rowIndex: number, type: 'deposit' | 'withdrawal', applyToMatching = false) => {
+      const target = processedData.find((p) => p.rowIndex === rowIndex);
+      if (!target) return;
+      const key = String(
+        target.mapped['description'] ?? target.mapped['payee_payor'] ?? target.mapped['merchant'] ?? '',
+      )
+        .trim()
+        .toLowerCase();
+
+      setRowOverrides((prev) => {
+        const next = { ...prev };
+        const rows = applyToMatching && key
+          ? processedData.filter(
+              (p) =>
+                String(p.mapped['description'] ?? p.mapped['payee_payor'] ?? p.mapped['merchant'] ?? '')
+                  .trim()
+                  .toLowerCase() === key,
+            )
+          : [target];
+        for (const r of rows) {
+          next[r.rowIndex] = { ...(next[r.rowIndex] ?? {}), ...typePatch(r.mapped, type) };
+        }
+        return next;
+      });
+    },
+    [processedData, statementType, useSplitColumns],
+  );
+
+  const setRowField = useCallback((rowIndex: number, field: string, value: unknown) => {
+    setRowOverrides((prev) => ({
+      ...prev,
+      [rowIndex]: { ...(prev[rowIndex] ?? {}), [field]: value },
+    }));
+  }, []);
+
+  const resetRow = useCallback((rowIndex: number) => {
+    setRowOverrides((prev) => {
+      const next = { ...prev };
+      delete next[rowIndex];
+      return next;
+    });
+  }, []);
+
+  const matchingCount = (mapped: Record<string, unknown>): number => {
+    const key = String(mapped['description'] ?? mapped['payee_payor'] ?? mapped['merchant'] ?? '')
+      .trim()
+      .toLowerCase();
+    if (!key) return 0;
+    return processedData.filter(
+      (p) =>
+        String(p.mapped['description'] ?? p.mapped['payee_payor'] ?? p.mapped['merchant'] ?? '')
+          .trim()
+          .toLowerCase() === key,
+    ).length;
+  };
+  
+
   
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -383,7 +509,7 @@ export function MappingPreviewDialog({
             Preview & Validate Transactions
           </DialogTitle>
           <DialogDescription>
-            Review the normalized data before importing. Rows with errors will be skipped.
+            Review the normalized data before importing. Use the pencil or flip icon to correct a wrongly classified row (e.g. a payment mapped as a Deposit). Rows with errors will be skipped.
           </DialogDescription>
         </DialogHeader>
         
@@ -404,10 +530,23 @@ export function MappingPreviewDialog({
               {warningCount} warnings
             </Badge>
           )}
+          {editedCount > 0 && (
+            <>
+              <Badge variant="outline" className="gap-1 text-amber-600 border-amber-600">
+                <Pencil className="h-3 w-3" />
+                {editedCount} corrected
+              </Badge>
+              <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setRowOverrides({})}>
+                <RotateCcw className="h-3 w-3 mr-1" />
+                Reset all edits
+              </Button>
+            </>
+          )}
           <span className="text-xs text-muted-foreground ml-auto">
             Showing rows {currentPage * pageSize + 1}–{Math.min((currentPage + 1) * pageSize, processedData.length)} of {processedData.length}
           </span>
         </div>
+
         
         {/* Preview Table */}
         <ScrollArea className="flex-1 min-h-0 h-[calc(100vh-350px)]">
@@ -425,14 +564,23 @@ export function MappingPreviewDialog({
                   {showTypeColumn && (
                     <TableHead className="min-w-[100px]">Type</TableHead>
                   )}
+                  <TableHead className="w-24 text-right">Correct</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {paginatedData.map((preview) => (
+                {paginatedData.map((preview) => {
+                  const isEdited = !!rowOverrides[preview.rowIndex];
+                  const rowType = deriveType(preview.mapped);
+                  const isEditing = editingRow === preview.rowIndex;
+                  const dupes = matchingCount(preview.mapped);
+                  const colSpan = 2 + mappedFields.length + (showTypeColumn ? 1 : 0) + 1;
+                  return (
+                  <Fragment key={preview.rowIndex}>
                   <TableRow 
                     key={preview.rowIndex}
                     className={cn(
-                      preview.errors.length > 0 && "bg-destructive/5"
+                      preview.errors.length > 0 && "bg-destructive/5",
+                      isEdited && "bg-amber-500/5"
                     )}
                   >
                     <TableCell className="font-mono text-xs sticky left-0 bg-inherit">
@@ -442,6 +590,10 @@ export function MappingPreviewDialog({
                       {preview.errors.length > 0 ? (
                         <Badge variant="destructive" className="text-[10px]">
                           Error
+                        </Badge>
+                      ) : isEdited ? (
+                        <Badge variant="outline" className="text-[10px] text-amber-600 border-amber-600">
+                          Edited
                         </Badge>
                       ) : preview.warnings.length > 0 ? (
                         <Badge variant="secondary" className="text-[10px]">
@@ -472,32 +624,148 @@ export function MappingPreviewDialog({
                         </TableCell>
                       );
                     })}
-                    {showTypeColumn && (() => {
-                      const t = deriveType(preview.mapped);
-                      if (!t) {
-                        return (
-                          <TableCell className="text-xs">
-                            <span className="text-muted-foreground">—</span>
-                          </TableCell>
-                        );
-                      }
-                      const isDeposit = t === 'deposit';
-                      return (
-                        <TableCell className="text-xs">
-                          <Badge
-                            variant="outline"
-                            className={cn(
-                              "text-[10px]",
-                              isDeposit ? "text-green-600 border-green-600" : "text-red-600 border-red-600"
-                            )}
+                    {showTypeColumn && (
+                      <TableCell className="text-xs">
+                        {!rowType ? (
+                          <span className="text-muted-foreground">—</span>
+                        ) : (
+                          <div className="flex items-center gap-1">
+                            <Badge
+                              variant="outline"
+                              className={cn(
+                                "text-[10px]",
+                                rowType === 'deposit'
+                                  ? "text-green-600 border-green-600"
+                                  : "text-red-600 border-red-600"
+                              )}
+                            >
+                              {rowType === 'deposit' ? 'Deposit' : 'Withdrawal'}
+                            </Badge>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6"
+                              title="Flip this row between Deposit and Withdrawal"
+                              onClick={() =>
+                                setRowType(
+                                  preview.rowIndex,
+                                  rowType === 'deposit' ? 'withdrawal' : 'deposit',
+                                )
+                              }
+                            >
+                              <ArrowLeftRight className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        )}
+                      </TableCell>
+                    )}
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6"
+                          title="Edit this row"
+                          onClick={() => setEditingRow(isEditing ? null : preview.rowIndex)}
+                        >
+                          {isEditing ? <X className="h-3 w-3" /> : <Pencil className="h-3 w-3" />}
+                        </Button>
+                        {isEdited && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6"
+                            title="Reset this row"
+                            onClick={() => resetRow(preview.rowIndex)}
                           >
-                            {isDeposit ? 'Deposit' : 'Withdrawal'}
-                          </Badge>
-                        </TableCell>
-                      );
-                    })()}
+                            <RotateCcw className="h-3 w-3" />
+                          </Button>
+                        )}
+                      </div>
+                    </TableCell>
                   </TableRow>
-                ))}
+                  {isEditing && (
+                    <TableRow key={`${preview.rowIndex}-editor`} className="bg-muted/40">
+                      <TableCell colSpan={colSpan} className="p-4">
+                        <div className="space-y-3">
+                          <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-4">
+                            {mappedFields.map((field) => {
+                              const isAmount = ['amount', 'debit', 'credit', 'balance', 'foreign_amount'].includes(field);
+                              const val = preview.mapped[field];
+                              return (
+                                <div key={field} className="space-y-1">
+                                  <Label className="text-[11px] text-muted-foreground">
+                                    {getFieldDisplayLabel(field)}
+                                  </Label>
+                                  <Input
+                                    className="h-8 text-xs"
+                                    type={isAmount ? 'number' : field.includes('date') ? 'date' : 'text'}
+                                    step={isAmount ? '0.01' : undefined}
+                                    value={val === undefined || val === null ? '' : String(val)}
+                                    onChange={(e) => {
+                                      const raw = e.target.value;
+                                      if (isAmount) {
+                                        setRowField(
+                                          preview.rowIndex,
+                                          field,
+                                          raw === '' ? null : Number(raw),
+                                        );
+                                      } else {
+                                        setRowField(preview.rowIndex, field, raw);
+                                      }
+                                    }}
+                                  />
+                                </div>
+                              );
+                            })}
+                          </div>
+                          {showTypeColumn && (
+                            <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-border">
+                              <span className="text-xs text-muted-foreground">Transaction type:</span>
+                              <Button
+                                size="sm"
+                                variant={rowType === 'deposit' ? 'default' : 'outline'}
+                                className="h-7 text-xs"
+                                onClick={() => setRowType(preview.rowIndex, 'deposit')}
+                              >
+                                {statementType === 'creditcard' ? 'Payment (Credit)' : 'Deposit (Credit)'}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant={rowType === 'withdrawal' ? 'default' : 'outline'}
+                                className="h-7 text-xs"
+                                onClick={() => setRowType(preview.rowIndex, 'withdrawal')}
+                              >
+                                {statementType === 'creditcard' ? 'Charge (Debit)' : 'Withdrawal (Debit)'}
+                              </Button>
+                              {dupes > 1 && rowType && (
+                                <Button
+                                  size="sm"
+                                  variant="secondary"
+                                  className="h-7 text-xs"
+                                  onClick={() => setRowType(preview.rowIndex, rowType, true)}
+                                >
+                                  Apply this type to all {dupes} matching rows
+                                </Button>
+                              )}
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 text-xs ml-auto"
+                                onClick={() => setEditingRow(null)}
+                              >
+                                Done
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  </Fragment>
+                  );
+                })}
+
               </TableBody>
             </Table>
           </div>

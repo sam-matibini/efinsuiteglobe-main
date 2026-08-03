@@ -1,61 +1,42 @@
-# Add Manitoba Hydro (MB Hydro) to eFinconnect — bill payee + remittance listing
-
-## Context (verified from the live DB)
-- The eFinconnect tax/remittance area is driven by `public.provincial_tax_authorities` (a public-read reference catalog) + `public.provincial_payee_accounts` (org-specific registered accounts), rendered by `ProvincialRemittanceCentre.tsx` (`/banking-payments/provincial`).
-- Manitoba today has 3 entries: `rst_mb` (Retail Sales Tax), `eht_mb` (Health & Post-Secondary Edu Tax), `wcb_mb` (WCB). **No Manitoba Hydro.**
-- The table currently has no way to tell a tax authority apart from a utility payee — all rows are treated as tax authorities. Adding Manitoba Hydro naively would label a utility as a tax.
-- Bill payments (the "Pay bills" side of eFinconnect) run through the `vendors` table + bills + AP Payments (`APPayments.tsx`). Manitoba Hydro would need to exist as a vendor to be paid as a bill.
-
 ## Goal
-Surface Manitoba Hydro as a Manitoba payee in eFinconnect in two ways, as you requested ("both"):
-1. Listed in the **Provincial Remittance Centre** so a Manitoba org can register its Manitoba Hydro account number.
-2. Payable as a **utility bill** via the AP / "Pay bills" flow (creates the bill against a Manitoba Hydro vendor).
 
-## 1. Database — schema (migration tool)
-Add a category column to distinguish tax authorities from utility payees, so Manitoba Hydro does not pollute the tax list:
+When the extraction engine mis-classifies a row (e.g. "MBFS Auto" lease payment and "MPI Autopac Pmt" insurance shown as Credit/Deposit instead of Debit/Withdrawal), let the user correct that row before importing — without re-running extraction or fixing it later with a journal entry.
 
-```sql
-ALTER TABLE public.provincial_tax_authorities
-  ADD COLUMN IF NOT EXISTS category text NOT NULL DEFAULT 'tax';
-```
-- Existing rows (RST, EHT, WCB, all provinces) default to `'tax'` automatically — no backfill needed.
-- The existing public-SELECT RLS policy is unaffected.
+## Where the fix lands
 
-## 2. Database — seed Manitoba Hydro (insert tool)
-Insert one row so it appears under the MB group in the Remittance Centre:
+Two surfaces are involved today:
 
-```sql
-INSERT INTO public.provincial_tax_authorities (code, jurisdiction, name, programs, website_url, category)
-VALUES ('mb_hydro', 'MB', 'Manitoba Hydro', '["utility"]'::jsonb, 'https://www.hydro.mb.ca', 'utility')
-ON CONFLICT (code) DO NOTHING;
-```
+- `src/components/banking/AdvancedMappingEngine.tsx` — the "Live Preview" panel in your screenshot. Read-only, 5 sample rows, column-level mapping only.
+- `src/components/banking/MappingPreviewDialog.tsx` — the paginated "Preview & Validate Transactions" step that runs after mapping and produces the rows that actually get imported.
 
-## 3. Frontend — surface Manitoba Hydro
+Row-level corrections belong in `MappingPreviewDialog`, because it processes **all** rows and is the last gate before import. The Live Preview gets a lightweight shortcut for the same action.
 
-**a) `src/hooks/useProvincialAuthorities.ts`** — add `category: string` to the `ProvincialAuthority` interface so the UI can read it.
+## What gets built
 
-**b) `src/pages/treasury/ProvincialRemittanceCentre.tsx`** — Manitoba Hydro will auto-appear under the "MB" jurisdiction card (the page already groups by `jurisdiction`). Two small enhancements:
-- Show a "Utility" badge instead of the program count for `category === 'utility'` rows, so it is visually distinct from tax authorities.
-- On utility rows, add a **"Pay bill"** button that:
-  - Ensures a vendor named "Manitoba Hydro" exists for the current org (creates it via the `vendors` table if missing),
-  - Navigates to the Create Bill flow prefilled with that vendor (reuse the existing route/param pattern used by the purchases module).
+**1. Editable rows in Preview & Validate (`MappingPreviewDialog.tsx`)**
 
-This makes Manitoba Hydro both registerable in the remittance centre and directly payable as a bill — covering both surfaces from one entry point.
+- New `rowOverrides` state: `Map<rowIndex, Partial<mappedRow>>`, merged on top of each computed row so re-parsing never wipes an edit.
+- An "Edit" (pencil) action per row opens an inline editor row / small popover allowing correction of:
+  - Transaction Date, Posted Date
+  - Description, Payee/Payor, Reference
+  - Debit and Credit amounts (or the single Amount column when that's what's mapped)
+  - Category / Memo when mapped
+- A **Type** dropdown per row (Deposit ↔ Withdrawal). Changing it moves the value between the debit and credit fields and recomputes the signed `amount` using the existing convention (`credit - debit` for bank, `debit - credit` for credit card), so the GL direction follows automatically.
+- A one-click **Flip** button on the Type badge for the common case shown in your screenshot — turns "Deposit 613.65" into "Withdrawal 613.65" in a single click.
+- Edited rows show an "Edited" badge and a per-row Reset; a header-level "Reset all edits" clears everything.
+- Overrides re-run validation, so a corrected row that previously errored becomes importable, and the valid/error counts update live.
 
-## 4. Out of scope
-- No change to `countryTreasuryConfig.ts` `taxPayees` — those are tax *types* (PD7A/GST/CIT), and Manitoba Hydro is not a tax type.
-- No new tax calculations or filing forms; Manitoba Hydro is a utility payee only.
+**2. Bulk fix by description**
 
-## Technical details
-- One schema migration (add `category` column) + one data insert (Manitoba Hydro row).
-- Two small frontend file edits (the hook interface + the remittance centre).
-- All existing data and policies remain valid; the new column is non-null with a safe default.
+Because the same payee recurs across a statement, the row editor offers "Apply to all rows matching this description/payee" when flipping type — one click fixes every MBFS Auto and MPI Autopac line in the statement.
 
-```
-provincial_tax_authorities
-  + category text  (tax | utility)
-  * new row: mb_hydro / MB / Manitoba Hydro / [utility] / utility
+**3. Quick flip in Live Preview (`AdvancedMappingEngine.tsx`)**
 
-ProvincialRemittanceCentre (MB group)
-  └─ Manitoba Hydro  [Utility]  [Register account]  [Pay bill -> creates vendor + Create Bill]
-```
+The Deposit/Withdrawal badge in the Live Preview panel becomes clickable, flipping the sign for that sample row and surfacing a hint that full row-by-row correction is available on the next (Preview & Validate) step. No mapping-config semantics change here.
+
+## Technical notes
+
+- `processedData` stays a `useMemo` over `sourceData` + mapping config; overrides are applied in a second derived pass so the source of truth is unchanged and edits survive page changes within the dialog.
+- `normalizeMappedRow` and `deriveType` already own the sign/type convention; the editor writes debit/credit and lets those two functions derive `amount` and `type`, so bank vs credit-card conventions stay in one place.
+- `handleConfirm` emits the override-merged rows, so corrections flow through `onImport` into the banking transactions exactly like clean rows.
+- No database or edge-function changes; this is entirely in the import preview UI.
