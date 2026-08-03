@@ -353,6 +353,40 @@ export default function Bills() {
         onOpenChange={setShowAICategorize}
         target="bill"
       />
+      <ViewBillDialog
+        open={viewBill !== null}
+        onOpenChange={(o) => !o && setViewBill(null)}
+        bill={viewBill}
+      />
+      <EditBillDialog
+        open={editBill !== null}
+        onOpenChange={(o) => !o && setEditBill(null)}
+        bill={editBill}
+      />
+      <AlertDialog open={billToVoid !== null} onOpenChange={(o) => !o && setBillToVoid(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Void bill {billToVoid?.bill_number}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This reverses the bill's journal entry so it no longer affects the General Ledger,
+              Trial Balance or financial statements. The bill and its reversal stay on record for
+              audit purposes. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (billToVoid) voidBill.mutate(billToVoid.id);
+                setBillToVoid(null);
+              }}
+            >
+              Void Bill
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
