@@ -36,7 +36,15 @@ export default function PayrollPayments() {
 
   const eligibleRuns = (payRuns ?? []).filter((r) => ['approved', 'processed'].includes(r.status as string));
   const selectedBank = fundingAccounts.find((a) => a.id === bankId);
-  const availableRails = selectedBank?.railsSupported ?? (['manual', 'cheque'] as Rail[]);
+  const availableRails = [
+    ...(selectedBank?.railsSupported ?? (['manual', 'cheque'] as Rail[])),
+    ...PROVIDER_RAILS,
+  ];
+
+  const changeProvider = (v: PayrollBatchProvider) => {
+    setProvider(v);
+    setRail(providerDefaultRail(v) as Rail);
+  };
 
   const submit = async () => {
     if (!payRunId) return;
