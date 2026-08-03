@@ -176,10 +176,16 @@ export function useApprovalActions() {
         comments,
       });
 
-      const { table, statusField } = STATUS_COLUMN[doc.documentType];
+      const { table, statusField, lifecycleField } = STATUS_COLUMN[doc.documentType];
+      const rejectUpdate: Record<string, any> = {
+        [statusField]: action === 'returned' ? 'draft' : 'rejected',
+      };
+      // Returning a document sends it back to the preparer as a draft. A
+      // rejection leaves the lifecycle status alone (never silently voided).
+      if (lifecycleField && action === 'returned') rejectUpdate[lifecycleField] = 'draft';
       await supabase
         .from(table as any)
-        .update({ [statusField]: action === 'returned' ? 'draft' : 'rejected' })
+        .update(rejectUpdate)
         .eq('id', doc.id);
     },
     onSuccess: (_d, vars) => {
