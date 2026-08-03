@@ -125,6 +125,7 @@ const AddressTax = lazy(() => import("./pages/AddressTax"));
 const EuVat = lazy(() => import("./pages/EuVat"));
 const TaxProvision = lazy(() => import("./pages/TaxProvision"));
 const WithholdingTax = lazy(() => import("./pages/WithholdingTax"));
+const NigeriaTaxEngine = lazy(() => import("./pages/tax/NigeriaTaxEngine"));
 const Employees = lazy(() => import("./pages/Employees"));
 const PayRuns = lazy(() => import("./pages/PayRuns"));
 const PayrollReports = lazy(() => import("./pages/PayrollReports"));
@@ -426,6 +427,7 @@ const AppRoutes = () => {
     <Route path="/tax/eu-vat" element={<ProtectedRoute><PageWrapper><EuVat /></PageWrapper></ProtectedRoute>} />
     <Route path="/tax/provision" element={<ProtectedRoute><PageWrapper><TaxProvision /></PageWrapper></ProtectedRoute>} />
     <Route path="/tax/withholding" element={<ProtectedRoute><PageWrapper><WithholdingTax /></PageWrapper></ProtectedRoute>} />
+    <Route path="/tax/nigeria" element={<ProtectedRoute><PageWrapper><NigeriaTaxEngine /></PageWrapper></ProtectedRoute>} />
     <Route path="/inventory" element={<ProtectedRoute><PageWrapper><Inventory /></PageWrapper></ProtectedRoute>} />
     <Route path="/fixed-assets" element={<ProtectedRoute><PageWrapper><FixedAssets /></PageWrapper></ProtectedRoute>} />
     <Route path="/leases" element={<ProtectedRoute><PageWrapper><Leases /></PageWrapper></ProtectedRoute>} />

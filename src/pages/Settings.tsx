@@ -1,6 +1,10 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Building2, Users, Shield, Palette, Receipt, Plus, MapPin, Phone, Wand2, FileText, Globe, TrendingUp, Check, ChevronsUpDown, RotateCcw, AlertTriangle, CreditCard, Coins, Wallet } from 'lucide-react';
+import { Building2, Users, Shield, Palette, Receipt, Plus, MapPin, Phone, Wand2, FileText, Globe, TrendingUp, Check, ChevronsUpDown, RotateCcw, AlertTriangle, CreditCard, Coins, Wallet, Send } from 'lucide-react';
+import { EfinconnectSettingsTab } from '@/components/settings/EfinconnectSettingsTab';
+import { DivisionsSettingsTab } from '@/components/settings/DivisionsSettingsTab';
+import { JobSitesSettingsTab } from '@/components/settings/JobSitesSettingsTab';
+import { Network } from 'lucide-react';
 import { MultiCurrencySettingsTab } from '@/components/settings/MultiCurrencySettingsTab';
 import { TroubleshootingTab } from '@/components/admin/TroubleshootingTab';
 import { Button } from '@/components/ui/button';
@@ -279,6 +283,14 @@ export default function Settings() {
             <Building2 className="w-4 h-4" />
             <span className="hidden sm:inline">Organization</span>
           </TabsTrigger>
+          <TabsTrigger value="divisions" className="gap-2">
+            <Network className="w-4 h-4" />
+            <span className="hidden sm:inline">Divisions</span>
+          </TabsTrigger>
+          <TabsTrigger value="job-sites" className="gap-2">
+            <MapPin className="w-4 h-4" />
+            <span className="hidden sm:inline">Job Sites</span>
+          </TabsTrigger>
           <TabsTrigger value="compliance" className="gap-2">
             <Globe className="w-4 h-4" />
             <span className="hidden sm:inline">Compliance</span>
@@ -298,6 +310,10 @@ export default function Settings() {
           <TabsTrigger value="payments" className="gap-2">
             <CreditCard className="w-4 h-4" />
             <span className="hidden sm:inline">Payments</span>
+          </TabsTrigger>
+          <TabsTrigger value="efinconnect" className="gap-2">
+            <Send className="w-4 h-4" />
+            <span className="hidden sm:inline">eFinconnect</span>
           </TabsTrigger>
           <TabsTrigger value="billing" className="gap-2">
             <Wallet className="w-4 h-4" />
@@ -723,6 +739,14 @@ export default function Settings() {
           />
         </TabsContent>
 
+        <TabsContent value="divisions" className="space-y-6">
+          <DivisionsSettingsTab />
+        </TabsContent>
+
+        <TabsContent value="job-sites" className="space-y-6">
+          <JobSitesSettingsTab />
+        </TabsContent>
+
         <TabsContent value="compliance" className="space-y-6">
           <GlobalComplianceTab organizationId={organization.id} />
         </TabsContent>
@@ -741,6 +765,10 @@ export default function Settings() {
 
         <TabsContent value="payments" className="space-y-6">
           <PaymentSettingsTab />
+        </TabsContent>
+
+        <TabsContent value="efinconnect" className="space-y-6">
+          <EfinconnectSettingsTab />
         </TabsContent>
 
         <TabsContent value="billing" className="space-y-6">

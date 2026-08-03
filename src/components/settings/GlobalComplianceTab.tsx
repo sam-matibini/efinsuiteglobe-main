@@ -87,7 +87,7 @@ export function GlobalComplianceTab({ organizationId }: GlobalComplianceTabProps
       if (!matchedCountryId) return [];
       const { data, error } = await supabase
         .from('tax_types')
-        .select('*')
+        .select('*, tax_rates(rate, is_default, is_active)')
         .eq('country_id', matchedCountryId)
         .eq('is_active', true)
         .order('name');
@@ -293,23 +293,27 @@ export function GlobalComplianceTab({ organizationId }: GlobalComplianceTabProps
               </TableRow>
             </TableHeader>
             <TableBody>
-              {taxTypes.map((tax) => (
-                <TableRow key={tax.id}>
-                  <TableCell className="font-mono text-sm">{tax.code}</TableCell>
-                  <TableCell>{tax.name}</TableCell>
-                  <TableCell>
-                    <Badge variant="outline">{tax.tax_category}</Badge>
-                  </TableCell>
-                  <TableCell>—</TableCell>
-                  <TableCell>
-                    {tax.is_active ? (
-                      <CheckCircle2 className="w-4 h-4 text-green-500" />
-                    ) : (
-                      <AlertCircle className="w-4 h-4 text-muted-foreground" />
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
+              {taxTypes.map((tax: any) => {
+                const rates = (tax.tax_rates || []) as Array<{ rate: number; is_default: boolean; is_active: boolean }>;
+                const defaultRate = rates.find(r => r.is_default && r.is_active) ?? rates[0];
+                return (
+                  <TableRow key={tax.id}>
+                    <TableCell className="font-mono text-sm">{tax.code}</TableCell>
+                    <TableCell>{tax.name}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline">{tax.tax_category}</Badge>
+                    </TableCell>
+                    <TableCell>{defaultRate ? `${Number(defaultRate.rate)}%` : '—'}</TableCell>
+                    <TableCell>
+                      {tax.is_active ? (
+                        <CheckCircle2 className="w-4 h-4 text-green-500" />
+                      ) : (
+                        <AlertCircle className="w-4 h-4 text-muted-foreground" />
+                      )}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         ) : (

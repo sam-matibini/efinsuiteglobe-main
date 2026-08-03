@@ -23,7 +23,8 @@ import * as XLSX from 'xlsx';
 import eFinSuiteGlobeLogo from '@/assets/efinsuite-globe-logo.png';
 import { copyTextToClipboard, tryOpenInNewTab } from '@/lib/share';
 import { useTwilioShare } from '@/hooks/useTwilioShare';
-import { buildAddressLines, generatePayStubPdf } from '@/lib/generatePayStubPdf';
+import { buildAddressLines, generatePayStubPdf, loadImageAsDataUrl } from '@/lib/generatePayStubPdf';
+import { useCurrencyFormatter } from '@/hooks/useCurrencyFormatter';
 
 interface PayStubData {
   id: string;
@@ -76,21 +77,24 @@ interface PaystubViewerProps {
   locale?: string;
 }
 
-export function PaystubViewer({ payStub, companyName, companyLogo, currencyCode = 'CAD', locale = 'en-CA' }: PaystubViewerProps) {
+export function PaystubViewer({ payStub, companyName, companyLogo, currencyCode, locale }: PaystubViewerProps) {
   const [isPrinting, setIsPrinting] = useState(false);
   const { shareWhatsAppNoRecipient, shareSMSNoRecipient } = useTwilioShare();
+  const { currencyCode: orgCurrency, locale: orgLocale } = useCurrencyFormatter();
+  const activeCurrency = currencyCode ?? orgCurrency ?? 'CAD';
+  const activeLocale = locale ?? orgLocale ?? 'en-CA';
 
   const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat(locale, {
+    return new Intl.NumberFormat(activeLocale, {
       style: 'currency',
-      currency: currencyCode,
+      currency: activeCurrency,
       minimumFractionDigits: 2,
     }).format(value);
   };
 
   const formatDate = (dateStr: string) => {
     const [year, month, day] = dateStr.split('-').map(Number);
-    return new Intl.DateTimeFormat('en-CA', {
+    return new Intl.DateTimeFormat(activeLocale, {
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
@@ -116,6 +120,7 @@ export function PaystubViewer({ payStub, companyName, companyLogo, currencyCode 
   });
 
   const generatePdf = async (): Promise<jsPDF> => {
+    const logoDataUrl = await loadImageAsDataUrl(companyLogo || undefined);
     return generatePayStubPdf({
       employeeName: payStub.employeeName,
       employeeNumber: payStub.employeeNumber,
@@ -160,6 +165,9 @@ export function PaystubViewer({ payStub, companyName, companyLogo, currencyCode 
       companyProvince: payStub.companyProvince,
       companyPostalCode: payStub.companyPostalCode,
       companyCountry: payStub.companyCountry,
+      countryCode: (payStub.companyCountry || payStub.employeeCountry || 'CA').toUpperCase().slice(0, 2),
+      logoDataUrl,
+      logoMimeType: 'PNG',
     });
   };
 
@@ -168,32 +176,24 @@ export function PaystubViewer({ payStub, companyName, companyLogo, currencyCode 
     try {
       const doc = await generatePdf();
       doc.autoPrint();
-      const pdfDataUri = doc.output('datauristring');
-      
-      const printWindow = window.open('', '_blank');
-      if (printWindow) {
-        printWindow.document.write(`
-          <html>
-            <head><title>Print Pay Stub - ${payStub.employeeName}</title></head>
-            <body style="margin:0;padding:0;">
-              <iframe
-                src="${pdfDataUri}"
-                style="width:100%;height:100%;border:none;"
-                onload="this.contentWindow.print();">
-              </iframe>
-            </body>
-          </html>
-        `);
-        printWindow.document.close();
-      } else {
-        toast.error('Please allow pop-ups to print');
+      const blob = doc.output('blob');
+      const url = URL.createObjectURL(blob);
+      const printWindow = window.open(url, '_blank', 'noopener,noreferrer');
+      if (!printWindow) {
+        // Popup blocked — fall back to direct download so the user can print locally
+        const filename = `paystub_${payStub.employeeNumber}_${payStub.payDate}.pdf`;
+        doc.save(filename);
+        toast.message('Pop-up blocked — PDF downloaded instead. Open it to print.');
       }
+      // Revoke after the new tab has had time to load the blob
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch (error) {
       toast.error('Failed to generate print document');
     } finally {
       setIsPrinting(false);
     }
   };
+
 
   const handleExportPDF = async () => {
     try {
@@ -468,12 +468,11 @@ export function PaystubViewer({ payStub, companyName, companyLogo, currencyCode 
         </Button>
         
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm">
-              <Share2 className="w-4 h-4 mr-2" />
-              View & Share
-            </Button>
+          <DropdownMenuTrigger className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-3">
+            <Share2 className="w-4 h-4 mr-2" />
+            View & Share
           </DropdownMenuTrigger>
+
           <DropdownMenuContent align="center">
             <DropdownMenuItem onClick={handleExportPDF}>
               <FileText className="w-4 h-4 mr-2" />

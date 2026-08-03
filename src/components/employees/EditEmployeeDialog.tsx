@@ -14,14 +14,24 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
 import { PROVINCE_NAMES, ROE_REASON_CODES } from '@/types/payroll';
 import { Textarea } from '@/components/ui/textarea';
 import { Database } from '@/integrations/supabase/types';
-import { User, Briefcase, DollarSign, FileText, MapPin } from 'lucide-react';
+import { User, Briefcase, DollarSign, FileText, MapPin, UserPlus } from 'lucide-react';
+import { GuarantorsForm, EMPTY_GUARANTOR, type GuarantorDraft } from './GuarantorForm';
+import { useEmployeeGuarantors } from '@/hooks/useEmployeeGuarantors';
 import { Checkbox } from '@/components/ui/checkbox';
+import { useCurrencyFormatter } from '@/hooks/useCurrencyFormatter';
+import { useCurrentOrganization } from '@/hooks/useOrganization';
+import { useJobSites } from '@/hooks/useJobSites';
+import { useCountryScope } from '@/hooks/useCountryFilter';
+import { getCountryLocalization, COUNTRY_LOCALIZATIONS } from '@/data/countryLocalizations';
+import { CompensationStructureEditor, getDefaultCompensationStructure, type CompensationStructure } from './CompensationStructureEditor';
+
 
 type Employee = Database['public']['Tables']['employees']['Row'];
 type TD1Row = Database['public']['Tables']['employee_td1']['Row'];
@@ -40,6 +50,23 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
   const [federalTD1, setFederalTD1] = useState<TD1Row | null>(null);
   const [provincialTD1, setProvincialTD1] = useState<TD1Row | null>(null);
 
+  // Country resolution — country scope > org.country > 'CA'
+  const { organization } = useCurrentOrganization();
+  const { country: scopedCountry } = useCountryScope();
+  const { jobSites: activeJobSites } = useJobSites({ activeOnly: true });
+  const countryCode = (() => {
+    const raw = (scopedCountry || organization?.country || 'CA').toString().trim();
+    if (!raw) return 'CA';
+    const upper = raw.toUpperCase();
+    if (COUNTRY_LOCALIZATIONS[upper]) return upper;
+    const match = Object.entries(COUNTRY_LOCALIZATIONS).find(
+      ([, loc]) => loc.name.toLowerCase() === raw.toLowerCase(),
+    );
+    return match?.[0] ?? 'CA';
+  })();
+  const countryConfig = getCountryLocalization(countryCode);
+  const isCA = countryCode === 'CA';
+
   const [formData, setFormData] = useState({
     first_name: '',
     last_name: '',
@@ -47,6 +74,7 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
     phone: '',
     date_of_birth: '',
     sin_encrypted: '',
+    nin: '',
     // Address
     address_line1: '',
     address_line2: '',
@@ -56,6 +84,7 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
     // Employment
     job_title: '',
     department: '',
+    job_site_id: '',
     province: '',
     employment_type: 'full_time',
     pay_frequency: 'bi_weekly',
@@ -92,6 +121,8 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
     prov_additional_tax_deduction: 0,
   });
 
+  const [compStructure, setCompStructure] = useState<CompensationStructure | null>(null);
+
   useEffect(() => {
     if (employee && open) {
       setFormData({
@@ -101,6 +132,7 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
         phone: employee.phone || '',
         date_of_birth: employee.date_of_birth || '',
         sin_encrypted: employee.sin_encrypted || '',
+        nin: (employee as any).nin || '',
         address_line1: employee.address_line1 || '',
         address_line2: employee.address_line2 || '',
         city: employee.city || '',
@@ -108,7 +140,8 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
         country: employee.country || '',
         job_title: employee.job_title || '',
         department: employee.department || '',
-        province: employee.province || 'ON',
+        job_site_id: (employee as any).job_site_id || '',
+        province: employee.province || countryConfig.jurisdictions[0]?.code || 'ON',
         employment_type: employee.employment_type || 'full_time',
         pay_frequency: employee.pay_frequency || 'bi_weekly',
         hire_date: employee.hire_date || '',
@@ -121,8 +154,12 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
         cpp_exempt: employee.cpp_exempt ?? false,
         ei_exempt: employee.ei_exempt ?? false,
       });
+      const existingComp = (employee as any).compensation_structure as CompensationStructure | null | undefined;
+      setCompStructure(existingComp && existingComp.items?.length
+        ? existingComp
+        : getDefaultCompensationStructure(countryCode));
       setActiveTab('personal');
-      loadTD1Data(employee.id);
+      if (isCA) loadTD1Data(employee.id);
     }
   }, [employee, open]);
 
@@ -182,6 +219,20 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
       return;
     }
 
+    if (!formData.job_site_id) {
+      toast.error('Job Site is required');
+      setActiveTab('employment');
+      return;
+    }
+
+    if (countryCode === 'NG' && !/^\d{11}$/.test(formData.nin || '')) {
+      toast.error('National Identification Number (NIN) must be exactly 11 digits');
+      setActiveTab('personal');
+      return;
+    }
+
+
+
     setIsSubmitting(true);
     try {
       // Update employee record
@@ -192,6 +243,7 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
         phone: formData.phone || null,
         date_of_birth: formData.date_of_birth || null,
         sin_encrypted: formData.sin_encrypted || null,
+        nin: formData.nin || null,
         address_line1: formData.address_line1 || null,
         address_line2: formData.address_line2 || null,
         city: formData.city || null,
@@ -199,6 +251,7 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
         country: formData.country || null,
         job_title: formData.job_title || null,
         department: formData.department || null,
+        job_site_id: formData.job_site_id || null,
         province: formData.province as any,
         employment_type: formData.employment_type as any,
         pay_frequency: formData.pay_frequency as any,
@@ -211,6 +264,7 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
         status: formData.status as any,
         cpp_exempt: formData.cpp_exempt,
         ei_exempt: formData.ei_exempt,
+        compensation_structure: compStructure as any,
       };
 
       const { error } = await supabase
@@ -220,48 +274,52 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
 
       if (error) throw error;
 
-      // Update/create federal TD1
-      const federalTD1Data = {
-        employee_id: employee.id,
-        form_type: 'federal',
-        tax_year: new Date().getFullYear(),
-        basic_personal_amount: td1Data.basic_personal_amount,
-        canada_employment_amount: td1Data.canada_employment_amount,
-        age_amount: td1Data.age_amount,
-        disability_amount: td1Data.disability_amount,
-        spouse_amount: td1Data.spouse_amount,
-        tuition_amount: td1Data.tuition_amount,
-        other_credits: td1Data.other_credits,
-        additional_tax_deduction: td1Data.additional_tax_deduction,
-        total_claim_amount: federalTotal,
-      };
+      // Canadian TD1 forms — only for CA organizations
+      if (isCA) {
+        // Update/create federal TD1
+        const federalTD1Data = {
+          employee_id: employee.id,
+          form_type: 'federal',
+          tax_year: new Date().getFullYear(),
+          basic_personal_amount: td1Data.basic_personal_amount,
+          canada_employment_amount: td1Data.canada_employment_amount,
+          age_amount: td1Data.age_amount,
+          disability_amount: td1Data.disability_amount,
+          spouse_amount: td1Data.spouse_amount,
+          tuition_amount: td1Data.tuition_amount,
+          other_credits: td1Data.other_credits,
+          additional_tax_deduction: td1Data.additional_tax_deduction,
+          total_claim_amount: federalTotal,
+        };
 
-      if (federalTD1?.id) {
-        await supabase.from('employee_td1').update(federalTD1Data).eq('id', federalTD1.id);
-      } else {
-        await supabase.from('employee_td1').insert(federalTD1Data);
+        if (federalTD1?.id) {
+          await supabase.from('employee_td1').update(federalTD1Data).eq('id', federalTD1.id);
+        } else {
+          await supabase.from('employee_td1').insert(federalTD1Data);
+        }
+
+        // Update/create provincial TD1
+        const provTD1Data = {
+          employee_id: employee.id,
+          form_type: formData.province,
+          tax_year: new Date().getFullYear(),
+          basic_personal_amount: td1Data.prov_basic_personal_amount,
+          age_amount: td1Data.prov_age_amount,
+          disability_amount: td1Data.prov_disability_amount,
+          spouse_amount: td1Data.prov_spouse_amount,
+          tuition_amount: td1Data.prov_tuition_amount,
+          other_credits: td1Data.prov_other_credits,
+          additional_tax_deduction: td1Data.prov_additional_tax_deduction,
+          total_claim_amount: provincialTotal,
+        };
+
+        if (provincialTD1?.id) {
+          await supabase.from('employee_td1').update(provTD1Data).eq('id', provincialTD1.id);
+        } else {
+          await supabase.from('employee_td1').insert(provTD1Data);
+        }
       }
 
-      // Update/create provincial TD1
-      const provTD1Data = {
-        employee_id: employee.id,
-        form_type: formData.province,
-        tax_year: new Date().getFullYear(),
-        basic_personal_amount: td1Data.prov_basic_personal_amount,
-        age_amount: td1Data.prov_age_amount,
-        disability_amount: td1Data.prov_disability_amount,
-        spouse_amount: td1Data.prov_spouse_amount,
-        tuition_amount: td1Data.prov_tuition_amount,
-        other_credits: td1Data.prov_other_credits,
-        additional_tax_deduction: td1Data.prov_additional_tax_deduction,
-        total_claim_amount: provincialTotal,
-      };
-
-      if (provincialTD1?.id) {
-        await supabase.from('employee_td1').update(provTD1Data).eq('id', provincialTD1.id);
-      } else {
-        await supabase.from('employee_td1').insert(provTD1Data);
-      }
 
       queryClient.invalidateQueries({ queryKey: ['employees'] });
       onOpenChange(false);
@@ -294,8 +352,8 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
     }
   };
 
-  const formatCurrency = (val: number) =>
-    new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD', minimumFractionDigits: 0 }).format(val);
+  const { formatWithSymbol } = useCurrencyFormatter();
+  const formatCurrency = (val: number) => formatWithSymbol(val);
 
   if (!employee) return null;
 
@@ -310,7 +368,7 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className={`grid w-full ${isCA ? 'grid-cols-5' : 'grid-cols-4'}`}>
             <TabsTrigger value="personal" className="flex items-center gap-1 text-xs">
               <User className="w-3.5 h-3.5" />
               Personal
@@ -323,9 +381,15 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
               <DollarSign className="w-3.5 h-3.5" />
               Compensation
             </TabsTrigger>
-            <TabsTrigger value="tax" className="flex items-center gap-1 text-xs">
-              <FileText className="w-3.5 h-3.5" />
-              TD1 Tax
+            {isCA && (
+              <TabsTrigger value="tax" className="flex items-center gap-1 text-xs">
+                <FileText className="w-3.5 h-3.5" />
+                TD1 Tax
+              </TabsTrigger>
+            )}
+            <TabsTrigger value="guarantors" className="flex items-center gap-1 text-xs">
+              <UserPlus className="w-3.5 h-3.5" />
+              Guarantors
             </TabsTrigger>
           </TabsList>
 
@@ -361,6 +425,22 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
                 <Input value={formData.sin_encrypted} onChange={e => setFormData({ ...formData, sin_encrypted: e.target.value })} placeholder="XXX-XXX-XXX" />
               </div>
             </div>
+
+            {countryCode === 'NG' && (
+              <div className="space-y-2">
+                <Label>National Identification Number (NIN) *</Label>
+                <Input
+                  value={formData.nin}
+                  onChange={e => setFormData({ ...formData, nin: e.target.value.replace(/\D/g, '').slice(0, 11) })}
+                  placeholder="12345678901"
+                  maxLength={11}
+                  inputMode="numeric"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Required by NRS. Must be the 11-digit NIN issued by NIMC.
+                </p>
+              </div>
+            )}
 
             {/* Address */}
             <div className="pt-2 pb-1">
@@ -402,43 +482,72 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
                 <Input value={formData.department} onChange={e => setFormData({ ...formData, department: e.target.value })} />
               </div>
             </div>
+            <div className="space-y-2">
+              <Label>Job Site / Location *</Label>
+              <SearchableSelect
+                value={formData.job_site_id}
+                onValueChange={(v) => setFormData({ ...formData, job_site_id: v })}
+                options={activeJobSites.map((s) => ({
+                  value: s.id,
+                  label: `${s.name}${s.code ? ` (${s.code})` : ''}`,
+                  keywords: [s.code, (s as any).state_province, (s as any).city].filter(Boolean).join(' '),
+                }))}
+                placeholder={
+                  activeJobSites.length === 0
+                    ? 'No sites — add one in Settings → Job Sites'
+                    : 'Select job site'
+                }
+                searchPlaceholder="Search job sites..."
+                emptyText="No matching job sites."
+                disabled={activeJobSites.length === 0}
+              />
+            </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Province/Territory</Label>
-                <Select value={formData.province} onValueChange={v => setFormData({ ...formData, province: v })}>
-                  <SelectTrigger><SelectValue placeholder="Select province" /></SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(PROVINCE_NAMES).map(([code, name]) => (
-                      <SelectItem key={code} value={code}>{name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label>{countryConfig.jurisdictionLabel}</Label>
+                <SearchableSelect
+                  value={formData.province}
+                  onValueChange={(v) => setFormData({ ...formData, province: v })}
+                  options={countryConfig.jurisdictions.map((j) => ({
+                    value: j.code,
+                    label: j.name,
+                    keywords: j.code,
+                  }))}
+                  placeholder={`Select ${countryConfig.jurisdictionLabel.toLowerCase()}`}
+                  searchPlaceholder={`Search ${countryConfig.jurisdictionLabel.toLowerCase()}...`}
+                />
               </div>
               <div className="space-y-2">
                 <Label>Employment Type</Label>
-                <Select value={formData.employment_type} onValueChange={v => setFormData({ ...formData, employment_type: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="full_time">Full-time</SelectItem>
-                    <SelectItem value="part_time">Part-time</SelectItem>
-                    <SelectItem value="contract">Contract</SelectItem>
-                    <SelectItem value="temporary">Temporary</SelectItem>
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  value={formData.employment_type}
+                  onValueChange={(v) => setFormData({ ...formData, employment_type: v })}
+                  options={[
+                    { value: 'full_time', label: 'Full-time' },
+                    { value: 'part_time', label: 'Part-time' },
+                    { value: 'contract', label: 'Contract' },
+                    { value: 'temporary', label: 'Temporary' },
+                  ]}
+                  placeholder="Select employment type"
+                  searchPlaceholder="Search..."
+                />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Pay Frequency</Label>
-                <Select value={formData.pay_frequency} onValueChange={v => setFormData({ ...formData, pay_frequency: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="weekly">Weekly</SelectItem>
-                    <SelectItem value="bi_weekly">Bi-Weekly</SelectItem>
-                    <SelectItem value="semi_monthly">Semi-Monthly</SelectItem>
-                    <SelectItem value="monthly">Monthly</SelectItem>
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  value={formData.pay_frequency}
+                  onValueChange={(v) => setFormData({ ...formData, pay_frequency: v })}
+                  options={[
+                    { value: 'weekly', label: 'Weekly' },
+                    { value: 'bi_weekly', label: 'Bi-Weekly' },
+                    { value: 'semi_monthly', label: 'Semi-Monthly' },
+                    { value: 'monthly', label: 'Monthly' },
+                  ]}
+                  placeholder="Select pay frequency"
+                  searchPlaceholder="Search..."
+                />
               </div>
               <div className="space-y-2">
                 <Label>Hire Date</Label>
@@ -448,15 +557,18 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Status</Label>
-                <Select value={formData.status} onValueChange={v => setFormData({ ...formData, status: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="onboarding">Onboarding</SelectItem>
-                    <SelectItem value="on_leave">On Leave</SelectItem>
-                    <SelectItem value="terminated">Terminated</SelectItem>
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  value={formData.status}
+                  onValueChange={(v) => setFormData({ ...formData, status: v })}
+                  options={[
+                    { value: 'active', label: 'Active' },
+                    { value: 'onboarding', label: 'Onboarding' },
+                    { value: 'on_leave', label: 'On Leave' },
+                    { value: 'terminated', label: 'Terminated' },
+                  ]}
+                  placeholder="Select status"
+                  searchPlaceholder="Search..."
+                />
               </div>
               {(formData.status === 'terminated' || formData.status === 'on_leave') && (
                 <div className="space-y-2">
@@ -482,21 +594,17 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
                   <Label>
                     Reason for Termination <span className="text-destructive">*</span>
                   </Label>
-                  <Select
+                  <SearchableSelect
                     value={formData.termination_reason_code}
-                    onValueChange={v => setFormData({ ...formData, termination_reason_code: v })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select Service Canada / RoE reason code" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.entries(ROE_REASON_CODES).map(([code, label]) => (
-                        <SelectItem key={code} value={code}>
-                          {code} – {label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    onValueChange={(v) => setFormData({ ...formData, termination_reason_code: v })}
+                    options={Object.entries(ROE_REASON_CODES).map(([code, label]) => ({
+                      value: code,
+                      label: `${code} – ${label}`,
+                      keywords: label as string,
+                    }))}
+                    placeholder="Select Service Canada / RoE reason code"
+                    searchPlaceholder="Search reason codes..."
+                  />
                   <p className="text-xs text-muted-foreground">
                     Required by Service Canada for Employment Insurance (EI). This populates the Record of Employment reason code.
                   </p>
@@ -528,127 +636,169 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
             </div>
             <p className="text-xs text-muted-foreground">Set either hourly rate or annual salary (or both if applicable).</p>
 
-            {/* CPP/EI Exemptions */}
-            <Card className="p-4 mt-4">
-              <h4 className="font-medium mb-3">Deduction Exemptions</h4>
-              <div className="space-y-3">
-                <div className="flex items-start space-x-3">
-                  <Checkbox
-                    id="cpp_exempt"
-                    checked={formData.cpp_exempt}
-                    onCheckedChange={(checked) => setFormData({ ...formData, cpp_exempt: checked === true })}
-                  />
-                  <div className="space-y-1 leading-none">
-                    <Label htmlFor="cpp_exempt">CPP Exempt</Label>
-                    <p className="text-xs text-muted-foreground">
-                      Employee is exempt from Canada Pension Plan contributions (e.g., First Nations employees working on reserve)
-                    </p>
+            <CompensationStructureEditor
+              value={compStructure}
+              onChange={setCompStructure}
+              annualSalary={parseFloat(formData.annual_salary) || 0}
+              countryCode={countryCode}
+            />
+
+
+            {/* Deduction Exemptions — country-aware */}
+            {(() => {
+              const c = (formData.country || '').toLowerCase();
+              const isNG = c === 'nigeria' || c === 'ng';
+              const isCA = c === '' || c === 'canada' || c === 'ca';
+              if (!isNG && !isCA) return null;
+              return (
+                <Card className="p-4 mt-4">
+                  <h4 className="font-medium mb-3">Deduction Exemptions</h4>
+                  <div className="space-y-3">
+                    <div className="flex items-start space-x-3">
+                      <Checkbox
+                        id="cpp_exempt"
+                        checked={formData.cpp_exempt}
+                        onCheckedChange={(checked) => setFormData({ ...formData, cpp_exempt: checked === true })}
+                      />
+                      <div className="space-y-1 leading-none">
+                        <Label htmlFor="cpp_exempt">{isNG ? 'Pension Exempt' : 'CPP Exempt'}</Label>
+                        <p className="text-xs text-muted-foreground">
+                          {isNG
+                            ? 'Employee is exempt from Pension Reform Act contributions'
+                            : 'Employee is exempt from Canada Pension Plan contributions (e.g., First Nations employees working on reserve)'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-start space-x-3">
+                      <Checkbox
+                        id="ei_exempt"
+                        checked={formData.ei_exempt}
+                        onCheckedChange={(checked) => setFormData({ ...formData, ei_exempt: checked === true })}
+                      />
+                      <div className="space-y-1 leading-none">
+                        <Label htmlFor="ei_exempt">{isNG ? 'NHF Exempt' : 'EI Exempt'}</Label>
+                        <p className="text-xs text-muted-foreground">
+                          {isNG
+                            ? 'Employee is exempt from National Housing Fund contributions'
+                            : 'Employee is exempt from Employment Insurance premiums'}
+                        </p>
+                      </div>
+                    </div>
                   </div>
-                </div>
-                <div className="flex items-start space-x-3">
-                  <Checkbox
-                    id="ei_exempt"
-                    checked={formData.ei_exempt}
-                    onCheckedChange={(checked) => setFormData({ ...formData, ei_exempt: checked === true })}
-                  />
-                  <div className="space-y-1 leading-none">
-                    <Label htmlFor="ei_exempt">EI Exempt</Label>
-                    <p className="text-xs text-muted-foreground">
-                      Employee is exempt from Employment Insurance premiums
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </Card>
+                </Card>
+              );
+            })()}
           </TabsContent>
 
-          {/* TD1 Tax Tab */}
+          {/* TD1 Tax Tab — Canada only. Other countries show a localized note. */}
           <TabsContent value="tax" className="space-y-4 mt-4">
-            {/* Federal TD1 */}
-            <Card className="p-4">
-              <div className="flex items-center justify-between mb-4">
-                <h4 className="font-medium flex items-center gap-2">
-                  <Badge variant="outline" className="bg-primary/10">Federal</Badge>
-                  TD1 - Federal
+            {!isCA && (
+              <Card className="p-4 bg-muted/30">
+                <h4 className="font-medium mb-2 flex items-center gap-2">
+                  <FileText className="w-4 h-4" />
+                  Tax Relief — {countryConfig.name}
                 </h4>
-                <span className="text-sm font-medium">Total: {formatCurrency(federalTotal)}</span>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Basic Personal Amount</Label>
-                  <Input type="number" value={td1Data.basic_personal_amount} onChange={e => setTd1Data({ ...td1Data, basic_personal_amount: parseFloat(e.target.value) || 0 })} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Canada Employment Amount</Label>
-                  <Input type="number" value={td1Data.canada_employment_amount} onChange={e => setTd1Data({ ...td1Data, canada_employment_amount: parseFloat(e.target.value) || 0 })} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Age Amount</Label>
-                  <Input type="number" value={td1Data.age_amount} onChange={e => setTd1Data({ ...td1Data, age_amount: parseFloat(e.target.value) || 0 })} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Disability Amount</Label>
-                  <Input type="number" value={td1Data.disability_amount} onChange={e => setTd1Data({ ...td1Data, disability_amount: parseFloat(e.target.value) || 0 })} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Spouse/Dependant Amount</Label>
-                  <Input type="number" value={td1Data.spouse_amount} onChange={e => setTd1Data({ ...td1Data, spouse_amount: parseFloat(e.target.value) || 0 })} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Tuition Amount</Label>
-                  <Input type="number" value={td1Data.tuition_amount} onChange={e => setTd1Data({ ...td1Data, tuition_amount: parseFloat(e.target.value) || 0 })} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Other Credits</Label>
-                  <Input type="number" value={td1Data.other_credits} onChange={e => setTd1Data({ ...td1Data, other_credits: parseFloat(e.target.value) || 0 })} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Additional Tax Deduction</Label>
-                  <Input type="number" value={td1Data.additional_tax_deduction} onChange={e => setTd1Data({ ...td1Data, additional_tax_deduction: parseFloat(e.target.value) || 0 })} />
-                </div>
-              </div>
-            </Card>
+                <p className="text-sm text-muted-foreground">
+                  {countryCode === 'NG'
+                    ? 'Nigeria does not use a TD1-style tax credit certificate. PAYE is computed automatically each pay run using the Consolidated Relief Allowance (higher of ₦200,000 or 1% of gross, plus 20% of gross) under PITA, with statutory pension and NHF deductions applied before the progressive tax bands.'
+                    : `${countryConfig.name} does not use the Canadian TD1 form. Statutory deductions and reliefs are applied automatically during payroll processing based on ${countryConfig.name} rules.`}
+                </p>
+              </Card>
+            )}
+            {isCA && (
+              <>
+                {/* Federal TD1 */}
+                <Card className="p-4">
+                  <div className="flex items-center justify-between mb-4">
+                    <h4 className="font-medium flex items-center gap-2">
+                      <Badge variant="outline" className="bg-primary/10">Federal</Badge>
+                      TD1 - Federal
+                    </h4>
+                    <span className="text-sm font-medium">Total: {formatCurrency(federalTotal)}</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Basic Personal Amount</Label>
+                      <Input type="number" value={td1Data.basic_personal_amount} onChange={e => setTd1Data({ ...td1Data, basic_personal_amount: parseFloat(e.target.value) || 0 })} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Canada Employment Amount</Label>
+                      <Input type="number" value={td1Data.canada_employment_amount} onChange={e => setTd1Data({ ...td1Data, canada_employment_amount: parseFloat(e.target.value) || 0 })} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Age Amount</Label>
+                      <Input type="number" value={td1Data.age_amount} onChange={e => setTd1Data({ ...td1Data, age_amount: parseFloat(e.target.value) || 0 })} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Disability Amount</Label>
+                      <Input type="number" value={td1Data.disability_amount} onChange={e => setTd1Data({ ...td1Data, disability_amount: parseFloat(e.target.value) || 0 })} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Spouse/Dependant Amount</Label>
+                      <Input type="number" value={td1Data.spouse_amount} onChange={e => setTd1Data({ ...td1Data, spouse_amount: parseFloat(e.target.value) || 0 })} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Tuition Amount</Label>
+                      <Input type="number" value={td1Data.tuition_amount} onChange={e => setTd1Data({ ...td1Data, tuition_amount: parseFloat(e.target.value) || 0 })} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Other Credits</Label>
+                      <Input type="number" value={td1Data.other_credits} onChange={e => setTd1Data({ ...td1Data, other_credits: parseFloat(e.target.value) || 0 })} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Additional Tax Deduction</Label>
+                      <Input type="number" value={td1Data.additional_tax_deduction} onChange={e => setTd1Data({ ...td1Data, additional_tax_deduction: parseFloat(e.target.value) || 0 })} />
+                    </div>
+                  </div>
+                </Card>
 
-            {/* Provincial TD1 */}
-            <Card className="p-4">
-              <div className="flex items-center justify-between mb-4">
-                <h4 className="font-medium flex items-center gap-2">
-                  <Badge variant="outline" className="bg-secondary/50">{formData.province}</Badge>
-                  TD1 - {PROVINCE_NAMES[formData.province as keyof typeof PROVINCE_NAMES] || formData.province}
-                </h4>
-                <span className="text-sm font-medium">Total: {formatCurrency(provincialTotal)}</span>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Basic Personal Amount</Label>
-                  <Input type="number" value={td1Data.prov_basic_personal_amount} onChange={e => setTd1Data({ ...td1Data, prov_basic_personal_amount: parseFloat(e.target.value) || 0 })} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Age Amount</Label>
-                  <Input type="number" value={td1Data.prov_age_amount} onChange={e => setTd1Data({ ...td1Data, prov_age_amount: parseFloat(e.target.value) || 0 })} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Disability Amount</Label>
-                  <Input type="number" value={td1Data.prov_disability_amount} onChange={e => setTd1Data({ ...td1Data, prov_disability_amount: parseFloat(e.target.value) || 0 })} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Spouse/Dependant Amount</Label>
-                  <Input type="number" value={td1Data.prov_spouse_amount} onChange={e => setTd1Data({ ...td1Data, prov_spouse_amount: parseFloat(e.target.value) || 0 })} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Tuition Amount</Label>
-                  <Input type="number" value={td1Data.prov_tuition_amount} onChange={e => setTd1Data({ ...td1Data, prov_tuition_amount: parseFloat(e.target.value) || 0 })} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Other Credits</Label>
-                  <Input type="number" value={td1Data.prov_other_credits} onChange={e => setTd1Data({ ...td1Data, prov_other_credits: parseFloat(e.target.value) || 0 })} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Additional Tax Deduction</Label>
-                  <Input type="number" value={td1Data.prov_additional_tax_deduction} onChange={e => setTd1Data({ ...td1Data, prov_additional_tax_deduction: parseFloat(e.target.value) || 0 })} />
-                </div>
-              </div>
-            </Card>
+                {/* Provincial TD1 */}
+                <Card className="p-4">
+                  <div className="flex items-center justify-between mb-4">
+                    <h4 className="font-medium flex items-center gap-2">
+                      <Badge variant="outline" className="bg-secondary/50">{formData.province}</Badge>
+                      TD1 - {PROVINCE_NAMES[formData.province as keyof typeof PROVINCE_NAMES] || formData.province}
+                    </h4>
+                    <span className="text-sm font-medium">Total: {formatCurrency(provincialTotal)}</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Basic Personal Amount</Label>
+                      <Input type="number" value={td1Data.prov_basic_personal_amount} onChange={e => setTd1Data({ ...td1Data, prov_basic_personal_amount: parseFloat(e.target.value) || 0 })} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Age Amount</Label>
+                      <Input type="number" value={td1Data.prov_age_amount} onChange={e => setTd1Data({ ...td1Data, prov_age_amount: parseFloat(e.target.value) || 0 })} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Disability Amount</Label>
+                      <Input type="number" value={td1Data.prov_disability_amount} onChange={e => setTd1Data({ ...td1Data, prov_disability_amount: parseFloat(e.target.value) || 0 })} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Spouse/Dependant Amount</Label>
+                      <Input type="number" value={td1Data.prov_spouse_amount} onChange={e => setTd1Data({ ...td1Data, prov_spouse_amount: parseFloat(e.target.value) || 0 })} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Tuition Amount</Label>
+                      <Input type="number" value={td1Data.prov_tuition_amount} onChange={e => setTd1Data({ ...td1Data, prov_tuition_amount: parseFloat(e.target.value) || 0 })} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Other Credits</Label>
+                      <Input type="number" value={td1Data.prov_other_credits} onChange={e => setTd1Data({ ...td1Data, prov_other_credits: parseFloat(e.target.value) || 0 })} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Additional Tax Deduction</Label>
+                      <Input type="number" value={td1Data.prov_additional_tax_deduction} onChange={e => setTd1Data({ ...td1Data, prov_additional_tax_deduction: parseFloat(e.target.value) || 0 })} />
+                    </div>
+                  </div>
+                </Card>
+              </>
+            )}
+          </TabsContent>
+
+
+          <TabsContent value="guarantors" className="space-y-4 mt-4">
+            <GuarantorsTabContent employeeId={employee.id} />
           </TabsContent>
         </Tabs>
 
@@ -660,5 +810,55 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function GuarantorsTabContent({ employeeId }: { employeeId: string }) {
+  const { guarantors, isLoading, upsert } = useEmployeeGuarantors(employeeId);
+
+  const seed = (order: 1 | 2): GuarantorDraft => {
+    const existing = guarantors.find((g) => g.guarantor_order === order);
+    if (!existing) return EMPTY_GUARANTOR(order);
+    const { id: _id, employee_id: _e, organization_id: _o, ...rest } = existing;
+    return { ...EMPTY_GUARANTOR(order), ...rest, guarantor_order: order };
+  };
+
+  const [g1, setG1] = useState<GuarantorDraft>(EMPTY_GUARANTOR(1));
+  const [g2, setG2] = useState<GuarantorDraft>(EMPTY_GUARANTOR(2));
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    if (!isLoading && !hydrated) {
+      setG1(seed(1));
+      setG2(seed(2));
+      setHydrated(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoading, guarantors.length]);
+
+  const save = async (which: 1 | 2) => {
+    const draft = which === 1 ? g1 : g2;
+    if (!draft.full_name?.trim()) {
+      toast.error('Full name is required');
+      return;
+    }
+    await upsert.mutateAsync({ ...draft, employee_id: employeeId });
+    toast.success(`Guarantor ${which} saved`);
+  };
+
+  if (isLoading) return <p className="text-sm text-muted-foreground">Loading guarantors…</p>;
+
+  return (
+    <div className="space-y-4">
+      <GuarantorsForm first={g1} second={g2} onChangeFirst={setG1} onChangeSecond={setG2} />
+      <div className="flex justify-end gap-2">
+        <Button variant="outline" onClick={() => save(1)} disabled={upsert.isPending}>
+          Save 1st Guarantor
+        </Button>
+        <Button onClick={() => save(2)} disabled={upsert.isPending}>
+          Save 2nd Guarantor
+        </Button>
+      </div>
+    </div>
   );
 }

@@ -16,6 +16,8 @@ import { useBankAccounts } from '@/hooks/useBankAccounts';
 import { useInvoices } from '@/hooks/useInvoices';
 import { useCustomers } from '@/hooks/useCustomers';
 import { useIsReadOnly } from '@/hooks/useIsReadOnly';
+import { useCountryScope } from '@/hooks/useCountryFilter';
+import { getBankInstitutionsOnly, getMobileMoneyProviders } from '@/data/localizedBankingInstitutions';
 import { toast } from 'sonner';
 import { useConfirmDelete } from '@/hooks/useConfirmDelete';
 
@@ -36,13 +38,20 @@ export default function PaymentLinks() {
   const { invoices = [] } = useInvoices() as { invoices?: Array<{ id: string; invoice_number: string; balance_due: number; status: string; customer_id?: string; total: number }> };
   const { customers = [] } = useCustomers() as { customers?: Array<{ id: string; name: string; email: string | null }> };
   const isReadOnly = useIsReadOnly();
+  const { country: countryScope } = useCountryScope();
+  const isNG = countryScope === 'NG';
+  const ngBanks = useMemo(() => getBankInstitutionsOnly('NG'), []);
+  const ngMobile = useMemo(() => getMobileMoneyProviders('NG'), []);
+
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<'invoice' | 'adhoc'>('invoice');
   const lastBank = typeof window !== 'undefined' ? window.localStorage.getItem('pl_last_deposit_bank') ?? '' : '';
-  const [form, setForm] = useState({
+  const defaultCurrency = isNG ? 'NGN' : 'CAD';
+  type NgPayout = 'none' | 'nibss' | 'bank' | 'mobile';
+  const initialForm = {
     invoice_id: '',
     amount: '',
-    currency: 'CAD',
+    currency: defaultCurrency,
     description: '',
     payment_method: 'all' as PaymentLinkMethod,
     create_invoice_on_payment: false,
@@ -51,7 +60,14 @@ export default function PaymentLinks() {
     deposit_bank_account_id: lastBank,
     instant_payment: false,
     instant_method: 'interac_etransfer' as InstantMethod,
-  });
+    // NG-specific payout fields
+    ng_payout: 'none' as NgPayout,
+    ng_bank_code: '',
+    ng_account_number: '',
+    ng_wallet_provider: '',
+    ng_wallet_number: '',
+  };
+  const [form, setForm] = useState(initialForm);
 
   const openInvoices = useMemo(
     () => invoices.filter((i) => ['sent', 'partial', 'overdue', 'issued', 'final'].includes(i.status) && Number(i.balance_due) > 0),
@@ -60,7 +76,7 @@ export default function PaymentLinks() {
 
   const selectedInv = openInvoices.find((i) => i.id === form.invoice_id);
 
-  const reset = () => setForm({ invoice_id: '', amount: '', currency: 'CAD', description: '', payment_method: 'all', create_invoice_on_payment: false, payer_name: '', payer_email: '', deposit_bank_account_id: lastBank, instant_payment: false, instant_method: 'interac_etransfer' });
+  const reset = () => setForm(initialForm);
 
   const submit = async () => {
     const amount = mode === 'invoice' && selectedInv ? Number(form.amount || selectedInv.balance_due) : Number(form.amount);
@@ -88,6 +104,24 @@ export default function PaymentLinks() {
       window.localStorage.setItem('pl_last_deposit_bank', form.deposit_bank_account_id);
     }
 
+    // NG payout validation
+    let ngPayoutMeta: Record<string, unknown> | null = null;
+    if (isNG) {
+      if (form.ng_payout === 'bank') {
+        if (!form.ng_bank_code) { toast.error('Select a Nigerian bank'); return; }
+        if (!/^\d{10}$/.test(form.ng_account_number)) { toast.error('Enter a valid 10-digit NUBAN account number'); return; }
+        const bank = ngBanks.find((b) => b.code === form.ng_bank_code);
+        ngPayoutMeta = { payout: { country: 'NG', method: 'bank', bank_code: form.ng_bank_code, bank_name: bank?.name ?? null, account_number: form.ng_account_number } };
+      } else if (form.ng_payout === 'mobile') {
+        if (!form.ng_wallet_provider) { toast.error('Select a mobile money provider'); return; }
+        if (!/^\d{11}$/.test(form.ng_wallet_number)) { toast.error('Enter a valid 11-digit wallet / phone number'); return; }
+        const prov = ngMobile.find((m) => m.code === form.ng_wallet_provider);
+        ngPayoutMeta = { payout: { country: 'NG', method: 'mobile_money', provider_code: form.ng_wallet_provider, provider_name: prov?.name ?? null, wallet_number: form.ng_wallet_number } };
+      } else if (form.ng_payout === 'nibss') {
+        ngPayoutMeta = { payout: { country: 'NG', method: 'nibss' } };
+      }
+    }
+
     await create.mutateAsync({
       amount,
       currency: form.currency,
@@ -101,6 +135,7 @@ export default function PaymentLinks() {
       deposit_bank_account_id: form.deposit_bank_account_id || null,
       instant_payment: form.instant_payment,
       instant_method: form.instant_payment ? form.instant_method : null,
+      metadata: ngPayoutMeta,
     });
     setOpen(false);
     reset();
@@ -198,6 +233,86 @@ export default function PaymentLinks() {
                   </SelectContent>
                 </Select>
               </div>
+
+              {isNG && (
+                <div className="rounded-md border p-3 space-y-3">
+                  <div>
+                    <Label className="text-sm font-medium">Default payout method</Label>
+                    <p className="text-[11px] text-muted-foreground">Where the collected NGN funds should settle.</p>
+                  </div>
+                  <div className="inline-flex rounded-full bg-muted p-1 text-sm">
+                    {[
+                      { v: 'none',   label: 'None' },
+                      { v: 'nibss',  label: 'NIBSS (NG)' },
+                      { v: 'bank',   label: 'Bank' },
+                      { v: 'mobile', label: 'Mobile Money' },
+                    ].map((opt) => (
+                      <button
+                        key={opt.v}
+                        type="button"
+                        onClick={() => setForm({ ...form, ng_payout: opt.v as typeof form.ng_payout })}
+                        className={`px-3 py-1 rounded-full transition ${form.ng_payout === opt.v ? 'bg-background shadow font-medium' : 'text-muted-foreground'}`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {form.ng_payout === 'bank' && (
+                    <div className="grid gap-2">
+                      <div>
+                        <Label>Bank Name</Label>
+                        <Select value={form.ng_bank_code} onValueChange={(v) => setForm({ ...form, ng_bank_code: v })}>
+                          <SelectTrigger><SelectValue placeholder="Search Nigerian bank…" /></SelectTrigger>
+                          <SelectContent className="max-h-72">
+                            {ngBanks.map((b) => (
+                              <SelectItem key={b.code} value={b.code}>{b.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label>Account Number</Label>
+                        <Input
+                          inputMode="numeric"
+                          maxLength={10}
+                          placeholder="0123456789"
+                          value={form.ng_account_number}
+                          onChange={(e) => setForm({ ...form, ng_account_number: e.target.value.replace(/\D/g, '') })}
+                        />
+                        <p className="text-[11px] text-muted-foreground mt-1">10-digit NUBAN.</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {form.ng_payout === 'mobile' && (
+                    <div className="grid gap-2">
+                      <div>
+                        <Label>Mobile Money Provider</Label>
+                        <Select value={form.ng_wallet_provider} onValueChange={(v) => setForm({ ...form, ng_wallet_provider: v })}>
+                          <SelectTrigger><SelectValue placeholder="Select provider" /></SelectTrigger>
+                          <SelectContent>
+                            {ngMobile.map((m) => (
+                              <SelectItem key={m.code} value={m.code}>{m.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label>Wallet / Phone Number</Label>
+                        <Input
+                          inputMode="numeric"
+                          maxLength={11}
+                          placeholder="08012345678"
+                          value={form.ng_wallet_number}
+                          onChange={(e) => setForm({ ...form, ng_wallet_number: e.target.value.replace(/\D/g, '') })}
+                        />
+                        <p className="text-[11px] text-muted-foreground mt-1">11-digit Nigerian mobile number.</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
               <div>
                 <Label>Deposit bank account <span className="text-muted-foreground font-normal">(optional)</span></Label>
                 <Select

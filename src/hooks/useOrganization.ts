@@ -187,6 +187,40 @@ export function useCurrentOrganization() {
   };
 }
 
+export interface OrganizationMembership {
+  organization_id: string;
+  role: string;
+}
+
+/** Orgs the current user is an actual member of (not just admin-viewable). */
+export function useMyOrganizationMemberships() {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ['my-org-memberships', user?.id],
+    queryFn: async (): Promise<OrganizationMembership[]> => {
+      if (!user?.id) return [];
+      const { data, error } = await supabase
+        .from('organization_members')
+        .select('organization_id, role')
+        .eq('user_id', user.id);
+      if (error) throw error;
+      return (data ?? []) as OrganizationMembership[];
+    },
+    enabled: !!user?.id,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+/** True when the current selected org is one the user can write to. */
+export function useIsMemberOfCurrentOrg() {
+  const { organization } = useCurrentOrganization();
+  const { data: memberships, isLoading } = useMyOrganizationMemberships();
+  const memberOrgIds = (memberships ?? []).map((m) => m.organization_id);
+  const isMember = !!organization && memberOrgIds.includes(organization.id);
+  const firstWritableOrgId = memberOrgIds[0] ?? null;
+  return { isMember, isLoading, memberships: memberships ?? [], firstWritableOrgId };
+}
+
 export function useCreateOrganization() {
   const queryClient = useQueryClient();
   const { user } = useAuth();

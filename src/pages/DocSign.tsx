@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, FileText, Send, Clock, CheckCircle, XCircle, Eye, Search, Filter, MoreVertical, FileSignature, Layout, PenTool, History, FolderOpen, Download, Trash2, Share2 } from 'lucide-react';
+import { Plus, FileText, Send, Clock, CheckCircle, XCircle, Eye, Search, Filter, MoreVertical, FileSignature, Layout, PenTool, History, FolderOpen, Download, Trash2, Share2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
@@ -37,6 +37,7 @@ import { Recipient } from '@/components/docsign/RecipientPicker';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
+import { useIsMemberOfCurrentOrg, useUserOrganizations, useCurrentOrganization } from '@/hooks/useOrganization';
 import { usePdfFlatten } from '@/hooks/usePdfFlatten';
 import { useSaveSignature } from '@/hooks/useUserSignatures';
 
@@ -73,6 +74,10 @@ export default function DocSign() {
   const sendDocument = useSendDocument();
   const remindDocument = useRemindDocument();
   const { user } = useAuth();
+  const { isMember: canWriteHere, isLoading: membershipLoading, firstWritableOrgId } = useIsMemberOfCurrentOrg();
+  const { data: allOrgs = [] } = useUserOrganizations();
+  const { organization: currentOrg } = useCurrentOrganization();
+  const firstWritableOrg = firstWritableOrgId ? allOrgs.find((o) => o.id === firstWritableOrgId) ?? null : null;
   const { flattenPdf } = usePdfFlatten();
   const saveSignature = useSaveSignature();
   const [documentMetadata, setDocumentMetadata] = useState<Record<string, any>>({});
@@ -734,8 +739,42 @@ export default function DocSign() {
     );
   }
 
+  const orgSwitchUnavailable = !membershipLoading && !canWriteHere;
+
   return (
     <div className="space-y-6">
+      {orgSwitchUnavailable && (
+        <Card className="border-amber-500/40 bg-amber-500/5">
+          <CardContent className="py-4">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              <div className="flex-1 space-y-1">
+                <p className="font-medium text-sm">
+                  View-only: you're not a member of {currentOrg?.name ?? 'this organization'}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {firstWritableOrg
+                    ? <>You can create documents under <span className="font-medium">{firstWritableOrg.name}</span>, an organization you belong to.</>
+                    : <>You don't belong to any organization yet. Create one or ask to be invited before creating documents.</>}
+                </p>
+              </div>
+              {firstWritableOrg && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    window.localStorage.setItem('current_organization_id', firstWritableOrg.id);
+                    window.location.reload();
+                  }}
+                >
+                  Switch to {firstWritableOrg.name}
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="flex justify-between items-start">
         <div>
           <div className="flex items-center gap-3">
@@ -755,7 +794,11 @@ export default function DocSign() {
             <PenTool className="w-4 h-4 mr-2" />
             My Signature
           </Button>
-          <Button onClick={() => setCreateDialogOpen(true)} className="bg-accent hover:bg-accent/90">
+          <Button
+            onClick={() => setCreateDialogOpen(true)}
+            disabled={orgSwitchUnavailable && !firstWritableOrg}
+            className="bg-accent hover:bg-accent/90"
+          >
             <Plus className="w-4 h-4 mr-2" />
             New Document
           </Button>

@@ -28,6 +28,7 @@ import { PROVINCE_NAMES } from '@/types/payroll';
 import { getDefaultTD1Claims } from '@/lib/payrollCalculator';
 import EditEmployeeDialog from '@/components/employees/EditEmployeeDialog';
 import EmployeePayHistoryDialog from '@/components/employees/EmployeePayHistoryDialog';
+import { useCurrencyFormatter } from '@/hooks/useCurrencyFormatter';
 
 export default function EmployeeProfile() {
   const { id } = useParams<{ id: string }>();
@@ -52,13 +53,10 @@ export default function EmployeeProfile() {
     enabled: !!id,
   });
 
+  const { formatWithSymbol, currencySymbol } = useCurrencyFormatter();
   const formatCurrency = (value: number | null | undefined) => {
     if (!value) return '-';
-    return new Intl.NumberFormat('en-CA', {
-      style: 'currency',
-      currency: 'CAD',
-      minimumFractionDigits: 0,
-    }).format(value);
+    return formatWithSymbol(value);
   };
 
   const formatDate = (dateStr: string | null | undefined) => {
@@ -254,7 +252,7 @@ export default function EmployeeProfile() {
                   <p className="text-sm text-muted-foreground">Hourly Rate</p>
                   <div className="flex items-center gap-2">
                     <Clock className="w-4 h-4 text-muted-foreground" />
-                    <p className="font-semibold text-xl">${employee.hourly_rate}/hr</p>
+                    <p className="font-semibold text-xl">{currencySymbol}{employee.hourly_rate}/hr</p>
                   </div>
                 </div>
               )}
@@ -282,6 +280,12 @@ export default function EmployeeProfile() {
                 <p className="text-sm text-muted-foreground">SIN (Last 3 digits)</p>
                 <p className="font-medium">***-***-***</p>
               </div>
+              {(employee as any).nin && (
+                <div>
+                  <p className="text-sm text-muted-foreground">NIN (National Identification Number)</p>
+                  <p className="font-medium">{(employee as any).nin}</p>
+                </div>
+              )}
               <div>
                 <p className="text-sm text-muted-foreground">Province (Employment)</p>
                 <p className="font-medium">{PROVINCE_NAMES[employee.province] || employee.province}</p>
@@ -325,14 +329,22 @@ export default function EmployeeProfile() {
                     <p className="text-sm text-muted-foreground">Province of Employment</p>
                     <p className="font-medium">{PROVINCE_NAMES[employee.province] || employee.province}</p>
                   </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">CPP Exempt</p>
-                    <p className="font-medium">{employee.cpp_exempt ? 'Yes' : 'No'}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">EI Exempt</p>
-                    <p className="font-medium">{employee.ei_exempt ? 'Yes' : 'No'}</p>
-                  </div>
+                  {(() => {
+                    const c = (employee.country || '').toLowerCase();
+                    const isNG = c === 'nigeria' || c === 'ng';
+                    return (
+                      <>
+                        <div>
+                          <p className="text-sm text-muted-foreground">{isNG ? 'Pension Exempt' : 'CPP Exempt'}</p>
+                          <p className="font-medium">{employee.cpp_exempt ? 'Yes' : 'No'}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-muted-foreground">{isNG ? 'NHF Exempt' : 'EI Exempt'}</p>
+                          <p className="font-medium">{employee.ei_exempt ? 'Yes' : 'No'}</p>
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
               );
             })()}

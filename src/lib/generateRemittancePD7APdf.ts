@@ -1,5 +1,10 @@
 import jsPDF from 'jspdf';
 import { parseLocalDate } from '@/lib/utils';
+import {
+  downloadGenericRemittancePdf,
+  downloadGenericRemittanceCsv,
+  type GenericRemittanceData,
+} from '@/lib/payroll/drawGenericRemittance';
 
 export interface RemittanceEmployeeLine {
   name: string;
@@ -263,6 +268,51 @@ export function downloadRemittancePD7APdf(data: RemittancePD7AData): void {
   const safe = data.periodLabel.replace(/[^A-Za-z0-9]+/g, '-');
   doc.save(`${data.formCode}-${safe}.pdf`);
 }
+
+// Country-aware dispatcher. CA path preserved above; other countries render
+// via the generic remittance renderer with per-country row + column config.
+function toGeneric(data: RemittancePD7AData, countryCode: string): GenericRemittanceData {
+  return {
+    countryCode,
+    employerName: data.employerName,
+    employerAddress: data.employerAddress,
+    employerTaxId: data.payrollAccountNumber || data.businessNumber,
+    periodLabel: data.periodLabel,
+    periodStart: data.periodStart,
+    periodEnd: data.periodEnd,
+    dueDate: data.dueDate,
+    numberOfEmployees: data.numberOfEmployees,
+    grossPayroll: data.grossPayroll,
+    federalTax: data.federalTax,
+    provincialTax: data.provincialTax,
+    cppEmployee: data.cppEmployee,
+    cppEmployer: data.cppEmployer,
+    eiEmployee: data.eiEmployee,
+    eiEmployer: data.eiEmployer,
+    employees: data.employees,
+    currencyCode: data.currencyCode,
+    currencyLocale: data.currencyLocale,
+  };
+}
+
+export function downloadLocalizedRemittancePdf(
+  data: RemittancePD7AData,
+  countryCode: string,
+): void {
+  const cc = (countryCode || 'CA').toUpperCase();
+  if (cc === 'CA') return downloadRemittancePD7APdf(data);
+  downloadGenericRemittancePdf(toGeneric(data, cc));
+}
+
+export function downloadLocalizedRemittanceCsv(
+  data: RemittancePD7AData,
+  countryCode: string,
+): void {
+  const cc = (countryCode || 'CA').toUpperCase();
+  if (cc === 'CA') return downloadRemittanceCsv(data);
+  downloadGenericRemittanceCsv(toGeneric(data, cc));
+}
+
 
 export function buildRemittanceCsv(data: RemittancePD7AData): string {
   const lines: string[] = [];

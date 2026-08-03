@@ -254,16 +254,73 @@ const HISTORICAL_RATES: Record<string, Record<number, any>> = {
       effective_date: '2025-01-01',
       source: 'OBR 2025'
     }
+  },
+  NG: {
+    2024: {
+      sales_tax: [
+        { code: 'VAT', rate: 7.5, source: 'NRS VAT Act (Finance Act 2020)' },
+        { code: 'WHT-CONTRACT', rate: 5, source: 'NRS WHT Regulations' },
+        { code: 'WHT-PROF', rate: 10, source: 'NRS WHT Regulations' },
+      ],
+      payroll: [
+        { code: 'PENSION', employee_rate: 8, employer_rate: 10, source: 'PenCom PRA 2014' },
+        { code: 'NHF', employee_rate: 2.5, source: 'NHF Act' },
+        { code: 'ITF', employer_rate: 1, source: 'ITF Act' },
+        { code: 'NSITF', employer_rate: 1, source: 'ECS Act 2010' },
+      ],
+      tax_brackets: [
+        { threshold: 300000, rate: 7 },
+        { threshold: 600000, rate: 11 },
+        { threshold: 1100000, rate: 15 },
+        { threshold: 1600000, rate: 19 },
+        { threshold: 3200000, rate: 21 },
+        { threshold: 999999999, rate: 24 },
+      ],
+      tax_credits: [
+        { code: 'CRA', name: 'Consolidated Relief Allowance', amount: 200000, notes: '20% of gross + higher of ₦200,000 or 1% of gross' },
+      ],
+      effective_date: '2024-01-01',
+      source: 'NRS / Finance Act 2023'
+    },
+    2025: {
+      sales_tax: [
+        { code: 'VAT', rate: 7.5, source: 'NRS VAT Act (Finance Act 2020)' },
+        { code: 'WHT-CONTRACT', rate: 5, source: 'NRS WHT Regulations' },
+        { code: 'WHT-PROF', rate: 10, source: 'NRS WHT Regulations' },
+        { code: 'TET', rate: 3, source: 'Finance Act 2023' },
+      ],
+      payroll: [
+        { code: 'PENSION', employee_rate: 8, employer_rate: 10, source: 'PenCom PRA 2014' },
+        { code: 'NHF', employee_rate: 2.5, source: 'NHF Act' },
+        { code: 'ITF', employer_rate: 1, source: 'ITF Act' },
+        { code: 'NSITF', employer_rate: 1, source: 'ECS Act 2010' },
+      ],
+      tax_brackets: [
+        { threshold: 300000, rate: 7 },
+        { threshold: 600000, rate: 11 },
+        { threshold: 1100000, rate: 15 },
+        { threshold: 1600000, rate: 19 },
+        { threshold: 3200000, rate: 21 },
+        { threshold: 999999999, rate: 24 },
+      ],
+      tax_credits: [
+        { code: 'CRA', name: 'Consolidated Relief Allowance', amount: 200000, notes: '20% of gross + higher of ₦200,000 or 1% of gross' },
+      ],
+      effective_date: '2025-01-01',
+      source: 'NRS / Finance Act 2023'
+    }
   }
 };
 
 const COUNTRY_LABELS: Record<string, { name: string; flag: string; currency: string; authority: string }> = {
   CA: { name: 'Canada', flag: '🇨🇦', currency: 'CAD', authority: 'CRA' },
   US: { name: 'United States', flag: '🇺🇸', currency: 'USD', authority: 'IRS' },
+  NG: { name: 'Nigeria', flag: '🇳🇬', currency: 'NGN', authority: 'NRS' },
   ZM: { name: 'Zambia', flag: '🇿🇲', currency: 'ZMW', authority: 'ZRA' },
   KE: { name: 'Kenya', flag: '🇰🇪', currency: 'KES', authority: 'KRA' },
   BI: { name: 'Burundi', flag: '🇧🇮', currency: 'BIF', authority: 'OBR' },
 };
+
 
 export function AutoRateUpdatesTab({ organizationId }: AutoRateUpdatesTabProps) {
   const queryClient = useQueryClient();
@@ -917,6 +974,7 @@ export function AutoRateUpdatesTab({ organizationId }: AutoRateUpdatesTabProps) 
             <ul className="text-sm text-muted-foreground space-y-1">
               <li>• <strong>🇨🇦 Canada:</strong> CRA - GST/HST/PST, CPP/EI, Federal & Provincial Tax Credits (TD1)</li>
               <li>• <strong>🇺🇸 USA:</strong> IRS - FICA, Medicare, FUTA, Federal Tax Brackets</li>
+              <li>• <strong>🇳🇬 Nigeria:</strong> NRS - VAT, WHT, PAYE Brackets, Pension, NHF, ITF, NSITF, TET, CIT</li>
               <li>• <strong>🇿🇲 Zambia:</strong> ZRA - VAT, NAPSA, NHIMA, PAYE Brackets</li>
               <li>• <strong>🇰🇪 Kenya:</strong> KRA - VAT, NSSF, SHIF, Housing Levy, PAYE</li>
               <li>• <strong>🇧🇮 Burundi:</strong> OBR - TVA, INSS, IPR Brackets</li>

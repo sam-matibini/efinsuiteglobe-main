@@ -270,12 +270,57 @@ const BURUNDI_PAYROLL: PayrollLocalization = {
   },
 };
 
+const NIGERIA_PAYROLL: PayrollLocalization = {
+  taxSlips: {
+    slipName: 'PAYE Tax Deduction Certificate',
+    slipCode: 'PAYE-Cert',
+    description: 'Generate annual PAYE certificates for employees (Year of Assessment)',
+    boxLabels: {
+      income: 'Gross Emoluments',
+      taxDeducted: 'PAYE Deducted',
+      pension: 'Pension (8%)',
+      socialInsurance: 'NHF (2.5%)',
+    },
+    generateButtonLabel: 'Generate PAYE Certificates',
+    emptyStateMessage: 'No PAYE certificates found for {year}. Generate certificates to get started.',
+    authority: 'NRS / State IRS',
+  },
+  separationDoc: {
+    docName: 'Disengagement Letter',
+    docCode: 'TERM',
+    description: 'Create disengagement/termination letters for departing employees',
+    createButtonLabel: 'Create Letter',
+    reasonLabel: 'Reason for Disengagement',
+    available: true,
+  },
+  remittances: {
+    title: 'PAYE & Statutory Remittances',
+    description: 'Monthly PAYE, Pension, NHF, NSITF & ITF remittances (due on/before 10th)',
+    authority: 'State IRS · PenCom · FMBN · NSITF · ITF',
+    formCode: 'PAYE Schedule',
+    columns: {
+      pension: 'Pension (8%+10%)',
+      socialInsurance: 'NHF / NSITF',
+      tax: 'PAYE',
+    },
+    generateDescription: 'Generate a monthly PAYE + statutory remittance schedule from paid pay runs.',
+  },
+  currencyCode: 'NGN',
+  currencyLocale: 'en-NG',
+  sidebarLabels: {
+    taxSlips: 'PAYE Certificates',
+    separationDoc: 'Disengagement Letters',
+    remittances: 'PAYE Remittances',
+  },
+};
+
 export const PAYROLL_LOCALIZATIONS: Record<string, PayrollLocalization> = {
   CA: CANADA_PAYROLL,
   US: US_PAYROLL,
   ZM: ZAMBIA_PAYROLL,
   KE: KENYA_PAYROLL,
   BI: BURUNDI_PAYROLL,
+  NG: NIGERIA_PAYROLL,
 };
 
 export function getPayrollLocalization(countryCode: string): PayrollLocalization {

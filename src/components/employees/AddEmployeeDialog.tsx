@@ -2,7 +2,9 @@ import { useState, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { FileText, User, Sparkles } from 'lucide-react';
+import { FileText, User, Sparkles, UserPlus } from 'lucide-react';
+import { GuarantorsForm, EMPTY_GUARANTOR, isGuarantorComplete, type GuarantorDraft } from './GuarantorForm';
+import { saveGuarantorsForEmployee } from '@/hooks/useEmployeeGuarantors';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -33,6 +35,7 @@ import {
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useCurrentOrganization } from '@/hooks/useOrganization';
+import { useJobSites } from '@/hooks/useJobSites';
 import { COUNTRY_LOCALIZATIONS, getCountryLocalization } from '@/data/countryLocalizations';
 import { 
   getCountryPayrollConfig, 
@@ -49,6 +52,9 @@ const createEmployeeSchema = (countryCode: string) => {
     email: z.string().email('Valid email required'),
     phone: z.string().optional(),
     nationalId: z.string().optional(),
+    nin: countryCode === 'NG'
+      ? z.string().regex(/^\d{11}$/, 'NIN must be exactly 11 digits')
+      : z.string().optional(),
     dateOfBirth: z.string().optional(),
     // Mailing address
     addressLine1: z.string().optional(),
@@ -59,6 +65,7 @@ const createEmployeeSchema = (countryCode: string) => {
     mailingCountry: z.string().optional(),
     department: z.string().optional(),
     jobTitle: z.string().optional(),
+    jobSiteId: z.string().min(1, 'Job site is required'),
     employmentType: z.enum(['full_time', 'part_time', 'contract', 'temporary']),
     payFrequency: z.enum(['weekly', 'bi_weekly', 'semi_monthly', 'monthly']),
     jurisdiction: z.string().min(1, 'Location is required'),
@@ -100,9 +107,12 @@ interface AddEmployeeDialogProps {
 
 export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployeeDialogProps) {
   const { organization } = useCurrentOrganization();
+  const { jobSites: activeJobSites } = useJobSites({ activeOnly: true });
   const [activeTab, setActiveTab] = useState('personal');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedJurisdiction, setSelectedJurisdiction] = useState<string>('');
+  const [guarantor1, setGuarantor1] = useState<GuarantorDraft>(EMPTY_GUARANTOR(1));
+  const [guarantor2, setGuarantor2] = useState<GuarantorDraft>(EMPTY_GUARANTOR(2));
 
   // Determine country from organization
   const countryCode = useMemo(() => {
@@ -145,6 +155,7 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
       email: '',
       phone: '',
       nationalId: '',
+      nin: '',
       dateOfBirth: '',
       addressLine1: '',
       addressLine2: '',
@@ -154,6 +165,7 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
       mailingCountry: '',
       department: '',
       jobTitle: '',
+      jobSiteId: '',
       employmentType: 'full_time' as const,
       payFrequency: 'bi_weekly' as const,
       jurisdiction: jurisdictionCode || countryConfig.jurisdictions[0]?.code || '',
@@ -268,6 +280,12 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
   };
 
   const onSubmit = async (data: EmployeeFormData) => {
+    // Mandatory: both guarantors must be provided AND confirmed
+    if (!isGuarantorComplete(guarantor1) || !isGuarantorComplete(guarantor2)) {
+      setActiveTab('guarantors');
+      toast.error('Both guarantors are required and each must be confirmed before onboarding.');
+      return;
+    }
     setIsSubmitting(true);
     try {
       // For non-Canadian employees, we still store the jurisdiction in province field
@@ -279,6 +297,7 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
         email: data.email,
         phone: data.phone || null,
         sin_encrypted: data.nationalId || null,
+        nin: (data as any).nin || null,
         date_of_birth: data.dateOfBirth || null,
         address_line1: data.addressLine1 || null,
         address_line2: data.addressLine2 || null,
@@ -292,6 +311,7 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
         pay_frequency: data.payFrequency,
         department: data.department || null,
         job_title: data.jobTitle || null,
+        job_site_id: data.jobSiteId,
         annual_salary: data.payType === 'salary' ? data.annualSalary : null,
         hourly_rate: data.payType === 'hourly' ? data.hourlyRate : null,
         status: 'onboarding' as const,
@@ -351,6 +371,18 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
       }
       // For other countries, we could store in a generic payroll_deductions table
 
+      // Save guarantors (any provided)
+      if (organization?.id) {
+        try {
+          await saveGuarantorsForEmployee(employee.id, organization.id, [
+            { ...guarantor1, guarantor_order: 1, full_name: guarantor1.full_name?.trim() ?? '' },
+            { ...guarantor2, guarantor_order: 2, full_name: guarantor2.full_name?.trim() ?? '' },
+          ]);
+        } catch (gErr: any) {
+          console.warn('Guarantor save warning:', gErr?.message);
+        }
+      }
+
       toast.success(`Employee ${data.firstName} ${data.lastName} added successfully!`);
       form.reset();
       onOpenChange(false);
@@ -396,46 +428,52 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
 
     return (
       <TabsContent value="tax" className="space-y-6 mt-4">
-        {/* CPP/EI Exemptions */}
-        <Card className="p-4">
-          <h4 className="font-medium mb-3">Deduction Exemptions</h4>
-          <div className="space-y-3">
-            <FormField
-              control={form.control}
-              name="cppExempt"
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                  <FormControl>
-                    <Checkbox checked={field.value} onCheckedChange={field.onChange} />
-                  </FormControl>
-                  <div className="space-y-1 leading-none">
-                    <FormLabel>CPP Exempt</FormLabel>
-                    <p className="text-xs text-muted-foreground">
-                      Employee is exempt from Canada Pension Plan contributions (e.g., First Nations employees working on reserve)
-                    </p>
-                  </div>
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="eiExempt"
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                  <FormControl>
-                    <Checkbox checked={field.value} onCheckedChange={field.onChange} />
-                  </FormControl>
-                  <div className="space-y-1 leading-none">
-                    <FormLabel>EI Exempt</FormLabel>
-                    <p className="text-xs text-muted-foreground">
-                      Employee is exempt from Employment Insurance premiums
-                    </p>
-                  </div>
-                </FormItem>
-              )}
-            />
-          </div>
-        </Card>
+        {/* Deduction Exemptions — country-aware */}
+        {(countryCode === 'CA' || countryCode === 'NG') && (
+          <Card className="p-4">
+            <h4 className="font-medium mb-3">Deduction Exemptions</h4>
+            <div className="space-y-3">
+              <FormField
+                control={form.control}
+                name="cppExempt"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                    <FormControl>
+                      <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                    </FormControl>
+                    <div className="space-y-1 leading-none">
+                      <FormLabel>{countryCode === 'NG' ? 'Pension Exempt' : 'CPP Exempt'}</FormLabel>
+                      <p className="text-xs text-muted-foreground">
+                        {countryCode === 'NG'
+                          ? 'Employee is exempt from Pension Reform Act contributions (e.g., fewer than 3 employees, or expatriate exemption)'
+                          : 'Employee is exempt from Canada Pension Plan contributions (e.g., First Nations employees working on reserve)'}
+                      </p>
+                    </div>
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="eiExempt"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                    <FormControl>
+                      <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                    </FormControl>
+                    <div className="space-y-1 leading-none">
+                      <FormLabel>{countryCode === 'NG' ? 'NHF Exempt' : 'EI Exempt'}</FormLabel>
+                      <p className="text-xs text-muted-foreground">
+                        {countryCode === 'NG'
+                          ? 'Employee is exempt from National Housing Fund contributions (e.g., basic salary below ₦3,000/month or non-Nigerian)'
+                          : 'Employee is exempt from Employment Insurance premiums'}
+                      </p>
+                    </div>
+                  </FormItem>
+                )}
+              />
+            </div>
+          </Card>
+        )}
 
         <div className="flex items-center justify-between">
           <div>
@@ -587,7 +625,7 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <TabsList className="grid w-full grid-cols-2">
+              <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="personal" className="flex items-center gap-2">
                   <User className="w-4 h-4" />
                   Personal Info
@@ -595,6 +633,10 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
                 <TabsTrigger value="tax" className="flex items-center gap-2">
                   <FileText className="w-4 h-4" />
                   {payrollConfig.taxFormName}
+                </TabsTrigger>
+                <TabsTrigger value="guarantors" className="flex items-center gap-2">
+                  <UserPlus className="w-4 h-4" />
+                  Guarantors
                 </TabsTrigger>
               </TabsList>
 
@@ -686,6 +728,30 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
                     )}
                   />
                 </div>
+
+                {countryCode === 'NG' && (
+                  <FormField
+                    control={form.control}
+                    name={'nin' as any}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>National Identification Number (NIN) *</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="12345678901"
+                            maxLength={11}
+                            inputMode="numeric"
+                            {...field}
+                          />
+                        </FormControl>
+                        <p className="text-xs text-muted-foreground">
+                          Required by NRS. Must be the 11-digit NIN issued by NIMC.
+                        </p>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
 
                 {/* Mailing Address */}
                 <div className="pt-2 pb-1">
@@ -919,6 +985,37 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
                   />
                 </div>
 
+                <FormField
+                  control={form.control}
+                  name="jobSiteId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Job Site / Location *</FormLabel>
+                      <Select value={field.value || ''} onValueChange={field.onChange}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue
+                              placeholder={
+                                activeJobSites.length === 0
+                                  ? 'No sites — add one in Settings → Job Sites'
+                                  : 'Select job site'
+                              }
+                            />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {activeJobSites.map((s) => (
+                            <SelectItem key={s.id} value={s.id}>
+                              {s.name}{s.code ? ` (${s.code})` : ''}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
                 <div className="grid grid-cols-3 gap-4">
                   <FormField
                     control={form.control}
@@ -986,6 +1083,16 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
 
               {/* Tax Credits Tab */}
               {renderTaxCreditsTab()}
+
+              {/* Guarantors Tab */}
+              <TabsContent value="guarantors" className="space-y-4 mt-4">
+                <GuarantorsForm
+                  first={guarantor1}
+                  second={guarantor2}
+                  onChangeFirst={setGuarantor1}
+                  onChangeSecond={setGuarantor2}
+                />
+              </TabsContent>
             </Tabs>
 
             <div className="flex justify-between pt-6 border-t mt-6">
@@ -998,23 +1105,26 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
               </Button>
               <div className="flex gap-2">
                 {activeTab === 'tax' && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setActiveTab('personal')}
-                  >
+                  <Button type="button" variant="outline" onClick={() => setActiveTab('personal')}>
+                    Previous
+                  </Button>
+                )}
+                {activeTab === 'guarantors' && (
+                  <Button type="button" variant="outline" onClick={() => setActiveTab('tax')}>
                     Previous
                   </Button>
                 )}
                 {activeTab === 'personal' && (
-                  <Button
-                    type="button"
-                    onClick={() => setActiveTab('tax')}
-                  >
+                  <Button type="button" onClick={() => setActiveTab('tax')}>
                     Next
                   </Button>
                 )}
                 {activeTab === 'tax' && (
+                  <Button type="button" onClick={() => setActiveTab('guarantors')}>
+                    Next
+                  </Button>
+                )}
+                {activeTab === 'guarantors' && (
                   <Button type="submit" disabled={isSubmitting}>
                     {isSubmitting ? 'Adding...' : 'Add Employee'}
                   </Button>

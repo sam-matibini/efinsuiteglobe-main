@@ -1,5 +1,9 @@
 import jsPDF from 'jspdf';
 import { parseLocalDate } from '@/lib/utils';
+import { getPayrollPdfConfig } from '@/lib/payroll/slipFieldMapping';
+import { getPayrollLocalization } from '@/data/payrollLocalization';
+import { buildPdfCurrencyFormatter } from '@/lib/payroll/pdfCurrency';
+
 
 export interface PayStubData {
   // Employee Info
@@ -60,14 +64,38 @@ export interface PayStubData {
   companyProvince?: string;
   companyPostalCode?: string;
   companyCountry?: string;
+
+  // Country / locale for labels + currency formatting (defaults to CA / CAD)
+  countryCode?: string;
+
+  // Optional preloaded org logo as data URL (PNG/JPEG). If omitted, no logo is drawn.
+  logoDataUrl?: string | null;
+  logoMimeType?: 'PNG' | 'JPEG';
 }
 
-const formatCurrency = (amount: number): string => {
-  return new Intl.NumberFormat('en-CA', {
-    style: 'currency',
-    currency: 'CAD',
-  }).format(amount);
-};
+/**
+ * Preload an image URL as a base64 data URL suitable for jsPDF.addImage.
+ * Returns null on any failure (missing url, CORS, network, etc.) so callers can degrade gracefully.
+ */
+export async function loadImageAsDataUrl(url?: string | null): Promise<string | null> {
+  if (!url) return null;
+  try {
+    const res = await fetch(url, { mode: 'cors' });
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    return await new Promise<string | null>((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve((reader.result as string) || null);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+}
+
+const buildFormatCurrency = (countryCode?: string) => buildPdfCurrencyFormatter(countryCode);
+
 
 const formatDate = (dateStr: string): string => {
   return parseLocalDate(dateStr).toLocaleDateString('en-CA', {
@@ -111,11 +139,42 @@ export function generatePayStubPdf(data: PayStubData): jsPDF {
   const rightCol = pageWidth / 2 + 10;
   let y = 20;
 
-  // ==== Header: company name (left) + employer mailing address (right) ====
-  doc.setFontSize(16);
-  doc.setFont('helvetica', 'bold');
-  doc.text(data.companyName || 'Pay Statement', leftMargin, y);
+  const formatCurrency = buildFormatCurrency(data.countryCode);
+  const labels = getPayrollPdfConfig(data.countryCode || 'CA').payStub;
 
+
+  // ==== Header: logo + company name (left) / employer mailing address (right) ====
+  const headerTop = y;
+  const halfGap = 6;
+  const leftColMaxW = pageWidth / 2 - leftMargin - halfGap;
+  const rightColMaxW = pageWidth / 2 - leftMargin - halfGap;
+
+  // Left column: optional logo, then company name (wrapped)
+  let headerLeftY = headerTop;
+  let nameStartX = leftMargin;
+  if (data.logoDataUrl) {
+    try {
+      const logoW = 18;
+      const logoH = 14;
+      doc.addImage(data.logoDataUrl, data.logoMimeType || 'PNG', leftMargin, headerTop - 4, logoW, logoH);
+      nameStartX = leftMargin + logoW + 3;
+    } catch {
+      // ignore bad image, continue with text only
+    }
+  }
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(0, 0, 0);
+  const nameLines: string[] = doc.splitTextToSize(
+    data.companyName || 'Pay Statement',
+    Math.max(40, pageWidth / 2 - halfGap - nameStartX),
+  );
+  nameLines.forEach((line, i) => {
+    doc.text(line, nameStartX, headerTop + i * 6);
+  });
+  headerLeftY = headerTop + Math.max(nameLines.length * 6, data.logoDataUrl ? 12 : 6);
+
+  // Right column: employer mailing address only (no duplicate company name)
   const employerAddress = buildAddressLines({
     line1: data.companyAddressLine1,
     line2: data.companyAddressLine2,
@@ -128,21 +187,21 @@ export function generatePayStubPdf(data: PayStubData): jsPDF {
   doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(80, 80, 80);
-  if (data.companyName) {
-    doc.text(data.companyName, rightMargin, y - 6, { align: 'right' });
-  }
-  let addrY = y - 1;
+  let addrY = headerTop;
   employerAddress.forEach((line) => {
-    doc.text(line, rightMargin, addrY, { align: 'right' });
-    addrY += 4.5;
+    const wrapped: string[] = doc.splitTextToSize(line, rightColMaxW);
+    wrapped.forEach((w) => {
+      doc.text(w, rightMargin, addrY, { align: 'right' });
+      addrY += 4.5;
+    });
   });
   doc.setTextColor(0, 0, 0);
 
-  // Sub-title centered
-  y = Math.max(y + 8, addrY + 2);
+  // Sub-title centered — placed safely below whichever column is taller
+  y = Math.max(headerLeftY, addrY) + 6;
   doc.setFontSize(10);
   doc.setFont('helvetica', 'bold');
-  doc.text('EMPLOYEE PAY STUB', pageWidth / 2, y, { align: 'center' });
+  doc.text(labels.title, pageWidth / 2, y, { align: 'center' });
 
   // Divider
   y += 4;
@@ -171,7 +230,7 @@ export function generatePayStubPdf(data: PayStubData): jsPDF {
     { text: data.employeeName, bold: true },
     ...empAddress.map((t) => ({ text: t })),
     { text: `Employee #: ${data.employeeNumber}` },
-    { text: `Province: ${data.province}` },
+    { text: `${labels.regionLabel}: ${data.province}` },
   ];
   if (data.department) leftLines.push({ text: `Department: ${data.department}` });
 
@@ -255,10 +314,12 @@ export function generatePayStubPdf(data: PayStubData): jsPDF {
     }
   };
 
-  addDeductionLine('CPP Contribution', data.cppContribution, data.ytdCpp);
-  addDeductionLine('EI Premium', data.eiPremium, data.ytdEi);
-  addDeductionLine('Federal Tax', data.federalTax, data.ytdFederalTax);
-  addDeductionLine('Provincial Tax', data.provincialTax, data.ytdProvincialTax);
+  addDeductionLine(labels.pensionLabel, data.cppContribution, data.ytdCpp);
+  addDeductionLine(labels.socialInsuranceLabel, data.eiPremium, data.ytdEi);
+  addDeductionLine(labels.federalTaxLabel, data.federalTax, data.ytdFederalTax);
+  if (labels.provincialTaxLabel) {
+    addDeductionLine(labels.provincialTaxLabel, data.provincialTax, data.ytdProvincialTax);
+  }
   if (data.otherDeductions > 0) {
     addDeductionLine('Other Deductions', data.otherDeductions, 0);
   }

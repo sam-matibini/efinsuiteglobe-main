@@ -10,6 +10,8 @@ export interface FundingBankAccount extends BankAccount {
   isPlaidLinked: boolean;
   isStripeReady: boolean;
   isPaysafeEftEnabled: boolean;
+  isNibssEnabled: boolean;
+  isRtgsEnabled: boolean;
   canDrawACH: boolean;
   canSendACH: boolean;
   isDefault: boolean;
@@ -22,6 +24,8 @@ export function decorateBankAccount(a: BankAccount): FundingBankAccount {
   const isStripeReady = !!(a as { stripe_bank_account_id?: string | null }).stripe_bank_account_id;
   const isPaysafeEftEnabled = !!(a as { paysafe_eft_enabled?: boolean }).paysafe_eft_enabled;
   const isPaysafeCardEnabled = !!(a as { paysafe_card_enabled?: boolean }).paysafe_card_enabled;
+  const isNibssEnabled = !!(a as { is_nibss_enabled?: boolean }).is_nibss_enabled;
+  const isRtgsEnabled = !!(a as { is_rtgs_enabled?: boolean }).is_rtgs_enabled;
   const isDefault = !!(a as { is_treasury_funding_default?: boolean }).is_treasury_funding_default;
   const stored = ((a as { rails_supported?: string[] }).rails_supported ?? []) as Rail[];
 
@@ -46,6 +50,8 @@ export function decorateBankAccount(a: BankAccount): FundingBankAccount {
     isPlaidLinked,
     isStripeReady,
     isPaysafeEftEnabled,
+    isNibssEnabled,
+    isRtgsEnabled,
     canDrawACH: isStripeReady,
     canSendACH: isStripeReady,
     isDefault,
@@ -137,5 +143,29 @@ export function useFundingBankAccounts() {
     onError: (e: Error) => toast.error(`Failed: ${e.message}`),
   });
 
-  return { accounts: decorated, defaultAccount, isLoading, enableStripeAch, enablePaysafeEft, disablePaysafeEft, setDefault };
+  const mkFlagMutation = (column: 'is_nibss_enabled' | 'is_rtgs_enabled', enabled: boolean, successMsg: string) => ({
+    mutationFn: async (bankAccountId: string) => {
+      const { error } = await supabase
+        .from('bank_accounts')
+        .update({ [column]: enabled } as any)
+        .eq('id', bankAccountId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['bank-accounts'] });
+      toast.success(successMsg);
+    },
+    onError: (e: Error) => toast.error(`Failed: ${e.message}`),
+  });
+
+  const enableNibss  = useMutation(mkFlagMutation('is_nibss_enabled', true,  'NIBSS Instant/NEFT enabled on this bank account'));
+  const disableNibss = useMutation(mkFlagMutation('is_nibss_enabled', false, 'NIBSS Instant/NEFT disabled'));
+  const enableRtgs   = useMutation(mkFlagMutation('is_rtgs_enabled',  true,  'CBN RTGS enabled on this bank account'));
+  const disableRtgs  = useMutation(mkFlagMutation('is_rtgs_enabled',  false, 'CBN RTGS disabled'));
+
+  return {
+    accounts: decorated, defaultAccount, isLoading,
+    enableStripeAch, enablePaysafeEft, disablePaysafeEft, setDefault,
+    enableNibss, disableNibss, enableRtgs, disableRtgs,
+  };
 }

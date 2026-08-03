@@ -264,6 +264,43 @@ export default function SubscriptionCheckout() {
       toast.error('Please select an organization first');
       return;
     }
+    const planTier = (plan.tier || deriveTierFromName(plan.name)) as string;
+    const isOfficeUse = planTier === 'office_use';
+
+    // Office Use is a free, admin-only demo plan — activate directly, bypass Stripe.
+    if (isOfficeUse && !(currentSub && (currentSub as any).stripe_subscription_id)) {
+      if (!isAdmin) {
+        toast.error('Only admins can activate the Office Use plan');
+        return;
+      }
+      setLoadingPlanId(plan.id);
+      try {
+        const now = new Date();
+        const periodEnd = new Date(now);
+        if (billingCycle === 'yearly') {
+          periodEnd.setFullYear(periodEnd.getFullYear() + 1);
+        } else {
+          periodEnd.setMonth(periodEnd.getMonth() + 1);
+        }
+        const { error } = await supabase.from('subscriptions').insert({
+          organization_id: organization.id,
+          plan_id: plan.id,
+          billing_cycle: billingCycle,
+          status: 'active',
+          current_period_start: now.toISOString(),
+          current_period_end: periodEnd.toISOString(),
+        } as any);
+        if (error) throw error;
+        toast.success('Office Use plan activated');
+        await queryClient.invalidateQueries({ queryKey: ['current-subscription'] });
+      } catch (err: any) {
+        toast.error(err.message || 'Failed to activate Office Use plan');
+      } finally {
+        setLoadingPlanId(null);
+      }
+      return;
+    }
+
     // If already on an active/trialing sub, switch plan with proration preview
     if (currentSub && (currentSub as any).stripe_subscription_id) {
       setChangePlan(plan);
@@ -295,6 +332,7 @@ export default function SubscriptionCheckout() {
     // Otherwise send to Stripe Checkout
     await openStripeCheckout(plan.id);
   };
+
 
   const confirmChangePlan = async () => {
     if (!organization?.id || !changePlan) return;
@@ -450,13 +488,17 @@ export default function SubscriptionCheckout() {
           .map((plan) => {
             const price = billingCycle === 'monthly' ? plan.price_monthly : plan.price_yearly;
             const isCurrentPlan = currentSub?.plan_id === plan.id;
-            const priceReady = billingCycle === 'monthly'
-              ? !!plan.stripe_price_id_monthly
-              : !!plan.stripe_price_id_yearly;
             const planTier = (plan.tier || deriveTierFromName(plan.name)) as string;
+            const isOfficeUse = planTier === 'office_use';
+            const priceReady = isOfficeUse || (billingCycle === 'monthly'
+              ? !!plan.stripe_price_id_monthly
+              : !!plan.stripe_price_id_yearly);
             const isHighlighted = highlightTier && planTier === highlightTier;
             const hasActiveSub = !!currentSub && !!(currentSub as any).stripe_subscription_id;
-            const ctaLabel = hasActiveSub ? 'Switch to this plan' : 'Subscribe';
+            const ctaLabel = isOfficeUse ? 'Activate' : (hasActiveSub ? 'Switch to this plan' : 'Subscribe');
+
+
+
 
             return (
               <Card key={plan.id} className={`relative flex flex-col ${isCurrentPlan ? 'border-primary ring-2 ring-primary/20' : ''} ${isHighlighted ? 'border-primary ring-2 ring-primary/40' : ''}`}>

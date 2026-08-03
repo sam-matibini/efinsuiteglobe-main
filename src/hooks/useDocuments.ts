@@ -141,9 +141,9 @@ export function useDocumentFields(documentId: string | undefined) {
 }
 
 async function invokeEfinsign<T = unknown>(action: string, payload: Record<string, unknown> = {}): Promise<T> {
-  // Auto-inject caller's current organization id if not already present.
+  // Auto-inject caller's current organization id when missing or null.
   const withOrg = { ...payload };
-  if (!('organization_id' in withOrg) && typeof window !== 'undefined') {
+  if (!withOrg.organization_id && typeof window !== 'undefined') {
     const currentOrgId = window.localStorage.getItem('current_organization_id');
     if (currentOrgId) withOrg.organization_id = currentOrgId;
   }
@@ -174,17 +174,38 @@ export function useCreateDocument() {
   return useMutation({
     mutationFn: async (documentData: { title: string; document_type?: string; file_url?: string; mime_type?: string; file_size?: number }) => {
       if (!user?.id) throw new Error('User not authenticated');
+
+      // Verify the user is a member of the current org. The DocSign page
+      // shows an upfront banner for the view-only case, so a plain error
+      // here is fine as a safety net.
+      const { data: memberships, error: memErr } = await supabase
+        .from('organization_members')
+        .select('organization_id')
+        .eq('user_id', user.id);
+      if (memErr) throw new Error(`Could not load your organizations: ${memErr.message}`);
+      if (!memberships || memberships.length === 0) {
+        throw new Error('You are not a member of any organization. Create one or ask to be invited.');
+      }
+
+      const memberOrgIds = memberships.map((m) => m.organization_id);
+      const preferred =
+        organization?.id ||
+        (typeof window !== 'undefined' ? window.localStorage.getItem('current_organization_id') : null) ||
+        null;
+
+      if (!preferred || !memberOrgIds.includes(preferred)) {
+        throw new Error('Switch to an organization you belong to before creating documents.');
+      }
+      const orgId = preferred;
+
       return await invokeEfinsign<Document>('create_document', {
         ...documentData,
-        organization_id: organization?.id || null,
+        organization_id: orgId,
       });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['documents'] });
       toast.success('Document created successfully');
-    },
-    onError: (error) => {
-      toast.error('Failed to create document: ' + error.message);
     },
   });
 }

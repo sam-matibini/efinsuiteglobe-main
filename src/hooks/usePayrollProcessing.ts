@@ -10,6 +10,7 @@ import {
   type PayStubCalculation 
 } from '@/lib/payrollCalculator';
 import { postPayrollJournalEntries } from '@/lib/payrollJournalPosting';
+import { recordPayrollTaxes } from '@/lib/ngTax/integration';
 
 export interface TimesheetEntry {
   employeeId: string;
@@ -192,12 +193,36 @@ export function usePayrollProcessing() {
       await supabase.from('pay_stubs').delete().eq('pay_run_id', payRunId);
 
       // Insert new pay stubs
+      let insertedStubs: any[] = [];
       if (payStubsToInsert.length > 0) {
-        const { error: stubsError } = await supabase
+        const { data: stubsData, error: stubsError } = await supabase
           .from('pay_stubs')
-          .insert(payStubsToInsert);
+          .insert(payStubsToInsert)
+          .select('id, employee_id, gross_pay');
         
         if (stubsError) throw stubsError;
+        insertedStubs = stubsData ?? [];
+      }
+
+      // NG Tax Engine — record PAYE + pension per stub (no-op for non-NG orgs)
+      if (insertedStubs.length > 0 && organization?.id) {
+        try {
+          const payPeriodEnd = new Date().toISOString().split('T')[0];
+          await recordPayrollTaxes({
+            organization_id: organization.id,
+            pay_run_id: payRunId,
+            pay_period_end: payPeriodEnd,
+            journal_entry_id: null,
+            stubs: insertedStubs.map((s: any) => ({
+              pay_stub_id: s.id,
+              gross_earnings: Number(s.gross_pay) || 0,
+              periods_per_year: 12,
+              pension_base: Number(s.gross_pay) || 0,
+            })),
+          });
+        } catch (ngErr) {
+          console.warn('NG payroll tax ledger write skipped:', ngErr);
+        }
       }
 
       // Calculate pay run totals

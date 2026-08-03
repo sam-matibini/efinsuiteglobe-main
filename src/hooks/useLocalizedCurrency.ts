@@ -38,6 +38,7 @@ const ACCOUNTING_STANDARDS: Record<string, { standard: string; label: string }> 
   ZM: { standard: 'IFRS', label: 'IFRS' },
   KE: { standard: 'IFRS', label: 'IFRS' },
   BI: { standard: 'OHADA/IFRS', label: 'SYSCOHADA / IFRS' },
+  NG: { standard: 'IFRS/IFRS for SMEs', label: 'Nigerian GAAP (IFRS)' },
 };
 
 // NPO-specific accounting standards (ASNPO for Canadian NPOs)

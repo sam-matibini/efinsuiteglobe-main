@@ -4,6 +4,7 @@ import { useCurrentOrganization } from './useOrganization';
 import { toast } from 'sonner';
 import { addDays, format } from 'date-fns';
 import { createJournalEntry, getDefaultAccounts, getTaxGlAccounts } from './useJournalEntryCreation';
+import { recordInvoiceTaxes } from '@/lib/ngTax/integration';
 
 export interface Invoice {
   id: string;
@@ -288,7 +289,7 @@ export function useInvoices() {
       if (invoiceError) throw invoiceError;
       
       // Create invoice lines
-      const { error: linesError } = await supabase
+      const { data: insertedLines, error: linesError } = await supabase
         .from('invoice_lines')
         .insert(
           lines.map(line => ({
@@ -303,13 +304,15 @@ export function useInvoices() {
             line_order: line.line_order,
             notes: (line as any).notes || null,
           }))
-        );
+        )
+        .select('id, amount, tax_rate');
       
       if (linesError) throw linesError;
 
       // Create journal entry for the invoice with source document tracking
       // Debit: Accounts Receivable
       // Credit: Sales Revenue + Sales Tax Payable
+      let journalEntryId: string | null = null;
       try {
         const [defaultAccounts, taxGl] = await Promise.all([
           getDefaultAccounts(organization.id),
@@ -359,7 +362,7 @@ export function useInvoices() {
             );
           }
           
-          const journalEntryId = await createJournalEntry({
+          journalEntryId = await createJournalEntry({
             organizationId: organization.id,
             date: invoiceDate,
             description: `Invoice ${invoiceNumber} created`,
@@ -377,6 +380,23 @@ export function useInvoices() {
         }
       } catch (jeError) {
         console.warn('Could not create journal entry for invoice:', jeError);
+      }
+
+      // NG Tax Engine — record VAT/output taxes into the ledger (no-op for non-NG orgs)
+      try {
+        await recordInvoiceTaxes({
+          organization_id: organization.id,
+          invoice_id: invoice.id,
+          invoice_date: invoiceDate,
+          journal_entry_id: journalEntryId,
+          lines: (insertedLines ?? []).map((l: any) => ({
+            id: l.id,
+            taxable_amount: Number(l.amount) || 0,
+            vat_exempt: (Number(l.tax_rate) || 0) === 0,
+          })),
+        });
+      } catch (ngErr) {
+        console.warn('NG tax ledger write skipped:', ngErr);
       }
       
       return invoice;

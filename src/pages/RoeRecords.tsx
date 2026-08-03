@@ -39,7 +39,8 @@ import { MoreHorizontal } from 'lucide-react';
 import { useRoeRecords, type CreateRoEInput } from '@/hooks/useRoeRecords';
 import { useEmployees } from '@/hooks/useEmployees';
 import { useCurrentOrganization } from '@/hooks/useOrganization';
-import { downloadRoePdf } from '@/lib/generateRoePdf';
+import { downloadRoePdf, downloadSeparationDocPdf } from '@/lib/generateRoePdf';
+
 import { ROE_REASON_CODES } from '@/types/payroll';
 import { format } from 'date-fns';
 import { parseLocalDate } from '@/lib/utils';
@@ -241,7 +242,7 @@ export default function RoeRecords() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => downloadRoePdf(roe, organization?.name || 'Company')}>
+                        <DropdownMenuItem onClick={() => downloadSeparationDocPdf(roe, organization, countryCode)}>
                           <Download className="w-4 h-4 mr-2" />
                           Download PDF
                         </DropdownMenuItem>
