@@ -47,6 +47,10 @@ import {
   computeDueDate,
   getTermDays,
 } from '@/lib/billPaymentTerms';
+import { PurchaseDocumentsPanel } from '@/components/purchases/PurchaseDocumentsPanel';
+import { InvoiceExtractionReview, type ReviewField } from '@/components/purchases/InvoiceExtractionReview';
+import { useStagedPurchaseAttachments } from '@/hooks/useStagedPurchaseAttachments';
+import { matchVendor, type InvoiceExtraction } from '@/lib/purchases/invoiceExtraction';
 
 
 const lineSchema = z.object({
