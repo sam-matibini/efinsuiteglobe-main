@@ -4,6 +4,7 @@ import { Building2, Users, Shield, Palette, Receipt, Plus, MapPin, Phone, Wand2,
 import { EfinconnectSettingsTab } from '@/components/settings/EfinconnectSettingsTab';
 import { DivisionsSettingsTab } from '@/components/settings/DivisionsSettingsTab';
 import { JobSitesSettingsTab } from '@/components/settings/JobSitesSettingsTab';
+import { ShieldCheck } from 'lucide-react';
 import { Network } from 'lucide-react';
 import { MultiCurrencySettingsTab } from '@/components/settings/MultiCurrencySettingsTab';
 import { TroubleshootingTab } from '@/components/admin/TroubleshootingTab';
