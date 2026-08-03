@@ -274,6 +274,8 @@ export function CreateBillDialog({ open, onOpenChange, prefillVendorId }: Create
           terms: data.terms || null,
           prepared_by: user?.id ?? null,
           approval_status: 'pending_approval',
+          // Awaiting approval, not a draft — keeps the badge honest.
+          status: 'pending',
         })
         .select()
         .single();
