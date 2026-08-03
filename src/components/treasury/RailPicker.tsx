@@ -16,11 +16,17 @@ const RAILS: Array<{ id: Rail; label: string; icon: React.ComponentType<{ classN
   { id: 'eft', label: 'EFT', icon: Building2, helper: 'Canadian EFT, 2-3 days' },
   { id: 'card', label: 'Credit / Debit Visa', icon: CreditCard, helper: 'Paysafe card payout, 1-2 days' },
   { id: 'wire', label: 'Wire', icon: Send, helper: 'Same-day domestic wire' },
+  { id: 'wise_eft', label: 'Wise EFT', icon: Globe2, helper: 'Wise bank transfer, multi-currency' },
+  { id: 'wise_etransfer', label: 'Wise e-Transfer', icon: Send, helper: 'Wise email transfer — no bank details needed' },
   { id: 'wallet_stripe', label: 'Stripe Wallet', icon: Wallet, helper: 'Draw from Stripe balance' },
   { id: 'wallet_paddle', label: 'Paddle Wallet', icon: Wallet, helper: 'Draw from Paddle balance' },
+  { id: 'wallet_efinmoney', label: 'eFinMoney Wallet', icon: Wallet, helper: 'Pay to employee eFinMoney wallet' },
   { id: 'cheque', label: 'Cheque', icon: ScrollText, helper: 'Printable cheque batch' },
   { id: 'manual', label: 'Manual', icon: FileText, helper: 'Outside the system' },
 ];
+
+/** Rails that are provider-hosted and don't depend on the funding bank's capabilities. */
+export const PROVIDER_RAILS: Rail[] = ['wise_eft', 'wise_etransfer', 'wallet_efinmoney'];
 
 export function RailPicker({ value, onChange, available, disabled }: Props) {
   const set = new Set(available);
