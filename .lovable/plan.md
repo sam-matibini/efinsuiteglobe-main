@@ -1,25 +1,69 @@
 ## Goal
 
-The Preview & Validate step should show **every** transaction in one continuous scrollable list — no 20-row page slices, no clipped table — so any row can be found and corrected before import.
+Make Wise a first-class payout partner alongside Stripe across eFinconnect, add Wise-backed bill payment methods (EFT / e-Transfer / card), add a Stripe-style checkout form, and collapse the three Stripe sidebar entries into one "Payout Routing" hub.
 
-## Current state (verified)
+## 1. Sidebar / eFinconnect reorganization
 
-- `MappingPreviewDialog.tsx` paginates at `pageSize = 20` (`paginatedData = processedData.slice(...)`) and renders the table inside `<ScrollArea className="flex-1 min-h-0 h-[calc(100vh-350px)]">` inside a `max-h-[90vh]` dialog. The fixed `calc(100vh-350px)` fights the flex layout, so the visible window is short and the last rows sit under the footer (the screenshot shows only 8 of 16 rows).
-- `EditableImportPreview.tsx` (used by `CreditCardImportDialog` and `UnifiedImportDialog`) caps its table at `max-h-[380px]`, which is a small window on a tall screen.
+`src/components/layout/Sidebar.tsx` — eFinconnect children become:
 
-## The work
+```text
+Dashboard | CRA Payments | AP Payments | Payroll Payments
+Scheduled | Payment History | Payment Links
+Payout Routing        <- new hub (/banking-payments/payout-routing)
+Approvals | CRA Accounts | Settings
+```
 
-**1. `MappingPreviewDialog.tsx`**
-- Drop the page-slicing: render all of `processedData` in one scroll region. Remove the Prev/Next/"Page X of Y" footer controls and the `currentPage`/`pageSize` state.
-- Fix the scroll container: dialog becomes `h-[90vh]` with `flex flex-col`; the scroll region becomes `flex-1 min-h-0` with no fixed `calc()` height, so it grows to fill whatever space the header, stats bar and footer leave.
-- Make the table header `sticky top-0` with a solid background so column labels stay visible while scrolling.
-- Change the counter text to `Showing all N rows` (and keep the valid/errors/corrected badges as-is).
-- Keep horizontal scrolling for wide statements (many mapped columns).
+Remove the standalone "Stripe Connect", "Payout Routing", "Stripe Compliance" items.
 
-**2. `EditableImportPreview.tsx`**
-- Replace the fixed `max-h-[380px]` with a viewport-relative cap (`max-h-[60vh]`) so both import dialogs show far more rows on normal screens, with sticky headers on the same pattern.
+New page `src/pages/treasury/PayoutRouting.tsx` with tabs:
+- **Providers** — Stripe Connect vs Wise cards (status, connect/manage)
+- **Vendor routing** — existing `StripeConnectRouting` table, extended with a per-vendor provider column (`stripe` | `wise`) and Wise recipient selection
+- **Connected accounts** — existing `StripeConnectedAccounts`
+- **Compliance** — existing `StripeConnectCompliance`
+
+Old routes redirect into the corresponding tab so nothing breaks.
+
+## 2. Wise as a payout partner
+
+Database (migration, with GRANTs + RLS scoped to org membership):
+- `wise_payout_recipients` — org_id, vendor_id/employee_id, currency, account holder, IBAN/account+routing/sort code, wise_recipient_id, status
+- `wise_transfers` — org_id, source_type (`bill` | `ap_batch` | `payroll` | `tax` | `payment_link`), source_id, recipient_id, amount, currency, method (`eft` | `etransfer` | `card`), wise_quote_id, wise_transfer_id, reference, status, error
+- extend `vendor_stripe_connect` usage with a `payout_provider` column on a new `vendor_payout_routing` view/table so routing is provider-agnostic
+
+Edge functions:
+- `wise-create-recipient` — creates/upserts a Wise recipient
+- `wise-create-transfer` — quote → transfer → fund, writes `wise_transfers`, records the GL/vendor payment on success
+- extend existing `wise-webhook` to move `wise_transfers` rows through `processing` → `outgoing_payment_sent` / `funds_refunded` and mark the linked bill/batch paid
+
+Secrets: the plan assumes `WISE_API_TOKEN` and `WISE_PROFILE_ID` exist. They are **not** currently in this project's secret store (only `GOOGLE_AI_API_KEY`, `LOVABLE_API_KEY`, `PAYROLL_ENCRYPTION_KEY`), so I'll request them before wiring the live calls. Until they're present, transfers record as `instructed` instead of failing.
+
+## 3. Bill payment methods
+
+- `useAPPaymentBatches` `BatchProvider` gains `wise_eft`, `wise_etransfer`, `wise_card`.
+- `APPayments.tsx` "Create AP Payment Batch" dialog: Provider select grouped as **Wise** (EFT, e-Transfer, Card) / **Stripe** / **Paysafe** / **Manual**; funding-bank field switches to Wise balance currency when a Wise rail is picked.
+- New `PayBillDialog` action on a bill (`ViewBillDialog`) → opens the checkout form (below) with EFT / e-Transfer / Card tabs, posting through `wise-create-transfer` and the existing bill-payment GL path.
+
+## 4. Checkout form (shared)
+
+New `src/components/payments/CheckoutForm.tsx` modelled on the screenshot:
+- express row (Apple Pay / Link) when Stripe is the processor
+- Contact information (email)
+- Payment method card: Card (number / expiry / CVC / cardholder), or EFT bank fields, or e-Transfer email
+- Billing address block (country, address 1/2, city, state, postal) with country-aware labels
+- "Save payment information" checkbox, sticky Pay button with amount
+
+Used in two places:
+- public `/pay/:linkId` page (`PayLink`) — replaces the current inline form
+- in-app bill payment dialog from §3
+
+Card fields stay tokenized by the processor (Stripe Elements / Paysafe.js); no raw PAN touches our DB.
+
+## 5. Payment Links
+
+`PaymentLinks.tsx`: add `wise` alongside existing processors — accepted methods gain **EFT (Wise)** and **e-Transfer (Wise)**, and payout partner selection (Stripe / Wise) per link, persisted in the link metadata and honoured by the checkout page.
 
 ## Technical notes
 
-- Pure presentation change: no change to `rowOverrides`, validation, type-flip, "apply to all matching rows", or what gets submitted on import.
-- Row counts here are statement-sized (tens to a few hundred), so plain scrolling is fine — no virtualization needed.
+- Existing platform-level `wise_receiving_accounts` (inbound invoice payments) is untouched; this adds the outbound payout side.
+- All new tables get `GRANT`s plus org-scoped RLS; edge functions use the service role and verify org membership.
+- Country/localization: Wise method availability filtered by org country using the existing `countryTreasuryConfig` (e-Transfer CA-only, EFT for CA/US/EU/UK, card everywhere).
