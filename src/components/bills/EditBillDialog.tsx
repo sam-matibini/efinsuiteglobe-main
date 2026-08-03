@@ -47,6 +47,9 @@ import {
   findPaymentTerm,
   getTermDays,
 } from '@/lib/billPaymentTerms';
+import { PurchaseDocumentsPanel } from '@/components/purchases/PurchaseDocumentsPanel';
+import { InvoiceExtractionReview, type ReviewField } from '@/components/purchases/InvoiceExtractionReview';
+import { matchVendor, type InvoiceExtraction } from '@/lib/purchases/invoiceExtraction';
 
 const lineSchema = z.object({
   description: z.string().min(1, 'Description is required'),
