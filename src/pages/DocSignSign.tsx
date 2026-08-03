@@ -1,16 +1,17 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useLocation, Navigate } from 'react-router-dom';
 import { createClient } from '@supabase/supabase-js';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { SignaturePad } from '@/components/docsign/SignaturePad';
+import { PdfPageRenderer } from '@/components/docsign/PdfPageRenderer';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import {
   Loader2, CheckCircle2, PenLine, Calendar, Type,
-  AlignLeft, SquareCheck, ShieldCheck, FileText, X,
+  AlignLeft, SquareCheck, ShieldCheck, FileText, X, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -422,18 +423,28 @@ function FirstPartySigningPage({ token }: { token: string }) {
       {/* Body: PDF + panel */}
       <div className="flex flex-1 overflow-hidden flex-col lg:flex-row">
         {/* PDF */}
-        <div className="flex-1 bg-muted/20 flex items-stretch min-h-[50vh] lg:min-h-0">
-          {pdfUrl ? (
+        <div className="flex-1 bg-muted/20 overflow-y-auto min-h-[50vh] lg:min-h-0">
+          {!pdfUrl ? (
+            <div className="h-full flex items-center justify-center">
+              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : phase === 'review' ? (
+            // Review phase: plain iframe so signer can scroll the full document
             <iframe
               src={pdfUrl}
               className="w-full h-full"
-              title="Document to sign"
+              title="Document to review"
               style={{ border: 'none', minHeight: '50vh' }}
             />
           ) : (
-            <div className="flex-1 flex items-center justify-center">
-              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-            </div>
+            // Signing phase: canvas renderer with field boxes overlaid
+            <SigningPdfViewer
+              pdfUrl={pdfUrl}
+              fields={myFields}
+              currentFieldId={currentField?.id ?? null}
+              fieldValues={fieldValues}
+              currentPage={currentField?.page_number ?? (myFields[myFields.length - 1]?.page_number ?? 1)}
+            />
           )}
         </div>
 
@@ -491,6 +502,145 @@ function FirstPartySigningPage({ token }: { token: string }) {
           fieldType="signature"
         />
       )}
+    </div>
+  );
+}
+
+// ─── Signing PDF viewer with field overlays ──────────────────────────────────
+
+function SigningPdfViewer({
+  pdfUrl,
+  fields,
+  currentFieldId,
+  fieldValues,
+  currentPage,
+}: {
+  pdfUrl: string;
+  fields: FieldRow[];
+  currentFieldId: string | null;
+  fieldValues: Record<string, string>;
+  currentPage: number;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(0);
+  const [pageAspect, setPageAspect] = useState(1.414); // A4 default until first render
+  const [totalPages, setTotalPages] = useState(1);
+  const [displayPage, setDisplayPage] = useState(currentPage);
+
+  // Follow the active field's page
+  useEffect(() => { setDisplayPage(currentPage); }, [currentPage]);
+
+  // Measure container width with ResizeObserver
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => {
+      const w = el.clientWidth;
+      if (w > 0) setContainerWidth(w);
+    });
+    ro.observe(el);
+    setContainerWidth(el.clientWidth);
+    return () => ro.disconnect();
+  }, []);
+
+  const pageHeight = containerWidth > 0 ? Math.round(containerWidth * pageAspect) : 0;
+  const pageFields = fields.filter(f => f.page_number === displayPage);
+
+  return (
+    <div ref={containerRef} className="w-full h-full flex flex-col">
+      {/* Page navigation */}
+      <div className="flex items-center justify-center gap-3 py-2 border-b bg-background/80 backdrop-blur-sm shrink-0">
+        <button
+          className="p-1 rounded hover:bg-muted disabled:opacity-30"
+          disabled={displayPage <= 1}
+          onClick={() => setDisplayPage(p => Math.max(1, p - 1))}
+        >
+          <ChevronLeft className="w-4 h-4" />
+        </button>
+        <span className="text-xs text-muted-foreground">
+          Page {displayPage} / {totalPages}
+        </span>
+        <button
+          className="p-1 rounded hover:bg-muted disabled:opacity-30"
+          disabled={displayPage >= totalPages}
+          onClick={() => setDisplayPage(p => Math.min(totalPages, p + 1))}
+        >
+          <ChevronRight className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* Canvas + overlays */}
+      <div className="flex-1 overflow-y-auto flex justify-center py-4 px-2">
+        {containerWidth > 0 && pageHeight > 0 && (
+          <div
+            className="relative bg-white shadow-lg rounded"
+            style={{ width: containerWidth, height: pageHeight, flexShrink: 0 }}
+          >
+            <PdfPageRenderer
+              fileUrl={pdfUrl}
+              pageNumber={displayPage}
+              width={containerWidth}
+              height={pageHeight}
+              onPageLoad={(pw, ph) => setPageAspect(ph / pw)}
+              onTotalPages={setTotalPages}
+            />
+
+            {/* Field boxes */}
+            {pageFields.map(field => {
+              const isCurrent = field.id === currentFieldId;
+              const isDone = !!fieldValues[field.id];
+
+              return (
+                <div
+                  key={field.id}
+                  className={cn(
+                    'absolute rounded border-2 overflow-hidden pointer-events-none',
+                    isDone
+                      ? 'border-green-500 bg-green-500/15'
+                      : isCurrent
+                        ? 'border-blue-500 bg-blue-500/10'
+                        : 'border-amber-400 bg-amber-400/10',
+                  )}
+                  style={{
+                    left: `${field.position_x}%`,
+                    top: `${field.position_y}%`,
+                    width: `${field.width}%`,
+                    height: `${field.height}%`,
+                    zIndex: 10,
+                    // Glow on the active field
+                    boxShadow: isCurrent && !isDone ? '0 0 0 3px rgba(59,130,246,0.35)' : undefined,
+                  }}
+                >
+                  {isDone && (field.field_type === 'signature' || field.field_type === 'initial') ? (
+                    <img
+                      src={fieldValues[field.id]}
+                      alt="signature"
+                      className="w-full h-full object-contain"
+                    />
+                  ) : isDone ? (
+                    <span className="text-[10px] text-green-700 leading-tight block px-0.5 truncate pt-0.5">
+                      {fieldValues[field.id]}
+                    </span>
+                  ) : (
+                    <span className={cn(
+                      'text-[10px] leading-tight block px-0.5 pt-0.5 font-semibold truncate',
+                      isCurrent ? 'text-blue-600' : 'text-amber-700',
+                    )}>
+                      {isCurrent ? '▸ ' : ''}
+                      {field.field_type === 'signature' ? 'Sign here'
+                        : field.field_type === 'initial' ? 'Initials'
+                        : field.field_type === 'date' ? 'Date'
+                        : field.field_type === 'full_name' ? 'Your name'
+                        : field.field_type === 'checkbox' ? 'Check'
+                        : 'Fill in'}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
