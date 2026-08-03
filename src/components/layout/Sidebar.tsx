@@ -103,6 +103,7 @@ const getNavigation = (payrollLabels: { taxSlips: string; separationDoc: string;
       { label: 'Expense Claims', href: '/purchases/expense-claims', icon: Receipt },
       { label: 'Direct Expenses', href: '/purchases/expenses', icon: DollarSign },
       { label: 'Payments', href: '/purchases/payments', icon: CreditCard },
+      { label: 'Approvals', href: '/purchases/approvals', icon: ClipboardList },
     ]
   },
   { 

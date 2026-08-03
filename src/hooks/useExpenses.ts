@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrganization } from './useOrganization';
 import { toast } from 'sonner';
-import { createJournalEntry, getDefaultAccounts } from './useJournalEntryCreation';
+import { requestApproval } from '@/lib/approvals';
 
 export interface Expense {
   id: string;
@@ -223,57 +223,18 @@ export function useExpenses() {
         if (itemsError) throw itemsError;
       }
 
-      // Create journal entry for proper GL integration
-      if (input.expense_account_id && input.paid_through_account_id) {
-        try {
-          const totalAmount = input.amount + (input.tax_amount || 0);
-          
-          const journalLines = [
-            // Debit expense account
-            { account_id: input.expense_account_id, debit: input.amount, credit: 0, memo: input.notes || 'Expense' },
-          ];
-
-          // Add tax line if applicable
-          if (input.tax_amount && input.tax_amount > 0) {
-            const defaults = await getDefaultAccounts(organization.id);
-            if (defaults.salesTax) {
-              journalLines.push({ 
-                account_id: defaults.salesTax.id, 
-                debit: input.tax_amount, 
-                credit: 0, 
-                memo: 'Input Tax' 
-              });
-            }
-          }
-
-          // Credit the paid-through account (cash/bank)
-          journalLines.push({ 
-            account_id: input.paid_through_account_id, 
-            debit: 0, 
-            credit: totalAmount, 
-            memo: input.notes || 'Expense payment' 
-          });
-
-          const journalId = await createJournalEntry({
-            organizationId: organization.id,
-            date: input.expense_date,
-            description: input.notes || 'Direct Expense',
-            reference: input.reference,
-            journalType: 'purchase',
-            departmentId: input.department_id || null,
-            lines: journalLines,
-            status: 'posted',
-          });
-
-          // Update expense with journal entry ID
-          await supabase
-            .from('expenses')
-            .update({ journal_entry_id: journalId, is_posted: true })
-            .eq('id', expense.id);
-        } catch (jeError) {
-          console.warn('Journal entry creation failed:', jeError);
-          // Continue - expense is saved, just not posted to GL
-        }
+      // Approval gate — direct expenses post to the GL only once approved.
+      try {
+        const { data: authData } = await supabase.auth.getUser();
+        await requestApproval({
+          organizationId: organization.id,
+          documentType: 'expense',
+          documentId: expense.id,
+          requestedBy: authData.user?.id ?? '',
+          amount: input.amount + (input.tax_amount || 0),
+        });
+      } catch (approvalError) {
+        console.warn('Approval request creation failed:', approvalError);
       }
 
       return expense;
@@ -282,7 +243,7 @@ export function useExpenses() {
       queryClient.invalidateQueries({ queryKey: ['expenses'] });
       queryClient.invalidateQueries({ queryKey: ['journal_entries'] });
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
-      toast.success('Expense recorded successfully');
+      toast.success('Expense recorded — submitted for approval');
     },
     onError: (error) => {
       toast.error(`Failed to record expense: ${error.message}`);
@@ -323,29 +284,18 @@ export function useExpenses() {
 
       if (error) throw error;
 
-      // Create journal entry for mileage expense
-      if (input.expense_account_id && input.paid_through_account_id) {
-        try {
-          const journalId = await createJournalEntry({
-            organizationId: organization.id,
-            date: input.expense_date,
-            description: `Mileage: ${input.from_location} → ${input.to_location} (${input.distance} ${input.distance_unit || 'km'})`,
-            reference: input.reference,
-            journalType: 'purchase',
-            lines: [
-              { account_id: input.expense_account_id, debit: amount, credit: 0, memo: 'Mileage expense' },
-              { account_id: input.paid_through_account_id, debit: 0, credit: amount, memo: 'Mileage reimbursement' },
-            ],
-            status: 'posted',
-          });
-
-          await supabase
-            .from('expenses')
-            .update({ journal_entry_id: journalId, is_posted: true })
-            .eq('id', data.id);
-        } catch (jeError) {
-          console.warn('Journal entry creation failed:', jeError);
-        }
+      // Approval gate — mileage posts to the GL only once approved.
+      try {
+        const { data: authData } = await supabase.auth.getUser();
+        await requestApproval({
+          organizationId: organization.id,
+          documentType: 'expense',
+          documentId: data.id,
+          requestedBy: authData.user?.id ?? '',
+          amount,
+        });
+      } catch (approvalError) {
+        console.warn('Approval request creation failed:', approvalError);
       }
 
       return data;
@@ -354,7 +304,7 @@ export function useExpenses() {
       queryClient.invalidateQueries({ queryKey: ['expenses'] });
       queryClient.invalidateQueries({ queryKey: ['journal_entries'] });
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
-      toast.success('Mileage recorded successfully');
+      toast.success('Mileage recorded — submitted for approval');
     },
     onError: (error) => {
       toast.error(`Failed to record mileage: ${error.message}`);

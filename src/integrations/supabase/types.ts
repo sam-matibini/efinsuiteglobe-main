@@ -2153,6 +2153,9 @@ export type Database = {
         Row: {
           amount_paid: number
           ap_account_id: string | null
+          approval_status: string
+          approved_at: string | null
+          approved_by: string | null
           balance_due: number
           base_currency_total: number | null
           bill_date: string
@@ -2173,6 +2176,8 @@ export type Database = {
           organization_id: string | null
           paid_at: string | null
           payment_terms_id: string | null
+          posted_at: string | null
+          prepared_by: string | null
           purchase_order_id: string | null
           received_at: string | null
           status: string
@@ -2187,6 +2192,9 @@ export type Database = {
         Insert: {
           amount_paid?: number
           ap_account_id?: string | null
+          approval_status?: string
+          approved_at?: string | null
+          approved_by?: string | null
           balance_due?: number
           base_currency_total?: number | null
           bill_date?: string
@@ -2207,6 +2215,8 @@ export type Database = {
           organization_id?: string | null
           paid_at?: string | null
           payment_terms_id?: string | null
+          posted_at?: string | null
+          prepared_by?: string | null
           purchase_order_id?: string | null
           received_at?: string | null
           status?: string
@@ -2221,6 +2231,9 @@ export type Database = {
         Update: {
           amount_paid?: number
           ap_account_id?: string | null
+          approval_status?: string
+          approved_at?: string | null
+          approved_by?: string | null
           balance_due?: number
           base_currency_total?: number | null
           bill_date?: string
@@ -2241,6 +2254,8 @@ export type Database = {
           organization_id?: string | null
           paid_at?: string | null
           payment_terms_id?: string | null
+          posted_at?: string | null
+          prepared_by?: string | null
           purchase_order_id?: string | null
           received_at?: string | null
           status?: string
@@ -6268,6 +6283,33 @@ export type Database = {
           },
         ]
       }
+      document_approvers: {
+        Row: {
+          created_at: string
+          document_type: string
+          id: string
+          organization_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          document_type?: string
+          id?: string
+          organization_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          document_type?: string
+          id?: string
+          organization_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       document_audit_logs: {
         Row: {
           action: string
@@ -10066,6 +10108,8 @@ export type Database = {
           paid_at: string | null
           payment_method: string | null
           payment_reference: string | null
+          posted_at: string | null
+          prepared_by: string | null
           reviewed_at: string | null
           reviewed_by: string | null
           status: string
@@ -10091,6 +10135,8 @@ export type Database = {
           paid_at?: string | null
           payment_method?: string | null
           payment_reference?: string | null
+          posted_at?: string | null
+          prepared_by?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
           status?: string
@@ -10116,6 +10162,8 @@ export type Database = {
           paid_at?: string | null
           payment_method?: string | null
           payment_reference?: string | null
+          posted_at?: string | null
+          prepared_by?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
           status?: string
@@ -10296,6 +10344,9 @@ export type Database = {
       expenses: {
         Row: {
           amount: number
+          approval_status: string
+          approved_at: string | null
+          approved_by: string | null
           created_at: string
           created_by: string | null
           currency: string
@@ -10314,6 +10365,7 @@ export type Database = {
           notes: string | null
           organization_id: string | null
           paid_through_account_id: string | null
+          posted_at: string | null
           rate_per_unit: number | null
           receipt_url: string | null
           receipt_urls: string[]
@@ -10328,6 +10380,9 @@ export type Database = {
         }
         Insert: {
           amount?: number
+          approval_status?: string
+          approved_at?: string | null
+          approved_by?: string | null
           created_at?: string
           created_by?: string | null
           currency?: string
@@ -10346,6 +10401,7 @@ export type Database = {
           notes?: string | null
           organization_id?: string | null
           paid_through_account_id?: string | null
+          posted_at?: string | null
           rate_per_unit?: number | null
           receipt_url?: string | null
           receipt_urls?: string[]
@@ -10360,6 +10416,9 @@ export type Database = {
         }
         Update: {
           amount?: number
+          approval_status?: string
+          approved_at?: string | null
+          approved_by?: string | null
           created_at?: string
           created_by?: string | null
           currency?: string
@@ -10378,6 +10437,7 @@ export type Database = {
           notes?: string | null
           organization_id?: string | null
           paid_through_account_id?: string | null
+          posted_at?: string | null
           rate_per_unit?: number | null
           receipt_url?: string | null
           receipt_urls?: string[]

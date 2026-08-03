@@ -40,7 +40,8 @@ import { format, addDays } from 'date-fns';
 import { getCountryLocalization } from '@/data/countryLocalizations';
 import { getLocaleForCountry } from '@/lib/localizedCurrencyFormatter';
 import { recordBillTaxes } from '@/lib/ngTax/integration';
-import { postBillToGL } from '@/lib/postBillToGL';
+import { requestApproval } from '@/lib/approvals';
+import { useAuth } from '@/hooks/useAuth';
 import {
   BILL_PAYMENT_TERMS,
   CUSTOM_TERM_VALUE,
@@ -82,6 +83,7 @@ interface CreateBillDialogProps {
 export function CreateBillDialog({ open, onOpenChange }: CreateBillDialogProps) {
   const { vendors, isLoading: vendorsLoading } = useVendors();
   const { organization } = useCurrentOrganization();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCustomTerm, setIsCustomTerm] = useState(false);
@@ -260,6 +262,8 @@ export function CreateBillDialog({ open, onOpenChange }: CreateBillDialogProps) 
           balance_due: total,
           notes: data.notes || null,
           terms: data.terms || null,
+          prepared_by: user?.id ?? null,
+          approval_status: 'pending_approval',
         })
         .select()
         .single();
@@ -286,28 +290,19 @@ export function CreateBillDialog({ open, onOpenChange }: CreateBillDialogProps) 
 
       if (linesError) throw linesError;
 
-      // Post to the General Ledger — roll the bill back if posting fails so no
-      // un-posted document is left behind.
-      let journalEntryId: string | null = null;
+      // Purchases now run through an approval gate: nothing touches the General
+      // Ledger until an approver (never the preparer) approves the bill.
+      const journalEntryId: string | null = null;
       try {
-        journalEntryId = await postBillToGL({
+        await requestApproval({
           organizationId: organization.id,
-          billId: bill.id,
-          billNumber: data.bill_number,
-          billDate: data.bill_date,
-          vendorId: data.vendor_id,
-          taxAmount: taxTotal,
-          total,
-          lines: data.lines.map((line) => ({
-            account_id: line.expense_account_id,
-            amount: line.quantity * line.unit_price,
-            description: line.description,
-          })),
+          documentType: 'bill',
+          documentId: bill.id,
+          requestedBy: user?.id ?? '',
+          amount: total,
         });
-      } catch (glError) {
-        await supabase.from('bill_lines').delete().eq('bill_id', bill.id);
-        await supabase.from('bills').delete().eq('id', bill.id);
-        throw glError;
+      } catch (approvalError) {
+        console.warn('Approval request creation failed:', approvalError);
       }
 
       // NG Tax Engine — record WHT + input VAT (no-op for non-NG orgs)
@@ -332,7 +327,7 @@ export function CreateBillDialog({ open, onOpenChange }: CreateBillDialogProps) 
       queryClient.invalidateQueries({ queryKey: ['bills'] });
       queryClient.invalidateQueries({ queryKey: ['journal-entries'] });
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
-      toast.success('Bill created and posted to the General Ledger');
+      toast.success('Bill created and submitted for approval');
       form.reset();
       setExtraction(null);
       setPendingSummary('');

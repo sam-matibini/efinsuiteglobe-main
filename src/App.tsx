@@ -99,6 +99,7 @@ const MobileCopilot = lazy(() => import("./pages/mobile/treasury/MobileCopilot")
 const PayLink = lazy(() => import("./pages/public/PayLink"));
 const Vendors = lazy(() => import("./pages/Vendors"));
 const Bills = lazy(() => import("./pages/Bills"));
+const Approvals = lazy(() => import("./pages/Approvals"));
 const BankAccounts = lazy(() => import("./pages/BankAccounts"));
 
 const BankTransactions = lazy(() => import("./pages/BankTransactions"));
@@ -336,6 +337,7 @@ const AppRoutes = () => {
     <Route path="/purchases/credits" element={<ProtectedRoute><PageWrapper><VendorCredits /></PageWrapper></ProtectedRoute>} />
     <Route path="/purchases/expense-claims" element={<ProtectedRoute><PageWrapper><ExpenseClaims /></PageWrapper></ProtectedRoute>} />
     <Route path="/purchases/expenses" element={<ProtectedRoute><PageWrapper><Expenses /></PageWrapper></ProtectedRoute>} />
+    <Route path="/purchases/approvals" element={<ProtectedRoute><PageWrapper><Approvals /></PageWrapper></ProtectedRoute>} />
     <Route path="/purchases/payments" element={<ProtectedRoute><PageWrapper><Payments /></PageWrapper></ProtectedRoute>} />
     <Route path="/reports/aging" element={<ProtectedRoute><PageWrapper><AgingReports /></PageWrapper></ProtectedRoute>} />
     <Route path="/reports/consolidated" element={<ProtectedRoute><PageWrapper><ConsolidatedStatements /></PageWrapper></ProtectedRoute>} />

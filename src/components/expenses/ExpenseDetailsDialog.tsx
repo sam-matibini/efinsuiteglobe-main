@@ -3,6 +3,7 @@ import { Badge } from '@/components/ui/badge';
 import { Receipt, Car } from 'lucide-react';
 import { format } from 'date-fns';
 import type { Expense } from '@/hooks/useExpenses';
+import { ApprovalPanel } from '@/components/approvals/ApprovalPanel';
 
 interface Props {
   expense: Expense | null;
@@ -81,6 +82,15 @@ export function ExpenseDetailsDialog({ expense, open, onOpenChange }: Props) {
           </Row>
           <Row label="Created">{format(new Date(expense.created_at), 'PPp')}</Row>
         </div>
+
+        <ApprovalPanel
+          documentType="expense"
+          documentId={expense.id}
+          amount={(Number(expense.amount) || 0) + (Number(expense.tax_amount) || 0)}
+          preparedBy={(expense as any).created_by ?? null}
+          status={(expense as any).approval_status}
+          isPosted={!!expense.is_posted}
+        />
       </DialogContent>
     </Dialog>
   );

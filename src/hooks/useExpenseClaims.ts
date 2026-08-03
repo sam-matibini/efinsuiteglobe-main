@@ -2,6 +2,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrganization } from './useOrganization';
 import { toast } from 'sonner';
+import { canApprove, requestApproval } from '@/lib/approvals';
+import { postExpenseClaimDocument } from '@/lib/approvals/posting';
 
 export interface ExpenseClaim {
   id: string;
@@ -97,6 +99,7 @@ export function useExpenseClaims() {
           description: input.description,
           notes: input.notes,
           total_amount: totalAmount,
+          prepared_by: (await supabase.auth.getUser()).data.user?.id ?? null,
         })
         .select()
         .single();
@@ -151,6 +154,21 @@ export function useExpenseClaims() {
         .eq('id', claimId);
 
       if (error) throw error;
+
+      const { data: claim } = await supabase
+        .from('expense_claims')
+        .select('total_amount, prepared_by')
+        .eq('id', claimId)
+        .single();
+      const { data: authData } = await supabase.auth.getUser();
+
+      await requestApproval({
+        organizationId: currentOrganization!.id,
+        documentType: 'expense_claim',
+        documentId: claimId,
+        requestedBy: (claim as any)?.prepared_by || authData.user?.id || '',
+        amount: Number((claim as any)?.total_amount) || 0,
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['expense_claims'] });
@@ -163,6 +181,23 @@ export function useExpenseClaims() {
 
   const approveExpenseClaim = useMutation({
     mutationFn: async ({ claimId, approverId }: { claimId: string; approverId: string }) => {
+      const orgId = currentOrganization!.id;
+
+      const { data: claim } = await supabase
+        .from('expense_claims')
+        .select('prepared_by, total_amount')
+        .eq('id', claimId)
+        .single();
+
+      // Segregation of duties + approver eligibility.
+      const eligibility = await canApprove({
+        organizationId: orgId,
+        userId: approverId,
+        documentType: 'expense_claim',
+        preparedBy: (claim as any)?.prepared_by ?? null,
+      });
+      if (!eligibility.allowed) throw new Error(eligibility.reason || 'Not authorised to approve');
+
       const { error } = await supabase
         .from('expense_claims')
         .update({
@@ -173,10 +208,15 @@ export function useExpenseClaims() {
         .eq('id', claimId);
 
       if (error) throw error;
+
+      // Approved claims post to the General Ledger.
+      await postExpenseClaimDocument(orgId, claimId);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['expense_claims'] });
-      toast.success('Expense claim approved');
+      queryClient.invalidateQueries({ queryKey: ['journal_entries'] });
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      toast.success('Expense claim approved and posted to the General Ledger');
     },
     onError: (error) => {
       toast.error(`Failed to approve expense claim: ${error.message}`);
