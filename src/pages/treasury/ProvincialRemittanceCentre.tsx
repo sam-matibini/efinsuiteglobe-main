@@ -43,6 +43,31 @@ export default function ProvincialRemittanceCentre() {
     setForm({ authority_id: '', program_code: '', account_number: '', account_label: '', period_type: 'monthly' });
   };
 
+  // Pay a utility bill (e.g. Manitoba Hydro): ensure a vendor exists for the
+  // authority, then open the Create Bill flow pre-filled with that vendor.
+  const payUtilityBill = async (authorityId: string, authorityName: string) => {
+    if (!organization?.id) {
+      toast.error('No organization selected');
+      return;
+    }
+    const existing = vendors.find((v) => v.name.toLowerCase() === authorityName.toLowerCase());
+    let vendorId = existing?.id;
+    if (!vendorId) {
+      try {
+        const created = await createVendor.mutateAsync({ name: authorityName, vendor_type: 'organization' });
+        vendorId = created?.id;
+      } catch (e: any) {
+        toast.error(`Could not create vendor: ${e.message ?? e}`);
+        return;
+      }
+    }
+    if (!vendorId) {
+      toast.error('Could not resolve vendor');
+      return;
+    }
+    navigate(`/purchases/bills?vendor=${encodeURIComponent(vendorId)}`);
+  };
+
   return (
     <div className="space-y-6 p-6">
       <div className="flex items-start justify-between gap-4">
