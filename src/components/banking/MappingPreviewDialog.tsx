@@ -1,10 +1,12 @@
-import { useState, useMemo } from 'react';
-import { 
-  Eye, Check, AlertTriangle, ChevronLeft, ChevronRight, 
-  FileCheck, ArrowRight, Edit2, RotateCcw
+import { useState, useMemo, useCallback } from 'react';
+import {
+  Eye, Check, AlertTriangle, ChevronLeft, ChevronRight,
+  FileCheck, ArrowRight, Edit2, RotateCcw, Pencil, ArrowLeftRight, X
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Dialog,
@@ -23,12 +25,13 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
-import { 
-  ColumnMappingAdvanced, 
+import {
+  ColumnMappingAdvanced,
   MappingConfig,
   DateFormat,
-  NumberFormat 
+  NumberFormat
 } from './AdvancedMappingEngine';
+
 
 interface TransactionPreview {
   rowIndex: number;
