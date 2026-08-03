@@ -364,8 +364,16 @@ async function matchDepositToInvoice(
     return result;
   }
 
-  // Find the payer reference: payload first, then the balance statement.
+  // Find the payer reference: payload first, then Wise's incoming-transfers
+  // resource (exact `unstructuredReference`), then the balance statement.
   let reference = referenceFromPayload(payload);
+
+  const incomingTransferId = incomingTransferIdFromPayload(payload);
+  const profileId = account.wise_profile_id ?? mapped.profile_id ?? null;
+  if (!reference && incomingTransferId && profileId) {
+    reference = await referenceFromIncomingTransfer(profileId, incomingTransferId);
+  }
+
   if (!reference && account.wise_profile_id && account.wise_balance_id) {
     reference = await referenceFromStatement(
       account.wise_profile_id,
@@ -375,6 +383,7 @@ async function matchDepositToInvoice(
       mapped.occurred_at,
     );
   }
+
   if (!reference) {
     result.match_status = 'no_reference';
     return result;
