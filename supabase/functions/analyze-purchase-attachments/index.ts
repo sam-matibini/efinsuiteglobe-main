@@ -416,15 +416,18 @@ Deno.serve(async (req) => {
     if (!raw) return json(500, { error: 'Empty AI response' });
 
     let financial_summary: any = null;
+    let extraction: any = null;
     let narrative = '';
     try {
       const cleaned = raw.replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
       const parsed = JSON.parse(cleaned);
       financial_summary = parsed.financial_summary ?? null;
+      extraction = parsed.extraction ?? null;
       narrative = (parsed.narrative ?? '').toString().trim();
       if (financial_summary && context.total != null) {
         financial_summary.record_total = context.total;
       }
+      if (extraction && !Array.isArray(extraction.lines)) extraction.lines = [];
     } catch {
       narrative = raw;
     }
