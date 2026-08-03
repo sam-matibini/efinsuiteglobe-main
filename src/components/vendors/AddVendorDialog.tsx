@@ -561,6 +561,15 @@ export function AddVendorDialog({ open, onOpenChange }: AddVendorDialogProps) {
               )}
             />
 
+            <div className="rounded-lg border p-4">
+              <PurchaseDocumentsPanel
+                entityType="vendor"
+                organizationId={organization?.id}
+                staging={staging}
+                title="Vendor documents"
+              />
+            </div>
+
             <DialogFooter>
               <Button type="button" variant="outline" onClick={handleClose}>
                 Cancel
