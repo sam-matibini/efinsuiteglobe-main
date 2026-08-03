@@ -308,6 +308,7 @@ export function CreateBillDialog({ open, onOpenChange }: CreateBillDialogProps) 
                   <thead className="bg-muted/50">
                     <tr>
                       <th className="text-left p-3">Description</th>
+                      <th className="text-left p-3 w-56">Account</th>
                       <th className="text-right p-3 w-20">Qty</th>
                       <th className="text-right p-3 w-28">Price</th>
                       <th className="text-right p-3 w-20">Tax %</th>
@@ -328,6 +329,26 @@ export function CreateBillDialog({ open, onOpenChange }: CreateBillDialogProps) 
                               {...form.register(`lines.${index}.description`)}
                               placeholder="Description"
                               className="border-0 bg-transparent"
+                            />
+                          </td>
+                          <td className="p-2">
+                            <FormField
+                              control={form.control}
+                              name={`lines.${index}.expense_account_id`}
+                              render={({ field: accField }) => (
+                                <FormItem className="space-y-0">
+                                  <SearchableSelect
+                                    value={accField.value}
+                                    onValueChange={accField.onChange}
+                                    options={accountOptions}
+                                    placeholder={accountsLoading ? 'Loading...' : 'Select account'}
+                                    searchPlaceholder="Search chart of accounts..."
+                                    emptyText="No postable accounts found."
+                                    className="h-9"
+                                  />
+                                  <FormMessage />
+                                </FormItem>
+                              )}
                             />
                           </td>
                           <td className="p-2">
@@ -354,6 +375,7 @@ export function CreateBillDialog({ open, onOpenChange }: CreateBillDialogProps) 
                               className="border-0 bg-transparent text-right"
                             />
                           </td>
+
                           <td className="p-2 text-right font-mono">
                             {formatCurrency(amount)}
                           </td>
