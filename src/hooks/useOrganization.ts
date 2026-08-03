@@ -191,13 +191,14 @@ export function useCreateOrganization() {
   const { user } = useAuth();
   
   return useMutation({
-    mutationFn: async ({ name, industry, country_id, currency, country_name, country_code }: { 
+    mutationFn: async ({ name, industry, country_id, currency, country_name, country_code, bvn_or_nin }: { 
       name: string; 
       industry?: string;
       country_id?: string;
       currency?: string;
       country_name?: string;
       country_code?: string;
+      bvn_or_nin?: string;
     }) => {
       if (!user) throw new Error('Not authenticated');
       
