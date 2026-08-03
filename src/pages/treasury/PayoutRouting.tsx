@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogT
 import { Globe2, Link2, Plus, Save, ShieldCheck } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 import { useCurrentOrganization } from '@/hooks/useOrganization';
 import { useStripeConnectedAccounts } from '@/hooks/useStripeConnectedAccounts';
 import { useWisePayouts, useVendorPayoutRouting } from '@/hooks/useWisePayouts';
