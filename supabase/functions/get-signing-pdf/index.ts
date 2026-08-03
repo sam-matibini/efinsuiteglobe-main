@@ -14,7 +14,13 @@
 // Errors are returned as { error: string } with 4xx/5xx status.
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
-import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
+
+// Custom CORS headers — must include x-signer-token so the browser
+// allows it in preflight for unauthenticated signer requests.
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-signer-token',
+};
 
 const admin = createClient(
   Deno.env.get('SUPABASE_URL')!,

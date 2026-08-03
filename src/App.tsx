@@ -486,10 +486,12 @@ const AppRoutes = () => {
 
 const DocSignRoute = () => {
   const location = useLocation();
-  const sign = new URLSearchParams(location.search).get("sign");
+  const params = new URLSearchParams(location.search);
+  const sign = params.get("sign");
+  const token = params.get("token");
 
-  // Public signer portal (no login required)
-  if (sign) {
+  // Public signer portal (no login required) — ?sign= legacy, ?token= first-party
+  if (sign || token) {
     return <DocSignSign />;
   }
 
