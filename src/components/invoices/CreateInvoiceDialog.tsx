@@ -134,6 +134,10 @@ export function CreateInvoiceDialog({ open, onOpenChange }: CreateInvoiceDialogP
   const [shareDefaultTab, setShareDefaultTab] = useState<'email' | 'whatsapp' | 'sms'>('email');
   const [lastCreatedInvoice, setLastCreatedInvoice] = useState<Invoice | null>(null);
   const saveActionRef = useRef<'draft' | 'save' | 'send-email' | 'send-whatsapp' | 'send-sms'>('draft');
+  const [activeTab, setActiveTab] = useState<'edit' | 'preview'>('edit');
+  const { accounts: wiseAccounts } = useWiseReceivingAccounts();
+
+
 
   // Collapsible section states
   const [taxOpen, setTaxOpen] = useState(false);
