@@ -17,6 +17,7 @@ import { getCountryLocalization } from '@/data/countryLocalizations';
 import { getLocaleForCountry } from '@/lib/localizedCurrencyFormatter';
 import { parseLocalDate } from '@/lib/utils';
 import { PurchaseAttachmentsSection } from '@/components/purchases/PurchaseAttachmentsSection';
+import { ApprovalPanel } from '@/components/approvals/ApprovalPanel';
 
 interface ViewBillDialogProps {
   open: boolean;
@@ -255,6 +256,15 @@ export function ViewBillDialog({ open, onOpenChange, bill }: ViewBillDialogProps
             <p className="whitespace-pre-wrap">{bill.notes}</p>
           </div>
         )}
+
+        <ApprovalPanel
+          documentType="bill"
+          documentId={bill.id}
+          amount={Number(bill.total) || 0}
+          preparedBy={bill.prepared_by ?? bill.created_by ?? null}
+          status={bill.approval_status}
+          isPosted={!!bill.journal_entry_id}
+        />
 
         <div className="rounded-lg border p-4">
           <PurchaseAttachmentsSection
