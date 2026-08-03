@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -6,13 +7,19 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { MapPin, Plus, Trash2, Building2 } from 'lucide-react';
+import { MapPin, Plus, Trash2, Building2, Zap } from 'lucide-react';
 import { useProvincialAuthorities } from '@/hooks/useProvincialAuthorities';
 import { useProvincialPayeeAccounts } from '@/hooks/useProvincialPayeeAccounts';
+import { useVendors } from '@/hooks/useVendors';
+import { useCurrentOrganization } from '@/hooks/useOrganization';
+import { toast } from 'sonner';
 
 export default function ProvincialRemittanceCentre() {
   const { authorities } = useProvincialAuthorities();
   const { payees, create, remove } = useProvincialPayeeAccounts();
+  const { vendors, createVendor } = useVendors();
+  const { organization } = useCurrentOrganization();
+  const navigate = useNavigate();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState({ authority_id: '', program_code: '', account_number: '', account_label: '', period_type: 'monthly' });
 
@@ -36,6 +43,31 @@ export default function ProvincialRemittanceCentre() {
     setForm({ authority_id: '', program_code: '', account_number: '', account_label: '', period_type: 'monthly' });
   };
 
+  // Pay a utility bill (e.g. Manitoba Hydro): ensure a vendor exists for the
+  // authority, then open the Create Bill flow pre-filled with that vendor.
+  const payUtilityBill = async (authorityId: string, authorityName: string) => {
+    if (!organization?.id) {
+      toast.error('No organization selected');
+      return;
+    }
+    const existing = vendors.find((v) => v.name.toLowerCase() === authorityName.toLowerCase());
+    let vendorId = existing?.id;
+    if (!vendorId) {
+      try {
+        const created = await createVendor.mutateAsync({ name: authorityName, vendor_type: 'organization' });
+        vendorId = created?.id;
+      } catch (e: any) {
+        toast.error(`Could not create vendor: ${e.message ?? e}`);
+        return;
+      }
+    }
+    if (!vendorId) {
+      toast.error('Could not resolve vendor');
+      return;
+    }
+    navigate(`/purchases/bills?vendor=${encodeURIComponent(vendorId)}`);
+  };
+
   return (
     <div className="space-y-6 p-6">
       <div className="flex items-start justify-between gap-4">
@@ -53,12 +85,35 @@ export default function ProvincialRemittanceCentre() {
               <CardTitle className="flex items-center gap-2 text-lg"><MapPin className="h-5 w-5 text-primary" />{jur}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
-              {list.map((a) => (
-                <div key={a.id} className="flex justify-between border-b pb-1 last:border-0">
-                  <span>{a.name}</span>
-                  <Badge variant="outline" className="text-xs">{a.programs.length} prog</Badge>
-                </div>
-              ))}
+              {list.map((a) => {
+                const isUtility = a.category === 'utility';
+                return (
+                  <div key={a.id} className="flex justify-between items-center border-b pb-1 last:border-0 gap-2">
+                    <span className="flex items-center gap-1.5">
+                      {isUtility && <Zap className="h-3.5 w-3.5 text-amber-500" />}
+                      {a.name}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      {isUtility && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-6 px-2 text-xs"
+                          onClick={() => payUtilityBill(a.id, a.name)}
+                        >
+                          Pay bill
+                        </Button>
+                      )}
+                      <Badge
+                        variant={isUtility ? 'secondary' : 'outline'}
+                        className="text-xs"
+                      >
+                        {isUtility ? 'Utility' : `${a.programs.length} prog`}
+                      </Badge>
+                    </div>
+                  </div>
+                );
+              })}
             </CardContent>
           </Card>
         ))}

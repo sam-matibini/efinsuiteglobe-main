@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Plus, Search, Download, MoreHorizontal, Check, AlertTriangle, Clock, DollarSign, Send, Paperclip, Sparkles, Eye, Pencil, Ban } from 'lucide-react';
 import { AICategorizeAPDialog } from '@/components/purchases/AICategorizeAPDialog';
 import { PurchaseAttachmentsDialog } from '@/components/purchases/PurchaseAttachmentsDialog';
@@ -54,7 +55,23 @@ export default function Bills() {
   const [editBill, setEditBill] = useState<any | null>(null);
   const [billToVoid, setBillToVoid] = useState<any | null>(null);
   const [showAICategorize, setShowAICategorize] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
 
+  // When navigated with ?vendor=<id> (e.g. "Pay bill" from the Provincial
+  // Remittance Centre), auto-open the Create Bill dialog pre-filled with that
+  // vendor.
+  const prefillVendorId = searchParams.get('vendor');
+  const [pendingPrefill, setPendingPrefill] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (prefillVendorId) {
+      setPendingPrefill(prefillVendorId);
+      setShowBillDialog(true);
+      searchParams.delete('vendor');
+      setSearchParams(searchParams, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefillVendorId]);
 
   const { bills, isLoading, totalOutstanding, overdueAmount, paidThisMonth, updateBillStatus, voidBill } = useBills();
   const { organization } = useCurrentOrganization();
@@ -309,7 +326,14 @@ export default function Bills() {
       </Card>
 
       {/* Dialogs */}
-      <CreateBillDialog open={showBillDialog} onOpenChange={setShowBillDialog} />
+      <CreateBillDialog
+        open={showBillDialog}
+        onOpenChange={(open) => {
+          setShowBillDialog(open);
+          if (!open) setPendingPrefill(null);
+        }}
+        prefillVendorId={pendingPrefill ?? undefined}
+      />
       <RecordVendorPaymentDialog 
         open={showPaymentDialog} 
         onOpenChange={(open) => {

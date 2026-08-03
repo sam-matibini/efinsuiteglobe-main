@@ -8,6 +8,8 @@ export interface ProvincialAuthority {
   jurisdiction: string;
   programs: string[];
   website_url: string | null;
+  /** 'tax' (default) for tax authorities, 'utility' for bill payees like Manitoba Hydro. */
+  category: string;
 }
 
 export function useProvincialAuthorities() {
