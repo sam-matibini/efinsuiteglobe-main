@@ -29,6 +29,18 @@ import { getCountryLocalization } from '@/data/countryLocalizations';
 import { getLocaleForCountry } from '@/lib/localizedCurrencyFormatter';
 import { useIsReadOnly } from '@/hooks/useIsReadOnly';
 import { DocumentShareDialog } from '@/components/shared/DocumentShareDialog';
+import { ViewBillDialog } from '@/components/bills/ViewBillDialog';
+import { EditBillDialog } from '@/components/bills/EditBillDialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 export default function Bills() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -38,10 +50,13 @@ export default function Bills() {
   const [selectedBillForPayment, setSelectedBillForPayment] = useState<{ vendorId?: string; billId?: string }>({});
   const [shareBill, setShareBill] = useState<any | null>(null);
   const [docsBill, setDocsBill] = useState<any | null>(null);
+  const [viewBill, setViewBill] = useState<any | null>(null);
+  const [editBill, setEditBill] = useState<any | null>(null);
+  const [billToVoid, setBillToVoid] = useState<any | null>(null);
   const [showAICategorize, setShowAICategorize] = useState(false);
 
 
-  const { bills, isLoading, totalOutstanding, overdueAmount, paidThisMonth, updateBillStatus } = useBills();
+  const { bills, isLoading, totalOutstanding, overdueAmount, paidThisMonth, updateBillStatus, voidBill } = useBills();
   const { organization } = useCurrentOrganization();
   const isReadOnly = useIsReadOnly();
   
