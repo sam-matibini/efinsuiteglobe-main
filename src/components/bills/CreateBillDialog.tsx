@@ -79,6 +79,23 @@ export function CreateBillDialog({ open, onOpenChange }: CreateBillDialogProps) 
   const localization = getCountryLocalization(countryCode);
   const locale = getLocaleForCountry(countryCode);
 
+  const { data: accounts = [], isLoading: accountsLoading } = useAccounts(organization?.id);
+
+  // Postable expense / COGS / asset accounts from the Chart of Accounts.
+  const accountOptions = accounts
+    .filter(
+      (a) =>
+        a.is_active !== false &&
+        !a.is_header &&
+        a.posting_allowed !== false &&
+        ['expense', 'cogs', 'other_expense', 'asset'].includes(a.account_type as string),
+    )
+    .map((a) => ({
+      value: a.id,
+      label: `${a.code} — ${a.name}`,
+      keywords: `${a.code} ${a.name}`,
+    }));
+
   const form = useForm<BillFormData>({
     resolver: zodResolver(billSchema),
     defaultValues: {
@@ -88,7 +105,7 @@ export function CreateBillDialog({ open, onOpenChange }: CreateBillDialogProps) 
       due_date: format(addDays(new Date(), 30), 'yyyy-MM-dd'),
       notes: '',
       terms: 'Net 30',
-      lines: [{ description: '', quantity: 1, unit_price: 0, tax_rate: 13 }],
+      lines: [{ description: '', expense_account_id: '', quantity: 1, unit_price: 0, tax_rate: 13 }],
     },
   });
 
@@ -96,6 +113,7 @@ export function CreateBillDialog({ open, onOpenChange }: CreateBillDialogProps) 
     control: form.control,
     name: 'lines',
   });
+
 
   const watchedLines = form.watch('lines');
   
