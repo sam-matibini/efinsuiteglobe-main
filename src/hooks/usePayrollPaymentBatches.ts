@@ -73,6 +73,23 @@ function mask(acc: string | null | undefined): string | null {
   return s.length <= 3 ? `***${s}` : `***${s.slice(-3)}`;
 }
 
+/** Default employee payout rail implied by the batch provider. */
+export function providerDefaultRail(provider: PayrollBatchProvider): Rail {
+  switch (provider) {
+    case 'wise_eft': return 'wise_eft';
+    case 'wise_etransfer': return 'wise_etransfer';
+    case 'wise_card': return 'card';
+    case 'efinmoney': return 'wallet_efinmoney';
+    case 'wallet': return 'wallet_stripe';
+    case 'paysafe_eft': return 'eft';
+    case 'paysafe_card': return 'card';
+    case 'wire': return 'wire';
+    case 'cheque': return 'cheque';
+    case 'manual': return 'manual';
+    default: return 'ach';
+  }
+}
+
 export function usePayrollPaymentBatches() {
   const { currentOrganization } = useOrganizationContext();
   const { user } = useAuth();
