@@ -93,6 +93,7 @@ export function CreateBillDialog({ open, onOpenChange }: CreateBillDialogProps) 
     .map((a) => ({
       value: a.id,
       label: `${a.code} — ${a.name}`,
+      triggerLabel: a.code,
       keywords: `${a.code} ${a.name}`,
     }));
 
