@@ -4,6 +4,7 @@ import { useCurrentOrganization } from './useOrganization';
 import { toast } from 'sonner';
 import { postBillToGL, type BillGLLine } from '@/lib/postBillToGL';
 import { parseLocalDate } from '@/lib/utils';
+import { reverseLinkedJournalEntry, recalculateAndInvalidate } from './useGLPropagation';
 
 export interface CreateBillInput {
   vendor_id: string;
