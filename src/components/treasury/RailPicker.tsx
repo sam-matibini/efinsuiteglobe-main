@@ -1,7 +1,7 @@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Rail } from '@/hooks/useFundingBankAccounts';
-import { Zap, Building2, Wallet, Send, FileText, ScrollText, CreditCard } from 'lucide-react';
+import { Zap, Building2, Wallet, Send, FileText, ScrollText, CreditCard, Globe2 } from 'lucide-react';
 
 interface Props {
   value: Rail;
