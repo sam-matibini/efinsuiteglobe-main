@@ -156,6 +156,9 @@ function FirstPartySigningPage({ token }: { token: string }) {
   const [signatureImages, setSignatureImages] = useState<Record<string, string>>({});
   const [sigPadOpen, setSigPadOpen] = useState(false);
   const [textInput, setTextInput] = useState('');
+  // Free signature — used when no fields were pre-assigned to this signer
+  const [freeSignature, setFreeSignature] = useState<string | null>(null);
+  const [freeSigPadOpen, setFreeSigPadOpen] = useState(false);
 
   const signerClient = useMemo(() => makeSignerClient(token), [token]);
 
@@ -308,6 +311,15 @@ function FirstPartySigningPage({ token }: { token: string }) {
             image_base64: dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl,
           })
         ),
+        // Free signature (no pre-assigned fields) — stored with field_id null
+        ...(freeSignature ? [
+          signerClient.from('document_signatures').insert({
+            document_id: doc.id,
+            signer_id: signer.id,
+            field_id: null,
+            image_base64: freeSignature.includes(',') ? freeSignature.split(',')[1] : freeSignature,
+          })
+        ] : []),
       ]);
 
       const { error } = await signerClient.from('document_signers').update({
@@ -454,6 +466,8 @@ function FirstPartySigningPage({ token }: { token: string }) {
               onCheckboxNext={handleCheckboxNext}
               onSkip={handleSkip}
               onSubmit={handleSubmit}
+              freeSignature={freeSignature}
+              onOpenFreeSigPad={() => setFreeSigPadOpen(true)}
             />
           )}
         </div>
@@ -466,6 +480,15 @@ function FirstPartySigningPage({ token }: { token: string }) {
           onSave={handleSignatureSave}
           signerName={signer?.name ?? ''}
           fieldType={currentField?.field_type === 'initial' ? 'initial' : 'signature'}
+        />
+      )}
+      {phase === 'signing' && (
+        <SignaturePad
+          open={freeSigPadOpen}
+          onOpenChange={setFreeSigPadOpen}
+          onSave={(dataUrl) => setFreeSignature(dataUrl)}
+          signerName={signer?.name ?? ''}
+          fieldType="signature"
         />
       )}
     </div>
@@ -547,6 +570,7 @@ function SigningPanel({
   fields, fieldIndex, fieldValues, currentField, allDone, requiredUnfilled,
   isSubmitting, textInput, onTextInputChange, onOpenSigPad, onTextSave,
   onCheckboxSet, onCheckboxNext, onSkip, onSubmit,
+  freeSignature, onOpenFreeSigPad,
 }: {
   fields: FieldRow[];
   fieldIndex: number;
@@ -563,7 +587,52 @@ function SigningPanel({
   onCheckboxNext: () => void;
   onSkip: () => void;
   onSubmit: () => void;
+  freeSignature: string | null;
+  onOpenFreeSigPad: () => void;
 }) {
+  // No pre-placed fields — require a free signature before submitting
+  if (fields.length === 0) {
+    return (
+      <div className="flex flex-col p-4 gap-4 h-full">
+        <div>
+          <p className="font-semibold text-sm">Your signature is required</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            Draw your signature below to confirm your intent to sign this document.
+          </p>
+        </div>
+        {freeSignature ? (
+          <div className="space-y-2">
+            <div className="border rounded-lg p-3 bg-muted/30 flex items-center justify-center">
+              <img src={freeSignature} alt="Your signature" className="max-h-16 max-w-full" />
+            </div>
+            <Button variant="outline" size="sm" className="w-full" onClick={onOpenFreeSigPad}>
+              Redo Signature
+            </Button>
+          </div>
+        ) : (
+          <div
+            className="border-2 border-dashed rounded-lg p-8 flex flex-col items-center gap-3 text-muted-foreground cursor-pointer hover:border-accent/50 hover:bg-accent/5 transition-colors"
+            onClick={onOpenFreeSigPad}
+          >
+            <PenLine className="w-8 h-8" />
+            <p className="text-sm font-medium">Tap to sign</p>
+          </div>
+        )}
+        <Button
+          className="w-full bg-accent hover:bg-accent/90 mt-auto"
+          onClick={!freeSignature ? onOpenFreeSigPad : onSubmit}
+          disabled={isSubmitting}
+        >
+          {isSubmitting
+            ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Submitting…</>
+            : !freeSignature
+              ? <><PenLine className="w-4 h-4 mr-2" />Sign Here</>
+              : <><CheckCircle2 className="w-4 h-4 mr-2" />Submit Signature</>}
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col p-4 gap-4 h-full">
       {/* Progress bar */}

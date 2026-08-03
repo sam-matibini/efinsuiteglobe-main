@@ -150,6 +150,10 @@ Deno.serve(async (req) => {
       .update({ status: 'completed', completed_at: new Date().toISOString() })
       .eq('id', documentId);
 
+    // Bake signatures into PDF (fire-and-forget — emails go out regardless)
+    admin.functions.invoke('bake-signed-pdf', { body: { document_id: documentId } })
+      .catch(e => console.warn('bake-signed-pdf:', e));
+
     const docUrl = `${APP_URL}/docsign`;
 
     // Email every signer
