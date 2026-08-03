@@ -59,7 +59,7 @@ export default function PayoutRouting() {
     return (
       draft[vendorId] ?? {
         provider: existing?.payout_provider ?? 'stripe',
-        target: existing?.wise_recipient_id ?? existing?.stripe_connected_account_id ?? '',
+        target: existing?.wise_recipient_id ?? existing?.stripe_connected_account_id ?? existing?.wallet_id ?? '',
         method: existing?.default_payout_method ?? 'eft',
       }
     );
