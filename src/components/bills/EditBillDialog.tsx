@@ -724,6 +724,25 @@ export function EditBillDialog({ open, onOpenChange, bill }: EditBillDialogProps
                 )}
               />
 
+              <div className="rounded-lg border p-4">
+                <PurchaseDocumentsPanel
+                  entityType="bill"
+                  entityId={bill?.id}
+                  organizationId={organization?.id}
+                  draftContext={{
+                    vendor: vendors.find((v) => v.id === form.getValues('vendor_id'))?.name ?? null,
+                    reference: form.getValues('bill_number') || null,
+                    date: form.getValues('bill_date') || null,
+                    currency: localization.currency,
+                  }}
+                  onExtraction={(ex, summary) => {
+                    setExtraction(ex);
+                    setPendingSummary(summary);
+                    setReviewOpen(true);
+                  }}
+                />
+              </div>
+
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                   Cancel
@@ -734,6 +753,18 @@ export function EditBillDialog({ open, onOpenChange, bill }: EditBillDialogProps
               </DialogFooter>
             </form>
           </Form>
+        )}
+
+        {extraction && (
+          <InvoiceExtractionReview
+            open={reviewOpen}
+            onOpenChange={setReviewOpen}
+            extraction={extraction}
+            fields={reviewFields}
+            supportsLines
+            currentLineCount={fields.length}
+            onApply={applyExtraction}
+          />
         )}
       </DialogContent>
     </Dialog>
