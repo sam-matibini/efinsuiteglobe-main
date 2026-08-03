@@ -5,7 +5,7 @@ import { useAuth } from './useAuth';
 import { toast } from 'sonner';
 
 export type BatchStatus = 'draft' | 'approved' | 'processing' | 'completed' | 'partial' | 'failed' | 'cancelled';
-export type BatchProvider = 'stripe' | 'plaid' | 'manual' | 'wire' | 'cheque' | 'paysafe_eft' | 'paysafe_card';
+export type BatchProvider = 'stripe' | 'plaid' | 'manual' | 'wire' | 'cheque' | 'paysafe_eft' | 'paysafe_card' | 'wise_eft' | 'wise_etransfer' | 'wise_card';
 
 export interface APPaymentBatch {
   id: string;

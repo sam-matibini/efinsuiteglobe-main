@@ -75,6 +75,9 @@ export default function APPayments() {
                         <SelectItem value="plaid">Plaid ACH</SelectItem>
                         <SelectItem value="paysafe_eft">Paysafe EFT</SelectItem>
                         <SelectItem value="paysafe_card">Paysafe Card (Credit / Debit Visa)</SelectItem>
+                        <SelectItem value="wise_eft">Wise EFT</SelectItem>
+                        <SelectItem value="wise_etransfer">Wise e-Transfer</SelectItem>
+                        <SelectItem value="wise_card">Wise Card payout</SelectItem>
                         <SelectItem value="wire">Wire</SelectItem>
                         <SelectItem value="cheque">Cheque</SelectItem>
                       </SelectContent>
