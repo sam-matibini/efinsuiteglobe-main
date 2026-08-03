@@ -450,9 +450,10 @@ export default function PayoutRouting() {
                           <Select value={row.provider} onValueChange={(val) => setRow(v.id, { provider: val, target: '' })}>
                             <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="wise">Wise</SelectItem>
-                              <SelectItem value="stripe">Stripe</SelectItem>
-                              <SelectItem value="efinmoney">eFinMoney</SelectItem>
+                              {isEnabled('wise') && <SelectItem value="wise">Wise</SelectItem>}
+                              {isEnabled('stripe') && <SelectItem value="stripe">Stripe</SelectItem>}
+                              {isEnabled('efinmoney') && <SelectItem value="efinmoney">eFinMoney</SelectItem>}
+
                             </SelectContent>
                           </Select>
                         </TableCell>
