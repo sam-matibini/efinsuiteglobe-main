@@ -16,6 +16,9 @@ export interface CreateBillInput {
   notes?: string;
   terms?: string;
   department_id?: string | null;
+  /** Optional per-line GL breakdown; falls back to a single subtotal line. */
+  lines?: BillGLLine[];
+
 }
 
 export interface Bill {
