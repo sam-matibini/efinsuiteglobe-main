@@ -150,9 +150,9 @@ export function EditableImportPreview<T extends EditablePreviewRow>({
         )}
       </div>
 
-      <div className="border rounded-lg overflow-auto max-h-[380px]">
+      <div className="border rounded-lg overflow-auto max-h-[60vh]">
         <table className="w-full text-sm">
-          <thead className="bg-muted/50 sticky top-0 z-10">
+          <thead className="bg-background sticky top-0 z-10 shadow-[inset_0_-1px_0_hsl(var(--border))]">
             <tr>
               <th className="text-left p-2 font-medium">Date</th>
               <th className="text-left p-2 font-medium">Description</th>

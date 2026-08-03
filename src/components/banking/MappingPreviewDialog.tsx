@@ -200,10 +200,8 @@ export function MappingPreviewDialog({
   onConfirm,
   onBack,
 }: MappingPreviewDialogProps) {
-  const [currentPage, setCurrentPage] = useState(0);
   const [rowOverrides, setRowOverrides] = useState<Record<number, Record<string, unknown>>>({});
   const [editingRow, setEditingRow] = useState<number | null>(null);
-  const pageSize = 20;
   
   const { mappings, dateFormat, numberFormat, invertSign, treatBracketsAsNegative } = mappingConfig;
   
