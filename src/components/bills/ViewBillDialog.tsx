@@ -152,11 +152,14 @@ export function ViewBillDialog({ open, onOpenChange, bill }: ViewBillDialogProps
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[95vw] max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-3">
+          <DialogTitle className="flex items-center gap-3 flex-wrap">
             <span className="font-mono">Bill {bill.bill_number}</span>
-            <Badge variant="secondary" className="capitalize">
+            <Badge className={cn('capitalize', BILL_STATUS_STYLES[bill.status] ?? BILL_STATUS_STYLES.draft)}>
               {bill.status}
             </Badge>
+            {bill.approval_status === 'rejected' && (
+              <Badge className="bg-destructive/10 text-destructive">Rejected</Badge>
+            )}
           </DialogTitle>
           <DialogDescription>{bill.vendor?.name || 'Unknown Vendor'}</DialogDescription>
         </DialogHeader>
