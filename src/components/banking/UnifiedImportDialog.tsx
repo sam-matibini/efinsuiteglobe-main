@@ -67,6 +67,8 @@ export function UnifiedImportDialog({
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [dateFormat, setDateFormat] = useState('yyyy-mm-dd');
   const [previewData, setPreviewData] = useState<(ParsedBankTransaction | ParsedCreditCardTransaction)[]>([]);
+  const [baselineData, setBaselineData] = useState<(ParsedBankTransaction | ParsedCreditCardTransaction)[]>([]);
+
   const [errors, setErrors] = useState<string[]>([]);
   
   // Column mapping state
