@@ -67,6 +67,7 @@ export function CreateExpenseClaimDialog({ open, onOpenChange }: CreateExpenseCl
   const fileInputs = useRef<Record<string, HTMLInputElement | null>>({});
   const [scanningLineId, setScanningLineId] = useState<string | null>(null);
   const [aiFilledFields, setAiFilledFields] = useState<Record<string, Set<string>>>({});
+  const staging = useStagedPurchaseAttachments();
 
   const [employeeId, setEmployeeId] = useState<string>('');
   const [claimDate, setClaimDate] = useState<string>(new Date().toISOString().split('T')[0]);
