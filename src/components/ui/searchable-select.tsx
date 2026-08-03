@@ -16,6 +16,8 @@ export interface SearchableSelectOption {
   value: string;
   label: string;
   keywords?: string;
+  /** Optional shorter label rendered in the closed trigger (list keeps `label`). */
+  triggerLabel?: string;
 }
 
 interface SearchableSelectProps {
@@ -56,13 +58,16 @@ export function SearchableSelect({
             !selected && 'text-muted-foreground',
             className,
           )}
+          title={selected ? selected.label : undefined}
         >
-          <span className="truncate text-left">{selected ? selected.label : placeholder}</span>
+          <span className="truncate text-left">
+            {selected ? selected.triggerLabel ?? selected.label : placeholder}
+          </span>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
       <PopoverContent
-        className="p-0 w-[--radix-popover-trigger-width] min-w-[240px]"
+        className="p-0 w-[--radix-popover-trigger-width] min-w-[320px]"
         align="start"
       >
         <Command

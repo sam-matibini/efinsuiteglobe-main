@@ -93,6 +93,7 @@ export function CreateBillDialog({ open, onOpenChange }: CreateBillDialogProps) 
     .map((a) => ({
       value: a.id,
       label: `${a.code} — ${a.name}`,
+      triggerLabel: a.code,
       keywords: `${a.code} ${a.name}`,
     }));
 
@@ -240,7 +241,7 @@ export function CreateBillDialog({ open, onOpenChange }: CreateBillDialogProps) 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-[95vw] max-w-5xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Create Bill</DialogTitle>
           <DialogDescription>
@@ -250,7 +251,7 @@ export function CreateBillDialog({ open, onOpenChange }: CreateBillDialogProps) 
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               <FormField
                 control={form.control}
                 name="vendor_id"
@@ -364,15 +365,15 @@ export function CreateBillDialog({ open, onOpenChange }: CreateBillDialogProps) 
                 </Button>
               </div>
 
-              <div className="border rounded-lg overflow-hidden">
-                <table className="w-full text-sm">
+              <div className="border rounded-lg overflow-x-auto">
+                <table className="w-full min-w-[820px] text-sm">
                   <thead className="bg-muted/50">
                     <tr>
-                      <th className="text-left p-3">Description</th>
-                      <th className="text-left p-3 w-56">Account</th>
-                      <th className="text-right p-3 w-20">Qty</th>
-                      <th className="text-right p-3 w-28">Price</th>
-                      <th className="text-right p-3 w-20">Tax %</th>
+                      <th className="text-left p-3 min-w-[220px]">Description</th>
+                      <th className="text-left p-3 w-40">Account</th>
+                      <th className="text-right p-3 w-16">Qty</th>
+                      <th className="text-right p-3 w-24">Price</th>
+                      <th className="text-right p-3 w-16">Tax %</th>
                       <th className="text-right p-3 w-28">Amount</th>
                       <th className="w-10"></th>
                     </tr>
@@ -405,7 +406,7 @@ export function CreateBillDialog({ open, onOpenChange }: CreateBillDialogProps) 
                                     placeholder={accountsLoading ? 'Loading...' : 'Select account'}
                                     searchPlaceholder="Search chart of accounts..."
                                     emptyText="No postable accounts found."
-                                    className="h-9"
+                                    className="h-9 font-mono text-xs"
                                   />
                                   <FormMessage />
                                 </FormItem>
