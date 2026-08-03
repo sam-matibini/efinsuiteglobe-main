@@ -24,7 +24,7 @@ import { getLocaleForCountry } from '@/lib/localizedCurrencyFormatter';
 import { FormattedNumberInput } from '@/components/ui/formatted-number-input';
 import { PurchaseDocumentsPanel } from '@/components/purchases/PurchaseDocumentsPanel';
 import { InvoiceExtractionReview, type ReviewField } from '@/components/purchases/InvoiceExtractionReview';
-import { matchVendor, type InvoiceExtraction } from '@/lib/purchases/invoiceExtraction';
+import type { InvoiceExtraction } from '@/lib/purchases/invoiceExtraction';
 import { useStagedPurchaseAttachments } from '@/hooks/useStagedPurchaseAttachments';
 
 interface ExpenseLineItem {
@@ -296,10 +296,10 @@ export function RecordExpenseTab({ onSuccess, onCancel }: RecordExpenseTabProps)
   };
 
   // ---- Attachments + AI invoice extraction -------------------------------
-  const matchedVendor = matchVendor(
-    (vendors ?? []) as Array<{ id: string; name: string }>,
-    extraction?.vendor_name,
-  );
+  const matchedVendorId = matchVendor(extraction?.vendor_name);
+  const matchedVendor = matchedVendorId
+    ? vendors.find((v) => v.id === matchedVendorId) ?? null
+    : null;
 
   const reviewFields: ReviewField[] = extraction
     ? [
