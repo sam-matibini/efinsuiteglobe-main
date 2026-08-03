@@ -406,6 +406,27 @@ export function CreateOrganizationDialog({
               </div>
             )}
 
+            {selectedCountry?.default_currency === 'NGN' && (
+              <FormField
+                control={form.control}
+                name="bvn_or_nin"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>BVN or NIN</FormLabel>
+                    <FormControl>
+                      <Input placeholder="11-digit BVN or NIN" {...field} value={field.value ?? ''} />
+                    </FormControl>
+                    <FormDescription>
+                      Required to open the organization's Naira virtual account.
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+
+
+
             <FormField
               control={form.control}
               name="industry"
