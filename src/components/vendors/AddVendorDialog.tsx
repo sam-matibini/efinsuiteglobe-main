@@ -36,6 +36,9 @@ import { Building2, User, FileText, Loader2 } from 'lucide-react';
 import { useVendors } from '@/hooks/useVendors';
 import { CurrencySelect } from '@/components/currency/CurrencySelect';
 import { cn } from '@/lib/utils';
+import { useCurrentOrganization } from '@/hooks/useOrganization';
+import { PurchaseDocumentsPanel } from '@/components/purchases/PurchaseDocumentsPanel';
+import { useStagedPurchaseAttachments } from '@/hooks/useStagedPurchaseAttachments';
 
 const vendorSchema = z.object({
   vendor_type: z.enum(['organization', 'individual']),
@@ -97,6 +100,8 @@ const COUNTRIES = [
 
 export function AddVendorDialog({ open, onOpenChange }: AddVendorDialogProps) {
   const { createVendor } = useVendors();
+  const { organization } = useCurrentOrganization();
+  const staging = useStagedPurchaseAttachments();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const form = useForm<VendorFormData>({
@@ -159,6 +164,7 @@ export function AddVendorDialog({ open, onOpenChange }: AddVendorDialogProps) {
         notes: data.notes || undefined,
       });
       form.reset();
+      staging.clear();
       onOpenChange(false);
     } finally {
       setIsSubmitting(false);
@@ -560,6 +566,15 @@ export function AddVendorDialog({ open, onOpenChange }: AddVendorDialogProps) {
                 </FormItem>
               )}
             />
+
+            <div className="rounded-lg border p-4">
+              <PurchaseDocumentsPanel
+                entityType="vendor"
+                organizationId={organization?.id}
+                staging={staging}
+                title="Vendor documents"
+              />
+            </div>
 
             <div className="rounded-lg border p-4">
               <PurchaseDocumentsPanel
