@@ -467,6 +467,7 @@ Deno.serve(async (req) => {
       summary: summaryText,
       narrative,
       financial_summary,
+      extraction,
       formatted: block,
       files_analyzed: used,
       warnings,
