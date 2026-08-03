@@ -80,6 +80,7 @@ export function CreateBillDialog({ open, onOpenChange }: CreateBillDialogProps) 
   const { organization } = useCurrentOrganization();
   const queryClient = useQueryClient();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isCustomTerm, setIsCustomTerm] = useState(false);
 
   const countryCode = organization?.country || 'CA';
   const localization = getCountryLocalization(countryCode);
