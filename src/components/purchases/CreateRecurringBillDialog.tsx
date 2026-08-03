@@ -14,6 +14,11 @@ import { getCountryLocalization } from '@/data/countryLocalizations';
 import { getLocaleForCountry } from '@/lib/localizedCurrencyFormatter';
 import { SearchableGLAccountSelect } from '@/components/banking/SearchableGLAccountSelect';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { PurchaseDocumentsPanel } from '@/components/purchases/PurchaseDocumentsPanel';
+import { InvoiceExtractionReview, type ReviewField } from '@/components/purchases/InvoiceExtractionReview';
+import { matchVendor, type InvoiceExtraction } from '@/lib/purchases/invoiceExtraction';
+import { useStagedPurchaseAttachments } from '@/hooks/useStagedPurchaseAttachments';
+import { toast } from 'sonner';
 
 interface CreateRecurringBillDialogProps {
   open: boolean;
