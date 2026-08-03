@@ -211,9 +211,107 @@ export default function PayoutRouting() {
           <Card>
             <CardHeader>
               <CardTitle>Vendor payout routing</CardTitle>
-              <CardDescription>Send each vendor's payouts through Wise or Stripe.</CardDescription>
+              <CardDescription>Send each vendor's payouts through Wise, Stripe or an eFinMoney wallet.</CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
+              <div className="flex flex-wrap items-end gap-2">
+                <div className="flex-1 min-w-[200px]">
+                  <Label>Search vendors</Label>
+                  <Input
+                    placeholder="Search by vendor name…"
+                    value={vendorSearch}
+                    onChange={(e) => setVendorSearch(e.target.value)}
+                  />
+                </div>
+
+                <Dialog open={vendorOpen} onOpenChange={setVendorOpen}>
+                  <DialogTrigger asChild>
+                    <Button><Plus className="h-4 w-4 mr-1" /> Add vendor</Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader><DialogTitle>New vendor</DialogTitle></DialogHeader>
+                    <div className="space-y-3">
+                      <div><Label>Vendor name</Label>
+                        <Input value={newVendor.name} onChange={(e) => setNewVendor({ ...newVendor, name: e.target.value })} /></div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div><Label>Email</Label>
+                          <Input type="email" value={newVendor.email} onChange={(e) => setNewVendor({ ...newVendor, email: e.target.value })} /></div>
+                        <div><Label>Phone</Label>
+                          <Input value={newVendor.phone} onChange={(e) => setNewVendor({ ...newVendor, phone: e.target.value })} /></div>
+                      </div>
+                      <div className="w-40"><Label>Default currency</Label>
+                        <Input value={newVendor.default_currency} onChange={(e) => setNewVendor({ ...newVendor, default_currency: e.target.value.toUpperCase() })} /></div>
+                    </div>
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setVendorOpen(false)}>Cancel</Button>
+                      <Button disabled={!newVendor.name.trim() || savingVendor} onClick={addVendor}>Create vendor</Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+
+                <Dialog open={bulkOpen} onOpenChange={setBulkOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" disabled={filteredVendors.length === 0}>
+                      Bulk assign ({filteredVendors.length})
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader><DialogTitle>Bulk assign payout routing</DialogTitle></DialogHeader>
+                    <p className="text-sm text-muted-foreground">
+                      Applies to all {filteredVendors.length} vendor{filteredVendors.length === 1 ? '' : 's'} currently listed.
+                    </p>
+                    <div className="space-y-3">
+                      <div>
+                        <Label>Provider</Label>
+                        <Select value={bulk.provider} onValueChange={(v) => setBulk({ ...bulk, provider: v, target: '' })}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="wise">Wise</SelectItem>
+                            <SelectItem value="stripe">Stripe</SelectItem>
+                            <SelectItem value="efinmoney">eFinMoney wallet</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label>Destination</Label>
+                        {bulk.provider === 'efinmoney' ? (
+                          <Input placeholder="Wallet ID" value={bulk.target} onChange={(e) => setBulk({ ...bulk, target: e.target.value })} />
+                        ) : (
+                          <Select value={bulk.target} onValueChange={(v) => setBulk({ ...bulk, target: v })}>
+                            <SelectTrigger><SelectValue placeholder="Select destination" /></SelectTrigger>
+                            <SelectContent>
+                              {bulk.provider === 'wise'
+                                ? recipients.map((r) => (
+                                    <SelectItem key={r.id} value={r.id}>{r.account_holder_name} · {r.currency}</SelectItem>
+                                  ))
+                                : stripeAccounts.map((a: { id: string; stripe_account_id: string }) => (
+                                    <SelectItem key={a.id} value={a.id}>{a.stripe_account_id}</SelectItem>
+                                  ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                      </div>
+                      <div>
+                        <Label>Method</Label>
+                        <Select value={bulk.method} onValueChange={(v) => setBulk({ ...bulk, method: v })}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="eft">EFT</SelectItem>
+                            <SelectItem value="etransfer">e-Transfer</SelectItem>
+                            <SelectItem value="card">Card</SelectItem>
+                            <SelectItem value="wallet">Wallet</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setBulkOpen(false)}>Cancel</Button>
+                      <Button onClick={applyBulk}>Apply to {filteredVendors.length}</Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              </div>
+
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -225,33 +323,43 @@ export default function PayoutRouting() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {(vendors.data ?? []).map((v: { id: string; name: string }) => {
+                  {filteredVendors.map((v: { id: string; name: string }) => {
                     const row = rowValue(v.id);
                     return (
                       <TableRow key={v.id}>
                         <TableCell>{v.name}</TableCell>
                         <TableCell>
                           <Select value={row.provider} onValueChange={(val) => setRow(v.id, { provider: val, target: '' })}>
-                            <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
+                            <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value="wise">Wise</SelectItem>
                               <SelectItem value="stripe">Stripe</SelectItem>
+                              <SelectItem value="efinmoney">eFinMoney</SelectItem>
                             </SelectContent>
                           </Select>
                         </TableCell>
                         <TableCell>
-                          <Select value={row.target} onValueChange={(val) => setRow(v.id, { target: val })}>
-                            <SelectTrigger className="w-56"><SelectValue placeholder="Select destination" /></SelectTrigger>
-                            <SelectContent>
-                              {row.provider === 'wise'
-                                ? recipients.map((r) => (
-                                    <SelectItem key={r.id} value={r.id}>{r.account_holder_name} · {r.currency}</SelectItem>
-                                  ))
-                                : stripeAccounts.map((a: { id: string; stripe_account_id: string }) => (
-                                    <SelectItem key={a.id} value={a.id}>{a.stripe_account_id}</SelectItem>
-                                  ))}
-                            </SelectContent>
-                          </Select>
+                          {row.provider === 'efinmoney' ? (
+                            <Input
+                              className="w-56"
+                              placeholder="Wallet ID"
+                              value={row.target}
+                              onChange={(e) => setRow(v.id, { target: e.target.value })}
+                            />
+                          ) : (
+                            <Select value={row.target} onValueChange={(val) => setRow(v.id, { target: val })}>
+                              <SelectTrigger className="w-56"><SelectValue placeholder="Select destination" /></SelectTrigger>
+                              <SelectContent>
+                                {row.provider === 'wise'
+                                  ? recipients.map((r) => (
+                                      <SelectItem key={r.id} value={r.id}>{r.account_holder_name} · {r.currency}</SelectItem>
+                                    ))
+                                  : stripeAccounts.map((a: { id: string; stripe_account_id: string }) => (
+                                      <SelectItem key={a.id} value={a.id}>{a.stripe_account_id}</SelectItem>
+                                    ))}
+                              </SelectContent>
+                            </Select>
+                          )}
                         </TableCell>
                         <TableCell>
                           <Select value={row.method} onValueChange={(val) => setRow(v.id, { method: val })}>
@@ -260,33 +368,25 @@ export default function PayoutRouting() {
                               <SelectItem value="eft">EFT</SelectItem>
                               <SelectItem value="etransfer">e-Transfer</SelectItem>
                               <SelectItem value="card">Card</SelectItem>
+                              <SelectItem value="wallet">Wallet</SelectItem>
                             </SelectContent>
                           </Select>
                         </TableCell>
                         <TableCell>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() =>
-                              upsert.mutate({
-                                vendor_id: v.id,
-                                payout_provider: row.provider as 'wise' | 'stripe',
-                                wise_recipient_id: row.provider === 'wise' ? row.target || null : null,
-                                stripe_connected_account_id: row.provider === 'stripe' ? row.target || null : null,
-                                default_payout_method: row.method,
-                              })
-                            }
-                          >
+                          <Button size="sm" variant="outline" onClick={() => saveRow(v.id, row)}>
                             <Save className="h-4 w-4" />
                           </Button>
                         </TableCell>
                       </TableRow>
                     );
                   })}
-                  {(vendors.data ?? []).length === 0 && (
+                  {filteredVendors.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={5} className="text-center text-sm text-muted-foreground">
-                        No vendors yet. <Link className="underline" to="/purchases/vendors">Add a vendor</Link>
+                        {(vendors.data ?? []).length === 0 ? (
+                          <>No vendors yet. Use <strong>Add vendor</strong> above or the{' '}
+                            <Link className="underline" to="/purchases/vendors">Vendors page</Link>.</>
+                        ) : 'No vendors match your search.'}
                       </TableCell>
                     </TableRow>
                   )}
@@ -295,6 +395,7 @@ export default function PayoutRouting() {
             </CardContent>
           </Card>
         </TabsContent>
+
 
         <TabsContent value="accounts" className="pt-4">
           <StripeConnectedAccounts />
