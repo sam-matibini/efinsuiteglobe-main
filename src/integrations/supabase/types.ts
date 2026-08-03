@@ -26797,6 +26797,7 @@ export type Database = {
           stripe_connected_account_id: string | null
           updated_at: string
           vendor_id: string
+          wallet_id: string | null
           wise_recipient_id: string | null
         }
         Insert: {
@@ -26808,6 +26809,7 @@ export type Database = {
           stripe_connected_account_id?: string | null
           updated_at?: string
           vendor_id: string
+          wallet_id?: string | null
           wise_recipient_id?: string | null
         }
         Update: {
@@ -26819,6 +26821,7 @@ export type Database = {
           stripe_connected_account_id?: string | null
           updated_at?: string
           vendor_id?: string
+          wallet_id?: string | null
           wise_recipient_id?: string | null
         }
         Relationships: [
