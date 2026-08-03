@@ -141,17 +141,19 @@ export function usePayrollPaymentBatches() {
         .single();
       if (batchErr) throw batchErr;
 
-      const defaultRail: Rail = input.default_rail ?? 'ach';
+      const defaultRail: Rail = input.default_rail ?? providerDefaultRail(input.provider);
       const items = stubs.map((r) => {
         const emp = (r as { employee?: { bank_institution?: string | null; bank_transit?: string | null; bank_account?: string | null } }).employee;
         const hasBank = !!(emp?.bank_institution && emp?.bank_transit && emp?.bank_account);
+        // e-Transfer and wallet rails don't need bank coordinates; bank rails fall back to cheque.
+        const railNeedsBank = !['wise_etransfer', 'wallet_efinmoney', 'wallet_stripe', 'wallet_paddle', 'cheque', 'manual', 'card'].includes(defaultRail);
         return {
           batch_id: (batch as { id: string }).id,
           pay_stub_id: (r as { id: string }).id,
           employee_id: (r as { employee_id: string }).employee_id,
           amount: Number((r as { net_pay: number }).net_pay || 0),
           currency: input.currency ?? 'CAD',
-          rail: hasBank ? defaultRail : 'cheque' as Rail,
+          rail: (railNeedsBank && !hasBank ? 'cheque' : defaultRail) as Rail,
           destination_institution: emp?.bank_institution ?? null,
           destination_transit: emp?.bank_transit ?? null,
           destination_account_masked: mask(emp?.bank_account),
