@@ -41,6 +41,12 @@ import { getCountryLocalization } from '@/data/countryLocalizations';
 import { getLocaleForCountry } from '@/lib/localizedCurrencyFormatter';
 import { recordBillTaxes } from '@/lib/ngTax/integration';
 import { postBillToGL } from '@/lib/postBillToGL';
+import {
+  BILL_PAYMENT_TERMS,
+  CUSTOM_TERM_VALUE,
+  computeDueDate,
+  getTermDays,
+} from '@/lib/billPaymentTerms';
 
 
 const lineSchema = z.object({
