@@ -19,7 +19,7 @@ const admin = createClient(
 );
 
 const APP_URL = 'https://efinsuite.com';
-const FROM_EMAIL = Deno.env.get('RESEND_FROM_EMAIL') ?? 'eFinsuite DocSign <docsign@efinsuite.com>';
+const FROM_EMAIL = Deno.env.get('RESEND_FROM_EMAIL') ?? 'info@efinsuite.com';
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
