@@ -318,6 +318,13 @@ function FirstPartySigningPage({ token }: { token: string }) {
       }).eq('id', signer.id);
 
       if (error) throw new Error(`Could not submit: ${error.message}`);
+
+      // Fire-and-forget: notify owner + check completion.
+      // The signer sees "submitted" regardless of email delivery outcome.
+      signerClient.functions.invoke('on-sign-complete', {
+        body: { document_id: doc.id },
+      }).catch(e => console.warn('on-sign-complete:', e));
+
       setPhase('submitted');
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Submission failed');

@@ -337,13 +337,25 @@ export function useSendDocument() {
 
   return useMutation({
     mutationFn: async (documentId: string) => {
-      return await invokeEfinsign('send', { id: documentId });
+      const { data, error } = await supabase.functions.invoke('send-for-signing', {
+        body: { document_id: documentId },
+      });
+      if (error) {
+        let msg = error.message || 'Failed to send';
+        try {
+          const ctx = (error as { context?: Response }).context;
+          if (ctx?.json) { const b = await ctx.json(); if (b?.error) msg = b.error; }
+        } catch { /* ignore */ }
+        throw new Error(msg);
+      }
+      if ((data as { error?: string })?.error) throw new Error((data as { error: string }).error);
+      return data as { sent: number; total: number };
     },
-    onSuccess: (_data, documentId) => {
+    onSuccess: (data, documentId) => {
       queryClient.invalidateQueries({ queryKey: ['documents'] });
       queryClient.invalidateQueries({ queryKey: ['document', documentId] });
       queryClient.invalidateQueries({ queryKey: ['document-signers', documentId] });
-      toast.success('Document sent for signing via eFinSign.');
+      toast.success(`Signing invitations sent to ${data.sent} signer${data.sent !== 1 ? 's' : ''}.`);
     },
     onError: (error) => toast.error('Failed to send document: ' + error.message),
   });
