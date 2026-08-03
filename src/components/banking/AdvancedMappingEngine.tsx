@@ -1566,7 +1566,12 @@ export function AdvancedMappingEngine({
                     {previewData.length} sample rows
                   </Badge>
                 </div>
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  Wrongly classified rows (e.g. a lease or insurance payment shown as a Deposit) can be
+                  corrected row-by-row on the next step, Preview &amp; Validate.
+                </p>
               </div>
+
               <ScrollArea className="flex-1">
                 <div className="p-3 space-y-3">
                   {previewData.length === 0 ? (
