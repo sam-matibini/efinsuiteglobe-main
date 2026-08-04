@@ -285,6 +285,27 @@ export function MappingPreviewDialog({
   const showTypeColumn =
     statementType === 'creditcard' || hasDebit || hasCredit || mappedFields.includes('amount');
 
+  const isCC = statementType === 'creditcard';
+
+  /** Credit cards speak Charge/Payment; bank statements speak Withdrawal/Deposit. */
+  const typeLabel = (t: 'deposit' | 'withdrawal') =>
+    isCC ? (t === 'deposit' ? 'Payment' : 'Charge') : t === 'deposit' ? 'Deposit' : 'Withdrawal';
+
+  // Credit card rows are always editable across the full correction field set,
+  // even when the source file never mapped a debit/credit/payee column.
+  const CC_EDITOR_FIELDS = [
+    'transaction_date',
+    'description',
+    'payee_payor',
+    'debit',
+    'credit',
+    'amount',
+  ];
+  const editorFields = isCC
+    ? Array.from(new Set([...CC_EDITOR_FIELDS, ...mappedFields]))
+    : mappedFields;
+
+
   // Apply per-row manual corrections on top of the parsed rows.
   const processedData = useMemo(() => {
     return baseProcessedData.map((p) => {
