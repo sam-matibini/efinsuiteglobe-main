@@ -582,8 +582,11 @@ export function MappingPreviewDialog({
             Preview & Validate Transactions
           </DialogTitle>
           <DialogDescription>
-            Review the normalized data before importing. Use the pencil or flip icon to correct a wrongly classified row (e.g. a payment mapped as a Deposit). Rows with errors will be skipped.
+            {isCC
+              ? 'Review the normalized card data before importing. A Charge increases the card balance; a Payment reduces it. Use the flip icon for a one-click Charge ↔ Payment correction, or the pencil to edit the date, description, payee, debit, credit or amount. Rows with errors will be skipped.'
+              : 'Review the normalized data before importing. Use the pencil or flip icon to correct a wrongly classified row (e.g. a payment mapped as a Deposit). Rows with errors will be skipped.'}
           </DialogDescription>
+
         </DialogHeader>
         
         {/* Summary Stats */}
