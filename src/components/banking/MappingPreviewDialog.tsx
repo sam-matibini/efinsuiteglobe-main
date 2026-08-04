@@ -285,6 +285,27 @@ export function MappingPreviewDialog({
   const showTypeColumn =
     statementType === 'creditcard' || hasDebit || hasCredit || mappedFields.includes('amount');
 
+  const isCC = statementType === 'creditcard';
+
+  /** Credit cards speak Charge/Payment; bank statements speak Withdrawal/Deposit. */
+  const typeLabel = (t: 'deposit' | 'withdrawal') =>
+    isCC ? (t === 'deposit' ? 'Payment' : 'Charge') : t === 'deposit' ? 'Deposit' : 'Withdrawal';
+
+  // Credit card rows are always editable across the full correction field set,
+  // even when the source file never mapped a debit/credit/payee column.
+  const CC_EDITOR_FIELDS = [
+    'transaction_date',
+    'description',
+    'payee_payor',
+    'debit',
+    'credit',
+    'amount',
+  ];
+  const editorFields = isCC
+    ? Array.from(new Set([...CC_EDITOR_FIELDS, ...mappedFields]))
+    : mappedFields;
+
+
   // Apply per-row manual corrections on top of the parsed rows.
   const processedData = useMemo(() => {
     return baseProcessedData.map((p) => {
@@ -471,12 +492,63 @@ export function MappingPreviewDialog({
     [processedData, statementType, useSplitColumns],
   );
 
-  const setRowField = useCallback((rowIndex: number, field: string, value: unknown) => {
-    setRowOverrides((prev) => ({
-      ...prev,
-      [rowIndex]: { ...(prev[rowIndex] ?? {}), [field]: value },
-    }));
-  }, []);
+  const setRowField = useCallback(
+    (rowIndex: number, field: string, value: unknown) => {
+      setRowOverrides((prev) => {
+        const patch: Record<string, unknown> = { [field]: value };
+        // Credit cards: keep amount <-> debit/credit in sync so the derived
+        // Charge/Payment classification always matches what the user typed.
+        if (statementType === 'creditcard' && field === 'amount') {
+          const n = typeof value === 'number' ? value : Number(value) || 0;
+          patch.debit = n >= 0 ? Math.abs(n) : 0;
+          patch.credit = n < 0 ? Math.abs(n) : 0;
+        }
+        return { ...prev, [rowIndex]: { ...(prev[rowIndex] ?? {}), ...patch } };
+      });
+    },
+    [statementType],
+  );
+
+  /**
+   * Apply the classification-style corrections of one row (payee, category and
+   * charge/payment type) to every row with the same description. Amounts and
+   * dates stay per-row so totals are never silently overwritten.
+   */
+  const applyFieldsToMatching = useCallback(
+    (rowIndex: number) => {
+      const target = processedData.find((p) => p.rowIndex === rowIndex);
+      if (!target) return;
+      const key = String(
+        target.mapped['description'] ?? target.mapped['payee_payor'] ?? target.mapped['merchant'] ?? '',
+      )
+        .trim()
+        .toLowerCase();
+      if (!key) return;
+      const type = deriveType(target.mapped);
+      const payee = target.mapped['payee_payor'];
+      const category = target.mapped['category'];
+
+      setRowOverrides((prev) => {
+        const next = { ...prev };
+        for (const p of processedData) {
+          const pk = String(
+            p.mapped['description'] ?? p.mapped['payee_payor'] ?? p.mapped['merchant'] ?? '',
+          )
+            .trim()
+            .toLowerCase();
+          if (pk !== key) continue;
+          const patch: Record<string, unknown> = {};
+          if (payee !== undefined && payee !== '') patch.payee_payor = payee;
+          if (category !== undefined && category !== '') patch.category = category;
+          if (type) Object.assign(patch, typePatch(p.mapped, type));
+          next[p.rowIndex] = { ...(next[p.rowIndex] ?? {}), ...patch };
+        }
+        return next;
+      });
+    },
+    [processedData, statementType, useSplitColumns],
+  );
+
 
   const resetRow = useCallback((rowIndex: number) => {
     setRowOverrides((prev) => {
@@ -510,8 +582,11 @@ export function MappingPreviewDialog({
             Preview & Validate Transactions
           </DialogTitle>
           <DialogDescription>
-            Review the normalized data before importing. Use the pencil or flip icon to correct a wrongly classified row (e.g. a payment mapped as a Deposit). Rows with errors will be skipped.
+            {isCC
+              ? 'Review the normalized card data before importing. A Charge increases the card balance; a Payment reduces it. Use the flip icon for a one-click Charge ↔ Payment correction, or the pencil to edit the date, description, payee, debit, credit or amount. Rows with errors will be skipped.'
+              : 'Review the normalized data before importing. Use the pencil or flip icon to correct a wrongly classified row (e.g. a payment mapped as a Deposit). Rows with errors will be skipped.'}
           </DialogDescription>
+
         </DialogHeader>
         
         {/* Summary Stats */}
@@ -627,10 +702,8 @@ export function MappingPreviewDialog({
                     })}
                     {showTypeColumn && (
                       <TableCell className="text-xs">
-                        {!rowType ? (
-                          <span className="text-muted-foreground">—</span>
-                        ) : (
-                          <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-1">
+                          {rowType ? (
                             <Badge
                               variant="outline"
                               className={cn(
@@ -640,26 +713,33 @@ export function MappingPreviewDialog({
                                   : "text-red-600 border-red-600"
                               )}
                             >
-                              {rowType === 'deposit' ? 'Deposit' : 'Withdrawal'}
+                              {typeLabel(rowType)}
                             </Badge>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6"
-                              title="Flip this row between Deposit and Withdrawal"
-                              onClick={() =>
-                                setRowType(
-                                  preview.rowIndex,
-                                  rowType === 'deposit' ? 'withdrawal' : 'deposit',
-                                )
-                              }
-                            >
-                              <ArrowLeftRight className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        )}
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6"
+                            title={
+                              isCC
+                                ? 'Flip this row between Charge and Payment'
+                                : 'Flip this row between Deposit and Withdrawal'
+                            }
+                            onClick={() =>
+                              setRowType(
+                                preview.rowIndex,
+                                rowType === 'deposit' ? 'withdrawal' : 'deposit',
+                              )
+                            }
+                          >
+                            <ArrowLeftRight className="h-3 w-3" />
+                          </Button>
+                        </div>
                       </TableCell>
                     )}
+
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
                         <Button
@@ -690,7 +770,7 @@ export function MappingPreviewDialog({
                       <TableCell colSpan={colSpan} className="p-4">
                         <div className="space-y-3">
                           <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-4">
-                            {mappedFields.map((field) => {
+                            {editorFields.map((field) => {
                               const isAmount = ['amount', 'debit', 'credit', 'balance', 'foreign_amount'].includes(field);
                               const val = preview.mapped[field];
                               return (
@@ -749,6 +829,18 @@ export function MappingPreviewDialog({
                                   Apply this type to all {dupes} matching rows
                                 </Button>
                               )}
+                              {dupes > 1 && (
+                                <Button
+                                  size="sm"
+                                  variant="secondary"
+                                  className="h-7 text-xs"
+                                  title="Copies this row's payee, category and type to every row with the same description (amounts and dates stay per-row)"
+                                  onClick={() => applyFieldsToMatching(preview.rowIndex)}
+                                >
+                                  Apply corrections to all {dupes} matching rows
+                                </Button>
+                              )}
+
                               <Button
                                 size="sm"
                                 variant="ghost"
