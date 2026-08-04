@@ -829,6 +829,18 @@ export function MappingPreviewDialog({
                                   Apply this type to all {dupes} matching rows
                                 </Button>
                               )}
+                              {dupes > 1 && (
+                                <Button
+                                  size="sm"
+                                  variant="secondary"
+                                  className="h-7 text-xs"
+                                  title="Copies this row's payee, category and type to every row with the same description (amounts and dates stay per-row)"
+                                  onClick={() => applyFieldsToMatching(preview.rowIndex)}
+                                >
+                                  Apply corrections to all {dupes} matching rows
+                                </Button>
+                              )}
+
                               <Button
                                 size="sm"
                                 variant="ghost"
