@@ -241,21 +241,77 @@ export function EditableImportPreview<T extends EditablePreviewRow>({
                     }`}
                   >
                     {editing ? (
-                      <Input
-                        type="number"
-                        step="0.01"
-                        className="h-8 w-[110px] text-right"
-                        value={draft?.amount ?? 0}
-                        onChange={(e) =>
-                          setDraft((d) => (d ? { ...d, amount: Number(e.target.value) } : d))
-                        }
-                      />
+                      mode === 'credit-card' ? (
+                        <div className="flex items-center justify-end gap-2">
+                          <div className="text-left">
+                            <span className="block text-[10px] text-muted-foreground">
+                              Debit (charge)
+                            </span>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              className="h-8 w-[100px] text-right"
+                              value={
+                                draft && !isInflow(mode, draft.type)
+                                  ? Math.abs(Number(draft.amount) || 0)
+                                  : 0
+                              }
+                              onChange={(e) => {
+                                const v = Math.abs(Number(e.target.value) || 0);
+                                setDraft((d) => (d ? { ...d, amount: v, type: 'charge' } : d));
+                              }}
+                            />
+                          </div>
+                          <div className="text-left">
+                            <span className="block text-[10px] text-muted-foreground">
+                              Credit (payment)
+                            </span>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              className="h-8 w-[100px] text-right"
+                              value={
+                                draft && isInflow(mode, draft.type)
+                                  ? Math.abs(Number(draft.amount) || 0)
+                                  : 0
+                              }
+                              onChange={(e) => {
+                                const v = Math.abs(Number(e.target.value) || 0);
+                                setDraft((d) => (d ? { ...d, amount: v, type: 'payment' } : d));
+                              }}
+                            />
+                          </div>
+                          <div className="text-left">
+                            <span className="block text-[10px] text-muted-foreground">Amount</span>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              className="h-8 w-[100px] text-right"
+                              value={draft?.amount ?? 0}
+                              onChange={(e) =>
+                                setDraft((d) => (d ? { ...d, amount: Number(e.target.value) } : d))
+                              }
+                            />
+                          </div>
+                        </div>
+                      ) : (
+                        <Input
+                          type="number"
+                          step="0.01"
+                          className="h-8 w-[110px] text-right"
+                          value={draft?.amount ?? 0}
+                          onChange={(e) =>
+                            setDraft((d) => (d ? { ...d, amount: Number(e.target.value) } : d))
+                          }
+                        />
+                      )
                     ) : (
                       <>
                         {inflow ? '+' : '-'}
                         {formatCurrency(Math.abs(row.amount))}
                       </>
                     )}
+
                   </td>
                   <td className="p-2">
                     <div className="flex flex-col gap-1">
