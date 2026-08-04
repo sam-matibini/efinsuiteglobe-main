@@ -492,12 +492,63 @@ export function MappingPreviewDialog({
     [processedData, statementType, useSplitColumns],
   );
 
-  const setRowField = useCallback((rowIndex: number, field: string, value: unknown) => {
-    setRowOverrides((prev) => ({
-      ...prev,
-      [rowIndex]: { ...(prev[rowIndex] ?? {}), [field]: value },
-    }));
-  }, []);
+  const setRowField = useCallback(
+    (rowIndex: number, field: string, value: unknown) => {
+      setRowOverrides((prev) => {
+        const patch: Record<string, unknown> = { [field]: value };
+        // Credit cards: keep amount <-> debit/credit in sync so the derived
+        // Charge/Payment classification always matches what the user typed.
+        if (statementType === 'creditcard' && field === 'amount') {
+          const n = typeof value === 'number' ? value : Number(value) || 0;
+          patch.debit = n >= 0 ? Math.abs(n) : 0;
+          patch.credit = n < 0 ? Math.abs(n) : 0;
+        }
+        return { ...prev, [rowIndex]: { ...(prev[rowIndex] ?? {}), ...patch } };
+      });
+    },
+    [statementType],
+  );
+
+  /**
+   * Apply the classification-style corrections of one row (payee, category and
+   * charge/payment type) to every row with the same description. Amounts and
+   * dates stay per-row so totals are never silently overwritten.
+   */
+  const applyFieldsToMatching = useCallback(
+    (rowIndex: number) => {
+      const target = processedData.find((p) => p.rowIndex === rowIndex);
+      if (!target) return;
+      const key = String(
+        target.mapped['description'] ?? target.mapped['payee_payor'] ?? target.mapped['merchant'] ?? '',
+      )
+        .trim()
+        .toLowerCase();
+      if (!key) return;
+      const type = deriveType(target.mapped);
+      const payee = target.mapped['payee_payor'];
+      const category = target.mapped['category'];
+
+      setRowOverrides((prev) => {
+        const next = { ...prev };
+        for (const p of processedData) {
+          const pk = String(
+            p.mapped['description'] ?? p.mapped['payee_payor'] ?? p.mapped['merchant'] ?? '',
+          )
+            .trim()
+            .toLowerCase();
+          if (pk !== key) continue;
+          const patch: Record<string, unknown> = {};
+          if (payee !== undefined && payee !== '') patch.payee_payor = payee;
+          if (category !== undefined && category !== '') patch.category = category;
+          if (type) Object.assign(patch, typePatch(p.mapped, type));
+          next[p.rowIndex] = { ...(next[p.rowIndex] ?? {}), ...patch };
+        }
+        return next;
+      });
+    },
+    [processedData, statementType, useSplitColumns],
+  );
+
 
   const resetRow = useCallback((rowIndex: number) => {
     setRowOverrides((prev) => {
