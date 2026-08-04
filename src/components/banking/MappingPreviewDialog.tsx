@@ -770,7 +770,7 @@ export function MappingPreviewDialog({
                       <TableCell colSpan={colSpan} className="p-4">
                         <div className="space-y-3">
                           <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-4">
-                            {mappedFields.map((field) => {
+                            {editorFields.map((field) => {
                               const isAmount = ['amount', 'debit', 'credit', 'balance', 'foreign_amount'].includes(field);
                               const val = preview.mapped[field];
                               return (
