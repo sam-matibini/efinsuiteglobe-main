@@ -702,10 +702,8 @@ export function MappingPreviewDialog({
                     })}
                     {showTypeColumn && (
                       <TableCell className="text-xs">
-                        {!rowType ? (
-                          <span className="text-muted-foreground">—</span>
-                        ) : (
-                          <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-1">
+                          {rowType ? (
                             <Badge
                               variant="outline"
                               className={cn(
@@ -715,26 +713,33 @@ export function MappingPreviewDialog({
                                   : "text-red-600 border-red-600"
                               )}
                             >
-                              {rowType === 'deposit' ? 'Deposit' : 'Withdrawal'}
+                              {typeLabel(rowType)}
                             </Badge>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6"
-                              title="Flip this row between Deposit and Withdrawal"
-                              onClick={() =>
-                                setRowType(
-                                  preview.rowIndex,
-                                  rowType === 'deposit' ? 'withdrawal' : 'deposit',
-                                )
-                              }
-                            >
-                              <ArrowLeftRight className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        )}
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6"
+                            title={
+                              isCC
+                                ? 'Flip this row between Charge and Payment'
+                                : 'Flip this row between Deposit and Withdrawal'
+                            }
+                            onClick={() =>
+                              setRowType(
+                                preview.rowIndex,
+                                rowType === 'deposit' ? 'withdrawal' : 'deposit',
+                              )
+                            }
+                          >
+                            <ArrowLeftRight className="h-3 w-3" />
+                          </Button>
+                        </div>
                       </TableCell>
                     )}
+
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
                         <Button
