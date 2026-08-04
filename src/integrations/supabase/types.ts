@@ -7346,6 +7346,47 @@ export type Database = {
           },
         ]
       }
+      document_webhooks: {
+        Row: {
+          created_at: string
+          events: string[]
+          id: string
+          is_active: boolean
+          organization_id: string
+          secret: string | null
+          updated_at: string
+          url: string
+        }
+        Insert: {
+          created_at?: string
+          events?: string[]
+          id?: string
+          is_active?: boolean
+          organization_id: string
+          secret?: string | null
+          updated_at?: string
+          url: string
+        }
+        Update: {
+          created_at?: string
+          events?: string[]
+          id?: string
+          is_active?: boolean
+          organization_id?: string
+          secret?: string | null
+          updated_at?: string
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_webhooks_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       documents: {
         Row: {
           ai_extracted_at: string | null
@@ -29774,6 +29815,8 @@ export type Database = {
           settlement_count: number
         }[]
       }
+      signer_accessible_document_ids: { Args: never; Returns: string[] }
+      signer_id_from_token: { Args: never; Returns: string }
       signer_token: { Args: never; Returns: string }
       subledger_reconciliation: {
         Args: { p_organization_id: string }
