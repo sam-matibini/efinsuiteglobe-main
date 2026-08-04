@@ -105,6 +105,24 @@ export function EditableImportPreview<T extends EditablePreviewRow>({
     );
   };
 
+  /**
+   * Copy this row's payee and type to every row with the same description.
+   * Amounts and dates stay per-row so totals are never silently overwritten.
+   */
+  const applyCorrectionsToMatching = (index: number) => {
+    const src = rows[index];
+    const key = (src.description || '').trim().toLowerCase();
+    if (!key) return;
+    onChange(
+      rows.map((r) =>
+        (r.description || '').trim().toLowerCase() === key
+          ? ({ ...r, type: src.type, payee_payor: src.payee_payor ?? r.payee_payor } as T)
+          : r,
+      ),
+    );
+  };
+
+
   const resetRow = (index: number) => {
     const base = baselineRows[index];
     if (!base) return;
