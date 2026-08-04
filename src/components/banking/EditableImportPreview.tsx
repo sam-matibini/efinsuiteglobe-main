@@ -363,6 +363,17 @@ export function EditableImportPreview<T extends EditablePreviewRow>({
                           Apply this type to all {matches + 1} matching rows
                         </button>
                       )}
+                      {matches > 0 && (
+                        <button
+                          type="button"
+                          className="text-[11px] text-primary hover:underline text-left"
+                          title="Copies this row's payee and type to every row with the same description"
+                          onClick={() => applyCorrectionsToMatching(index)}
+                        >
+                          Apply corrections to all {matches + 1} matching rows
+                        </button>
+                      )}
+
                     </div>
                   </td>
                   <td className="p-2 text-right whitespace-nowrap">
