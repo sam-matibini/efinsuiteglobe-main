@@ -143,10 +143,12 @@ export function EditableImportPreview<T extends EditablePreviewRow>({
       description: draft.description,
       payee_payor: draft.payee_payor,
       amount: Math.abs(Number(draft.amount) || 0),
+      type: draft.type,
     });
     setEditingIndex(null);
     setDraft(null);
   };
+
 
   const cancelEdit = () => {
     setEditingIndex(null);
