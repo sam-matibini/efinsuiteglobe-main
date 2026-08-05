@@ -236,6 +236,24 @@ async function handleCheckoutCompleted(supabaseAdmin: SupabaseClient, event: any
       console.error(`[${event.id}] JE creation failed:`, jeErr);
       // Do not fail the webhook over a bookkeeping error — payment is already recorded.
     }
+
+    // Settlement leg — route the collected funds to Wise when enabled.
+    try {
+      const res = await settleCollectionToWise(supabaseAdmin, {
+        organizationId,
+        amount: amountPaid,
+        currency: String(session.currency ?? 'CAD').toUpperCase(),
+        reference: `stripe:${paymentIntentId}`,
+        invoiceId,
+        paymentLinkId: null,
+        sourceLabel: 'stripe_card',
+      });
+      if (res.skippedReason !== 'not_enabled') {
+        console.log(`[${event.id}] wise settlement`, res);
+      }
+    } catch (setErr) {
+      console.error(`[${event.id}] Wise settlement failed:`, setErr);
+    }
   }
 }
 
