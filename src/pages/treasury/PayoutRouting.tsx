@@ -43,6 +43,7 @@ export default function PayoutRouting() {
   const { recipients, saveRecipient, transfers } = useWisePayouts();
   const { routing, upsert } = useVendorPayoutRouting();
   const { isEnabled, toggle } = usePayoutProviderToggles();
+  const { settings: cardSettlement, save: saveCardSettlement, saving: settlementSaving } = useCardSettlementSettings();
   const walletRoutingCount = routing.filter((r) => r.payout_provider === 'efinmoney').length;
 
 
