@@ -219,6 +219,47 @@ export default function PayoutRouting() {
                   </Button>
                 </div>
 
+                <div className="rounded-md border p-3 space-y-2">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <Label className="text-sm">Settle invoice card payments to Wise</Label>
+                      <p className="text-xs text-muted-foreground">
+                        Card checkout stays the same — captured invoice funds are transferred to your Wise destination.
+                      </p>
+                    </div>
+                    <Switch
+                      checked={cardSettlement.provider === 'wise'}
+                      disabled={settlementSaving}
+                      onCheckedChange={(v) => saveCardSettlement({ provider: v ? 'wise' : 'processor' })}
+                      aria-label="Settle invoice card payments to Wise"
+                    />
+                  </div>
+                  {cardSettlement.provider === 'wise' && (
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">Wise settlement destination</Label>
+                      <Select
+                        value={cardSettlement.wiseRecipientId ?? ''}
+                        onValueChange={(v) => {
+                          const r = recipients.find((x) => x.id === v);
+                          saveCardSettlement({ wiseRecipientId: v, currency: r?.currency ?? null });
+                        }}
+                      >
+                        <SelectTrigger><SelectValue placeholder="Select a Wise recipient / balance" /></SelectTrigger>
+                        <SelectContent>
+                          {recipients.map((r) => (
+                            <SelectItem key={r.id} value={r.id}>
+                              {r.account_holder_name} · {r.currency}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {recipients.length === 0 && (
+                        <p className="text-xs text-muted-foreground">Add a recipient above to pick a destination.</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+
                 {recipients.length > 0 && (
                   <div className="border rounded divide-y text-sm">
                     {recipients.slice(0, 5).map((r) => (
