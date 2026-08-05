@@ -18,6 +18,7 @@ import { useCurrentOrganization } from '@/hooks/useOrganization';
 import { useStripeConnectedAccounts } from '@/hooks/useStripeConnectedAccounts';
 import { useWisePayouts, useVendorPayoutRouting } from '@/hooks/useWisePayouts';
 import { usePayoutProviderToggles, PayoutProviderKey } from '@/hooks/usePayoutProviderToggles';
+import { useCardSettlementSettings } from '@/hooks/useCardSettlementSettings';
 import { ProviderTile } from '@/components/treasury/ProviderTile';
 import StripeConnectedAccounts from './StripeConnectedAccounts';
 import StripeConnectCompliance from './StripeConnectCompliance';
@@ -43,6 +44,7 @@ export default function PayoutRouting() {
   const { recipients, saveRecipient, transfers } = useWisePayouts();
   const { routing, upsert } = useVendorPayoutRouting();
   const { isEnabled, toggle } = usePayoutProviderToggles();
+  const { settings: cardSettlement, save: saveCardSettlement, saving: settlementSaving } = useCardSettlementSettings();
   const walletRoutingCount = routing.filter((r) => r.payout_provider === 'efinmoney').length;
 
 
@@ -217,6 +219,47 @@ export default function PayoutRouting() {
                   <Button size="sm" variant="outline" asChild>
                     <a href="https://wise.com/your-account/" target="_blank" rel="noopener noreferrer">Open Wise</a>
                   </Button>
+                </div>
+
+                <div className="rounded-md border p-3 space-y-2">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <Label className="text-sm">Settle invoice card payments to Wise</Label>
+                      <p className="text-xs text-muted-foreground">
+                        Card checkout stays the same — captured invoice funds are transferred to your Wise destination.
+                      </p>
+                    </div>
+                    <Switch
+                      checked={cardSettlement.provider === 'wise'}
+                      disabled={settlementSaving}
+                      onCheckedChange={(v) => saveCardSettlement({ provider: v ? 'wise' : 'processor' })}
+                      aria-label="Settle invoice card payments to Wise"
+                    />
+                  </div>
+                  {cardSettlement.provider === 'wise' && (
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">Wise settlement destination</Label>
+                      <Select
+                        value={cardSettlement.wiseRecipientId ?? ''}
+                        onValueChange={(v) => {
+                          const r = recipients.find((x) => x.id === v);
+                          saveCardSettlement({ wiseRecipientId: v, currency: r?.currency ?? null });
+                        }}
+                      >
+                        <SelectTrigger><SelectValue placeholder="Select a Wise recipient / balance" /></SelectTrigger>
+                        <SelectContent>
+                          {recipients.map((r) => (
+                            <SelectItem key={r.id} value={r.id}>
+                              {r.account_holder_name} · {r.currency}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {recipients.length === 0 && (
+                        <p className="text-xs text-muted-foreground">Add a recipient above to pick a destination.</p>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {recipients.length > 0 && (

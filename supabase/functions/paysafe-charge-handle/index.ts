@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { settleCollectionToWise } from "../_shared/wise-settlement.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -271,13 +272,45 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Settlement leg — move the captured funds to Wise when the org routes
+    // invoice card collections there. Never fails the capture.
+    let settlement: Record<string, unknown> | null = null;
+    if (settled) {
+      try {
+        const res = await settleCollectionToWise(admin, {
+          organizationId: link.organization_id,
+          amount: Number(link.amount),
+          currency: (link.currency || 'CAD').toUpperCase(),
+          reference: link.reference,
+          invoiceId: link.invoice_id ?? null,
+          paymentLinkId: link.id,
+          sourceLabel: 'paysafe_card',
+        });
+        if (!res.skippedReason || res.skippedReason !== 'not_enabled') {
+          settlement = res as unknown as Record<string, unknown>;
+          await admin.from('payment_link_events').insert({
+            payment_link_id: link.id,
+            event_type: res.settled ? 'wise_settlement_initiated' : 'wise_settlement_failed',
+            payload: res,
+          });
+        }
+      } catch (setErr) {
+        console.error('Wise settlement failed', setErr);
+        await admin.from('payment_link_events').insert({
+          payment_link_id: link.id,
+          event_type: 'wise_settlement_failed',
+          payload: { error: String(setErr) },
+        });
+      }
+    }
+
     await admin.from('payment_link_events').insert({
       payment_link_id: link.id,
       event_type: 'paysafe_charge_completed',
       payload: psBody,
     });
 
-    return new Response(JSON.stringify({ ok: true, status: psBody?.status, payment: psBody }), {
+    return new Response(JSON.stringify({ ok: true, status: psBody?.status, payment: psBody, settlement }), {
       status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (err) {
