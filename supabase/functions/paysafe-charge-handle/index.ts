@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { settleCollectionToWise } from "../_shared/wise-settlement.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
