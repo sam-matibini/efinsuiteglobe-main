@@ -18,6 +18,7 @@ import { useCurrentOrganization } from '@/hooks/useOrganization';
 import { useStripeConnectedAccounts } from '@/hooks/useStripeConnectedAccounts';
 import { useWisePayouts, useVendorPayoutRouting } from '@/hooks/useWisePayouts';
 import { usePayoutProviderToggles, PayoutProviderKey } from '@/hooks/usePayoutProviderToggles';
+import { useCardSettlementSettings } from '@/hooks/useCardSettlementSettings';
 import { ProviderTile } from '@/components/treasury/ProviderTile';
 import StripeConnectedAccounts from './StripeConnectedAccounts';
 import StripeConnectCompliance from './StripeConnectCompliance';
