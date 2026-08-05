@@ -427,9 +427,10 @@ export default function PayLink() {
             }
             if (serverMsg || invErr) throw new Error(serverMsg || invErr!.message);
             safelyShowCheckoutScreen(instance, 'success', 'Payment received');
+            const settledToWise = Boolean((data as { settlement?: { settled?: boolean } } | null)?.settlement?.settled);
             setTimeout(() => {
               safelyCloseCheckout(instance);
-              window.location.href = `${window.location.pathname}?status=success&method=card`;
+              window.location.href = `${window.location.pathname}?status=success&method=card${settledToWise ? '&settlement=wise' : ''}`;
             }, 1200);
           } catch (err2) {
             const msg = err2 instanceof Error ? err2.message : String(err2);
