@@ -551,6 +551,15 @@ export default function PayLink() {
               </div>
             )}
 
+            {searchParams.get('settlement') === 'wise' && (
+              <div className="rounded-lg border bg-emerald-50 dark:bg-emerald-950/30 dark:border-emerald-900 border-emerald-200 p-3 text-sm text-emerald-900 dark:text-emerald-200 flex items-start gap-2.5">
+                <Landmark className="h-5 w-5 mt-0.5 shrink-0" />
+                <span>Funds are being settled to the recipient's Wise account.</span>
+              </div>
+            )}
+
+
+
             <div className="rounded-lg border border-green-200 bg-green-50 dark:bg-green-950/30 dark:border-green-900 p-3">
               <div className="flex items-start gap-2.5">
                 <Banknote className="h-5 w-5 text-green-700 dark:text-green-400 mt-0.5 shrink-0" />
