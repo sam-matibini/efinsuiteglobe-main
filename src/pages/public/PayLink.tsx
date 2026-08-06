@@ -329,8 +329,35 @@ export default function PayLink() {
     if (appendScript) document.body.appendChild(script);
   });
 
+  /** Square hosted checkout: create (or reuse) the payment link and redirect. */
+  const startSquarePayment = async () => {
+    if (!linkId) return;
+    setPaying(true);
+    try {
+      const { data, error: invErr } = await supabase.functions.invoke('square-create-payment-link', {
+        body: {
+          payment_link_id: linkId,
+          redirect_url: `${window.location.origin}${window.location.pathname}?status=success&method=square`,
+        },
+      });
+      let serverMsg: string | undefined = (data as { error?: string } | null)?.error;
+      if (!serverMsg && invErr) {
+        const ctx = (invErr as unknown as { context?: Response }).context;
+        try { serverMsg = (await ctx?.clone().json())?.error; } catch { /* ignore */ }
+      }
+      if (serverMsg || invErr) throw new Error(serverMsg || invErr!.message);
+      const url = (data as { url?: string } | null)?.url;
+      if (!url) throw new Error('Square did not return a checkout URL');
+      window.location.href = url;
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err), { duration: 12000 });
+      setPaying(false);
+    }
+  };
+
   const startPayment = async (_cardTypeHint?: 'credit' | 'debit' | 'visa_debit') => {
     if (!linkId) return;
+    if (link?.card_provider === 'square') return startSquarePayment();
     setPaying(true);
     let clearCheckoutStartupWatch: (() => void) | undefined;
     try {
