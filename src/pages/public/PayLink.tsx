@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Loader2, CheckCircle2, XCircle, ShieldCheck, PartyPopper, Calendar, Banknote, Receipt, Landmark } from 'lucide-react';
 import { toast } from 'sonner';
+import PaymentStatus from '@/pages/PaymentStatus';
 
 interface PublicLink {
   id: string;
@@ -524,7 +525,10 @@ export default function PayLink() {
   }
 
   if (status === 'success') {
-    const usedMethod = searchParams.get('method'); // 'eft' | 'card' | 'interac' | null
+    const usedMethod = searchParams.get('method'); // 'eft' | 'card' | 'interac' | 'square' | null
+    if (usedMethod === 'square') {
+      return <PaymentStatus backTo={null} />;
+    }
     const linkMethod = link?.payment_method ?? 'any_card';
     // Prefer the actual method the payer used; fall back to the link's configured method.
     // Avoid defaulting an "all" link to card copy when no method param is present.

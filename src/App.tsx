@@ -98,6 +98,7 @@ const MobileAlerts = lazy(() => import("./pages/mobile/treasury/MobileAlerts"));
 const MobileApprovals = lazy(() => import("./pages/mobile/treasury/MobileApprovals"));
 const MobileCopilot = lazy(() => import("./pages/mobile/treasury/MobileCopilot"));
 const PayLink = lazy(() => import("./pages/public/PayLink"));
+const PaymentStatus = lazy(() => import("./pages/PaymentStatus"));
 const Vendors = lazy(() => import("./pages/Vendors"));
 const Bills = lazy(() => import("./pages/Bills"));
 const Approvals = lazy(() => import("./pages/Approvals"));
@@ -404,6 +405,7 @@ const AppRoutes = () => {
       <Route path="copilot" element={<MobileCopilot />} />
     </Route>
     <Route path="/pay/:linkId" element={<PayLink />} />
+    <Route path="/payment-status/:linkId" element={<PaymentStatus />} />
 
         <Route path="/banking/credit-cards" element={<ProtectedRoute><PageWrapper><CreditCards /></PageWrapper></ProtectedRoute>} />
         <Route path="/banking/credit-cards/:cardId/transactions" element={<ProtectedRoute><PageWrapper><CreditCardTransactions /></PageWrapper></ProtectedRoute>} />
