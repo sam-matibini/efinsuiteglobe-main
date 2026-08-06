@@ -314,6 +314,23 @@ export default function PayoutRouting() {
 
             <ProviderTile
               icon={CreditCard}
+              iconClassName="text-slate-700"
+              title="Square"
+              description="Square hosted checkout for invoice and payment-link card payments."
+              configured={isEnabled('square')}
+              enabled={isEnabled('square')}
+              onToggle={(v) => toggle('square', v)}
+              stat={isEnabled('square') ? 'Card checkout routed to Square' : 'Card checkout uses Paysafe'}
+            >
+              <Button size="sm" variant="outline" asChild>
+                <a href="https://squareup.com/dashboard" target="_blank" rel="noopener noreferrer">
+                  Open Square
+                </a>
+              </Button>
+            </ProviderTile>
+
+            <ProviderTile
+              icon={CreditCard}
               iconClassName="text-sky-500"
               title="Paysafe"
               description="EFT and credit / debit card payouts for payroll batches."
