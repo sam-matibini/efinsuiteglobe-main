@@ -21,6 +21,8 @@ interface PublicLink {
   hosted_url: string | null;
   instant_payment?: boolean;
   instant_method?: 'interac_etransfer' | 'card_instant_funding' | null;
+  card_provider?: 'paysafe' | 'square' | null;
+  square_checkout_url?: string | null;
 }
 
 type PaysafeCheckoutInstance = {
