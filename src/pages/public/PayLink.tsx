@@ -648,7 +648,7 @@ export default function PayLink() {
         <CardContent className="space-y-4">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <ShieldCheck className="h-3.5 w-3.5" />
-            <span>Secure payment processed by Paysafe</span>
+            <span>Secure payment processed by {link.card_provider === 'square' ? 'Square' : 'Paysafe'}</span>
           </div>
 
           {link.instant_payment && link.instant_method === 'interac_etransfer' && (
