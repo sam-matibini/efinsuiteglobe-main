@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 export type PayoutProviderKey =
   | 'wise'
   | 'stripe'
+  | 'square'
   | 'efinmoney'
   | 'paysafe'
   | 'plaid'
@@ -16,6 +17,7 @@ export type PayoutProviderKey =
 export const PAYOUT_PROVIDER_DEFAULTS: Record<PayoutProviderKey, boolean> = {
   wise: true,
   stripe: true,
+  square: false,
   efinmoney: false,
   paysafe: false,
   plaid: false,
