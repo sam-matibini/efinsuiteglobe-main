@@ -16651,6 +16651,9 @@ export type Database = {
           payment_method: string
           paysafe_payment_handle_id: string | null
           reference: string
+          square_checkout_url: string | null
+          square_order_id: string | null
+          square_payment_link_id: string | null
           status: string
           updated_at: string
         }
@@ -16678,6 +16681,9 @@ export type Database = {
           payment_method?: string
           paysafe_payment_handle_id?: string | null
           reference: string
+          square_checkout_url?: string | null
+          square_order_id?: string | null
+          square_payment_link_id?: string | null
           status?: string
           updated_at?: string
         }
@@ -16705,6 +16711,9 @@ export type Database = {
           payment_method?: string
           paysafe_payment_handle_id?: string | null
           reference?: string
+          square_checkout_url?: string | null
+          square_order_id?: string | null
+          square_payment_link_id?: string | null
           status?: string
           updated_at?: string
         }
@@ -29424,6 +29433,7 @@ export type Database = {
         Args: { p_id: string }
         Returns: {
           amount: number
+          card_provider: string
           currency: string
           description: string
           expires_at: string
@@ -29434,6 +29444,7 @@ export type Database = {
           organization_id: string
           payment_method: string
           reference: string
+          square_checkout_url: string
           status: string
         }[]
       }
