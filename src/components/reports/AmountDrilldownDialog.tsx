@@ -72,6 +72,11 @@ interface AmountDrilldownDialogProps {
   accountCode?: string;
   periodStart?: Date | null;
   periodEnd: Date;
+  /** Drop CLOSE-* year-end journals (used for RE other additions/deductions). */
+  excludeCloseEntries?: boolean;
+  /** Load the other side of each journal so the offset CoA code is visible. */
+  includeOffsetAccounts?: boolean;
+  hideOpeningBalance?: boolean;
 }
 
 const sourceLabel = (reference: string): string => {
@@ -108,12 +113,16 @@ export function AmountDrilldownDialog({
   accountCode,
   periodStart,
   periodEnd,
+  excludeCloseEntries = false,
+  includeOffsetAccounts = false,
+  hideOpeningBalance = false,
 }: AmountDrilldownDialogProps) {
   const { formatCurrency } = useCurrencyFormatter();
   const { organization } = useCurrentOrganization();
   const [loading, setLoading] = useState(false);
   const [lines, setLines] = useState<DrillLine[]>([]);
   const [openingBalance, setOpeningBalance] = useState(0);
+  const [offsetsByEntry, setOffsetsByEntry] = useState<Record<string, string>>({});
   const [viewEntry, setViewEntry] = useState<JournalEntryWithLines | null>(null);
   const [viewOpen, setViewOpen] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -157,8 +166,35 @@ export function AmountDrilldownDialog({
           from += pageSize;
         }
 
+        const filtered = excludeCloseEntries
+          ? all.filter((r) => !(r.journal_entry?.reference || '').toUpperCase().startsWith('CLOSE-'))
+          : all;
+
+        const offsets: Record<string, string> = {};
+        if (includeOffsetAccounts && filtered.length > 0) {
+          const entryIds = [...new Set(filtered.map((r) => r.journal_entry_id).filter(Boolean))];
+          for (let i = 0; i < entryIds.length; i += 200) {
+            const batch = entryIds.slice(i, i + 200);
+            const { data: sibs, error: sibErr } = await supabase
+              .from('journal_entry_lines')
+              .select('journal_entry_id, account_id, account:accounts(code, name)')
+              .in('journal_entry_id', batch)
+              .neq('account_id', accountId);
+            if (sibErr) throw sibErr;
+            for (const sib of sibs ?? []) {
+              const acc = (sib as any).account;
+              const label = acc
+                ? `${acc.code || ''} ${acc.name || ''}`.trim()
+                : '';
+              if (!label) continue;
+              const key = (sib as any).journal_entry_id as string;
+              offsets[key] = offsets[key] ? `${offsets[key]}; ${label}` : label;
+            }
+          }
+        }
+
         let opening = 0;
-        if (startStr) {
+        if (startStr && !hideOpeningBalance) {
           const { data: opData, error: opErr } = await supabase
             .from('journal_entry_lines')
             .select(`
@@ -179,7 +215,8 @@ export function AmountDrilldownDialog({
 
         if (!cancelled) {
           setOpeningBalance(opening);
-          setLines(all);
+          setLines(filtered);
+          setOffsetsByEntry(offsets);
         }
       } catch (e) {
         console.error('[AmountDrilldownDialog] fetch failed', e);
@@ -192,7 +229,7 @@ export function AmountDrilldownDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, organizationId, accountId, periodStart, periodEnd]);
+  }, [open, organizationId, accountId, periodStart, periodEnd, excludeCloseEntries, includeOffsetAccounts, hideOpeningBalance]);
 
   const sorted = [...lines].sort((a, b) => {
     const ad = a.journal_entry?.entry_date ?? '';
@@ -380,7 +417,8 @@ export function AmountDrilldownDialog({
                   Drilldown — {accountCode ? `${accountCode} ` : ''}{accountName}
                 </DialogTitle>
                 <DialogDescription className="mt-1">
-                  {periodLabel} · Double-click a row to open the source journal entry.
+                  {periodLabel} · Double-click a row to open the source journal entry
+                  {includeOffsetAccounts ? ' and see the offset Chart of Accounts code.' : '.'}
                 </DialogDescription>
               </div>
               <TooltipProvider delayDuration={150}>
@@ -446,15 +484,16 @@ export function AmountDrilldownDialog({
                     <TableHead>Reference</TableHead>
                     <TableHead>Source</TableHead>
                     <TableHead>Description</TableHead>
+                    {includeOffsetAccounts && <TableHead>Offset CoA</TableHead>}
                     <TableHead className="text-right">Debit</TableHead>
                     <TableHead className="text-right">Credit</TableHead>
                     <TableHead className="text-right">Running</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {periodStart && (
+                  {periodStart && !hideOpeningBalance && (
                     <TableRow className="bg-muted/30">
-                      <TableCell colSpan={6} className="font-medium text-muted-foreground">
+                      <TableCell colSpan={includeOffsetAccounts ? 7 : 6} className="font-medium text-muted-foreground">
                         Opening Balance
                       </TableCell>
                       <TableCell className="text-right font-mono">
@@ -487,6 +526,11 @@ export function AmountDrilldownDialog({
                             {line.description || je.description || '—'}
                           </span>
                         </TableCell>
+                        {includeOffsetAccounts && (
+                          <TableCell className="align-top font-mono text-xs max-w-[220px]">
+                            {offsetsByEntry[je.id] || '—'}
+                          </TableCell>
+                        )}
                         <TableCell className="text-right font-mono align-top">
                           {d ? formatCurrency(d) : ''}
                         </TableCell>
@@ -502,7 +546,7 @@ export function AmountDrilldownDialog({
                 </TableBody>
                 <tfoot className="sticky bottom-0 bg-background">
                   <tr className="bg-muted/60 font-semibold border-t-2">
-                    <td className="p-4" colSpan={4}>Totals</td>
+                    <td className="p-4" colSpan={includeOffsetAccounts ? 5 : 4}>Totals</td>
                     <td className="p-4 text-right font-mono">{formatCurrency(computed.totalDebit)}</td>
                     <td className="p-4 text-right font-mono">{formatCurrency(computed.totalCredit)}</td>
                     <td className="p-4 text-right font-mono">{formatCurrency(computed.endRunning)}</td>

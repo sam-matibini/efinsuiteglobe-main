@@ -306,7 +306,15 @@ export default function BalanceSheet() {
   });
 
   // Drilldown state — double-click an amount to see underlying journal entries.
-  const [drilldown, setDrilldown] = useState<{ accountId: string; name: string; code?: string } | null>(null);
+  const [drilldown, setDrilldown] = useState<{
+    accountId: string;
+    name: string;
+    code?: string;
+    periodStart?: Date | null;
+    excludeClose?: boolean;
+    showOffsets?: boolean;
+    hideOpening?: boolean;
+  } | null>(null);
 
   // Auto-open drilldown from share link (?drill=1&acc=...&name=...&code=...)
   useEffect(() => {
@@ -464,6 +472,23 @@ export default function BalanceSheet() {
     retainedEarningsCurrentPeriod,
     retainedEarningsComparisonPeriods
   );
+
+  const retainedEarningsGlAccount = useMemo(() => {
+    return (allAccounts || []).find((a) => !a.is_header && isRetainedEarningsEquityAccount(a));
+  }, [allAccounts]);
+
+  const openRetainedEarningsAdjustments = () => {
+    if (!retainedEarningsGlAccount) return;
+    setDrilldown({
+      accountId: retainedEarningsGlAccount.id,
+      name: `Other additions / deductions (${retainedEarningsGlAccount.name})`,
+      code: retainedEarningsGlAccount.code,
+      periodStart: retainedEarningsCurrentPeriod.startDate,
+      excludeClose: true,
+      showOffsets: true,
+      hideOpening: true,
+    });
+  };
 
   // Recompute each comparative period's totalEquity to match the on-screen
   // rows: non-RE/CYE/dividend equity accounts + Statement of Retained Earnings
@@ -1780,7 +1805,11 @@ export default function BalanceSheet() {
 
 
                   {((reCurrentStatement?.data.otherAdditions ?? 0) !== 0 || reComparativeStatements.some(c => (c?.data.otherAdditions ?? 0) !== 0)) && (
-                    <tr className="border-b border-border/30 hover:bg-muted/20 transition-colors">
+                    <tr
+                      className="border-b border-border/30 hover:bg-muted/20 transition-colors cursor-pointer"
+                      onDoubleClick={openRetainedEarningsAdjustments}
+                      title="Double-click to view supporting journal entries and offset CoA codes"
+                    >
                       <td className="py-2.5 px-6" style={{ paddingLeft: 30 }}>
                         <span className="text-foreground">Other additions</span>
                       </td>
@@ -1819,7 +1848,11 @@ export default function BalanceSheet() {
                   )}
 
                   {((reCurrentStatement?.data.otherDeductions ?? 0) !== 0 || reComparativeStatements.some(c => (c?.data.otherDeductions ?? 0) !== 0)) && (
-                    <tr className="border-b border-border/30 hover:bg-muted/20 transition-colors">
+                    <tr
+                      className="border-b border-border/30 hover:bg-muted/20 transition-colors cursor-pointer"
+                      onDoubleClick={openRetainedEarningsAdjustments}
+                      title="Double-click to view supporting journal entries and offset CoA codes"
+                    >
                       <td className="py-2.5 px-6" style={{ paddingLeft: 30 }}>
                         <span className="text-foreground">Other deductions</span>
                       </td>
@@ -1906,8 +1939,11 @@ export default function BalanceSheet() {
           accountId={drilldown.accountId}
           accountName={drilldown.name}
           accountCode={drilldown.code}
-          periodStart={null}
+          periodStart={drilldown.periodStart ?? null}
           periodEnd={endDate}
+          excludeCloseEntries={drilldown.excludeClose}
+          includeOffsetAccounts={drilldown.showOffsets}
+          hideOpeningBalance={drilldown.hideOpening}
         />
       )}
 
