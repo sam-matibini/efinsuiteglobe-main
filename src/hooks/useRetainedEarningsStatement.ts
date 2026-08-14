@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrganization } from '@/hooks/useOrganization';
+import { enforceRetainedEarningsContinuity } from '@/lib/retainedEarningsRollforward';
 
 /**
  * ============================================================================
@@ -123,13 +124,47 @@ export function useRetainedEarningsStatement(
 
       const comparativeData = await Promise.all(comparativePromises);
 
+      const currentEntry = {
+        key: 'current',
+        label: `${currentPeriod.endDate.getFullYear()}`,
+        fiscalYear: currentPeriod.endDate.getFullYear(),
+        startDate: currentPeriod.startDate,
+        endDate: currentPeriod.endDate,
+        data: currentData,
+      };
+
+      const comparativeEntries = comparativeData.map((period, index) => ({
+        key: `comp-${index}`,
+        label: period.label,
+        fiscalYear: period.fiscalYear,
+        startDate: comparisonPeriods[index].startDate,
+        endDate: comparisonPeriods[index].endDate,
+        data: period.data,
+      }));
+
+      // Opening RE (Year N) must equal Closing RE (Year N-1) on comparative
+      // statements. Reclassify any leftover gap as a prior-period adjustment.
+      const enforced = enforceRetainedEarningsContinuity([
+        currentEntry,
+        ...comparativeEntries,
+      ]);
+      const enforcedCurrent = enforced.find((row) => row.key === 'current') ?? currentEntry;
+      const enforcedComparatives = comparativeEntries.map((entry) => {
+        const next = enforced.find((row) => row.key === entry.key);
+        return {
+          label: entry.label,
+          fiscalYear: entry.fiscalYear,
+          data: next?.data ?? entry.data,
+        };
+      });
+
       return {
         current: {
-          label: `${currentPeriod.endDate.getFullYear()}`,
-          fiscalYear: currentPeriod.endDate.getFullYear(),
-          data: currentData,
+          label: enforcedCurrent.label,
+          fiscalYear: enforcedCurrent.fiscalYear,
+          data: enforcedCurrent.data,
         },
-        comparatives: comparativeData,
+        comparatives: enforcedComparatives,
       };
     },
     enabled: !!organization?.id,
