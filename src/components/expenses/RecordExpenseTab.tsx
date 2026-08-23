@@ -11,6 +11,7 @@ import { Switch } from '@/components/ui/switch';
 import { Plus, Trash2, Upload, Search, Tag, Sparkles, Loader2, X, FileText } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SearchableGLAccountSelect } from '@/components/banking/SearchableGLAccountSelect';
+import { TaxCodeSelect } from '@/components/banking/TaxCodeSelect';
 import { QuickAddVendorDialog } from '@/components/journal/QuickAddVendorDialog';
 import { useExpenses, CreateExpenseInput } from '@/hooks/useExpenses';
 import { useCurrentOrganization } from '@/hooks/useOrganization';
@@ -510,18 +511,15 @@ export function RecordExpenseTab({ onSuccess, onCancel }: RecordExpenseTabProps)
           {/* Tax */}
           <div className="grid grid-cols-[140px_1fr] items-center gap-4">
             <Label className="text-muted-foreground">Tax</Label>
-            <Select value={taxCodeId} onValueChange={setTaxCodeId}>
-              <SelectTrigger className="max-w-md">
-                <SelectValue placeholder="Select a Tax" />
-              </SelectTrigger>
-              <SelectContent>
-                {taxCodes?.map((tc) => (
-                  <SelectItem key={tc.id} value={tc.id}>
-                    {tc.code} · {tc.name} ({tc.rate}%)
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="max-w-md">
+              <TaxCodeSelect
+                organizationId={organization?.id}
+                value={taxCodeId || null}
+                onValueChange={(tc) => setTaxCodeId(tc?.id || '')}
+                placeholder="Select a Tax"
+                direction="paid"
+              />
+            </div>
           </div>
 
           {/* Vendor */}
