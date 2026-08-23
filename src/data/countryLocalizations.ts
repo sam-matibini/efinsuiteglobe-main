@@ -1768,6 +1768,22 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
   },
 };
 
+/**
+ * Resolve an organization country value (ISO code or display name) to a
+ * supported ISO country code. Falls back to CA when unknown.
+ */
+export function resolveCountryCode(country?: string | null): string {
+  if (!country) return 'CA';
+  const trimmed = country.trim();
+  if (!trimmed) return 'CA';
+  const upper = trimmed.toUpperCase();
+  if (COUNTRY_LOCALIZATIONS[upper]) return upper;
+  const byName = Object.values(COUNTRY_LOCALIZATIONS).find(
+    (c) => c.name.toLowerCase() === trimmed.toLowerCase(),
+  );
+  return byName?.code ?? 'CA';
+}
+
 // Get localization for a country code, fallback to generic if not found
 export function getCountryLocalization(countryCode: string): CountryLocalization {
   return COUNTRY_LOCALIZATIONS[countryCode] || {
