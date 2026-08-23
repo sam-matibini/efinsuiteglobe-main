@@ -124,13 +124,14 @@ export function CreateVirtualAccountDialog({ open, onOpenChange }: Props) {
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
-              <Label>Country</Label>
-              <CountrySelect value={country} onChange={handleCountryChange} />
+              <Label htmlFor="va-country">Country</Label>
+              <CountrySelect id="va-country" value={country} onChange={handleCountryChange} />
               {errors.country && <p className="text-xs text-destructive">{errors.country}</p>}
             </div>
             <div className="space-y-2">
-              <Label>Currency</Label>
+              <Label htmlFor="va-currency">Currency</Label>
               <AllCurrenciesSelect
+                id="va-currency"
                 value={currency}
                 onChange={setCurrency}
                 primaryCountryCode={country}
@@ -147,30 +148,30 @@ export function CreateVirtualAccountDialog({ open, onOpenChange }: Props) {
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
-              <Label>First name</Label>
-              <Input value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+              <Label htmlFor="va-first-name">First name</Label>
+              <Input id="va-first-name" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
               {errors.first_name && <p className="text-xs text-destructive">{errors.first_name}</p>}
             </div>
             <div className="space-y-2">
-              <Label>Last name</Label>
-              <Input value={lastName} onChange={(e) => setLastName(e.target.value)} />
+              <Label htmlFor="va-last-name">Last name</Label>
+              <Input id="va-last-name" value={lastName} onChange={(e) => setLastName(e.target.value)} />
               {errors.last_name && <p className="text-xs text-destructive">{errors.last_name}</p>}
             </div>
           </div>
 
           <div className="space-y-2">
-            <Label>Email</Label>
-            <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+            <Label htmlFor="va-email">Email</Label>
+            <Input id="va-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
             {errors.email && <p className="text-xs text-destructive">{errors.email}</p>}
           </div>
 
           <div className="space-y-2">
-            <Label>
+            <Label htmlFor="va-bvn">
               BVN or NIN {kycRequired
                 ? <span className="text-destructive text-xs">(required)</span>
                 : <span className="text-muted-foreground text-xs">(optional)</span>}
             </Label>
-            <Input value={bvn} onChange={(e) => setBvn(e.target.value)} placeholder="11-digit BVN or NIN" />
+            <Input id="va-bvn" value={bvn} onChange={(e) => setBvn(e.target.value)} placeholder="11-digit BVN or NIN" />
             {errors.bvn_or_nin && <p className="text-xs text-destructive">{errors.bvn_or_nin}</p>}
             <p className="text-xs text-muted-foreground">
               Required by NGN providers for KYC. Leave blank for non-NGN currencies if not applicable.
