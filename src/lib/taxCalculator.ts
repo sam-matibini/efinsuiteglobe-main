@@ -1,10 +1,14 @@
 // Global Tax Calculation Engine for EFINSUITE Globe
 // Now integrated with Split Tax Calculator for Canadian provinces
 import type { TaxCalculation } from '@/types/global';
+import {
+  getPrimaryRetailTaxType,
+  taxTypeAppliesToTransaction,
+  getCountryLocalization,
+} from '@/data/countryLocalizations';
 import { 
   calculateSplitTaxes, 
   PROVINCE_TAX_CONFIG, 
-  type SplitTaxCalculation,
   type TaxModel 
 } from './splitTaxCalculator';
 
@@ -150,21 +154,29 @@ export function getApplicableTaxCode(
     }
   }
   
-  // US - varies by state
+  // US - varies by state. Purchases in no-tax states may still owe use tax.
   if (countryCode === 'US') {
     const noSalesTaxStates = ['DE', 'MT', 'NH', 'OR', 'AK'];
     if (jurisdictionCode && noSalesTaxStates.includes(jurisdictionCode)) {
-      return 'EXEMPT';
+      return transactionType === 'purchase' ? 'USE_TAX' : 'EXEMPT';
     }
-    return 'STATE-SALES';
+    return transactionType === 'purchase' ? 'USE_TAX' : 'STATE-SALES';
   }
-  
-  // African countries use VAT
-  if (['ZM', 'KE', 'BI'].includes(countryCode)) {
-    return 'VAT-STD';
+
+  const loc = getCountryLocalization(countryCode);
+  const applicable = loc.taxTypes.filter((t) => taxTypeAppliesToTransaction(t, transactionType));
+  const primary = applicable[0] || getPrimaryRetailTaxType(countryCode);
+  if (!primary || primary.code === 'PROFITS' || primary.code === 'NONE') {
+    return 'EXEMPT';
   }
-  
-  return 'EXEMPT';
+
+  // Preserve historical VAT-STD codes for ZM / KE / BI and other VAT countries.
+  if (['VAT', 'TVA', 'UST', 'BTW', 'IVA', 'MWST', 'DPH', 'MOMS', 'MVA', 'ALV', 'PPN', 'KDV', 'AFA', 'FPA', 'PDV', 'JCT', 'IGV', 'ICMS'].includes(primary.code)) {
+    if (['ZM', 'KE', 'BI'].includes(countryCode)) return 'VAT-STD';
+    return primary.code === 'VAT' ? 'VAT-STD' : primary.code;
+  }
+
+  return primary.code;
 }
 
 /**

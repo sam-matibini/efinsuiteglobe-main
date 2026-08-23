@@ -5,6 +5,11 @@ import {
   getTaxGlAccounts,
   type JournalEntryLine,
 } from '@/hooks/useJournalEntryCreation';
+import {
+  resolveRetailTaxGlAccount,
+  splitPurchaseTaxPosting,
+  type DocumentTaxLine,
+} from '@/lib/documentTaxEngine';
 
 export interface BillGLLine {
   /** Chart of Accounts expense/COGS/asset account chosen for the line. */
@@ -25,12 +30,14 @@ export interface PostBillToGLParams {
   total: number;
   departmentId?: string | null;
   lines: BillGLLine[];
+  /** Split retail taxes paid (GST/HST ITC, Input VAT, PST paid). */
+  taxLines?: DocumentTaxLine[];
 }
 
 /**
  * Posts a bill to the General Ledger:
- *   DR each line's expense account (net amount)
- *   DR input tax / ITC account (total tax, when configured)
+ *   DR each line's expense account (net amount + non-recoverable tax)
+ *   DR input tax / ITC account(s) (recoverable GST/HST/VAT)
  *      CR Accounts Payable (bill total)
  *
  * Throws when the required accounts cannot be resolved so the caller can roll
@@ -48,6 +55,7 @@ export async function postBillToGL(params: PostBillToGLParams): Promise<string> 
     total,
     departmentId,
     lines,
+    taxLines,
   } = params;
 
   const [defaultAccounts, taxGl] = await Promise.all([
@@ -100,6 +108,16 @@ export async function postBillToGL(params: PostBillToGLParams): Promise<string> 
     byAccount.set(accountId, (byAccount.get(accountId) || 0) + amount);
   }
 
+  const split = taxLines?.length ? splitPurchaseTaxPosting(taxLines) : null;
+  const nonRecoverable = split?.nonRecoverableTotal ?? 0;
+  if (nonRecoverable > 0) {
+    const firstExpenseId = [...byAccount.keys()][0] || fallbackAccountId;
+    if (!firstExpenseId) {
+      throw new Error('No expense account found to post non-recoverable sales tax paid.');
+    }
+    byAccount.set(firstExpenseId, (byAccount.get(firstExpenseId) || 0) + nonRecoverable);
+  }
+
   for (const [accountId, amount] of byAccount) {
     journalLines.push({
       account_id: accountId,
@@ -116,8 +134,39 @@ export async function postBillToGL(params: PostBillToGLParams): Promise<string> 
   }
 
   const tax = Number(taxAmount) || 0;
-  if (tax > 0) {
-    const itcAccountId = taxGl.gstPaidAccountId;
+  if (split && split.recoverable.length > 0) {
+    const byTaxAccount = new Map<string, { amount: number; name: string }>();
+    for (const line of split.recoverable) {
+      const accountId =
+        line.glAccountId ||
+        resolveRetailTaxGlAccount(line.taxCode || line.taxType, 'paid', {
+          gstPaidAccountId: taxGl.gstPaidAccountId,
+          vatPaidAccountId: taxGl.vatPaidAccountId,
+          pstPaidAccountId: taxGl.pstPaidAccountId,
+        });
+      if (!accountId) {
+        throw new Error(
+          `No paid/ITC account configured for ${line.taxName}. Set the tax paid GL account in Settings → Sales Tax.`,
+        );
+      }
+      const existing = byTaxAccount.get(accountId);
+      byTaxAccount.set(accountId, {
+        amount: (existing?.amount || 0) + line.taxAmount,
+        name: line.taxName,
+      });
+    }
+    for (const [accountId, info] of byTaxAccount) {
+      journalLines.push({
+        account_id: accountId,
+        debit: info.amount,
+        credit: 0,
+        memo: `${info.name} - Bill ${billNumber}`,
+        department_id: departmentId || undefined,
+        ...baseDimensions,
+      });
+    }
+  } else if (tax > 0 && !split) {
+    const itcAccountId = taxGl.gstPaidAccountId || taxGl.vatPaidAccountId;
     if (!itcAccountId) {
       throw new Error(
         'No input tax (ITC) account configured. Set the tax paid GL account in Settings → Sales Tax before posting a bill with tax.',
@@ -131,6 +180,19 @@ export async function postBillToGL(params: PostBillToGLParams): Promise<string> 
       department_id: departmentId || undefined,
       ...baseDimensions,
     });
+  } else if (tax > 0 && split && split.recoverableTotal === 0 && split.nonRecoverableTotal === 0) {
+    // Tax amount present but no split rows — treat as recoverable ITC.
+    const itcAccountId = taxGl.gstPaidAccountId || taxGl.vatPaidAccountId;
+    if (itcAccountId) {
+      journalLines.push({
+        account_id: itcAccountId,
+        debit: tax,
+        credit: 0,
+        memo: `Input tax - Bill ${billNumber}`,
+        department_id: departmentId || undefined,
+        ...baseDimensions,
+      });
+    }
   }
 
   journalLines.push({

@@ -2101,6 +2101,7 @@ export type Database = {
           rate: number
           tax_amount: number
           tax_code: string | null
+          tax_direction: string
           tax_type: string
           taxable_amount: number
         }
@@ -2115,6 +2116,7 @@ export type Database = {
           rate: number
           tax_amount: number
           tax_code?: string | null
+          tax_direction?: string
           tax_type: string
           taxable_amount: number
         }
@@ -2129,6 +2131,7 @@ export type Database = {
           rate?: number
           tax_amount?: number
           tax_code?: string | null
+          tax_direction?: string
           tax_type?: string
           taxable_amount?: number
         }
@@ -4545,6 +4548,7 @@ export type Database = {
           name: string
           paid_account_patterns: string[]
           paid_account_type: string
+          paid_name: string | null
           rate: number
           tax_type: string
           updated_at: string
@@ -4565,6 +4569,7 @@ export type Database = {
           name: string
           paid_account_patterns?: string[]
           paid_account_type?: string
+          paid_name?: string | null
           rate?: number
           tax_type?: string
           updated_at?: string
@@ -4585,6 +4590,7 @@ export type Database = {
           name?: string
           paid_account_patterns?: string[]
           paid_account_type?: string
+          paid_name?: string | null
           rate?: number
           tax_type?: string
           updated_at?: string
@@ -10334,6 +10340,7 @@ export type Database = {
           rate: number
           tax_amount: number
           tax_code: string | null
+          tax_direction: string
           tax_type: string
           taxable_amount: number
         }
@@ -10348,6 +10355,7 @@ export type Database = {
           rate: number
           tax_amount: number
           tax_code?: string | null
+          tax_direction?: string
           tax_type: string
           taxable_amount: number
         }
@@ -10362,6 +10370,7 @@ export type Database = {
           rate?: number
           tax_amount?: number
           tax_code?: string | null
+          tax_direction?: string
           tax_type?: string
           taxable_amount?: number
         }
@@ -12923,6 +12932,7 @@ export type Database = {
           rate: number
           tax_amount: number
           tax_code: string | null
+          tax_direction: string
           tax_type: string
           taxable_amount: number
         }
@@ -12937,6 +12947,7 @@ export type Database = {
           rate: number
           tax_amount: number
           tax_code?: string | null
+          tax_direction?: string
           tax_type: string
           taxable_amount: number
         }
@@ -12951,6 +12962,7 @@ export type Database = {
           rate?: number
           tax_amount?: number
           tax_code?: string | null
+          tax_direction?: string
           tax_type?: string
           taxable_amount?: number
         }
@@ -21129,6 +21141,9 @@ export type Database = {
       }
       sales_tax_settings: {
         Row: {
+          claim_gst_hst_itc: boolean
+          claim_input_tax: boolean
+          claim_pst_paid: boolean
           collect_gst: boolean | null
           collect_hst: boolean | null
           collect_pst: boolean | null
@@ -21154,10 +21169,15 @@ export type Database = {
           sales_tax_number: string | null
           sales_tax_rate: number | null
           updated_at: string
+          vat_collected_account_id: string | null
           vat_number: string | null
+          vat_paid_account_id: string | null
           vat_rate: number | null
         }
         Insert: {
+          claim_gst_hst_itc?: boolean
+          claim_input_tax?: boolean
+          claim_pst_paid?: boolean
           collect_gst?: boolean | null
           collect_hst?: boolean | null
           collect_pst?: boolean | null
@@ -21183,10 +21203,15 @@ export type Database = {
           sales_tax_number?: string | null
           sales_tax_rate?: number | null
           updated_at?: string
+          vat_collected_account_id?: string | null
           vat_number?: string | null
+          vat_paid_account_id?: string | null
           vat_rate?: number | null
         }
         Update: {
+          claim_gst_hst_itc?: boolean
+          claim_input_tax?: boolean
+          claim_pst_paid?: boolean
           collect_gst?: boolean | null
           collect_hst?: boolean | null
           collect_pst?: boolean | null
@@ -21212,7 +21237,9 @@ export type Database = {
           sales_tax_number?: string | null
           sales_tax_rate?: number | null
           updated_at?: string
+          vat_collected_account_id?: string | null
           vat_number?: string | null
+          vat_paid_account_id?: string | null
           vat_rate?: number | null
         }
         Relationships: [
@@ -21247,6 +21274,20 @@ export type Database = {
           {
             foreignKeyName: "sales_tax_settings_pst_paid_account_id_fkey"
             columns: ["pst_paid_account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_tax_settings_vat_collected_account_id_fkey"
+            columns: ["vat_collected_account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_tax_settings_vat_paid_account_id_fkey"
+            columns: ["vat_paid_account_id"]
             isOneToOne: false
             referencedRelation: "accounts"
             referencedColumns: ["id"]

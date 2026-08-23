@@ -288,10 +288,12 @@ export async function getTaxGlAccounts(organizationId: string): Promise<{
   gstPaidAccountId: string | null;
   pstCollectedAccountId: string | null;
   pstPaidAccountId: string | null;
+  vatCollectedAccountId: string | null;
+  vatPaidAccountId: string | null;
 }> {
   const { data } = await supabase
     .from('sales_tax_settings')
-    .select('gst_collected_account_id, gst_paid_account_id, pst_collected_account_id, pst_paid_account_id')
+    .select('gst_collected_account_id, gst_paid_account_id, pst_collected_account_id, pst_paid_account_id, vat_collected_account_id, vat_paid_account_id')
     .eq('organization_id', organizationId)
     .maybeSingle();
 
@@ -300,5 +302,7 @@ export async function getTaxGlAccounts(organizationId: string): Promise<{
     gstPaidAccountId: data?.gst_paid_account_id ?? null,
     pstCollectedAccountId: data?.pst_collected_account_id ?? null,
     pstPaidAccountId: data?.pst_paid_account_id ?? null,
+    vatCollectedAccountId: data?.vat_collected_account_id ?? null,
+    vatPaidAccountId: data?.vat_paid_account_id ?? null,
   };
 }

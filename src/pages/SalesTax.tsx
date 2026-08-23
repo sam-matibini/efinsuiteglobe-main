@@ -19,8 +19,7 @@ import { format, parseISO } from 'date-fns';
 import { parseLocalDate } from '@/lib/utils';
 import { Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
-import { getCountryLocalization } from '@/data/countryLocalizations';
-import { COUNTRY_LOCALIZATIONS } from '@/data/countryLocalizations';
+import { getCountryLocalization, getPrimaryRetailTaxType, COUNTRY_LOCALIZATIONS } from '@/data/countryLocalizations';
 import { useIsReadOnly } from '@/hooks/useIsReadOnly';
 import { useConfirmDelete } from '@/hooks/useConfirmDelete';
 
@@ -136,17 +135,22 @@ export default function SalesTax() {
           authorityLabel: 'OBR',
           itcLabel: 'TVA Déductible',
         };
-      default:
+      default: {
+        const primary = getPrimaryRetailTaxType(countryCode);
+        const paid = primary?.paidName || 'Tax Paid (Input)';
         return {
-          title: 'Sales Tax',
-          description: 'Tax management and reporting',
+          title: primary?.name?.replace(/^Collect\s+/i, '') || 'Sales Tax',
+          description: primary
+            ? `${primary.description} — collected on sales and ${paid.toLowerCase()} on purchases`
+            : 'Tax management and reporting',
           returnLabel: 'Tax Returns',
-          collectedLabel: 'Tax Collected',
-          paidLabel: 'Tax Paid',
+          collectedLabel: primary?.name || 'Tax Collected',
+          paidLabel: paid,
           netLabel: 'Net Payable',
           authorityLabel: 'Tax Authority',
-          itcLabel: 'Credits',
+          itcLabel: primary?.isRecoverable ? paid : 'Credits',
         };
+      }
     }
   }, [countryCode]);
 

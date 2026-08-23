@@ -40,6 +40,8 @@ import { format, addDays } from 'date-fns';
 import { getCountryLocalization } from '@/data/countryLocalizations';
 import { getLocaleForCountry } from '@/lib/localizedCurrencyFormatter';
 import { recordBillTaxes } from '@/lib/ngTax/integration';
+import { computeDocumentTaxes, persistBillTaxes } from '@/lib/documentTaxEngine';
+import type { SalesTaxSettings } from '@/hooks/useSalesTax';
 import { requestApproval } from '@/lib/approvals';
 import { useAuth } from '@/hooks/useAuth';
 import {
@@ -301,6 +303,33 @@ export function CreateBillDialog({ open, onOpenChange, prefillVendorId }: Create
         .select('id, amount, tax_amount');
 
       if (linesError) throw linesError;
+
+      try {
+        const { data: taxSettings } = await supabase
+          .from('sales_tax_settings')
+          .select('*')
+          .eq('organization_id', organization.id)
+          .maybeSingle();
+        const split = computeDocumentTaxes({
+          countryCode: organization.country,
+          jurisdictionCode: organization.province || taxSettings?.province,
+          amount: subtotal,
+          direction: 'paid',
+          settings: taxSettings as SalesTaxSettings | null,
+        });
+        const blended = computeDocumentTaxes({
+          countryCode: organization.country,
+          jurisdictionCode: organization.province || taxSettings?.province,
+          amount: subtotal,
+          direction: 'paid',
+          settings: taxSettings as SalesTaxSettings | null,
+          taxRateOverride: subtotal > 0 ? (taxTotal / subtotal) * 100 : 0,
+        });
+        const taxes = Math.abs(split.totalTax - taxTotal) <= 0.05 ? split.taxes : blended.taxes;
+        await persistBillTaxes(bill.id, taxes);
+      } catch (taxErr) {
+        console.warn('Could not persist bill_taxes:', taxErr);
+      }
 
       // Purchases now run through an approval gate: nothing touches the General
       // Ledger until an approver (never the preparer) approves the bill.

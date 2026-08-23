@@ -6,6 +6,9 @@ export interface JurisdictionOption {
   name: string;
 }
 
+export type TaxAppliesTo = 'sales' | 'purchases' | 'both';
+export type TaxDirection = 'collected' | 'paid';
+
 export interface TaxTypeConfig {
   code: string;
   name: string;
@@ -13,6 +16,20 @@ export interface TaxTypeConfig {
   defaultRate: number;
   registrationLabel: string;
   registrationPlaceholder: string;
+  /** Whether this retail tax applies on sales, purchases, or both. Defaults to both. */
+  appliesTo?: TaxAppliesTo;
+  /** Localized label for tax paid on purchases (ITC / Input VAT / PST Paid). */
+  paidName?: string;
+  paidDescription?: string;
+  /** Recoverable on purchases (GST/HST ITC, Input VAT). PST and US sales/use tax are typically not. */
+  isRecoverable?: boolean;
+}
+
+export interface ResolvedTaxTypeConfig extends TaxTypeConfig {
+  appliesTo: TaxAppliesTo;
+  paidName: string;
+  paidDescription: string;
+  isRecoverable: boolean;
 }
 
 export interface CountryLocalization {
@@ -61,9 +78,9 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
     ],
     taxRegimes: ['GST/HST', 'GST+QST', 'GST+PST'],
     taxTypes: [
-      { code: 'HST', name: 'Collect HST', description: 'Harmonized Sales Tax (ON, NB, NL, NS, PE)', defaultRate: 13, registrationLabel: 'HST Number', registrationPlaceholder: '123456789RT0001' },
-      { code: 'GST', name: 'Collect GST', description: 'Goods and Services Tax (Federal)', defaultRate: 5, registrationLabel: 'GST Number', registrationPlaceholder: '123456789RT0001' },
-      { code: 'PST', name: 'Collect PST/QST', description: 'Provincial Sales Tax (BC, MB, SK) / Quebec Sales Tax', defaultRate: 7, registrationLabel: 'PST Number', registrationPlaceholder: 'PST-1234-5678' },
+      { code: 'HST', name: 'Collect HST', description: 'Harmonized Sales Tax (ON, NB, NL, NS, PE)', defaultRate: 13, registrationLabel: 'HST Number', registrationPlaceholder: '123456789RT0001', appliesTo: 'both', paidName: 'HST Paid (ITC)', paidDescription: 'Input Tax Credit for Harmonized Sales Tax paid on purchases', isRecoverable: true },
+      { code: 'GST', name: 'Collect GST', description: 'Goods and Services Tax (Federal)', defaultRate: 5, registrationLabel: 'GST Number', registrationPlaceholder: '123456789RT0001', appliesTo: 'both', paidName: 'GST Paid (ITC)', paidDescription: 'Input Tax Credit for Goods and Services Tax paid on purchases', isRecoverable: true },
+      { code: 'PST', name: 'Collect PST/QST', description: 'Provincial Sales Tax (BC, MB, SK) / Quebec Sales Tax', defaultRate: 7, registrationLabel: 'PST Number', registrationPlaceholder: 'PST-1234-5678', appliesTo: 'both', paidName: 'PST Paid', paidDescription: 'Provincial sales tax paid on purchases. QST ITR is recoverable in Quebec; other PST is generally not recoverable', isRecoverable: false },
     ],
     flag: '🇨🇦',
     region: 'North America',
@@ -133,7 +150,7 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
     ],
     taxRegimes: ['State Sales Tax', 'No Sales Tax'],
     taxTypes: [
-      { code: 'SALES_TAX', name: 'Collect Sales Tax', description: 'State and Local Sales Tax', defaultRate: 0, registrationLabel: 'Sales Tax Permit Number', registrationPlaceholder: '12-3456789' },
+      { code: 'SALES_TAX', name: 'Collect Sales Tax', description: 'State and Local Sales Tax', defaultRate: 0, registrationLabel: 'Sales Tax Permit Number', registrationPlaceholder: '12-3456789', appliesTo: 'both', paidName: 'Sales Tax Paid / Use Tax', paidDescription: 'Use tax and sales tax paid on purchases (generally not recoverable)', isRecoverable: false },
     ],
     flag: '🇺🇸',
     region: 'North America',
@@ -160,7 +177,7 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
     ],
     taxRegimes: ['IVA (16%)'],
     taxTypes: [
-      { code: 'IVA', name: 'Collect IVA', description: 'Impuesto al Valor Agregado', defaultRate: 16, registrationLabel: 'RFC', registrationPlaceholder: 'XAXX010101000' },
+      { code: 'IVA', name: 'Collect IVA', description: 'Impuesto al Valor Agregado', defaultRate: 16, registrationLabel: 'RFC', registrationPlaceholder: 'XAXX010101000', appliesTo: 'both', paidName: 'IVA Paid (Input IVA)', paidDescription: 'Input IVA recoverable on purchases', isRecoverable: true },
     ],
     flag: '🇲🇽',
     region: 'North America',
@@ -186,7 +203,7 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
     ],
     taxRegimes: ['IVA (21%)'],
     taxTypes: [
-      { code: 'IVA', name: 'Collect IVA', description: 'Impuesto al Valor Agregado', defaultRate: 21, registrationLabel: 'CUIT', registrationPlaceholder: '20-12345678-9' },
+      { code: 'IVA', name: 'Collect IVA', description: 'Impuesto al Valor Agregado', defaultRate: 21, registrationLabel: 'CUIT', registrationPlaceholder: '20-12345678-9', appliesTo: 'both', paidName: 'IVA Paid (Input IVA)', paidDescription: 'Input IVA recoverable on purchases', isRecoverable: true },
     ],
     flag: '🇦🇷',
     region: 'South America',
@@ -213,7 +230,7 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
     ],
     taxRegimes: ['ICMS', 'ISS', 'IPI'],
     taxTypes: [
-      { code: 'ICMS', name: 'Collect ICMS', description: 'State VAT on Goods', defaultRate: 18, registrationLabel: 'CNPJ', registrationPlaceholder: '12.345.678/0001-90' },
+      { code: 'ICMS', name: 'Collect ICMS', description: 'State VAT on Goods', defaultRate: 18, registrationLabel: 'CNPJ', registrationPlaceholder: '12.345.678/0001-90', appliesTo: 'both', paidName: 'ICMS Paid (Input ICMS)', paidDescription: 'ICMS paid on purchases (recoverable when registered)', isRecoverable: true },
     ],
     flag: '🇧🇷',
     region: 'South America',
@@ -236,7 +253,7 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
     ],
     taxRegimes: ['IVA (19%)'],
     taxTypes: [
-      { code: 'IVA', name: 'Collect IVA', description: 'Impuesto al Valor Agregado', defaultRate: 19, registrationLabel: 'RUT', registrationPlaceholder: '12.345.678-9' },
+      { code: 'IVA', name: 'Collect IVA', description: 'Impuesto al Valor Agregado', defaultRate: 19, registrationLabel: 'RUT', registrationPlaceholder: '12.345.678-9', appliesTo: 'both', paidName: 'IVA Paid (Input IVA)', paidDescription: 'Input IVA recoverable on purchases', isRecoverable: true },
     ],
     flag: '🇨🇱',
     region: 'South America',
@@ -259,7 +276,7 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
     ],
     taxRegimes: ['IVA (19%)'],
     taxTypes: [
-      { code: 'IVA', name: 'Collect IVA', description: 'Impuesto al Valor Agregado', defaultRate: 19, registrationLabel: 'NIT', registrationPlaceholder: '900.123.456-7' },
+      { code: 'IVA', name: 'Collect IVA', description: 'Impuesto al Valor Agregado', defaultRate: 19, registrationLabel: 'NIT', registrationPlaceholder: '900.123.456-7', appliesTo: 'both', paidName: 'IVA Paid (Input IVA)', paidDescription: 'Input IVA recoverable on purchases', isRecoverable: true },
     ],
     flag: '🇨🇴',
     region: 'South America',
@@ -282,7 +299,7 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
     ],
     taxRegimes: ['IGV (18%)'],
     taxTypes: [
-      { code: 'IGV', name: 'Collect IGV', description: 'Impuesto General a las Ventas', defaultRate: 18, registrationLabel: 'RUC', registrationPlaceholder: '20123456789' },
+      { code: 'IGV', name: 'Collect IGV', description: 'Impuesto General a las Ventas', defaultRate: 18, registrationLabel: 'RUC', registrationPlaceholder: '20123456789', appliesTo: 'both', paidName: 'IGV Paid (Input IGV)', paidDescription: 'Input IGV recoverable on purchases', isRecoverable: true },
     ],
     flag: '🇵🇪',
     region: 'South America',
@@ -307,7 +324,7 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
     ],
     taxRegimes: ['VAT (20%)'],
     taxTypes: [
-      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 20, registrationLabel: 'VAT Number', registrationPlaceholder: 'GB123456789' },
+      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 20, registrationLabel: 'VAT Number', registrationPlaceholder: 'GB123456789', appliesTo: 'both', paidName: 'VAT Paid (Input VAT)', paidDescription: 'Input VAT recoverable on purchases', isRecoverable: true },
     ],
     flag: '🇬🇧',
     region: 'Europe',
@@ -342,7 +359,7 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
     ],
     taxRegimes: ['USt (19%)'],
     taxTypes: [
-      { code: 'UST', name: 'Collect USt', description: 'Umsatzsteuer (VAT)', defaultRate: 19, registrationLabel: 'USt-IdNr.', registrationPlaceholder: 'DE123456789' },
+      { code: 'UST', name: 'Collect USt', description: 'Umsatzsteuer (VAT)', defaultRate: 19, registrationLabel: 'USt-IdNr.', registrationPlaceholder: 'DE123456789', appliesTo: 'both', paidName: 'USt Paid (Vorsteuer)', paidDescription: 'Input VAT (Vorsteuer) recoverable on purchases', isRecoverable: true },
     ],
     flag: '🇩🇪',
     region: 'Europe',
@@ -374,7 +391,7 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
     ],
     taxRegimes: ['TVA (20%)'],
     taxTypes: [
-      { code: 'TVA', name: 'Collect TVA', description: 'Taxe sur la Valeur Ajoutée', defaultRate: 20, registrationLabel: 'Numéro TVA', registrationPlaceholder: 'FR12345678901' },
+      { code: 'TVA', name: 'Collect TVA', description: 'Taxe sur la Valeur Ajoutée', defaultRate: 20, registrationLabel: 'Numéro TVA', registrationPlaceholder: 'FR12345678901', appliesTo: 'both', paidName: 'TVA Paid (Input TVA)', paidDescription: 'TVA deductible / input TVA recoverable on purchases', isRecoverable: true },
     ],
     flag: '🇫🇷',
     region: 'Europe',
@@ -400,7 +417,7 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
     ],
     taxRegimes: ['IVA (22%)'],
     taxTypes: [
-      { code: 'IVA', name: 'Collect IVA', description: 'Imposta sul Valore Aggiunto', defaultRate: 22, registrationLabel: 'Partita IVA', registrationPlaceholder: 'IT12345678901' },
+      { code: 'IVA', name: 'Collect IVA', description: 'Imposta sul Valore Aggiunto', defaultRate: 22, registrationLabel: 'Partita IVA', registrationPlaceholder: 'IT12345678901', appliesTo: 'both', paidName: 'IVA Paid (Input IVA)', paidDescription: 'Input IVA recoverable on purchases', isRecoverable: true },
     ],
     flag: '🇮🇹',
     region: 'Europe',
@@ -425,7 +442,7 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
     ],
     taxRegimes: ['IVA (21%)'],
     taxTypes: [
-      { code: 'IVA', name: 'Collect IVA', description: 'Impuesto sobre el Valor Añadido', defaultRate: 21, registrationLabel: 'NIF-IVA', registrationPlaceholder: 'ES12345678A' },
+      { code: 'IVA', name: 'Collect IVA', description: 'Impuesto sobre el Valor Añadido', defaultRate: 21, registrationLabel: 'NIF-IVA', registrationPlaceholder: 'ES12345678A', appliesTo: 'both', paidName: 'IVA Paid (Input IVA)', paidDescription: 'Input IVA recoverable on purchases', isRecoverable: true },
     ],
     flag: '🇪🇸',
     region: 'Europe',
@@ -448,7 +465,7 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
     ],
     taxRegimes: ['IVA (23%)'],
     taxTypes: [
-      { code: 'IVA', name: 'Collect IVA', description: 'Imposto sobre o Valor Acrescentado', defaultRate: 23, registrationLabel: 'NIF', registrationPlaceholder: 'PT123456789' },
+      { code: 'IVA', name: 'Collect IVA', description: 'Imposto sobre o Valor Acrescentado', defaultRate: 23, registrationLabel: 'NIF', registrationPlaceholder: 'PT123456789', appliesTo: 'both', paidName: 'IVA Paid (Input IVA)', paidDescription: 'Input IVA recoverable on purchases', isRecoverable: true },
     ],
     flag: '🇵🇹',
     region: 'Europe',
@@ -472,7 +489,7 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
     ],
     taxRegimes: ['BTW (21%)'],
     taxTypes: [
-      { code: 'BTW', name: 'Collect BTW', description: 'Belasting over de Toegevoegde Waarde', defaultRate: 21, registrationLabel: 'BTW-nummer', registrationPlaceholder: 'NL123456789B01' },
+      { code: 'BTW', name: 'Collect BTW', description: 'Belasting over de Toegevoegde Waarde', defaultRate: 21, registrationLabel: 'BTW-nummer', registrationPlaceholder: 'NL123456789B01', appliesTo: 'both', paidName: 'BTW Paid (Voorbelasting)', paidDescription: 'Input BTW recoverable on purchases', isRecoverable: true },
     ],
     flag: '🇳🇱',
     region: 'Europe',
@@ -494,7 +511,7 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
     ],
     taxRegimes: ['TVA/BTW (21%)'],
     taxTypes: [
-      { code: 'TVA', name: 'Collect TVA/BTW', description: 'Value Added Tax', defaultRate: 21, registrationLabel: 'VAT Number', registrationPlaceholder: 'BE0123456789' },
+      { code: 'TVA', name: 'Collect TVA/BTW', description: 'Value Added Tax', defaultRate: 21, registrationLabel: 'VAT Number', registrationPlaceholder: 'BE0123456789', appliesTo: 'both', paidName: 'TVA Paid (Input TVA)', paidDescription: 'TVA deductible / input TVA recoverable on purchases', isRecoverable: true },
     ],
     flag: '🇧🇪',
     region: 'Europe',
@@ -518,7 +535,7 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
     ],
     taxRegimes: ['USt (20%)'],
     taxTypes: [
-      { code: 'UST', name: 'Collect USt', description: 'Umsatzsteuer', defaultRate: 20, registrationLabel: 'UID-Nummer', registrationPlaceholder: 'ATU12345678' },
+      { code: 'UST', name: 'Collect USt', description: 'Umsatzsteuer', defaultRate: 20, registrationLabel: 'UID-Nummer', registrationPlaceholder: 'ATU12345678', appliesTo: 'both', paidName: 'USt Paid (Vorsteuer)', paidDescription: 'Input VAT (Vorsteuer) recoverable on purchases', isRecoverable: true },
     ],
     flag: '🇦🇹',
     region: 'Europe',
@@ -542,7 +559,7 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
     ],
     taxRegimes: ['MWST (8.1%)'],
     taxTypes: [
-      { code: 'MWST', name: 'Collect MWST', description: 'Mehrwertsteuer', defaultRate: 8.1, registrationLabel: 'MWST-Nr.', registrationPlaceholder: 'CHE-123.456.789 MWST' },
+      { code: 'MWST', name: 'Collect MWST', description: 'Mehrwertsteuer', defaultRate: 8.1, registrationLabel: 'MWST-Nr.', registrationPlaceholder: 'CHE-123.456.789 MWST', appliesTo: 'both', paidName: 'MWST Paid (Vorsteuer)', paidDescription: 'Input MWST recoverable on purchases', isRecoverable: true },
     ],
     flag: '🇨🇭',
     region: 'Europe',
@@ -565,7 +582,7 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
     ],
     taxRegimes: ['VAT (23%)'],
     taxTypes: [
-      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 23, registrationLabel: 'VAT Number', registrationPlaceholder: 'IE1234567T' },
+      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 23, registrationLabel: 'VAT Number', registrationPlaceholder: 'IE1234567T', appliesTo: 'both', paidName: 'VAT Paid (Input VAT)', paidDescription: 'Input VAT recoverable on purchases', isRecoverable: true },
     ],
     flag: '🇮🇪',
     region: 'Europe',
@@ -588,7 +605,7 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
     ],
     taxRegimes: ['VAT (23%)'],
     taxTypes: [
-      { code: 'VAT', name: 'Collect VAT', description: 'Podatek od towarów i usług', defaultRate: 23, registrationLabel: 'NIP', registrationPlaceholder: 'PL1234567890' },
+      { code: 'VAT', name: 'Collect VAT', description: 'Podatek od towarów i usług', defaultRate: 23, registrationLabel: 'NIP', registrationPlaceholder: 'PL1234567890', appliesTo: 'both', paidName: 'VAT Paid (Input VAT)', paidDescription: 'Input VAT recoverable on purchases', isRecoverable: true },
     ],
     flag: '🇵🇱',
     region: 'Europe',
@@ -610,7 +627,7 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
     ],
     taxRegimes: ['DPH (21%)'],
     taxTypes: [
-      { code: 'DPH', name: 'Collect DPH', description: 'Daň z přidané hodnoty', defaultRate: 21, registrationLabel: 'DIČ', registrationPlaceholder: 'CZ12345678' },
+      { code: 'DPH', name: 'Collect DPH', description: 'Daň z přidané hodnoty', defaultRate: 21, registrationLabel: 'DIČ', registrationPlaceholder: 'CZ12345678', appliesTo: 'both', paidName: 'DPH Paid (Input VAT)', paidDescription: 'Input DPH recoverable on purchases', isRecoverable: true },
     ],
     flag: '🇨🇿',
     region: 'Europe',
@@ -632,7 +649,7 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
     ],
     taxRegimes: ['Moms (25%)'],
     taxTypes: [
-      { code: 'MOMS', name: 'Collect Moms', description: 'Mervärdesskatt', defaultRate: 25, registrationLabel: 'Momsreg.nr', registrationPlaceholder: 'SE123456789001' },
+      { code: 'MOMS', name: 'Collect Moms', description: 'Mervärdesskatt', defaultRate: 25, registrationLabel: 'Momsreg.nr', registrationPlaceholder: 'SE123456789001', appliesTo: 'both', paidName: 'Moms Paid (Input VAT)', paidDescription: 'Input Moms recoverable on purchases', isRecoverable: true },
     ],
     flag: '🇸🇪',
     region: 'Europe',
@@ -654,7 +671,7 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
     ],
     taxRegimes: ['MVA (25%)'],
     taxTypes: [
-      { code: 'MVA', name: 'Collect MVA', description: 'Merverdiavgift', defaultRate: 25, registrationLabel: 'Org.nr', registrationPlaceholder: 'NO123456789MVA' },
+      { code: 'MVA', name: 'Collect MVA', description: 'Merverdiavgift', defaultRate: 25, registrationLabel: 'Org.nr', registrationPlaceholder: 'NO123456789MVA', appliesTo: 'both', paidName: 'MVA Paid (Input VAT)', paidDescription: 'Input MVA recoverable on purchases', isRecoverable: true },
     ],
     flag: '🇳🇴',
     region: 'Europe',
@@ -676,7 +693,7 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
     ],
     taxRegimes: ['Moms (25%)'],
     taxTypes: [
-      { code: 'MOMS', name: 'Collect Moms', description: 'Merværdiafgift', defaultRate: 25, registrationLabel: 'CVR-nr', registrationPlaceholder: 'DK12345678' },
+      { code: 'MOMS', name: 'Collect Moms', description: 'Merværdiafgift', defaultRate: 25, registrationLabel: 'CVR-nr', registrationPlaceholder: 'DK12345678', appliesTo: 'both', paidName: 'Moms Paid (Input VAT)', paidDescription: 'Input Moms recoverable on purchases', isRecoverable: true },
     ],
     flag: '🇩🇰',
     region: 'Europe',
@@ -698,7 +715,7 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
     ],
     taxRegimes: ['ALV (24%)'],
     taxTypes: [
-      { code: 'ALV', name: 'Collect ALV', description: 'Arvonlisävero', defaultRate: 24, registrationLabel: 'Y-tunnus', registrationPlaceholder: 'FI12345678' },
+      { code: 'ALV', name: 'Collect ALV', description: 'Arvonlisävero', defaultRate: 24, registrationLabel: 'Y-tunnus', registrationPlaceholder: 'FI12345678', appliesTo: 'both', paidName: 'ALV Paid (Input VAT)', paidDescription: 'Input ALV recoverable on purchases', isRecoverable: true },
     ],
     flag: '🇫🇮',
     region: 'Europe',
@@ -727,7 +744,7 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
     ],
     taxRegimes: ['GST (10%)'],
     taxTypes: [
-      { code: 'GST', name: 'Collect GST', description: 'Goods and Services Tax', defaultRate: 10, registrationLabel: 'ABN', registrationPlaceholder: '12 345 678 901' },
+      { code: 'GST', name: 'Collect GST', description: 'Goods and Services Tax', defaultRate: 10, registrationLabel: 'ABN', registrationPlaceholder: '12 345 678 901', appliesTo: 'both', paidName: 'GST Paid (ITC)', paidDescription: 'Input Tax Credit for Goods and Services Tax paid on purchases', isRecoverable: true },
     ],
     flag: '🇦🇺',
     region: 'Asia-Pacific',
@@ -750,7 +767,7 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
     ],
     taxRegimes: ['GST (15%)'],
     taxTypes: [
-      { code: 'GST', name: 'Collect GST', description: 'Goods and Services Tax', defaultRate: 15, registrationLabel: 'GST Number', registrationPlaceholder: '123-456-789' },
+      { code: 'GST', name: 'Collect GST', description: 'Goods and Services Tax', defaultRate: 15, registrationLabel: 'GST Number', registrationPlaceholder: '123-456-789', appliesTo: 'both', paidName: 'GST Paid (ITC)', paidDescription: 'Input Tax Credit for Goods and Services Tax paid on purchases', isRecoverable: true },
     ],
     flag: '🇳🇿',
     region: 'Asia-Pacific',
@@ -774,7 +791,7 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
     ],
     taxRegimes: ['Consumption Tax (10%)'],
     taxTypes: [
-      { code: 'JCT', name: 'Collect JCT', description: 'Japanese Consumption Tax', defaultRate: 10, registrationLabel: 'Corporate Number', registrationPlaceholder: '1234567890123' },
+      { code: 'JCT', name: 'Collect JCT', description: 'Japanese Consumption Tax', defaultRate: 10, registrationLabel: 'Corporate Number', registrationPlaceholder: '1234567890123', appliesTo: 'both', paidName: 'JCT Paid (Input Consumption Tax)', paidDescription: 'Japanese consumption tax paid on purchases', isRecoverable: true },
     ],
     flag: '🇯🇵',
     region: 'Asia-Pacific',
@@ -797,7 +814,7 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
     ],
     taxRegimes: ['VAT (10%)'],
     taxTypes: [
-      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 10, registrationLabel: 'Business Number', registrationPlaceholder: '123-45-67890' },
+      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 10, registrationLabel: 'Business Number', registrationPlaceholder: '123-45-67890', appliesTo: 'both', paidName: 'VAT Paid (Input VAT)', paidDescription: 'Input VAT recoverable on purchases', isRecoverable: true },
     ],
     flag: '🇰🇷',
     region: 'Asia-Pacific',
@@ -821,7 +838,7 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
     ],
     taxRegimes: ['VAT (13%)'],
     taxTypes: [
-      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 13, registrationLabel: 'Tax ID', registrationPlaceholder: '91110000123456789X' },
+      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 13, registrationLabel: 'Tax ID', registrationPlaceholder: '91110000123456789X', appliesTo: 'both', paidName: 'VAT Paid (Input VAT)', paidDescription: 'Input VAT recoverable on purchases', isRecoverable: true },
     ],
     flag: '🇨🇳',
     region: 'Asia-Pacific',
@@ -843,7 +860,7 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
     ],
     taxRegimes: ['No VAT'],
     taxTypes: [
-      { code: 'PROFITS', name: 'Profits Tax', description: 'Corporate Profits Tax', defaultRate: 16.5, registrationLabel: 'BR Number', registrationPlaceholder: '12345678' },
+      { code: 'PROFITS', name: 'Profits Tax', description: 'Corporate Profits Tax', defaultRate: 16.5, registrationLabel: 'BR Number', registrationPlaceholder: '12345678', appliesTo: 'sales', paidName: 'No retail sales tax paid', paidDescription: 'Hong Kong Profits Tax is not a retail sales tax and has no input credit', isRecoverable: false },
     ],
     flag: '🇭🇰',
     region: 'Asia-Pacific',
@@ -866,7 +883,7 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
     ],
     taxRegimes: ['GST (9%)'],
     taxTypes: [
-      { code: 'GST', name: 'Collect GST', description: 'Goods and Services Tax', defaultRate: 9, registrationLabel: 'GST Reg. No.', registrationPlaceholder: 'M12345678A' },
+      { code: 'GST', name: 'Collect GST', description: 'Goods and Services Tax', defaultRate: 9, registrationLabel: 'GST Reg. No.', registrationPlaceholder: 'M12345678A', appliesTo: 'both', paidName: 'GST Paid (ITC)', paidDescription: 'Input Tax Credit for Goods and Services Tax paid on purchases', isRecoverable: true },
     ],
     flag: '🇸🇬',
     region: 'Asia-Pacific',
@@ -889,7 +906,7 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
     ],
     taxRegimes: ['Sales Tax (10%)'],
     taxTypes: [
-      { code: 'SST', name: 'Collect SST', description: 'Sales and Service Tax', defaultRate: 10, registrationLabel: 'SST No.', registrationPlaceholder: 'W10-1234-56789000' },
+      { code: 'SST', name: 'Collect SST', description: 'Sales and Service Tax', defaultRate: 10, registrationLabel: 'SST No.', registrationPlaceholder: 'W10-1234-56789000', appliesTo: 'both', paidName: 'SST Paid', paidDescription: 'Sales and Service Tax paid on purchases (generally not recoverable)', isRecoverable: false },
     ],
     flag: '🇲🇾',
     region: 'Asia-Pacific',
@@ -912,7 +929,7 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
     ],
     taxRegimes: ['VAT (7%)'],
     taxTypes: [
-      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 7, registrationLabel: 'Tax ID', registrationPlaceholder: '0123456789012' },
+      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 7, registrationLabel: 'Tax ID', registrationPlaceholder: '0123456789012', appliesTo: 'both', paidName: 'VAT Paid (Input VAT)', paidDescription: 'Input VAT recoverable on purchases', isRecoverable: true },
     ],
     flag: '🇹🇭',
     region: 'Asia-Pacific',
@@ -935,7 +952,7 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
     ],
     taxRegimes: ['PPN (11%)'],
     taxTypes: [
-      { code: 'PPN', name: 'Collect PPN', description: 'Pajak Pertambahan Nilai', defaultRate: 11, registrationLabel: 'NPWP', registrationPlaceholder: '01.234.567.8-012.000' },
+      { code: 'PPN', name: 'Collect PPN', description: 'Pajak Pertambahan Nilai', defaultRate: 11, registrationLabel: 'NPWP', registrationPlaceholder: '01.234.567.8-012.000', appliesTo: 'both', paidName: 'PPN Paid (Input PPN)', paidDescription: 'Input PPN recoverable on purchases', isRecoverable: true },
     ],
     flag: '🇮🇩',
     region: 'Asia-Pacific',
@@ -958,7 +975,7 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
     ],
     taxRegimes: ['VAT (12%)'],
     taxTypes: [
-      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 12, registrationLabel: 'TIN', registrationPlaceholder: '123-456-789-000' },
+      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 12, registrationLabel: 'TIN', registrationPlaceholder: '123-456-789-000', appliesTo: 'both', paidName: 'VAT Paid (Input VAT)', paidDescription: 'Input VAT recoverable on purchases', isRecoverable: true },
     ],
     flag: '🇵🇭',
     region: 'Asia-Pacific',
@@ -981,7 +998,7 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
     ],
     taxRegimes: ['VAT (10%)'],
     taxTypes: [
-      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 10, registrationLabel: 'Tax Code', registrationPlaceholder: '0123456789' },
+      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 10, registrationLabel: 'Tax Code', registrationPlaceholder: '0123456789', appliesTo: 'both', paidName: 'VAT Paid (Input VAT)', paidDescription: 'Input VAT recoverable on purchases', isRecoverable: true },
     ],
     flag: '🇻🇳',
     region: 'Asia-Pacific',
@@ -1012,7 +1029,7 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
     ],
     taxRegimes: ['GST (18%)'],
     taxTypes: [
-      { code: 'GST', name: 'Collect GST', description: 'Goods and Services Tax', defaultRate: 18, registrationLabel: 'GSTIN', registrationPlaceholder: '22AAAAA0000A1Z5' },
+      { code: 'GST', name: 'Collect GST', description: 'Goods and Services Tax', defaultRate: 18, registrationLabel: 'GSTIN', registrationPlaceholder: '22AAAAA0000A1Z5', appliesTo: 'both', paidName: 'GST Paid (ITC)', paidDescription: 'Input Tax Credit for Goods and Services Tax paid on purchases', isRecoverable: true },
     ],
     flag: '🇮🇳',
     region: 'South Asia',
@@ -1040,7 +1057,7 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
     ],
     taxRegimes: ['VAT (5%)'],
     taxTypes: [
-      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 5, registrationLabel: 'TRN', registrationPlaceholder: '100234567890003' },
+      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 5, registrationLabel: 'TRN', registrationPlaceholder: '100234567890003', appliesTo: 'both', paidName: 'VAT Paid (Input VAT)', paidDescription: 'Input VAT recoverable on purchases', isRecoverable: true },
     ],
     flag: '🇦🇪',
     region: 'Middle East',
@@ -1064,7 +1081,7 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
     ],
     taxRegimes: ['VAT (15%)'],
     taxTypes: [
-      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 15, registrationLabel: 'VAT Number', registrationPlaceholder: '300012345678901' },
+      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 15, registrationLabel: 'VAT Number', registrationPlaceholder: '300012345678901', appliesTo: 'both', paidName: 'VAT Paid (Input VAT)', paidDescription: 'Input VAT recoverable on purchases', isRecoverable: true },
     ],
     flag: '🇸🇦',
     region: 'Middle East',
@@ -1085,7 +1102,9 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
       { code: 'WAK', name: 'Al Wakrah' },
     ],
     taxRegimes: ['No VAT'],
-    taxTypes: [],
+    taxTypes: [
+      { code: 'NONE', name: 'No retail sales tax', description: 'No VAT or retail sales tax currently levied', defaultRate: 0, registrationLabel: 'Tax Registration', registrationPlaceholder: '', appliesTo: 'sales', paidName: 'No input tax', paidDescription: 'No retail sales tax is currently levied on purchases', isRecoverable: false },
+    ],
     flag: '🇶🇦',
     region: 'Middle East',
   },
@@ -1105,7 +1124,9 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
       { code: 'FA', name: 'Farwaniya' },
     ],
     taxRegimes: ['No VAT'],
-    taxTypes: [],
+    taxTypes: [
+      { code: 'NONE', name: 'No retail sales tax', description: 'No VAT or retail sales tax currently levied', defaultRate: 0, registrationLabel: 'Tax Registration', registrationPlaceholder: '', appliesTo: 'sales', paidName: 'No input tax', paidDescription: 'No retail sales tax is currently levied on purchases', isRecoverable: false },
+    ],
     flag: '🇰🇼',
     region: 'Middle East',
   },
@@ -1126,7 +1147,7 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
     ],
     taxRegimes: ['VAT (5%)'],
     taxTypes: [
-      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 5, registrationLabel: 'VAT Number', registrationPlaceholder: 'OM1234567890' },
+      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 5, registrationLabel: 'VAT Number', registrationPlaceholder: 'OM1234567890', appliesTo: 'both', paidName: 'VAT Paid (Input VAT)', paidDescription: 'Input VAT recoverable on purchases', isRecoverable: true },
     ],
     flag: '🇴🇲',
     region: 'Middle East',
@@ -1149,7 +1170,7 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
     ],
     taxRegimes: ['VAT (10%)'],
     taxTypes: [
-      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 10, registrationLabel: 'VAT Number', registrationPlaceholder: '100012345678901' },
+      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 10, registrationLabel: 'VAT Number', registrationPlaceholder: '100012345678901', appliesTo: 'both', paidName: 'VAT Paid (Input VAT)', paidDescription: 'Input VAT recoverable on purchases', isRecoverable: true },
     ],
     flag: '🇧🇭',
     region: 'Middle East',
@@ -1172,7 +1193,7 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
     ],
     taxRegimes: ['VAT (17%)'],
     taxTypes: [
-      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 17, registrationLabel: 'VAT Number', registrationPlaceholder: '123456789' },
+      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 17, registrationLabel: 'VAT Number', registrationPlaceholder: '123456789', appliesTo: 'both', paidName: 'VAT Paid (Input VAT)', paidDescription: 'Input VAT recoverable on purchases', isRecoverable: true },
     ],
     flag: '🇮🇱',
     region: 'Middle East',
@@ -1202,7 +1223,7 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
     ],
     taxRegimes: ['VAT (15%)'],
     taxTypes: [
-      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 15, registrationLabel: 'VAT Number', registrationPlaceholder: '4123456789' },
+      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 15, registrationLabel: 'VAT Number', registrationPlaceholder: '4123456789', appliesTo: 'both', paidName: 'VAT Paid (Input VAT)', paidDescription: 'Input VAT recoverable on purchases', isRecoverable: true },
     ],
     flag: '🇿🇦',
     region: 'Africa',
@@ -1259,7 +1280,7 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
 
     taxRegimes: ['VAT (7.5%)'],
     taxTypes: [
-      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 7.5, registrationLabel: 'TIN', registrationPlaceholder: '12345678-0001' },
+      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 7.5, registrationLabel: 'TIN', registrationPlaceholder: '12345678-0001', appliesTo: 'both', paidName: 'VAT Paid (Input VAT)', paidDescription: 'Input VAT recoverable on purchases', isRecoverable: true },
     ],
     flag: '🇳🇬',
     region: 'Africa',
@@ -1282,7 +1303,7 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
     ],
     taxRegimes: ['VAT (14%)'],
     taxTypes: [
-      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 14, registrationLabel: 'Tax Card Number', registrationPlaceholder: '123-456-789' },
+      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 14, registrationLabel: 'Tax Card Number', registrationPlaceholder: '123-456-789', appliesTo: 'both', paidName: 'VAT Paid (Input VAT)', paidDescription: 'Input VAT recoverable on purchases', isRecoverable: true },
     ],
     flag: '🇪🇬',
     region: 'Africa',
@@ -1305,7 +1326,7 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
     ],
     taxRegimes: ['TVA (20%)'],
     taxTypes: [
-      { code: 'TVA', name: 'Collect TVA', description: 'Taxe sur la Valeur Ajoutée', defaultRate: 20, registrationLabel: 'ICE', registrationPlaceholder: '000000000000000' },
+      { code: 'TVA', name: 'Collect TVA', description: 'Taxe sur la Valeur Ajoutée', defaultRate: 20, registrationLabel: 'ICE', registrationPlaceholder: '000000000000000', appliesTo: 'both', paidName: 'TVA Paid (Input TVA)', paidDescription: 'TVA deductible / input TVA recoverable on purchases', isRecoverable: true },
     ],
     flag: '🇲🇦',
     region: 'Africa',
@@ -1331,7 +1352,7 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
     ],
     taxRegimes: ['VAT (15%)'],
     taxTypes: [
-      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 15, registrationLabel: 'TIN', registrationPlaceholder: 'C0012345678' },
+      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 15, registrationLabel: 'TIN', registrationPlaceholder: 'C0012345678', appliesTo: 'both', paidName: 'VAT Paid (Input VAT)', paidDescription: 'Input VAT recoverable on purchases', isRecoverable: true },
     ],
     flag: '🇬🇭',
     region: 'Africa',
@@ -1357,7 +1378,7 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
     ],
     taxRegimes: ['VAT (16%)'],
     taxTypes: [
-      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax (Standard Rate)', defaultRate: 16, registrationLabel: 'KRA PIN', registrationPlaceholder: 'P051234567A' },
+      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax (Standard Rate)', defaultRate: 16, registrationLabel: 'KRA PIN', registrationPlaceholder: 'P051234567A', appliesTo: 'both', paidName: 'VAT Paid (Input VAT)', paidDescription: 'Input VAT recoverable on purchases', isRecoverable: true },
     ],
     flag: '🇰🇪',
     region: 'Africa',
@@ -1380,7 +1401,7 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
     ],
     taxRegimes: ['VAT (18%)'],
     taxTypes: [
-      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 18, registrationLabel: 'TIN', registrationPlaceholder: '123-456-789' },
+      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 18, registrationLabel: 'TIN', registrationPlaceholder: '123-456-789', appliesTo: 'both', paidName: 'VAT Paid (Input VAT)', paidDescription: 'Input VAT recoverable on purchases', isRecoverable: true },
     ],
     flag: '🇹🇿',
     region: 'Africa',
@@ -1409,7 +1430,7 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
     ],
     taxRegimes: ['VAT (18%)'],
     taxTypes: [
-      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax (Standard Rate)', defaultRate: 18, registrationLabel: 'TIN', registrationPlaceholder: '1000012345' },
+      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax (Standard Rate)', defaultRate: 18, registrationLabel: 'TIN', registrationPlaceholder: '1000012345', appliesTo: 'both', paidName: 'VAT Paid (Input VAT)', paidDescription: 'Input VAT recoverable on purchases', isRecoverable: true },
     ],
     flag: '🇺🇬',
     region: 'Africa',
@@ -1433,7 +1454,7 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
     ],
     taxRegimes: ['VAT (18%)'],
     taxTypes: [
-      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 18, registrationLabel: 'TIN', registrationPlaceholder: '123456789' },
+      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 18, registrationLabel: 'TIN', registrationPlaceholder: '123456789', appliesTo: 'both', paidName: 'VAT Paid (Input VAT)', paidDescription: 'Input VAT recoverable on purchases', isRecoverable: true },
     ],
     flag: '🇷🇼',
     region: 'Africa',
@@ -1456,7 +1477,7 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
     ],
     taxRegimes: ['VAT (15%)'],
     taxTypes: [
-      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 15, registrationLabel: 'TIN', registrationPlaceholder: '0012345678' },
+      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 15, registrationLabel: 'TIN', registrationPlaceholder: '0012345678', appliesTo: 'both', paidName: 'VAT Paid (Input VAT)', paidDescription: 'Input VAT recoverable on purchases', isRecoverable: true },
     ],
     flag: '🇪🇹',
     region: 'Africa',
@@ -1485,7 +1506,7 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
     ],
     taxRegimes: ['VAT (16%)'],
     taxTypes: [
-      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax (Standard Rate)', defaultRate: 16, registrationLabel: 'TPIN', registrationPlaceholder: '1234567890' },
+      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax (Standard Rate)', defaultRate: 16, registrationLabel: 'TPIN', registrationPlaceholder: '1234567890', appliesTo: 'both', paidName: 'VAT Paid (Input VAT)', paidDescription: 'Input VAT recoverable on purchases', isRecoverable: true },
     ],
     flag: '🇿🇲',
     region: 'Africa',
@@ -1522,7 +1543,7 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
     ],
     taxRegimes: ['VAT (18%)'],
     taxTypes: [
-      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax (Standard Rate)', defaultRate: 18, registrationLabel: 'NIF', registrationPlaceholder: '4000012345' },
+      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax (Standard Rate)', defaultRate: 18, registrationLabel: 'NIF', registrationPlaceholder: '4000012345', appliesTo: 'both', paidName: 'VAT Paid (Input VAT)', paidDescription: 'Input VAT recoverable on purchases', isRecoverable: true },
     ],
     flag: '🇧🇮',
     region: 'Africa',
@@ -1547,7 +1568,7 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
     ],
     taxRegimes: ['KDV (20%)'],
     taxTypes: [
-      { code: 'KDV', name: 'Collect KDV', description: 'Katma Değer Vergisi', defaultRate: 20, registrationLabel: 'Vergi Kimlik No', registrationPlaceholder: '1234567890' },
+      { code: 'KDV', name: 'Collect KDV', description: 'Katma Değer Vergisi', defaultRate: 20, registrationLabel: 'Vergi Kimlik No', registrationPlaceholder: '1234567890', appliesTo: 'both', paidName: 'KDV Paid (Indirilecek KDV)', paidDescription: 'Input KDV recoverable on purchases', isRecoverable: true },
     ],
     flag: '🇹🇷',
     region: 'Europe',
@@ -1571,7 +1592,7 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
     ],
     taxRegimes: ['TVA (19%)'],
     taxTypes: [
-      { code: 'TVA', name: 'Collect TVA', description: 'Taxa pe Valoarea Adăugată', defaultRate: 19, registrationLabel: 'CUI', registrationPlaceholder: 'RO12345678' },
+      { code: 'TVA', name: 'Collect TVA', description: 'Taxa pe Valoarea Adăugată', defaultRate: 19, registrationLabel: 'CUI', registrationPlaceholder: 'RO12345678', appliesTo: 'both', paidName: 'TVA Paid (Input TVA)', paidDescription: 'TVA deductible / input TVA recoverable on purchases', isRecoverable: true },
     ],
     flag: '🇷🇴',
     region: 'Europe',
@@ -1594,7 +1615,7 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
     ],
     taxRegimes: ['ÁFA (27%)'],
     taxTypes: [
-      { code: 'AFA', name: 'Collect ÁFA', description: 'Általános forgalmi adó', defaultRate: 27, registrationLabel: 'Adószám', registrationPlaceholder: 'HU12345678' },
+      { code: 'AFA', name: 'Collect ÁFA', description: 'Általános forgalmi adó', defaultRate: 27, registrationLabel: 'Adószám', registrationPlaceholder: 'HU12345678', appliesTo: 'both', paidName: 'AFA Paid (Input AFA)', paidDescription: 'Input AFA recoverable on purchases', isRecoverable: true },
     ],
     flag: '🇭🇺',
     region: 'Europe',
@@ -1617,7 +1638,7 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
     ],
     taxRegimes: ['ΦΠΑ (24%)'],
     taxTypes: [
-      { code: 'FPA', name: 'Collect ΦΠΑ', description: 'Φόρος Προστιθέμενης Αξίας', defaultRate: 24, registrationLabel: 'ΑΦΜ', registrationPlaceholder: 'EL123456789' },
+      { code: 'FPA', name: 'Collect ΦΠΑ', description: 'Φόρος Προστιθέμενης Αξίας', defaultRate: 24, registrationLabel: 'ΑΦΜ', registrationPlaceholder: 'EL123456789', appliesTo: 'both', paidName: 'FPA Paid (Input VAT)', paidDescription: 'Input FPA recoverable on purchases', isRecoverable: true },
     ],
     flag: '🇬🇷',
     region: 'Europe',
@@ -1640,7 +1661,7 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
     ],
     taxRegimes: ['PDV (25%)'],
     taxTypes: [
-      { code: 'PDV', name: 'Collect PDV', description: 'Porez na dodanu vrijednost', defaultRate: 25, registrationLabel: 'OIB', registrationPlaceholder: 'HR12345678901' },
+      { code: 'PDV', name: 'Collect PDV', description: 'Porez na dodanu vrijednost', defaultRate: 25, registrationLabel: 'OIB', registrationPlaceholder: 'HR12345678901', appliesTo: 'both', paidName: 'PDV Paid (Input VAT)', paidDescription: 'Input PDV recoverable on purchases', isRecoverable: true },
     ],
     flag: '🇭🇷',
     region: 'Europe',
@@ -1664,7 +1685,7 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
     ],
     taxRegimes: ['ПДВ (20%)'],
     taxTypes: [
-      { code: 'PDV', name: 'Collect ПДВ', description: 'Податок на додану вартість', defaultRate: 20, registrationLabel: 'ЄДРПОУ', registrationPlaceholder: '12345678' },
+      { code: 'PDV', name: 'Collect ПДВ', description: 'Податок на додану вартість', defaultRate: 20, registrationLabel: 'ЄДРПОУ', registrationPlaceholder: '12345678', appliesTo: 'both', paidName: 'PDV Paid (Input VAT)', paidDescription: 'Input PDV recoverable on purchases', isRecoverable: true },
     ],
     flag: '🇺🇦',
     region: 'Europe',
@@ -1690,7 +1711,7 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
     ],
     taxRegimes: ['Sales Tax (18%)'],
     taxTypes: [
-      { code: 'ST', name: 'Collect Sales Tax', description: 'Federal Sales Tax', defaultRate: 18, registrationLabel: 'NTN', registrationPlaceholder: '1234567-8' },
+      { code: 'ST', name: 'Collect Sales Tax', description: 'Federal Sales Tax', defaultRate: 18, registrationLabel: 'NTN', registrationPlaceholder: '1234567-8', appliesTo: 'both', paidName: 'Sales Tax Paid (Input Tax)', paidDescription: 'Federal sales tax paid on purchases (recoverable input tax)', isRecoverable: true },
     ],
     flag: '🇵🇰',
     region: 'South Asia',
@@ -1714,7 +1735,7 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
     ],
     taxRegimes: ['VAT (15%)'],
     taxTypes: [
-      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 15, registrationLabel: 'BIN', registrationPlaceholder: '000000000000' },
+      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 15, registrationLabel: 'BIN', registrationPlaceholder: '000000000000', appliesTo: 'both', paidName: 'VAT Paid (Input VAT)', paidDescription: 'Input VAT recoverable on purchases', isRecoverable: true },
     ],
     flag: '🇧🇩',
     region: 'South Asia',
@@ -1737,7 +1758,7 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
     ],
     taxRegimes: ['VAT (18%)'],
     taxTypes: [
-      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 18, registrationLabel: 'TIN', registrationPlaceholder: '123456789' },
+      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 18, registrationLabel: 'TIN', registrationPlaceholder: '123456789', appliesTo: 'both', paidName: 'VAT Paid (Input VAT)', paidDescription: 'Input VAT recoverable on purchases', isRecoverable: true },
     ],
     flag: '🇱🇰',
     region: 'South Asia',
@@ -1761,7 +1782,7 @@ export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
     ],
     taxRegimes: ['VAT (13%)'],
     taxTypes: [
-      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 13, registrationLabel: 'PAN', registrationPlaceholder: '123456789' },
+      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 13, registrationLabel: 'PAN', registrationPlaceholder: '123456789', appliesTo: 'both', paidName: 'VAT Paid (Input VAT)', paidDescription: 'Input VAT recoverable on purchases', isRecoverable: true },
     ],
     flag: '🇳🇵',
     region: 'South Asia',
@@ -1921,4 +1942,112 @@ export function getCountriesByRegion(): Record<string, CountryLocalization[]> {
 // Get all supported country codes
 export function getSupportedCountryCodes(): string[] {
   return Object.keys(COUNTRY_LOCALIZATIONS);
+}
+
+const NON_RETAIL_TAX_CODES = new Set(['PROFITS', 'NONE', 'EXEMPT']);
+const NON_RECOVERABLE_TAX_CODES = new Set(['PST', 'SALES_TAX', 'SST', 'PROFITS', 'NONE', 'USE_TAX']);
+
+function defaultPaidName(tax: TaxTypeConfig): string {
+  if (tax.code === 'PROFITS' || tax.code === 'NONE') return 'No retail sales tax paid';
+  if (tax.code === 'PST') return 'PST Paid';
+  if (tax.code === 'HST') return 'HST Paid (ITC)';
+  if (tax.code === 'GST') return 'GST Paid (ITC)';
+  if (tax.code === 'SALES_TAX') return 'Sales Tax Paid / Use Tax';
+  const collect = tax.name.replace(/^Collect\s+/i, '');
+  return `${collect} Paid (Input ${collect})`;
+}
+
+function defaultPaidDescription(tax: TaxTypeConfig): string {
+  if (tax.code === 'PROFITS' || tax.code === 'NONE') {
+    return 'No retail sales tax is levied on purchases';
+  }
+  if (NON_RECOVERABLE_TAX_CODES.has(tax.code)) {
+    return `${tax.description} paid on purchases (generally not recoverable)`;
+  }
+  return `Input ${tax.name.replace(/^Collect\s+/i, '')} recoverable on purchases`;
+}
+
+/** Fill paid/ITC defaults so older tax type objects still resolve. */
+export function resolveRetailTaxType(tax: TaxTypeConfig): ResolvedTaxTypeConfig {
+  const appliesTo: TaxAppliesTo =
+    tax.appliesTo ?? (NON_RETAIL_TAX_CODES.has(tax.code) ? 'sales' : 'both');
+  return {
+    ...tax,
+    appliesTo,
+    paidName: tax.paidName ?? defaultPaidName(tax),
+    paidDescription: tax.paidDescription ?? defaultPaidDescription(tax),
+    isRecoverable: tax.isRecoverable ?? !NON_RECOVERABLE_TAX_CODES.has(tax.code),
+  };
+}
+
+export function taxTypeAppliesToTransaction(
+  tax: TaxTypeConfig,
+  transactionType: 'sale' | 'purchase',
+): boolean {
+  const resolved = resolveRetailTaxType(tax);
+  if (resolved.appliesTo === 'both') return true;
+  return transactionType === 'sale'
+    ? resolved.appliesTo === 'sales'
+    : resolved.appliesTo === 'purchases';
+}
+
+/** Retail sales taxes (GST/HST/VAT/PST/etc.) for a country and posting direction. */
+export function getRetailTaxTypes(
+  countryCode: string,
+  direction: TaxDirection = 'collected',
+): ResolvedTaxTypeConfig[] {
+  return getCountryLocalization(countryCode)
+    .taxTypes
+    .map(resolveRetailTaxType)
+    .filter((tax) => {
+      if (NON_RETAIL_TAX_CODES.has(tax.code)) return false;
+      if (direction === 'collected') return tax.appliesTo !== 'purchases';
+      return tax.appliesTo !== 'sales';
+    });
+}
+
+/** Primary retail tax (VAT/GST/IVA/…) used for generic country defaults. */
+export function getPrimaryRetailTaxType(countryCode: string): ResolvedTaxTypeConfig | null {
+  const types = getRetailTaxTypes(countryCode, 'collected');
+  return types[0] ?? null;
+}
+
+/**
+ * Recoverability of a tax paid on purchases.
+ * Canadian PST is recoverable only as QST ITR in Quebec.
+ */
+export function isRecoverableRetailTax(
+  code: string,
+  countryCode?: string,
+  jurisdictionCode?: string,
+): boolean {
+  const upper = (code || '').toUpperCase();
+  if (upper === 'QST' || upper.startsWith('QST')) return true;
+  if (countryCode === 'CA' && (upper === 'PST' || upper.startsWith('PST'))) {
+    return jurisdictionCode === 'QC';
+  }
+  if (countryCode) {
+    const match = getCountryLocalization(countryCode).taxTypes.find(
+      (t) => t.code === upper || upper.startsWith(t.code),
+    );
+    if (match) return resolveRetailTaxType(match).isRecoverable;
+  }
+  return !NON_RECOVERABLE_TAX_CODES.has(upper);
+}
+
+/** Family used to pick collected vs paid GL accounts. */
+export function classifyRetailTaxFamily(
+  code: string,
+): 'gst' | 'hst' | 'pst' | 'vat' | 'sales_tax' | 'other' {
+  const upper = (code || '').toUpperCase();
+  if (upper === 'HST' || upper.startsWith('HST')) return 'hst';
+  if (upper === 'GST' || upper.startsWith('GST') || upper === 'CGST' || upper === 'SGST' || upper === 'IGST') {
+    return 'gst';
+  }
+  if (upper === 'PST' || upper === 'QST' || upper.startsWith('PST') || upper.startsWith('QST')) {
+    return 'pst';
+  }
+  if (upper === 'SALES_TAX' || upper === 'USE_TAX' || upper === 'SST') return 'sales_tax';
+  if (NON_RETAIL_TAX_CODES.has(upper)) return 'other';
+  return 'vat';
 }
