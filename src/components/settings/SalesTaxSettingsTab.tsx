@@ -8,11 +8,16 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useSalesTaxSettings, useUpsertSalesTaxSettings, PROVINCES, PROVINCE_TAX_RATES } from '@/hooks/useSalesTax';
+import { useSalesTaxSettings, useUpsertSalesTaxSettings, PROVINCE_TAX_RATES } from '@/hooks/useSalesTax';
 import { useCurrentOrganization } from '@/hooks/useOrganization';
 import { CreateOrganizationDialog } from '@/components/accounts/CreateOrganizationDialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { getCountryLocalization, TaxTypeConfig } from '@/data/countryLocalizations';
+import {
+  getCountryLocalization,
+  getPrimaryRetailTaxType,
+  getRetailTaxTypes,
+} from '@/data/countryLocalizations';
+import { useAccounts } from '@/hooks/useAccounts';
 
 interface FormValues {
   filing_frequency: string;
@@ -34,6 +39,12 @@ interface FormValues {
   vat_rate: number;
   sales_tax_rate: number;
   default_tax_code: string;
+  claim_input_tax: boolean;
+  claim_gst_hst_itc: boolean;
+  claim_pst_paid: boolean;
+  gst_paid_account_id: string;
+  pst_paid_account_id: string;
+  vat_paid_account_id: string;
 }
 
 export function SalesTaxSettingsTab() {
@@ -41,6 +52,15 @@ export function SalesTaxSettingsTab() {
   const { organization, isLoading: orgLoading } = useCurrentOrganization();
   const { data: settings, isLoading: settingsLoading } = useSalesTaxSettings(organization?.id);
   const upsertSettings = useUpsertSalesTaxSettings();
+  const { data: accounts = [] } = useAccounts(organization?.id);
+  const assetAccounts = useMemo(
+    () => accounts.filter((a) => a.account_type === 'asset' && a.is_active && !a.is_header),
+    [accounts],
+  );
+  const expenseAccounts = useMemo(
+    () => accounts.filter((a) => a.account_type === 'expense' && a.is_active && !a.is_header),
+    [accounts],
+  );
 
   // Get country and province from organization profile
   const orgCountry = organization?.country || 'CA';
@@ -76,6 +96,12 @@ export function SalesTaxSettingsTab() {
       vat_rate: 16,
       sales_tax_rate: 0,
       default_tax_code: 'HST',
+      claim_input_tax: true,
+      claim_gst_hst_itc: true,
+      claim_pst_paid: false,
+      gst_paid_account_id: '',
+      pst_paid_account_id: '',
+      vat_paid_account_id: '',
     },
   });
 
@@ -125,15 +151,15 @@ export function SalesTaxSettingsTab() {
       form.setValue('collect_vat', false);
       form.setValue('default_tax_code', 'SALES_TAX');
     } else {
-      // VAT countries (ZM, KE, BI, etc.)
-      const vatTax = countryLocalization.taxTypes.find(t => t.code === 'VAT');
-      form.setValue('collect_vat', true);
-      form.setValue('vat_rate', vatTax?.defaultRate || 16);
+      const primaryTax = getPrimaryRetailTaxType(orgCountry);
+      form.setValue('collect_vat', !!primaryTax);
+      form.setValue('vat_rate', primaryTax?.defaultRate || 16);
       form.setValue('collect_hst', false);
       form.setValue('collect_gst', false);
       form.setValue('collect_pst', false);
       form.setValue('collect_sales_tax', false);
-      form.setValue('default_tax_code', 'VAT');
+      form.setValue('default_tax_code', primaryTax?.code || 'VAT');
+      form.setValue('claim_input_tax', primaryTax?.isRecoverable !== false);
     }
   }, [form, orgCountry, orgProvince, countryLocalization, applyProvinceRates]);
 
@@ -160,6 +186,12 @@ export function SalesTaxSettingsTab() {
         vat_rate: settings.vat_rate ?? 16,
         sales_tax_rate: settings.sales_tax_rate ?? 0,
         default_tax_code: settings.default_tax_code || 'HST',
+        claim_input_tax: settings.claim_input_tax ?? true,
+        claim_gst_hst_itc: settings.claim_gst_hst_itc ?? true,
+        claim_pst_paid: settings.claim_pst_paid ?? false,
+        gst_paid_account_id: settings.gst_paid_account_id || '',
+        pst_paid_account_id: settings.pst_paid_account_id || '',
+        vat_paid_account_id: settings.vat_paid_account_id || '',
       });
     } else {
       // Apply country defaults for new settings
@@ -175,8 +207,161 @@ export function SalesTaxSettingsTab() {
     if (!organization?.id) return;
     await upsertSettings.mutateAsync({
       organizationId: organization.id,
-      settings: data,
+      settings: {
+        ...data,
+        gst_paid_account_id: data.gst_paid_account_id || null,
+        pst_paid_account_id: data.pst_paid_account_id || null,
+        vat_paid_account_id: data.vat_paid_account_id || null,
+      },
     });
+  };
+
+  const paidTaxTypes = useMemo(
+    () => getRetailTaxTypes(orgCountry, 'paid'),
+    [orgCountry],
+  );
+
+  const renderPaidTaxSettings = () => {
+    if (paidTaxTypes.length === 0) {
+      return (
+        <Card className="p-6">
+          <h2 className="text-lg font-semibold text-foreground mb-2">Retail Sales Taxes Paid</h2>
+          <p className="text-sm text-muted-foreground">
+            This country does not levy a recoverable retail sales tax on purchases.
+          </p>
+        </Card>
+      );
+    }
+
+    const showCanadianItc = orgCountry === 'CA';
+    const showVatInput = orgCountry !== 'CA' && orgCountry !== 'US';
+    const showUseTax = orgCountry === 'US';
+
+    return (
+      <Card className="p-6">
+        <h2 className="text-lg font-semibold text-foreground mb-1">Retail Sales Taxes Paid</h2>
+        <p className="text-sm text-muted-foreground mb-4">
+          Track GST/HST Input Tax Credits (ITC), Input VAT, PST paid, and other taxes paid on purchases.
+        </p>
+        <div className="space-y-6">
+          <div className="rounded-md border border-border p-3 space-y-1">
+            {paidTaxTypes.map((tax) => (
+              <p key={tax.code} className="text-sm">
+                <span className="font-medium text-foreground">{tax.paidName}</span>
+                <span className="text-muted-foreground"> — {tax.paidDescription}</span>
+                {!tax.isRecoverable && (
+                  <span className="ml-1 text-xs text-muted-foreground">(not recoverable)</span>
+                )}
+              </p>
+            ))}
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="font-medium text-foreground">Claim input tax on purchases</p>
+              <p className="text-sm text-muted-foreground">
+                Post recoverable taxes paid to an ITC / Input VAT asset account
+              </p>
+            </div>
+            <Switch
+              checked={form.watch('claim_input_tax')}
+              onCheckedChange={(v) => form.setValue('claim_input_tax', v, { shouldDirty: true })}
+            />
+          </div>
+
+          {showCanadianItc && (
+            <>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-foreground">Claim GST/HST ITC</p>
+                  <p className="text-sm text-muted-foreground">
+                    Recover GST and HST paid on purchases as Input Tax Credits
+                  </p>
+                </div>
+                <Switch
+                  checked={form.watch('claim_gst_hst_itc')}
+                  onCheckedChange={(v) => form.setValue('claim_gst_hst_itc', v, { shouldDirty: true })}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-foreground">Track PST paid</p>
+                  <p className="text-sm text-muted-foreground">
+                    Provincial sales tax paid is generally not recoverable except QST ITR in Quebec
+                  </p>
+                </div>
+                <Switch
+                  checked={form.watch('claim_pst_paid')}
+                  onCheckedChange={(v) => form.setValue('claim_pst_paid', v, { shouldDirty: true })}
+                />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <Label>GST/HST Paid (ITC) account</Label>
+                  <Select
+                    value={form.watch('gst_paid_account_id') || '__none__'}
+                    onValueChange={(v) => form.setValue('gst_paid_account_id', v === '__none__' ? '' : v, { shouldDirty: true })}
+                  >
+                    <SelectTrigger><SelectValue placeholder="Select ITC asset account" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">Not set</SelectItem>
+                      {assetAccounts.map((a) => (
+                        <SelectItem key={a.id} value={a.id}>
+                          <span className="font-mono mr-2">{a.code}</span>{a.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>PST Paid account</Label>
+                  <Select
+                    value={form.watch('pst_paid_account_id') || '__none__'}
+                    onValueChange={(v) => form.setValue('pst_paid_account_id', v === '__none__' ? '' : v, { shouldDirty: true })}
+                  >
+                    <SelectTrigger><SelectValue placeholder="Select PST paid account" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">Not set</SelectItem>
+                      {[...expenseAccounts, ...assetAccounts].map((a) => (
+                        <SelectItem key={a.id} value={a.id}>
+                          <span className="font-mono mr-2">{a.code}</span>{a.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </>
+          )}
+
+          {(showVatInput || showUseTax) && (
+            <div className="space-y-2">
+              <Label>
+                {showUseTax ? 'Sales tax paid / Use tax account' : `${paidTaxTypes[0]?.paidName || 'Input VAT'} account`}
+              </Label>
+              <Select
+                value={form.watch('vat_paid_account_id') || form.watch('gst_paid_account_id') || '__none__'}
+                onValueChange={(v) => {
+                  const next = v === '__none__' ? '' : v;
+                  form.setValue('vat_paid_account_id', next, { shouldDirty: true });
+                  form.setValue('gst_paid_account_id', next, { shouldDirty: true });
+                }}
+              >
+                <SelectTrigger><SelectValue placeholder="Select paid tax account" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">Not set</SelectItem>
+                  {(showUseTax ? [...expenseAccounts, ...assetAccounts] : assetAccounts).map((a) => (
+                    <SelectItem key={a.id} value={a.id}>
+                      <span className="font-mono mr-2">{a.code}</span>{a.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+        </div>
+      </Card>
+    );
   };
 
   // Show loading state
@@ -454,7 +639,7 @@ export function SalesTaxSettingsTab() {
 
   // Render VAT tax settings (ZM, KE, BI, etc.)
   const renderVATTaxSettings = () => {
-    const taxConfig = countryLocalization.taxTypes.find(t => t.code === 'VAT');
+    const taxConfig = getPrimaryRetailTaxType(orgCountry) || countryLocalization.taxTypes[0];
     return (
       <>
         <Card className="p-6">
@@ -516,7 +701,10 @@ export function SalesTaxSettingsTab() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="font-medium text-foreground">{taxConfig?.name || 'Collect VAT'}</p>
-                <p className="text-sm text-muted-foreground">{taxConfig?.description || 'Value Added Tax'}</p>
+                <p className="text-sm text-muted-foreground">
+                  {taxConfig?.description || 'Value Added Tax'}
+                  {taxConfig?.paidName ? ` · Paid: ${taxConfig.paidName}` : ''}
+                </p>
               </div>
               <div className="flex items-center gap-4">
                 {form.watch('collect_vat') && (
@@ -557,6 +745,7 @@ export function SalesTaxSettingsTab() {
   return (
     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
       {renderTaxSettings()}
+      {renderPaidTaxSettings()}
 
       <div className="flex justify-end">
         <Button type="button" onClick={form.handleSubmit(onSubmit)} disabled={upsertSettings.isPending}>

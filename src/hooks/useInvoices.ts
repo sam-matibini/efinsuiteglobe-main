@@ -5,6 +5,8 @@ import { toast } from 'sonner';
 import { addDays, format } from 'date-fns';
 import { createJournalEntry, getDefaultAccounts, getTaxGlAccounts } from './useJournalEntryCreation';
 import { recordInvoiceTaxes } from '@/lib/ngTax/integration';
+import { computeDocumentTaxes, persistInvoiceTaxes } from '@/lib/documentTaxEngine';
+import type { SalesTaxSettings } from './useSalesTax';
 
 export interface Invoice {
   id: string;
@@ -308,6 +310,35 @@ export function useInvoices() {
         .select('id, amount, tax_rate');
       
       if (linesError) throw linesError;
+
+      try {
+        const { data: taxSettings } = await supabase
+          .from('sales_tax_settings')
+          .select('*')
+          .eq('organization_id', organization.id)
+          .maybeSingle();
+        const jurisdiction = input.buyer_province || organization.province || taxSettings?.province || null;
+        const split = computeDocumentTaxes({
+          countryCode: organization.country,
+          jurisdictionCode: jurisdiction,
+          amount: subtotal,
+          direction: 'collected',
+          settings: taxSettings as SalesTaxSettings | null,
+        });
+        const blended = computeDocumentTaxes({
+          countryCode: organization.country,
+          jurisdictionCode: jurisdiction,
+          amount: subtotal,
+          direction: 'collected',
+          settings: taxSettings as SalesTaxSettings | null,
+          taxRateOverride: subtotal > 0 ? (taxAmount / subtotal) * 100 : 0,
+        });
+        const taxes =
+          Math.abs(split.totalTax - taxAmount) <= 0.05 ? split.taxes : blended.taxes;
+        await persistInvoiceTaxes(invoice.id, taxes);
+      } catch (taxErr) {
+        console.warn('Could not persist invoice_taxes:', taxErr);
+      }
 
       // Create journal entry for the invoice with source document tracking
       // Debit: Accounts Receivable

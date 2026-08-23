@@ -28,6 +28,11 @@ export interface SalesTaxSettings {
   gst_paid_account_id: string | null;
   pst_collected_account_id: string | null;
   pst_paid_account_id: string | null;
+  vat_collected_account_id: string | null;
+  vat_paid_account_id: string | null;
+  claim_input_tax: boolean;
+  claim_gst_hst_itc: boolean;
+  claim_pst_paid: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -223,8 +228,8 @@ export function useTaxCodes(organizationId?: string, countryCode?: string) {
           is_recoverable,
           is_compound: false,
           is_active: true,
-          gl_collected_account_id: settings?.gst_collected_account_id || null,
-          gl_paid_account_id: settings?.gst_paid_account_id || null,
+          gl_collected_account_id: settings?.vat_collected_account_id || settings?.gst_collected_account_id || null,
+          gl_paid_account_id: settings?.vat_paid_account_id || settings?.gst_paid_account_id || null,
           created_at: now,
           updated_at: now,
         });

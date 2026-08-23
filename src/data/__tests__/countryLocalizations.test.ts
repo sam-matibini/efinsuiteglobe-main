@@ -5,6 +5,11 @@ import {
   resolveCountryCode,
   getCountriesByRegion,
   getAvailableCurrencies,
+  getRetailTaxTypes,
+  getPrimaryRetailTaxType,
+  isRecoverableRetailTax,
+  classifyRetailTaxFamily,
+  resolveRetailTaxType,
 } from '../countryLocalizations';
 import { getAllLocalizedCurrencies } from '@/hooks/useLocalizedCurrency';
 
@@ -71,6 +76,43 @@ describe('Country Localizations Data', () => {
     const flattened = Object.values(byRegion).flat();
     expect(flattened).toHaveLength(allCodes.length);
     expect(Object.keys(byRegion).length).toBeGreaterThan(1);
+  });
+
+  it('retail tax types include paid/ITC labels for every localized country that levies one', () => {
+    allCodes.forEach((code) => {
+      const loc = COUNTRY_LOCALIZATIONS[code];
+      loc.taxTypes.forEach((tax) => {
+        const resolved = resolveRetailTaxType(tax);
+        expect(resolved.paidName.length).toBeGreaterThan(0);
+        expect(resolved.paidDescription.length).toBeGreaterThan(0);
+        expect(['sales', 'purchases', 'both']).toContain(resolved.appliesTo);
+      });
+    });
+  });
+
+  it('Canada paid taxes distinguish recoverable GST/HST ITC from non-recoverable PST', () => {
+    const paid = getRetailTaxTypes('CA', 'paid');
+    expect(paid.map((t) => t.code).sort()).toEqual(['GST', 'HST', 'PST']);
+    expect(paid.find((t) => t.code === 'GST')?.paidName).toMatch(/ITC/);
+    expect(paid.find((t) => t.code === 'HST')?.paidName).toMatch(/ITC/);
+    expect(paid.find((t) => t.code === 'PST')?.isRecoverable).toBe(false);
+    expect(isRecoverableRetailTax('QST', 'CA', 'QC')).toBe(true);
+    expect(isRecoverableRetailTax('PST-BC', 'CA', 'BC')).toBe(false);
+  });
+
+  it('VAT countries expose Input VAT as the paid-side label', () => {
+    const gb = getPrimaryRetailTaxType('GB');
+    expect(gb?.code).toBe('VAT');
+    expect(gb?.paidName).toMatch(/Input VAT/);
+    expect(gb?.isRecoverable).toBe(true);
+    expect(classifyRetailTaxFamily('VAT')).toBe('vat');
+    expect(classifyRetailTaxFamily('IVA')).toBe('vat');
+    expect(classifyRetailTaxFamily('SALES_TAX')).toBe('sales_tax');
+  });
+
+  it('Hong Kong profits tax is not a retail sales tax on purchases', () => {
+    expect(getRetailTaxTypes('HK', 'paid')).toHaveLength(0);
+    expect(getRetailTaxTypes('HK', 'collected')).toHaveLength(0);
   });
 
   it('getAllLocalizedCurrencies includes every country currency', () => {

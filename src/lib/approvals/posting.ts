@@ -1,7 +1,55 @@
 import { supabase } from '@/integrations/supabase/client';
-import { createJournalEntry, getDefaultAccounts } from '@/hooks/useJournalEntryCreation';
+import { createJournalEntry, getDefaultAccounts, getTaxGlAccounts } from '@/hooks/useJournalEntryCreation';
 import { postBillToGL } from '@/lib/postBillToGL';
+import {
+  computeDocumentTaxes,
+  persistBillTaxes,
+  persistExpenseTaxes,
+  resolveRetailTaxGlAccount,
+  splitPurchaseTaxPosting,
+  type DocumentTaxLine,
+} from '@/lib/documentTaxEngine';
+import type { SalesTaxSettings } from '@/hooks/useSalesTax';
 import type { ApprovalDocumentType } from './index';
+
+async function loadOrgTaxContext(organizationId: string) {
+  const [{ data: org }, { data: settings }] = await Promise.all([
+    supabase.from('organizations').select('country, province').eq('id', organizationId).maybeSingle(),
+    supabase.from('sales_tax_settings').select('*').eq('organization_id', organizationId).maybeSingle(),
+  ]);
+  return {
+    country: (org as { country?: string | null } | null)?.country ?? null,
+    province: (org as { province?: string | null } | null)?.province ?? (settings as SalesTaxSettings | null)?.province ?? null,
+    settings: (settings as SalesTaxSettings | null) ?? null,
+  };
+}
+
+function rowsToTaxLines(rows: Array<{
+  tax_type: string;
+  tax_code: string | null;
+  rate: number;
+  taxable_amount: number;
+  tax_amount: number;
+  is_recoverable: boolean | null;
+  gl_account_id: string | null;
+  authority: string | null;
+  jurisdiction_code: string | null;
+  tax_direction?: string | null;
+}>): DocumentTaxLine[] {
+  return rows.map((row) => ({
+    taxType: row.tax_type,
+    taxCode: row.tax_code || row.tax_type,
+    taxName: row.tax_code || row.tax_type,
+    taxRate: Number(row.rate) || 0,
+    taxableAmount: Number(row.taxable_amount) || 0,
+    taxAmount: Number(row.tax_amount) || 0,
+    isRecoverable: row.is_recoverable !== false,
+    glAccountId: row.gl_account_id,
+    authority: row.authority,
+    jurisdictionCode: row.jurisdiction_code,
+    taxDirection: row.tax_direction === 'collected' ? 'collected' : 'paid',
+  }));
+}
 
 /** Posts an approved bill to the GL. Returns the journal entry id. */
 export async function postBillDocument(organizationId: string, billId: string): Promise<string> {
@@ -19,20 +67,49 @@ export async function postBillDocument(organizationId: string, billId: string): 
     .eq('bill_id', billId)
     .order('line_order', { ascending: true });
 
+  const taxAmount = Number((bill as any).tax_amount) || 0;
+  const total = Number((bill as any).total) || 0;
+  const subtotal = Number((bill as any).subtotal) || Math.max(0, total - taxAmount);
+
+  const { data: existingTaxes } = await supabase
+    .from('bill_taxes')
+    .select('*')
+    .eq('bill_id', billId);
+
+  let taxLines = rowsToTaxLines((existingTaxes || []) as any);
+  if (taxLines.length === 0 && taxAmount > 0) {
+    const ctx = await loadOrgTaxContext(organizationId);
+    const computed = computeDocumentTaxes({
+      countryCode: ctx.country,
+      jurisdictionCode: ctx.province,
+      amount: subtotal,
+      direction: 'paid',
+      settings: ctx.settings,
+      taxRateOverride: subtotal > 0 ? (taxAmount / subtotal) * 100 : 0,
+    });
+    taxLines = computed.taxes;
+    try {
+      await persistBillTaxes(billId, taxLines);
+    } catch (err) {
+      console.warn('Could not persist bill_taxes:', err);
+    }
+  }
+
   return await postBillToGL({
     organizationId,
     billId,
     billNumber: (bill as any).bill_number,
     billDate: (bill as any).bill_date,
     vendorId: (bill as any).vendor_id,
-    taxAmount: Number((bill as any).tax_amount) || 0,
-    total: Number((bill as any).total) || 0,
+    taxAmount,
+    total,
     departmentId: (bill as any).department_id ?? null,
     lines: (lines || []).map((l: any) => ({
       account_id: l.expense_account_id,
       amount: Number(l.amount) || 0,
       description: l.description,
     })),
+    taxLines,
   });
 }
 
@@ -60,10 +137,37 @@ export async function postExpenseDocument(
   const taxAmount = Number(e.tax_amount) || 0;
   const total = amount + taxAmount;
 
+  const { data: existingTaxes } = await supabase
+    .from('expense_taxes')
+    .select('*')
+    .eq('expense_id', expenseId);
+
+  let taxLines = rowsToTaxLines((existingTaxes || []) as any);
+  if (taxLines.length === 0 && taxAmount > 0) {
+    const ctx = await loadOrgTaxContext(organizationId);
+    const computed = computeDocumentTaxes({
+      countryCode: ctx.country,
+      jurisdictionCode: ctx.province,
+      amount,
+      direction: 'paid',
+      settings: ctx.settings,
+      taxRateOverride: amount > 0 ? (taxAmount / amount) * 100 : 0,
+    });
+    taxLines = computed.taxes;
+    try {
+      await persistExpenseTaxes(expenseId, taxLines);
+    } catch (err) {
+      console.warn('Could not persist expense_taxes:', err);
+    }
+  }
+
+  const split = taxLines.length ? splitPurchaseTaxPosting(taxLines) : null;
+  const expenseDebit = amount + (split?.nonRecoverableTotal ?? 0);
+
   const lines: any[] = [
     {
       account_id: e.expense_account_id,
-      debit: amount,
+      debit: expenseDebit,
       credit: 0,
       memo: e.notes || 'Expense',
       source_document_type: 'expense',
@@ -71,11 +175,39 @@ export async function postExpenseDocument(
     },
   ];
 
-  if (taxAmount > 0) {
-    const defaults = await getDefaultAccounts(organizationId);
-    if (defaults.salesTax) {
+  if (split && split.recoverable.length > 0) {
+    const taxGl = await getTaxGlAccounts(organizationId);
+    for (const tax of split.recoverable) {
+      const accountId =
+        tax.glAccountId ||
+        resolveRetailTaxGlAccount(tax.taxCode || tax.taxType, 'paid', {
+          gstPaidAccountId: taxGl.gstPaidAccountId,
+          vatPaidAccountId: taxGl.vatPaidAccountId,
+          pstPaidAccountId: taxGl.pstPaidAccountId,
+        });
+      if (!accountId) {
+        throw new Error(
+          `No paid/ITC account configured for ${tax.taxName}. Set the tax paid GL account in Settings → Sales Tax.`,
+        );
+      }
       lines.push({
-        account_id: defaults.salesTax.id,
+        account_id: accountId,
+        debit: tax.taxAmount,
+        credit: 0,
+        memo: tax.taxName,
+        source_document_type: 'expense',
+        source_document_id: expenseId,
+      });
+    }
+  } else if (taxAmount > 0 && !split) {
+    const [defaults, taxGl] = await Promise.all([
+      getDefaultAccounts(organizationId),
+      getTaxGlAccounts(organizationId),
+    ]);
+    const paidId = taxGl.gstPaidAccountId || taxGl.vatPaidAccountId || defaults.salesTax?.id;
+    if (paidId) {
+      lines.push({
+        account_id: paidId,
         debit: taxAmount,
         credit: 0,
         memo: 'Input Tax',

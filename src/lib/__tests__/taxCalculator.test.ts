@@ -92,6 +92,21 @@ describe('Tax Calculator', () => {
     it('returns STATE-SALES for US taxable states', () => {
       expect(getApplicableTaxCode('US', 'NY')).toBe('STATE-SALES');
     });
+
+    it('returns USE_TAX on US purchases', () => {
+      expect(getApplicableTaxCode('US', 'NY', 'purchase')).toBe('USE_TAX');
+      expect(getApplicableTaxCode('US', 'OR', 'purchase')).toBe('USE_TAX');
+    });
+
+    it('returns VAT-STD for VAT countries including ZM/KE/BI', () => {
+      expect(getApplicableTaxCode('ZM', 'LK')).toBe('VAT-STD');
+      expect(getApplicableTaxCode('GB')).toBe('VAT-STD');
+      expect(getApplicableTaxCode('NG', undefined, 'purchase')).toBe('VAT-STD');
+    });
+
+    it('returns EXEMPT for Hong Kong (no retail sales tax)', () => {
+      expect(getApplicableTaxCode('HK', undefined, 'purchase')).toBe('EXEMPT');
+    });
   });
 
   describe('getCombinedTaxRate', () => {
