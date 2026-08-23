@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, type ReactNode } from 'react';
 import { Check, ChevronsUpDown, Percent, MapPin } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -28,6 +28,7 @@ import {
   calculateSplitTaxes,
   PROVINCE_TAX_CONFIG,
 } from '@/lib/splitTaxCalculator';
+import { isPaidRetailTaxCode, taxCodeGroupLabel } from '@/lib/retailTaxRateCatalog';
 
 // Fallback: resolve a tax GL account directly from the chart of accounts by
 // name patterns. Used when tax_codes rows lack gl_collected/gl_paid links so
@@ -72,6 +73,20 @@ const COMBINED_TAX_OPTIONS: CombinedTaxOption[] = [
   { id: 'combined-yt', code: 'YT', name: 'Yukon', combinedRate: 5, taxModel: 'GST_ONLY', provinceCode: 'YT', breakdown: [{ code: 'GST', rate: 5, authority: 'CRA' }] },
 ];
 
+const COMBINED_PAID_TAX_OPTIONS: CombinedTaxOption[] = COMBINED_TAX_OPTIONS.map((opt) => ({
+  ...opt,
+  id: opt.id.replace('combined-', 'combined-paid-'),
+  name: opt.taxModel === 'HST'
+    ? `${opt.name} — HST Paid (ITC)`
+    : opt.taxModel === 'GST_PST'
+      ? `${opt.name} — GST Paid (ITC) + ${opt.provinceCode === 'QC' ? 'QST Paid (ITR)' : 'PST Paid'}`
+      : `${opt.name} — GST Paid (ITC)`,
+  breakdown: opt.breakdown.map((b) => ({
+    ...b,
+    code: b.code === 'GST' ? 'GST-ITC' : b.code === 'HST' ? 'HST-ITC' : b.code === 'QST' ? 'QST-ITR' : 'PST-PAID',
+  })),
+}));
+
 interface TaxCodeSelectProps {
   organizationId?: string;
   value: string | null | undefined;
@@ -80,6 +95,8 @@ interface TaxCodeSelectProps {
   disabled?: boolean;
   className?: string;
   showCombinedRates?: boolean;
+  /** Prefer collect, paid/ITC, or both groups in the picker. */
+  direction?: 'collected' | 'paid' | 'both';
 }
 
 export function TaxCodeSelect({
@@ -90,6 +107,7 @@ export function TaxCodeSelect({
   disabled = false,
   className,
   showCombinedRates = true,
+  direction = 'both',
 }: TaxCodeSelectProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -112,7 +130,7 @@ export function TaxCodeSelect({
     if (!normalizedValue) return null;
     
     // First check by direct ID match
-    const byId = COMBINED_TAX_OPTIONS.find(opt => opt.id === normalizedValue);
+    const byId = [...COMBINED_TAX_OPTIONS, ...COMBINED_PAID_TAX_OPTIONS].find(opt => opt.id === normalizedValue);
     if (byId) return byId;
     
     // If we have a selected tax code, try to match it to a combined option
@@ -149,22 +167,36 @@ export function TaxCodeSelect({
     );
   }, [taxCodes, search]);
 
-  const filteredCombinedOptions = useMemo(() => {
-    if (!search) return COMBINED_TAX_OPTIONS;
+  const filterCombined = (list: CombinedTaxOption[]) => {
+    if (!search) return list;
     const term = search.toLowerCase();
-    return COMBINED_TAX_OPTIONS.filter(
+    return list.filter(
       (opt) =>
         opt.code.toLowerCase().includes(term) ||
         opt.name.toLowerCase().includes(term) ||
-        opt.combinedRate.toString().includes(term)
+        opt.combinedRate.toString().includes(term) ||
+        opt.id.includes('paid')
     );
-  }, [search]);
+  };
+
+  const filteredCombinedOptions = useMemo(
+    () => filterCombined(COMBINED_TAX_OPTIONS),
+    [search],
+  );
+  const filteredCombinedPaidOptions = useMemo(
+    () => filterCombined(COMBINED_PAID_TAX_OPTIONS),
+    [search],
+  );
 
   // Group tax codes by type
   const groupedTaxCodes = useMemo(() => {
-    const groups: Record<string, TaxCode[]> = {};
+    const groups: Record<string, TaxCode[]> = {
+      'Paid / ITC': [],
+      'Collect': [],
+      'Exempt': [],
+    };
     filteredTaxCodes.forEach((tc) => {
-      const group = tc.rate === 0 ? 'Exempt' : 'Individual Tax Rates';
+      const group = taxCodeGroupLabel(tc);
       if (!groups[group]) groups[group] = [];
       groups[group].push(tc);
     });
@@ -172,25 +204,28 @@ export function TaxCodeSelect({
   }, [filteredTaxCodes]);
 
   // Group combined options by tax model
-  const groupedCombinedOptions = useMemo(() => {
+  const groupCombinedByModel = (options: CombinedTaxOption[]) => {
     const groups: Record<string, CombinedTaxOption[]> = {
       'HST Provinces': [],
       'GST + PST Provinces': [],
       'GST Only': [],
     };
-    
-    filteredCombinedOptions.forEach(option => {
-      if (option.taxModel === 'HST') {
-        groups['HST Provinces'].push(option);
-      } else if (option.taxModel === 'GST_PST') {
-        groups['GST + PST Provinces'].push(option);
-      } else {
-        groups['GST Only'].push(option);
-      }
+    options.forEach(option => {
+      if (option.taxModel === 'HST') groups['HST Provinces'].push(option);
+      else if (option.taxModel === 'GST_PST') groups['GST + PST Provinces'].push(option);
+      else groups['GST Only'].push(option);
     });
-    
     return groups;
-  }, [filteredCombinedOptions]);
+  };
+
+  const groupedCombinedOptions = useMemo(
+    () => groupCombinedByModel(filteredCombinedOptions),
+    [filteredCombinedOptions],
+  );
+  const groupedCombinedPaidOptions = useMemo(
+    () => groupCombinedByModel(filteredCombinedPaidOptions),
+    [filteredCombinedPaidOptions],
+  );
 
   const handleSelect = (taxCode: TaxCode | null) => {
     onValueChange(taxCode);
@@ -199,10 +234,14 @@ export function TaxCodeSelect({
   };
 
   const handleSelectCombined = (option: CombinedTaxOption) => {
+    const isPaidOption = option.id.includes('-paid-');
     // Find or create a matching tax code for this combined rate
     const matchingCode = taxCodes.find(tc => 
       tc.rate === option.combinedRate && 
-      (tc.jurisdiction === option.provinceCode || tc.tax_type.includes(option.taxModel))
+      (tc.jurisdiction === option.provinceCode || tc.tax_type.includes(option.taxModel)) &&
+      (isPaidOption
+        ? isPaidRetailTaxCode(tc.code, tc.applies_to)
+        : !isPaidRetailTaxCode(tc.code, tc.applies_to))
     );
     
     if (matchingCode) {
@@ -293,19 +332,23 @@ export function TaxCodeSelect({
         gl_paid_account_id = gstCode?.gl_paid_account_id ?? gstHstPaidFallback;
       }
 
+      const isPaid = option.id.includes('-paid-');
       // Create a synthetic tax code for the combined rate
       const syntheticCode: TaxCode = {
         id: option.id,
         organization_id: organizationId || '',
-        code: option.taxModel === 'HST' ? `HST-${option.code}` : `GST+PST-${option.code}`,
+        code: isPaid
+          ? (option.taxModel === 'HST' ? `HST-${option.code}-ITC` : `GST+PST-${option.code}-ITC`)
+          : (option.taxModel === 'HST' ? `HST-${option.code}` : `GST+PST-${option.code}`),
         name: `${option.name} (${option.combinedRate}%)`,
         rate: option.combinedRate,
         jurisdiction: option.provinceCode,
         tax_type: option.taxModel === 'HST' ? 'HST' : option.taxModel === 'GST_PST' ? 'GST+PST' : 'GST',
-        is_recoverable: true,
+        is_recoverable: option.taxModel !== 'GST_PST' || option.provinceCode === 'QC',
         is_compound: false,
         is_active: true,
-        gl_collected_account_id,
+        applies_to: isPaid ? 'purchases' : 'both',
+        gl_collected_account_id: isPaid ? null : gl_collected_account_id,
         gl_paid_account_id,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -393,56 +436,49 @@ export function TaxCodeSelect({
             </CommandGroup>
 
             {/* Combined Provincial Tax Rates */}
-            {showCombinedRates && Object.entries(groupedCombinedOptions).map(([group, options]) => (
+            {showCombinedRates && direction !== 'paid' && Object.entries(groupedCombinedOptions).map(([group, options]) => (
               options.length > 0 && (
                 <CommandGroup key={group} heading={group}>
                   {options.map((option) => (
-                    <TooltipProvider key={option.id}>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <CommandItem
-                            value={option.id}
-                            onSelect={() => handleSelectCombined(option)}
-                          >
-                            <Check
-                              className={cn(
-                                'mr-2 h-4 w-4',
-                                normalizedValue === option.id || 
-                                (selectedTaxCode?.rate === option.combinedRate && selectedTaxCode?.jurisdiction === option.provinceCode)
-                                  ? 'opacity-100' : 'opacity-0'
-                              )}
-                            />
-                            <div className="flex items-center gap-2 flex-1">
-                              <MapPin className="w-3 h-3 text-muted-foreground" />
-                              <span className="font-medium">{option.code}</span>
-                              <span className="text-muted-foreground text-sm truncate">
-                                {option.name}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              {getTaxModelBadge(option.taxModel)}
-                              <Badge 
-                                className="text-xs px-1.5 py-0 tabular-nums bg-teal-600 text-white border-0"
-                              >
-                                {option.combinedRate}%
-                              </Badge>
-                            </div>
-                          </CommandItem>
-                        </TooltipTrigger>
-                        <TooltipContent side="right" className="max-w-[220px]">
-                          <TaxBreakdownTooltip option={option} />
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
+                    <CombinedRateItem
+                      key={option.id}
+                      option={option}
+                      selected={normalizedValue === option.id ||
+                        (selectedTaxCode?.rate === option.combinedRate && selectedTaxCode?.jurisdiction === option.provinceCode && !isPaidRetailTaxCode(selectedTaxCode.code, selectedTaxCode.applies_to))}
+                      onSelect={() => handleSelectCombined(option)}
+                      badge={getTaxModelBadge(option.taxModel)}
+                    />
                   ))}
                 </CommandGroup>
               )
             ))}
 
-            {/* Individual Tax Codes */}
-            {Object.entries(groupedTaxCodes).map(([group, codes]) => (
-              <CommandGroup key={group} heading={group}>
-                {codes.map((tc) => (
+            {showCombinedRates && direction !== 'collected' && Object.entries(groupedCombinedPaidOptions).map(([group, options]) => (
+              options.length > 0 && (
+                <CommandGroup key={`paid-${group}`} heading={`${group} — Paid (ITC)`}>
+                  {options.map((option) => (
+                    <CombinedRateItem
+                      key={option.id}
+                      option={option}
+                      selected={normalizedValue === option.id || selectedTaxCode?.id === option.id}
+                      onSelect={() => handleSelectCombined(option)}
+                      badge={getTaxModelBadge(option.taxModel)}
+                    />
+                  ))}
+                </CommandGroup>
+              )
+            ))}
+
+            {/* Individual Tax Codes: Paid / ITC, Collect, Exempt */}
+            {(['Paid / ITC', 'Collect', 'Exempt'] as const)
+              .filter((group) => {
+                if (direction === 'paid' && group === 'Collect') return false;
+                if (direction === 'collected' && group === 'Paid / ITC') return false;
+                return (groupedTaxCodes[group] || []).length > 0;
+              })
+              .map((group) => (
+              <CommandGroup key={group} heading={group === 'Collect' ? 'Collect' : group}>
+                {(groupedTaxCodes[group] || []).map((tc) => (
                   <CommandItem
                     key={tc.id}
                     value={tc.id}
@@ -471,6 +507,44 @@ export function TaxCodeSelect({
         </Command>
       </PopoverContent>
     </Popover>
+  );
+}
+
+function CombinedRateItem({
+  option,
+  selected,
+  onSelect,
+  badge,
+}: {
+  option: CombinedTaxOption;
+  selected: boolean;
+  onSelect: () => void;
+  badge: ReactNode;
+}) {
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <CommandItem value={option.id} onSelect={onSelect}>
+            <Check className={cn('mr-2 h-4 w-4', selected ? 'opacity-100' : 'opacity-0')} />
+            <div className="flex items-center gap-2 flex-1">
+              <MapPin className="w-3 h-3 text-muted-foreground" />
+              <span className="font-medium">{option.code}</span>
+              <span className="text-muted-foreground text-sm truncate">{option.name}</span>
+            </div>
+            <div className="flex items-center gap-1">
+              {badge}
+              <Badge className="text-xs px-1.5 py-0 tabular-nums bg-teal-600 text-white border-0">
+                {option.combinedRate}%
+              </Badge>
+            </div>
+          </CommandItem>
+        </TooltipTrigger>
+        <TooltipContent side="right" className="max-w-[220px]">
+          <TaxBreakdownTooltip option={option} />
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
 
@@ -538,7 +612,8 @@ export function calculateTax(
   isInclusive: boolean = false,
   txType: TaxTxDirection = 'withdrawal'
 ): TaxCalculationResult {
-  const isCollected = txType === 'deposit';
+  const forcePaid = isPaidRetailTaxCode(taxCode?.code || '', taxCode?.applies_to);
+  const isCollected = txType === 'deposit' && !forcePaid;
   if (!taxCode || taxCode.rate === 0) {
     return {
       subtotal: amount,

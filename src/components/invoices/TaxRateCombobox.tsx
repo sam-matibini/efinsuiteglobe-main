@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/tooltip';
 import { useTaxCodes, type TaxCode } from '@/hooks/useSalesTax';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { taxCodeGroupLabel } from '@/lib/retailTaxRateCatalog';
 
 // Combined provincial tax rates for Canadian transactions
 interface CombinedTaxOption {
@@ -58,10 +59,18 @@ interface IndividualTaxOption {
 }
 
 const INDIVIDUAL_TAX_OPTIONS: IndividualTaxOption[] = [
-  { code: 'GST', name: 'GST (5%)', rate: 5 },
-  { code: 'HST', name: 'HST (13%)', rate: 13 },
-  { code: 'PST', name: 'PST (7%)', rate: 7 },
-  { code: 'QST', name: 'QST (9.975%)', rate: 9.975 },
+  { code: 'GST', name: 'Collect GST', rate: 5 },
+  { code: 'HST', name: 'Collect HST', rate: 13 },
+  { code: 'PST', name: 'Collect PST/QST', rate: 7 },
+  { code: 'QST', name: 'Collect QST', rate: 9.975 },
+];
+
+const PAID_TAX_OPTIONS: IndividualTaxOption[] = [
+  { code: 'GST-ITC', name: 'GST Paid (ITC)', rate: 5 },
+  { code: 'HST-ITC', name: 'HST Paid (ITC)', rate: 13 },
+  { code: 'HST15-ITC', name: 'HST Paid (ITC)', rate: 15 },
+  { code: 'PST-PAID', name: 'PST Paid', rate: 7 },
+  { code: 'QST-ITR', name: 'QST Paid (ITR)', rate: 9.975 },
 ];
 
 const EXEMPT_TAX_OPTIONS: IndividualTaxOption[] = [
@@ -133,14 +142,18 @@ export function TaxRateCombobox({
     () => filterIndividual(INDIVIDUAL_TAX_OPTIONS),
     [search, dbCodeSet]
   );
+  const filteredPaidOptions = useMemo(
+    () => filterIndividual(PAID_TAX_OPTIONS),
+    [search, dbCodeSet]
+  );
   const filteredExemptOptions = useMemo(
     () => filterIndividual(EXEMPT_TAX_OPTIONS),
     [search, dbCodeSet]
   );
 
-  // Group tax codes by type for better organization
+  // Group tax codes: Paid / ITC, Collect family, Exempt
   const groupedCodes = filteredTaxCodes.reduce((acc, code) => {
-    const group = code.tax_type || 'Other';
+    const group = taxCodeGroupLabel(code);
     if (!acc[group]) acc[group] = [];
     acc[group].push(code);
     return acc;
@@ -179,7 +192,7 @@ export function TaxRateCombobox({
         : null;
 
   // Order for display
-  const groupOrder = ['GST', 'HST', 'PST', 'QST', 'GST+PST', 'GST+QST', 'exempt', 'zero-rated', 'out-of-scope'];
+  const groupOrder = ['Paid / ITC', 'Collect', 'Exempt'];
   const sortedGroups = Object.keys(groupedCodes).sort((a, b) => {
     const aIdx = groupOrder.indexOf(a);
     const bIdx = groupOrder.indexOf(b);
@@ -326,9 +339,37 @@ export function TaxRateCombobox({
                 </CommandGroup>
               )}
 
-              {/* Individual Tax Rates (Federal/Provincial components) */}
+              {filteredPaidOptions.length > 0 && (
+                <CommandGroup heading="Paid / ITC">
+                  {filteredPaidOptions.map((opt) => {
+                    const isSelected = opt.rate === value && displayValue?.includes('Paid');
+                    return (
+                      <CommandItem
+                        key={`paid-${opt.code}`}
+                        value={`paid-${opt.code}`}
+                        onSelect={() => {
+                          onChange(opt.rate);
+                          setOpen(false);
+                          setSearch('');
+                        }}
+                      >
+                        <Check className={cn('mr-2 h-4 w-4', isSelected ? 'opacity-100' : 'opacity-0')} />
+                        <div className="flex items-center gap-2 flex-1">
+                          <span className="font-medium">{opt.code}</span>
+                          <span className="text-muted-foreground text-xs truncate">{opt.name}</span>
+                        </div>
+                        <Badge variant="default" className="text-xs px-1.5 py-0 tabular-nums">
+                          {opt.rate}%
+                        </Badge>
+                      </CommandItem>
+                    );
+                  })}
+                </CommandGroup>
+              )}
+
+              {/* Individual Tax Rates (Federal/Provincial collect components) */}
               {filteredIndividualOptions.length > 0 && (
-                <CommandGroup heading="Individual Tax Rates">
+                <CommandGroup heading="Collect">
                   {filteredIndividualOptions.map((opt) => {
                     const isSelected = opt.rate === value;
                     return (

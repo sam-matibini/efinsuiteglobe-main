@@ -146,31 +146,45 @@ export function AddJournalEntryDialog({
   // Build synthetic "combined" tax options for GST_PST provinces (BC/SK/MB/QC).
   // Selecting one of these splits into two separate tax GL postings on submit.
   const combinedTaxOptions: TaxCode[] = useMemo(() => {
-    const provinces: Array<{ code: 'BC' | 'SK' | 'MB' | 'QC'; label: string }> = [
-      { code: 'BC', label: 'BC – GST 5% + PST 7%' },
-      { code: 'SK', label: 'SK – GST 5% + PST 6%' },
-      { code: 'MB', label: 'MB – GST 5% + PST 7%' },
-      { code: 'QC', label: 'QC – GST 5% + QST 9.975%' },
+    const provinces: Array<{ code: 'BC' | 'SK' | 'MB' | 'QC'; label: string; paidLabel: string }> = [
+      { code: 'BC', label: 'BC – Collect GST 5% + PST 7%', paidLabel: 'BC – GST Paid (ITC) 5% + PST Paid 7%' },
+      { code: 'SK', label: 'SK – Collect GST 5% + PST 6%', paidLabel: 'SK – GST Paid (ITC) 5% + PST Paid 6%' },
+      { code: 'MB', label: 'MB – Collect GST 5% + PST 7%', paidLabel: 'MB – GST Paid (ITC) 5% + PST Paid 7%' },
+      { code: 'QC', label: 'QC – Collect GST 5% + QST 9.975%', paidLabel: 'QC – GST Paid (ITC) 5% + QST Paid (ITR) 9.975%' },
     ];
-    return provinces.map(({ code, label }) => {
+    return provinces.flatMap(({ code, label, paidLabel }) => {
       const cfg = PROVINCE_TAX_CONFIG[code];
       const rate = Math.round((cfg.gstRate + cfg.pstRate) * 1000) / 1000;
-      return {
-        id: `combined:${code}`,
+      const base = {
         organization_id: organizationId,
-        code: `${code} GST+${code === 'QC' ? 'QST' : 'PST'}`,
-        name: label,
         rate,
         jurisdiction: code,
         tax_type: 'combined',
-        is_recoverable: true,
+        is_recoverable: code === 'QC',
         is_compound: false,
         is_active: true,
         gl_collected_account_id: null,
         gl_paid_account_id: null,
         created_at: '',
         updated_at: '',
-      } as TaxCode;
+      };
+      return [
+        {
+          ...base,
+          id: `combined:${code}`,
+          code: `${code} GST+${code === 'QC' ? 'QST' : 'PST'}`,
+          name: label,
+          applies_to: 'both',
+        } as TaxCode,
+        {
+          ...base,
+          id: `combined-paid:${code}`,
+          code: `${code} GST+${code === 'QC' ? 'QST' : 'PST'}-ITC`,
+          name: paidLabel,
+          applies_to: 'purchases',
+          paid_name: paidLabel,
+        } as TaxCode,
+      ];
     });
   }, [organizationId]);
 
@@ -181,7 +195,7 @@ export function AddJournalEntryDialog({
 
   // Helper: split a combined synthetic id into province + components
   const getCombinedSplit = (taxCodeId: string | null | undefined, amount: number) => {
-    if (!taxCodeId || !taxCodeId.startsWith('combined:')) return null;
+    if (!taxCodeId || !taxCodeId.startsWith('combined')) return null;
     const province = taxCodeId.split(':')[1];
     if (!PROVINCE_TAX_CONFIG[province]) return null;
     const calc = calculateSplitTaxes(amount, province, false);

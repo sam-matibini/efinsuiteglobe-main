@@ -15,12 +15,15 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
+import { taxCodeGroupLabel } from '@/lib/retailTaxRateCatalog';
 
 interface TaxCode {
   id: string;
   code: string;
   name: string;
   rate: number;
+  tax_type?: string;
+  applies_to?: string | null;
 }
 
 interface SearchableTaxCodeSelectProps {
@@ -55,9 +58,22 @@ export function SearchableTaxCodeSelect({
     return taxCodes.filter(
       (tc) =>
         tc.code.toLowerCase().includes(term) ||
-        tc.name.toLowerCase().includes(term)
+        tc.name.toLowerCase().includes(term) ||
+        (tc.tax_type || '').toLowerCase().includes(term)
     );
   }, [taxCodes, search]);
+
+  const grouped = useMemo(() => {
+    const groups: Record<string, TaxCode[]> = {
+      'Paid / ITC': [],
+      Collect: [],
+      Exempt: [],
+    };
+    filteredTaxCodes.forEach((tc) => {
+      groups[taxCodeGroupLabel(tc)].push(tc);
+    });
+    return groups;
+  }, [filteredTaxCodes]);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -71,7 +87,7 @@ export function SearchableTaxCodeSelect({
         >
           {selectedTaxCode ? (
             <span className="truncate">
-              {selectedTaxCode.code} ({selectedTaxCode.rate}%)
+              {selectedTaxCode.code} · {selectedTaxCode.name} ({selectedTaxCode.rate}%)
             </span>
           ) : (
             <span className="text-muted-foreground">{placeholder}</span>
@@ -79,10 +95,10 @@ export function SearchableTaxCodeSelect({
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[250px] p-0" align="start">
+      <PopoverContent className="w-[320px] p-0" align="start">
         <Command shouldFilter={false}>
           <CommandInput
-            placeholder="Search tax codes..."
+            placeholder="Search tax rates..."
             value={search}
             onValueChange={setSearch}
           />
@@ -105,27 +121,34 @@ export function SearchableTaxCodeSelect({
                 />
                 <span>No Tax</span>
               </CommandItem>
-              {filteredTaxCodes.map((tc) => (
-                <CommandItem
-                  key={tc.id}
-                  value={tc.id}
-                  onSelect={() => {
-                    onValueChange(tc.id);
-                    setOpen(false);
-                    setSearch('');
-                  }}
-                >
-                  <Check
-                    className={cn(
-                      'mr-2 h-4 w-4',
-                      normalizedValue === tc.id ? 'opacity-100' : 'opacity-0'
-                    )}
-                  />
-                  <span className="font-medium mr-2">{tc.code}</span>
-                  <span className="text-muted-foreground">({tc.rate}%)</span>
-                </CommandItem>
-              ))}
             </CommandGroup>
+            {(['Paid / ITC', 'Collect', 'Exempt'] as const).map((group) =>
+              grouped[group].length > 0 ? (
+                <CommandGroup key={group} heading={group}>
+                  {grouped[group].map((tc) => (
+                    <CommandItem
+                      key={tc.id}
+                      value={tc.id}
+                      onSelect={() => {
+                        onValueChange(tc.id);
+                        setOpen(false);
+                        setSearch('');
+                      }}
+                    >
+                      <Check
+                        className={cn(
+                          'mr-2 h-4 w-4',
+                          normalizedValue === tc.id ? 'opacity-100' : 'opacity-0'
+                        )}
+                      />
+                      <span className="font-medium mr-2">{tc.code}</span>
+                      <span className="text-muted-foreground truncate mr-2">{tc.name}</span>
+                      <span className="text-muted-foreground">({tc.rate}%)</span>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              ) : null
+            )}
           </CommandList>
         </Command>
       </PopoverContent>

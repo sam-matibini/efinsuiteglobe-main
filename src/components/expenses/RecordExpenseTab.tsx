@@ -517,7 +517,7 @@ export function RecordExpenseTab({ onSuccess, onCancel }: RecordExpenseTabProps)
               <SelectContent>
                 {taxCodes?.map((tc) => (
                   <SelectItem key={tc.id} value={tc.id}>
-                    {tc.name} ({tc.rate}%)
+                    {tc.code} · {tc.name} ({tc.rate}%)
                   </SelectItem>
                 ))}
               </SelectContent>
