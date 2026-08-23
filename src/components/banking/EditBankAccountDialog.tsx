@@ -27,7 +27,7 @@ import {
   mapInstitutionType,
   type BankingInstitution,
 } from '@/data/localizedBankingInstitutions';
-import { getAllLocalizedCurrencies } from '@/hooks/useLocalizedCurrency';
+import { AllCurrenciesSelect } from '@/components/banking/CountryCurrencySelects';
 
 interface Account {
   id: string;
@@ -231,21 +231,12 @@ export function EditBankAccountDialog({
               </div>
               <div className="space-y-2">
                 <Label htmlFor="editCurrency">Currency</Label>
-                <Select 
+                <AllCurrenciesSelect
+                  id="editCurrency"
                   value={formData.currency}
-                  onValueChange={(val) => setFormData(prev => ({ ...prev, currency: val }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-72">
-                    {getAllLocalizedCurrencies(countryCode).map((curr) => (
-                      <SelectItem key={curr.code} value={curr.code}>
-                        {curr.code} - {curr.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  onChange={(val) => setFormData(prev => ({ ...prev, currency: val }))}
+                  primaryCountryCode={countryCode}
+                />
               </div>
             </div>
             <div className="space-y-2">

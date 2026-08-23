@@ -4,22 +4,27 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useVirtualAccounts } from '@/hooks/useVirtualAccounts';
+import { useCurrentOrganization } from '@/hooks/useOrganization';
 import { EFINCASH_CURRENCIES } from '@/lib/efincash';
+import { getCountryLocalization, resolveCountryCode } from '@/data/countryLocalizations';
+import { AllCurrenciesSelect, CountrySelect } from '@/components/banking/CountryCurrencySelects';
 
-const CURRENCIES = EFINCASH_CURRENCIES;
+function isNigeriaKycRequired(country: string, currency: string) {
+  return country === 'NG' || currency === 'NGN';
+}
 
 const schema = z.object({
+  country: z.string().min(1),
   currency: z.string().min(1),
   email: z.string().email('Invalid email'),
   first_name: z.string().trim().min(1, 'Required').max(100),
   last_name: z.string().trim().min(1, 'Required').max(100),
   bvn_or_nin: z.string().trim().max(50).optional().or(z.literal('')),
 }).superRefine((data, ctx) => {
-  if (data.currency === 'NGN' && !data.bvn_or_nin) {
+  if (isNigeriaKycRequired(data.country, data.currency) && !data.bvn_or_nin) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ['bvn_or_nin'],
@@ -35,13 +40,16 @@ interface Props {
 
 export function CreateVirtualAccountDialog({ open, onOpenChange }: Props) {
   const { user } = useAuth();
+  const { organization } = useCurrentOrganization();
   const { create } = useVirtualAccounts();
 
   const meta = (user?.user_metadata ?? {}) as Record<string, string | undefined>;
   const defaultFirst = meta.first_name ?? meta.given_name ?? (meta.full_name?.split(' ')[0] ?? '');
   const defaultLast = meta.last_name ?? meta.family_name ?? (meta.full_name?.split(' ').slice(1).join(' ') ?? '');
+  const orgCountry = resolveCountryCode(organization?.country);
 
-  const [currency, setCurrency] = useState('NGN');
+  const [country, setCountry] = useState(orgCountry);
+  const [currency, setCurrency] = useState(getCountryLocalization(orgCountry).currency);
   const [email, setEmail] = useState(user?.email ?? '');
   const [firstName, setFirstName] = useState(defaultFirst);
   const [lastName, setLastName] = useState(defaultLast);
@@ -49,19 +57,34 @@ export function CreateVirtualAccountDialog({ open, onOpenChange }: Props) {
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    if (open) {
-      setEmail(user?.email ?? '');
-      setFirstName(defaultFirst);
-      setLastName(defaultLast);
-      setBvn('');
-      setCurrency('NGN');
-      setErrors({});
-    }
+    if (!open) return;
+    const nextCountry = resolveCountryCode(organization?.country);
+    setEmail(user?.email ?? '');
+    setFirstName(defaultFirst);
+    setLastName(defaultLast);
+    setBvn('');
+    setCountry(nextCountry);
+    setCurrency(
+      organization?.currency || getCountryLocalization(nextCountry).currency,
+    );
+    setErrors({});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
+  const handleCountryChange = (code: string) => {
+    setCountry(code);
+    setCurrency(getCountryLocalization(code).currency);
+  };
+
   const handleSubmit = async () => {
-    const parsed = schema.safeParse({ currency, email, first_name: firstName, last_name: lastName, bvn_or_nin: bvn });
+    const parsed = schema.safeParse({
+      country,
+      currency,
+      email,
+      first_name: firstName,
+      last_name: lastName,
+      bvn_or_nin: bvn,
+    });
     if (!parsed.success) {
       const errs: Record<string, string> = {};
       for (const [k, v] of Object.entries(parsed.error.flatten().fieldErrors)) {
@@ -85,6 +108,9 @@ export function CreateVirtualAccountDialog({ open, onOpenChange }: Props) {
     }
   };
 
+  const kycRequired = isNigeriaKycRequired(country, currency);
+  const providerSupported = (EFINCASH_CURRENCIES as readonly string[]).includes(currency);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
@@ -96,15 +122,28 @@ export function CreateVirtualAccountDialog({ open, onOpenChange }: Props) {
         </DialogHeader>
 
         <div className="space-y-4">
-          <div className="space-y-2">
-            <Label>Currency</Label>
-            <Select value={currency} onValueChange={setCurrency}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {CURRENCIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-              </SelectContent>
-            </Select>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label>Country</Label>
+              <CountrySelect value={country} onChange={handleCountryChange} />
+              {errors.country && <p className="text-xs text-destructive">{errors.country}</p>}
+            </div>
+            <div className="space-y-2">
+              <Label>Currency</Label>
+              <AllCurrenciesSelect
+                value={currency}
+                onChange={setCurrency}
+                primaryCountryCode={country}
+              />
+              {errors.currency && <p className="text-xs text-destructive">{errors.currency}</p>}
+            </div>
           </div>
+
+          {!providerSupported && (
+            <p className="text-xs text-muted-foreground">
+              eFinCash typically provisions {EFINCASH_CURRENCIES.join(', ')}. Other currencies can still be requested; the provider may return pending or failed if unsupported.
+            </p>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
@@ -127,13 +166,15 @@ export function CreateVirtualAccountDialog({ open, onOpenChange }: Props) {
 
           <div className="space-y-2">
             <Label>
-              BVN or NIN {currency === 'NGN'
+              BVN or NIN {kycRequired
                 ? <span className="text-destructive text-xs">(required)</span>
                 : <span className="text-muted-foreground text-xs">(optional)</span>}
             </Label>
             <Input value={bvn} onChange={(e) => setBvn(e.target.value)} placeholder="11-digit BVN or NIN" />
             {errors.bvn_or_nin && <p className="text-xs text-destructive">{errors.bvn_or_nin}</p>}
-            <p className="text-xs text-muted-foreground">Required by NGN providers for KYC. Leave blank for non-NGN currencies if not applicable.</p>
+            <p className="text-xs text-muted-foreground">
+              Required by NGN providers for KYC. Leave blank for non-NGN currencies if not applicable.
+            </p>
           </div>
         </div>
 

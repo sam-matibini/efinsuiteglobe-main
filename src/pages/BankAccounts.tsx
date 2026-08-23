@@ -1,9 +1,8 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { Plus, RefreshCw, ArrowUpRight, ArrowDownLeft, MoreHorizontal, Building2, Sparkles, BookOpen, AlertTriangle, Globe, ArrowRightLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { cn } from '@/lib/utils';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,29 +10,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
-  getInstitutionsForCountry,
-  getBankInstitutionsOnly,
-  getMobileWalletInstitutions,
-  mapInstitutionType,
-  type BankingInstitution,
-} from '@/data/localizedBankingInstitutions';
 import { useBankAccounts, CreateBankAccountInput, BankAccount } from '@/hooks/useBankAccounts';
 import { useCurrentOrganization } from '@/hooks/useOrganization';
 import { useAccounts } from '@/hooks/useAccounts';
@@ -41,6 +17,7 @@ import { CreateOrganizationDialog } from '@/components/accounts/CreateOrganizati
 import { AIBankConnectDialog } from '@/components/banking/AIBankConnectDialog';
 import { PlaidLinkDialog } from '@/components/banking/PlaidLinkDialog';
 import { ACHConnectDialog } from '@/components/banking/ACHConnectDialog';
+import { AddBankAccountDialog } from '@/components/banking/AddBankAccountDialog';
 import { EditBankAccountDialog } from '@/components/banking/EditBankAccountDialog';
 import { FundsTransferDialog } from '@/components/banking/FundsTransferDialog';
 import { CreateVirtualAccountDialog } from '@/components/virtual-accounts/CreateVirtualAccountDialog';
@@ -48,8 +25,7 @@ import { VirtualAccountsList } from '@/components/virtual-accounts/VirtualAccoun
 import { Skeleton } from '@/components/ui/skeleton';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { useLocalizedCurrency, getAllLocalizedCurrencies } from '@/hooks/useLocalizedCurrency';
-import { getCountryLocalization } from '@/data/countryLocalizations';
+import { useLocalizedCurrency } from '@/hooks/useLocalizedCurrency';
 import { useIsReadOnly } from '@/hooks/useIsReadOnly';
 import { usePlaidSync } from '@/hooks/usePlaidSync';
 import { useConfirmDelete } from '@/hooks/useConfirmDelete';
@@ -67,16 +43,11 @@ export default function BankAccounts() {
   const { 
     formatCurrency: formatLocalizedCurrency, 
     formatDate: formatLocalizedDate, 
-    financialInstitutions, 
-    countryCode,
     currencyCode,
-    terminology,
-    localization
   } = useLocalizedCurrency();
   
-  const availableCurrencies = useMemo(() => getAllLocalizedCurrencies(countryCode), [countryCode]);
-  
-  const [isAddOpen, setIsAddOpen] = useState(false);
+  const [isAddBankOpen, setIsAddBankOpen] = useState(false);
+  const [isAddVirtualOpen, setIsAddVirtualOpen] = useState(false);
   const [isAIConnectOpen, setIsAIConnectOpen] = useState(false);
   const [isOnlineBankingOpen, setIsOnlineBankingOpen] = useState(false);
   const [isACHConnectOpen, setIsACHConnectOpen] = useState(false);
@@ -122,41 +93,6 @@ export default function BankAccounts() {
     return legacyMatch || hierarchicalMatch || nameMatch;
   });
   
-  // Form state
-  const [formData, setFormData] = useState({
-    name: '',
-    institution: '',
-    institutionType: 'bank' as 'bank' | 'mobile_money' | 'ewallet' | 'microfinance' | 'other',
-    institutionCode: '' as string,
-    accountNumber: '',
-    currency: currencyCode,
-    openingBalance: '',
-    openingDate: new Date().toISOString().split('T')[0],
-    glAccountId: '',
-  });
-
-  // Localized institution groups
-  const bankList = useMemo(() => getBankInstitutionsOnly(countryCode), [countryCode]);
-  const mobileMoneyList = useMemo(
-    () => getMobileWalletInstitutions(countryCode).filter(i => i.type === 'mobile_money'),
-    [countryCode]
-  );
-  const eWalletList = useMemo(
-    () => getMobileWalletInstitutions(countryCode).filter(i => i.type === 'ewallet'),
-    [countryCode]
-  );
-  const allInstitutions = useMemo(() => getInstitutionsForCountry(countryCode), [countryCode]);
-
-  const handleInstitutionChange = (val: string) => {
-    const found = allInstitutions.find(i => i.name === val);
-    setFormData(prev => ({
-      ...prev,
-      institution: val,
-      institutionType: found ? mapInstitutionType(found.type) : 'other',
-      institutionCode: found?.code || '',
-    }));
-  };
-
   // Get GL account name by ID
   const getGLAccountName = (glAccountId: string | null) => {
     if (!glAccountId) return null;
@@ -173,39 +109,8 @@ export default function BankAccounts() {
     return formatLocalizedDate(date, 'medium');
   };
 
-  const handleSubmit = async () => {
-    if (!formData.name || !formData.institution) return;
-    
-    if (!formData.glAccountId) {
-      toast.error('Please select a GL account to link this bank account');
-      return;
-    }
-    
-    const input: CreateBankAccountInput = {
-      name: formData.name,
-      institution: formData.institution,
-      institution_type: formData.institutionType,
-      institution_code: formData.institutionCode || undefined,
-      account_number: formData.accountNumber || undefined,
-      currency: formData.currency,
-      opening_balance: parseFloat(formData.openingBalance) || 0,
-      opening_date: formData.openingDate || undefined,
-      gl_account_id: formData.glAccountId,
-    };
-    
+  const handleAddBankAccount = async (input: CreateBankAccountInput) => {
     await createAccount.mutateAsync(input);
-    setIsAddOpen(false);
-    setFormData({
-      name: '',
-      institution: '',
-      institutionType: 'bank',
-      institutionCode: '',
-      accountNumber: '',
-      currency: 'CAD',
-      openingBalance: '',
-      openingDate: new Date().toISOString().split('T')[0],
-      glAccountId: '',
-    });
   };
 
   const handleAIAccountCreated = async (account: { name: string; institution: string; accountType: string; accountNumber?: string; balance?: number; plaidAccessToken?: string; plaidAccountId?: string; plaidItemId?: string }): Promise<void> => {
@@ -377,13 +282,22 @@ export default function BankAccounts() {
                 <RefreshCw className={`w-4 h-4 mr-2 ${isSyncing ? 'animate-spin' : ''}`} />
                 {isSyncing ? 'Syncing…' : 'Sync All'}
               </Button>
-              <Button
-                className="bg-accent hover:bg-accent/90 text-accent-foreground"
-                onClick={() => setIsAddOpen(true)}
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Add Account
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button className="bg-accent hover:bg-accent/90 text-accent-foreground">
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Account
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => setIsAddBankOpen(true)}>
+                    Add Bank Account
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setIsAddVirtualOpen(true)}>
+                    Create Virtual Account
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </>
           )}
         </div>
@@ -651,8 +565,15 @@ export default function BankAccounts() {
         onOpenChange={setIsTransferOpen}
       />
 
-      {/* Create Virtual Account Dialog (replaces manual Add Account) */}
-      <CreateVirtualAccountDialog open={isAddOpen} onOpenChange={setIsAddOpen} />
+      <AddBankAccountDialog
+        open={isAddBankOpen}
+        onOpenChange={setIsAddBankOpen}
+        glAccounts={glAccounts}
+        onSubmit={handleAddBankAccount}
+        isPending={createAccount.isPending}
+      />
+
+      <CreateVirtualAccountDialog open={isAddVirtualOpen} onOpenChange={setIsAddVirtualOpen} />
 
       {/* Virtual Accounts list */}
       <div className="pt-4">
