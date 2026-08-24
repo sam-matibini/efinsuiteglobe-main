@@ -69,6 +69,7 @@ export function TimeClockCard({ employee, submitTimesheet }: TimeClockCardProps)
     summary,
     periodTimesheet,
     isLoading,
+    isMutating,
     clockIn,
     startBreak,
     endBreak,
@@ -135,10 +136,11 @@ export function TimeClockCard({ employee, submitTimesheet }: TimeClockCardProps)
               <Button
                 size="lg"
                 className="w-56 h-14 text-lg gap-2"
+                disabled={isMutating}
                 onClick={() => clockIn()}
               >
                 <LogIn className="w-5 h-5" />
-                Clock In
+                {isMutating ? 'Clocking In…' : 'Clock In'}
               </Button>
             </>
           ) : (
@@ -159,18 +161,19 @@ export function TimeClockCard({ employee, submitTimesheet }: TimeClockCardProps)
               </div>
               <div className="flex gap-2 mt-1">
                 {openBreak ? (
-                  <Button variant="outline" onClick={() => endBreak()}>
+                  <Button variant="outline" disabled={isMutating} onClick={() => endBreak()}>
                     <Play className="w-4 h-4 mr-2" />
-                    End Break
+                    {isMutating ? 'Ending…' : 'End Break'}
                   </Button>
                 ) : (
-                  <Button variant="outline" onClick={() => startBreak()}>
+                  <Button variant="outline" disabled={isMutating} onClick={() => startBreak()}>
                     <Coffee className="w-4 h-4 mr-2" />
-                    Start Break
+                    {isMutating ? 'Starting…' : 'Start Break'}
                   </Button>
                 )}
                 <Button
                   variant="destructive"
+                  disabled={isMutating}
                   onClick={() => setClockOutOpen(true)}
                 >
                   <LogOut className="w-4 h-4 mr-2" />
@@ -288,9 +291,9 @@ export function TimeClockCard({ employee, submitTimesheet }: TimeClockCardProps)
             <Button variant="outline" onClick={() => setClockOutOpen(false)}>
               Cancel
             </Button>
-            <Button variant="destructive" onClick={handleClockOut}>
+            <Button variant="destructive" disabled={isMutating} onClick={handleClockOut}>
               <LogOut className="w-4 h-4 mr-2" />
-              Clock Out
+              {isMutating ? 'Clocking Out…' : 'Clock Out'}
             </Button>
           </DialogFooter>
         </DialogContent>
