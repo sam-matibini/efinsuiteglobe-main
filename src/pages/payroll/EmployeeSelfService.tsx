@@ -57,8 +57,12 @@ export default function EmployeeSelfService() {
   const { organization } = useCurrentOrganization();
   const [createTimesheetOpen, setCreateTimesheetOpen] = useState(false);
 
-  // Find the employee record associated with current user (by email match)
-  const currentEmployee = employees.find(e => e.email === user?.email);
+  // Find the employee record associated with current user (case-insensitive email match,
+  // consistent with the LOWER() matching used in the time-clock RLS policies)
+  const userEmail = user?.email?.toLowerCase();
+  const currentEmployee = userEmail
+    ? employees.find(e => e.email?.toLowerCase() === userEmail)
+    : undefined;
   
   const { timesheets, isLoading: timesheetsLoading, submitTimesheet } = useTimesheets(currentEmployee?.id);
 

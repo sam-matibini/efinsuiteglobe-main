@@ -70,11 +70,25 @@ const ROUTE_MODULE_MAP: Array<{ prefix: string; module: ModuleCode }> = [
   { prefix: '/firm', module: 'practice_management' },
 ];
 
+const ACCESS_EXEMPT_PREFIXES: Array<{ prefix: string; subpathOnly?: boolean }> = [
+  { prefix: '/payroll/self-service' },
+  { prefix: '/payroll/timesheets', subpathOnly: true },
+];
+
+function isAccessExempt(pathname: string): boolean {
+  return ACCESS_EXEMPT_PREFIXES.some(({ prefix, subpathOnly }) => {
+    const exact = pathname === prefix;
+    const nested = pathname.startsWith(`${prefix}/`) && pathname.length > prefix.length + 1;
+    return subpathOnly ? nested : exact || nested;
+  });
+}
+
 /**
  * Resolve the ModuleCode required to access a given pathname.
  * Returns null when no gating applies (dashboard, settings, subscription, etc.).
  */
 export function getRequiredModuleForPath(pathname: string): ModuleCode | null {
+  if (isAccessExempt(pathname)) return null;
   // Sort matched by longest prefix so nested overrides win regardless of array order.
   let best: { prefix: string; module: ModuleCode } | null = null;
   for (const entry of ROUTE_MODULE_MAP) {
