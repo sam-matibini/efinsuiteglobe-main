@@ -27,6 +27,8 @@ export interface RetailTaxCodeLike {
   updated_at: string;
   applies_to?: 'sales' | 'purchases' | 'both' | string | null;
   paid_name?: string | null;
+  /** Client-only: derived from settings or synthesized as a paid sibling — not a tax_codes row. */
+  isVirtual?: boolean;
 }
 
 const SKIP_TYPES = new Set([
@@ -115,6 +117,7 @@ export function appendPaidRetailTaxCodes<T extends RetailTaxCodeLike>(
         : code.is_recoverable,
       gl_collected_account_id: null,
       gl_paid_account_id: code.gl_paid_account_id,
+      isVirtual: true,
     });
   }
 
@@ -125,4 +128,35 @@ export function taxCodeGroupLabel(code: RetailTaxCodeLike): 'Paid / ITC' | 'Exem
   if (isPaidRetailTaxCode(code.code, code.applies_to)) return 'Paid / ITC';
   if (code.rate === 0 || SKIP_TYPES.has((code.tax_type || '').toLowerCase())) return 'Exempt';
   return 'Collect';
+}
+
+/**
+ * Whether a tax code posts to collected (output) and/or paid (ITC/input) GL accounts.
+ * Family types like GST/HST/VAT are treated as both unless they are purchase-side ITC codes.
+ */
+export function taxCodePostingSides(code: {
+  code?: string | null;
+  tax_type?: string | null;
+  applies_to?: string | null;
+}): { collected: boolean; paid: boolean } {
+  const type = (code.tax_type || '').toLowerCase();
+  const applies = (code.applies_to || '').toLowerCase();
+  if (isPaidRetailTaxCode(code.code || '', code.applies_to) || applies === 'purchases' || type === 'purchase' || type === 'purchases') {
+    return { collected: false, paid: true };
+  }
+  if (applies === 'sales' || type === 'sales') {
+    return { collected: true, paid: false };
+  }
+  return { collected: true, paid: true };
+}
+
+export function taxCodeSelectType(code: {
+  code?: string | null;
+  tax_type?: string | null;
+  applies_to?: string | null;
+}): 'sales' | 'purchase' | 'both' {
+  const sides = taxCodePostingSides(code);
+  if (sides.collected && sides.paid) return 'both';
+  if (sides.paid) return 'purchase';
+  return 'sales';
 }
