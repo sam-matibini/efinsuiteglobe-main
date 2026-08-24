@@ -20,6 +20,7 @@ import { parseLocalDate } from '@/lib/utils';
 import { Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { getCountryLocalization, getPrimaryRetailTaxType, COUNTRY_LOCALIZATIONS } from '@/data/countryLocalizations';
+import { taxCodePostingSides, taxCodeSelectType } from '@/lib/retailTaxRateCatalog';
 import { useIsReadOnly } from '@/hooks/useIsReadOnly';
 import { useConfirmDelete } from '@/hooks/useConfirmDelete';
 
@@ -495,8 +496,9 @@ export default function SalesTax() {
                 <TableBody>
                   {taxCodes.map((code) => {
                     const noPosting = (code as any).is_zero_rated || (code as any).is_exempt || Number(code.rate || 0) === 0;
-                    const needsCollected = !noPosting && (code.tax_type === 'sales' || code.tax_type === 'both');
-                    const needsPaid = !noPosting && (code.tax_type === 'purchase' || code.tax_type === 'both');
+                    const sides = taxCodePostingSides(code);
+                    const needsCollected = !noPosting && sides.collected;
+                    const needsPaid = !noPosting && sides.paid;
                     const collectedAcct = accounts.find(a => a.id === (code as any).gl_collected_account_id);
                     const paidAcct = accounts.find(a => a.id === (code as any).gl_paid_account_id);
                     const renderMapping = (
@@ -967,7 +969,13 @@ export default function SalesTax() {
           await updateTaxCode.mutateAsync({
             id: editingCode.id,
             organizationId: organization.id,
-            updates,
+            updates: {
+              ...updates,
+              applies_to: editingCode.applies_to,
+              paid_name: editingCode.paid_name,
+              is_compound: editingCode.is_compound,
+              isVirtual: editingCode.isVirtual,
+            },
           });
           setEditingCode(null);
         }}
@@ -1002,7 +1010,8 @@ function EditTaxCodeDialog({
         name: code.name ?? '',
         rate: Number(code.rate ?? 0),
         jurisdiction: code.jurisdiction ?? '',
-        tax_type: code.tax_type ?? 'both',
+        tax_type: taxCodeSelectType(code),
+        original_tax_type: code.tax_type ?? 'both',
         is_recoverable: code.is_recoverable ?? true,
         is_active: code.is_active ?? true,
         gl_collected_account_id: code.gl_collected_account_id ?? null,
@@ -1013,20 +1022,27 @@ function EditTaxCodeDialog({
 
   const noPosting =
     !!code && ((code as any).is_zero_rated || (code as any).is_exempt || Number(form.rate || 0) === 0);
-  const needsCollected = !noPosting && (form.tax_type === 'sales' || form.tax_type === 'both');
-  const needsPaid = !noPosting && (form.tax_type === 'purchase' || form.tax_type === 'both');
+  const sides = taxCodePostingSides({
+    code: form.code,
+    tax_type: form.tax_type,
+    applies_to: code?.applies_to,
+  });
+  const needsCollected = !noPosting && sides.collected;
+  const needsPaid = !noPosting && sides.paid;
 
   const liabilityAccounts = accounts.filter((a) => a.account_type === 'liability');
   const assetAccounts = accounts.filter((a) => a.account_type === 'asset');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const initialSelect = code ? taxCodeSelectType(code) : 'both';
+    const taxTypeUnchanged = form.tax_type === initialSelect;
     await onSubmit({
       code: form.code,
       name: form.name,
       rate: Number(form.rate) || 0,
       jurisdiction: form.jurisdiction || null,
-      tax_type: form.tax_type,
+      tax_type: taxTypeUnchanged ? (form.original_tax_type || form.tax_type) : form.tax_type,
       is_recoverable: !!form.is_recoverable,
       is_active: !!form.is_active,
       gl_collected_account_id: needsCollected ? form.gl_collected_account_id || null : null,

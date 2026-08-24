@@ -5,6 +5,8 @@ import {
   paidCodeFor,
   paidDisplayName,
   taxCodeGroupLabel,
+  taxCodePostingSides,
+  taxCodeSelectType,
   type RetailTaxCodeLike,
 } from '../retailTaxRateCatalog';
 
@@ -58,6 +60,7 @@ describe('retailTaxRateCatalog', () => {
     const gstItc = expanded.find((c) => c.code === 'GST-ITC');
     expect(gstItc?.name).toMatch(/ITC/);
     expect(gstItc?.applies_to).toBe('purchases');
+    expect(gstItc?.isVirtual).toBe(true);
     expect(gstItc?.gl_paid_account_id).toBe('paid');
     expect(gstItc?.gl_collected_account_id).toBeNull();
     expect(expanded.find((c) => c.code === 'PST-PAID')?.is_recoverable).toBe(false);
@@ -66,5 +69,15 @@ describe('retailTaxRateCatalog', () => {
 
     const again = appendPaidRetailTaxCodes(expanded, 'CA');
     expect(again.filter((c) => c.code === 'GST-ITC')).toHaveLength(1);
+  });
+
+  it('treats GST/HST family codes as both sides and ITC codes as paid-only', () => {
+    expect(taxCodePostingSides({ code: 'GST', tax_type: 'GST' })).toEqual({ collected: true, paid: true });
+    expect(taxCodePostingSides({ code: 'GST-ITC', tax_type: 'GST', applies_to: 'purchases' })).toEqual({
+      collected: false,
+      paid: true,
+    });
+    expect(taxCodeSelectType({ code: 'HST', tax_type: 'HST' })).toBe('both');
+    expect(taxCodeSelectType({ code: 'HST-ITC', applies_to: 'purchases' })).toBe('purchase');
   });
 });

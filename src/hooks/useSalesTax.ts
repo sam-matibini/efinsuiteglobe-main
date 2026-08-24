@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { appendPaidRetailTaxCodes } from '@/lib/retailTaxRateCatalog';
+import { persistTaxCodeUpdate } from '@/lib/persistTaxCode';
 import { resolveCountryCode } from '@/data/countryLocalizations';
 
 export interface SalesTaxSettings {
@@ -54,6 +55,8 @@ export interface TaxCode {
   gl_paid_account_id: string | null;
   applies_to?: 'sales' | 'purchases' | 'both' | string | null;
   paid_name?: string | null;
+  /** Client-only: not a row in tax_codes (derived or synthesized paid sibling). */
+  isVirtual?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -194,6 +197,8 @@ export function useTaxCodes(organizationId?: string, countryCode?: string) {
           .maybeSingle();
         cc = resolveCountryCode(org?.country);
       }
+      const markVirtual = (list: TaxCode[]): TaxCode[] =>
+        list.map((c) => ({ ...c, isVirtual: true }));
       const withPaid = (list: TaxCode[]) =>
         appendPaidRetailTaxCodes(list, cc, (source, paidCode) =>
           generateDeterministicUuid(source.organization_id || organizationId, paidCode),
@@ -323,7 +328,7 @@ export function useTaxCodes(organizationId?: string, countryCode?: string) {
           updated_at: now,
         });
 
-        return withPaid(list);
+        return withPaid(markVirtual(list));
       }
 
       // Build derived tax codes - include all standard Canadian taxes for place-of-supply
@@ -585,7 +590,7 @@ export function useTaxCodes(organizationId?: string, countryCode?: string) {
         updated_at: now,
       });
       
-      return withPaid(derivedCodes);
+      return withPaid(markVirtual(derivedCodes));
     },
     enabled: !!organizationId,
   });
@@ -625,23 +630,9 @@ export function useUpdateTaxCode() {
     mutationFn: async ({ id, organizationId, updates }: {
       id: string;
       organizationId: string;
-      updates: Partial<TaxCode>;
+      updates: Partial<TaxCode> & Record<string, unknown>;
     }) => {
-      const { data, error } = await supabase
-        .from('tax_codes')
-        .update({ ...updates, updated_at: new Date().toISOString() })
-        .eq('id', id)
-        .eq('organization_id', organizationId)
-        .select()
-        .maybeSingle();
-
-      if (error) throw error;
-      if (!data) {
-        throw new Error(
-          'Update returned no rows — the tax code may not belong to the current organization or access is blocked.'
-        );
-      }
-      return data;
+      return persistTaxCodeUpdate(supabase as any, { id, organizationId, updates });
     },
     onSuccess: (_, { organizationId }) => {
       queryClient.invalidateQueries({ queryKey: ['tax-codes', organizationId] });
