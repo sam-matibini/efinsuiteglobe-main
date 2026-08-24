@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { createJournalEntry } from './useJournalEntryCreation';
 import { TaxCode } from './useSalesTax';
+import { ensurePersistedTaxCode } from '@/lib/persistTaxCode';
 import { toast } from 'sonner';
 import { JournalEntryLineDimensions } from './useJournalEntryCreation';
 import { 
@@ -465,8 +466,8 @@ export function usePostTransactionToGL() {
         status: 'matched',
       };
       if (dimensions?.department_id) txUpdate.department_id = dimensions.department_id;
-      const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-      if (taxCode?.id && UUID_RE.test(taxCode.id)) txUpdate.tax_code_id = taxCode.id;
+      const persistedTaxCodeId = await ensurePersistedTaxCode(supabase, organizationId, taxCode);
+      if (persistedTaxCodeId) txUpdate.tax_code_id = persistedTaxCodeId;
       if (effectiveTax > 0) {
         txUpdate.tax_amount = effectiveTax;
         txUpdate.subtotal_amount = subtotal;

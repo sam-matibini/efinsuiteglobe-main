@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
+  ensurePersistedTaxCode,
   isMissingColumnError,
   persistTaxCodeUpdate,
   sanitizeTaxCodeWrite,
@@ -115,5 +116,68 @@ describe('persistTaxCodeUpdate', () => {
       applies_to: 'purchases',
       persisted: true,
     });
+  });
+});
+
+describe('ensurePersistedTaxCode', () => {
+  it('returns an existing id without inserting', async () => {
+    const client = {
+      from: () => ({
+        select: () => ({
+          eq: () => ({
+            maybeSingle: async () => ({ data: { id: 'db-id' }, error: null }),
+          }),
+        }),
+      }),
+    };
+    await expect(
+      ensurePersistedTaxCode(client, 'org', {
+        id: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+        code: 'GST-ITC',
+      }),
+    ).resolves.toBe('db-id');
+  });
+
+  it('inserts virtual GST-ITC when the id is not in tax_codes', async () => {
+    const insert = vi.fn(async (body: Record<string, unknown>) => ({
+      data: { ...body },
+      error: null,
+    }));
+    const client = {
+      from: () => {
+        const filters: Record<string, string> = {};
+        const chain: any = {
+          select: () => chain,
+          eq: (column: string, value: string) => {
+            filters[column] = value;
+            return chain;
+          },
+          maybeSingle: async () => ({ data: null, error: null }),
+          update: (body: Record<string, unknown>) => {
+            chain._update = body;
+            return chain;
+          },
+          insert: (body: Record<string, unknown>) => {
+            chain._insert = body;
+            return {
+              select: () => ({
+                single: () => insert(body),
+              }),
+            };
+          },
+        };
+        return chain;
+      },
+    };
+    const id = await ensurePersistedTaxCode(client, 'org-1', {
+      id: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+      code: 'GST-ITC',
+      name: 'GST Paid (ITC)',
+      rate: 5,
+      tax_type: 'GST',
+      applies_to: 'purchases',
+    });
+    expect(insert).toHaveBeenCalled();
+    expect(id).toBe('aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee');
   });
 });
