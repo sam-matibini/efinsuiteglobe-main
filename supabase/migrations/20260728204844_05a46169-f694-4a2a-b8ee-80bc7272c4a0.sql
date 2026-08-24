@@ -13,7 +13,7 @@ AS $$
 DECLARE
   v_country text;
 BEGIN
-  SELECT COALESCE(c.iso2, o.country)
+  SELECT COALESCE(c.code, o.country)
     INTO v_country
   FROM public.organizations o
   LEFT JOIN public.countries c ON c.id = o.country_id
