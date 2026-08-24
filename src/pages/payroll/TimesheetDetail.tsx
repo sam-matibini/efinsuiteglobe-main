@@ -1,6 +1,7 @@
 // Timesheet Detail - Semi-Monthly Fix v3
 import { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import {
   ArrowLeft,
   ArrowRight,
@@ -8,6 +9,7 @@ import {
   Trash2,
   Pencil,
   Clock,
+  Timer,
   Calendar,
   User,
   CheckCircle2,
@@ -54,6 +56,7 @@ import {
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/integrations/supabase/client';
 import { useTimesheets, useTimesheetEntries, TimesheetStatus, TimesheetEntry } from '@/hooks/useTimesheets';
 import { useEmployees } from '@/hooks/useEmployees';
 import { usePayrollLocalization } from '@/hooks/usePayrollLocalization';
@@ -85,10 +88,40 @@ export default function TimesheetDetail() {
   const confirmDelete = useConfirmDelete();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const goBack = () => {
+    const idx = (window.history.state as { idx?: number } | null)?.idx ?? 0;
+    if (idx > 0) navigate(-1);
+    else navigate('/');
+  };
   const { timesheets, isLoading, submitTimesheet, approveTimesheet, rejectTimesheet } = useTimesheets();
   const { entries, createEntry, updateEntry, deleteEntry } = useTimesheetEntries(id);
   const { getEmployeeById } = useEmployees();
   usePayrollLocalization(); // Keep hook for side effects
+
+  // Time clock punches feeding this timesheet - shows supervisors the
+  // source of the hours (clock in/out + break) on each entry
+  const punchByEntryId = useQuery({
+    queryKey: ['time-clock', 'punches-by-entry', id, entries.map((e) => e.id).join(',')],
+    enabled: !!id && entries.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('employee_time_clock_punches')
+        .select('id, timesheet_entry_id, work_date, clock_in_at, clock_out_at, break_minutes')
+        .in('timesheet_entry_id', entries.map((e) => e.id));
+      if (error) throw error;
+      const map = new Map<string, { clock_in_at: string; clock_out_at: string | null; break_minutes: number }>();
+      for (const p of data ?? []) {
+        if (p.timesheet_entry_id) {
+          map.set(p.timesheet_entry_id, {
+            clock_in_at: p.clock_in_at,
+            clock_out_at: p.clock_out_at,
+            break_minutes: p.break_minutes ?? 0,
+          });
+        }
+      }
+      return map;
+    },
+  });
 
   const [addEntryOpen, setAddEntryOpen] = useState(false);
   const [editEntryOpen, setEditEntryOpen] = useState(false);
@@ -149,9 +182,9 @@ export default function TimesheetDetail() {
     return (
       <div className="flex flex-col items-center justify-center h-64">
         <p className="text-muted-foreground">Timesheet not found</p>
-        <Button variant="outline" className="mt-4" onClick={() => navigate('/payroll/timesheets')}>
+        <Button variant="outline" className="mt-4" onClick={goBack}>
           <ArrowLeft className="w-4 h-4 mr-2" />
-          Back to Timesheets
+          Go Back
         </Button>
       </div>
     );
@@ -482,7 +515,7 @@ export default function TimesheetDetail() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Button variant="outline" size="icon" onClick={() => navigate('/payroll/timesheets')}>
+          <Button variant="outline" size="icon" onClick={goBack}>
             <ArrowLeft className="w-4 h-4" />
           </Button>
           <div>
@@ -612,10 +645,26 @@ export default function TimesheetDetail() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {entries.map((entry) => (
+                {entries.map((entry) => {
+                  const punch = punchByEntryId.data?.get(entry.id);
+                  return (
                   <TableRow key={entry.id}>
                     <TableCell className="font-medium">
-                      {format(parseLocalDate(entry.work_date), 'EEE, MMM d')}
+                      <div className="flex items-center gap-2">
+                        {format(parseLocalDate(entry.work_date), 'EEE, MMM d')}
+                        {punch && (
+                          <Badge
+                            variant="outline"
+                            className="gap-1 text-xs bg-primary/5 text-primary border-primary/30"
+                            title={`Clocked in ${punch.clock_in_at ? format(new Date(punch.clock_in_at), 'MMM d, h:mm a') : '-'}${
+                              punch.clock_out_at ? ` · Clocked out ${format(new Date(punch.clock_out_at), 'h:mm a')}` : ''
+                            }`}
+                          >
+                            <Timer className="w-3 h-3" />
+                            Clocked
+                          </Badge>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell>{entry.start_time?.slice(0, 5) || '-'}</TableCell>
                     <TableCell>{entry.end_time?.slice(0, 5) || '-'}</TableCell>
@@ -630,8 +679,8 @@ export default function TimesheetDetail() {
                     {isDraft && (
                       <TableCell>
                         <div className="flex gap-1">
-                          <Button 
-                            variant="ghost" 
+                          <Button
+                            variant="ghost"
                             size="icon"
                             onClick={() => {
                               setSelectedEntry(entry);
@@ -640,9 +689,9 @@ export default function TimesheetDetail() {
                           >
                             <Pencil className="w-4 h-4" />
                           </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
+                          <Button
+                            variant="ghost"
+                            size="icon"
                             className="text-destructive"
                             onClick={() => confirmDelete(() => deleteEntry.mutate(entry.id), { title: 'Delete time entry?' })}
                           >
@@ -652,7 +701,8 @@ export default function TimesheetDetail() {
                       </TableCell>
                     )}
                   </TableRow>
-                ))}
+                  );
+                })}
               </TableBody>
             </Table>
           )}
