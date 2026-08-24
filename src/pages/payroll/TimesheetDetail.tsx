@@ -88,6 +88,11 @@ export default function TimesheetDetail() {
   const confirmDelete = useConfirmDelete();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const goBack = () => {
+    const idx = (window.history.state as { idx?: number } | null)?.idx ?? 0;
+    if (idx > 0) navigate(-1);
+    else navigate('/');
+  };
   const { timesheets, isLoading, submitTimesheet, approveTimesheet, rejectTimesheet } = useTimesheets();
   const { entries, createEntry, updateEntry, deleteEntry } = useTimesheetEntries(id);
   const { getEmployeeById } = useEmployees();
@@ -177,9 +182,9 @@ export default function TimesheetDetail() {
     return (
       <div className="flex flex-col items-center justify-center h-64">
         <p className="text-muted-foreground">Timesheet not found</p>
-        <Button variant="outline" className="mt-4" onClick={() => navigate('/payroll/timesheets')}>
+        <Button variant="outline" className="mt-4" onClick={goBack}>
           <ArrowLeft className="w-4 h-4 mr-2" />
-          Back to Timesheets
+          Go Back
         </Button>
       </div>
     );
@@ -510,7 +515,7 @@ export default function TimesheetDetail() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Button variant="outline" size="icon" onClick={() => navigate('/payroll/timesheets')}>
+          <Button variant="outline" size="icon" onClick={goBack}>
             <ArrowLeft className="w-4 h-4" />
           </Button>
           <div>

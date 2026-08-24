@@ -298,7 +298,7 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
   // Items whose module is enabled by role/org but NOT included in the current plan
   // stay visible with `locked: true` so users see everything and get an upgrade prompt.
   const navigation = useMemo(() => {
-    return baseNavigation
+    const filtered = baseNavigation
       .map(item => {
         if (item.allowedRoles && !item.allowedRoles.includes(userRole)) return null;
         if (isReadOnly && item.hideForReadOnly) return null;
@@ -319,6 +319,12 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
         children = children.filter(child => isChildVisibleForCountry(child, countryCode));
         return { ...item, children };
       });
+
+    if (!isReadOnly && !isModuleEnabled('payroll')) {
+      filtered.push({ label: 'Self-Service', icon: Clock, href: '/payroll/self-service', locked: false });
+    }
+
+    return filtered;
   }, [baseNavigation, isModuleEnabled, isModuleInCurrentPlan, modulesLoading, isReadOnly, userRole, countryCode]);
 
 
