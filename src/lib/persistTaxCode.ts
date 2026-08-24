@@ -163,3 +163,81 @@ export async function persistTaxCodeUpdate(
   }
   return inserted.data;
 }
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export interface EnsurePersistedTaxCodeInput {
+  id?: string | null;
+  code?: string | null;
+  name?: string | null;
+  rate?: number | null;
+  jurisdiction?: string | null;
+  tax_type?: string | null;
+  is_recoverable?: boolean | null;
+  is_compound?: boolean | null;
+  is_active?: boolean | null;
+  gl_collected_account_id?: string | null;
+  gl_paid_account_id?: string | null;
+  applies_to?: string | null;
+  paid_name?: string | null;
+}
+
+/**
+ * Return a tax_codes.id that exists for this org. Virtual GST-ITC / derived
+ * picker ids are inserted (or matched by code) so FK columns like
+ * bank_transactions.tax_code_id can store them.
+ */
+export async function ensurePersistedTaxCode(
+  supabase: any,
+  organizationId: string,
+  taxCode: EnsurePersistedTaxCodeInput | null | undefined,
+): Promise<string | null> {
+  if (!organizationId || !taxCode) return null;
+  const id = (taxCode.id || '').trim();
+  const code = (taxCode.code || '').trim();
+  if (!id && !code) return null;
+
+  const lookup = async (column: string, value: string, extra?: Array<[string, string]>) => {
+    let query: any = supabase.from('tax_codes').select('id');
+    query = query.eq(column, value);
+    for (const [col, val] of extra || []) query = query.eq(col, val);
+    const { data, error } = await query.maybeSingle();
+    if (error) throw error;
+    return (data?.id as string | undefined) || null;
+  };
+
+  if (id && UUID_RE.test(id)) {
+    const existing = await lookup('id', id);
+    if (existing) return existing;
+  }
+  if (code) {
+    const byCode = await lookup('code', code, [['organization_id', organizationId]]);
+    if (byCode) return byCode;
+  }
+
+  if (id && !UUID_RE.test(id) && !code) return null;
+
+  const persistId = id && UUID_RE.test(id)
+    ? id
+    : (globalThis.crypto?.randomUUID?.() ?? `${organizationId.slice(0, 8)}-0000-4000-8000-${Date.now().toString(16).padStart(12, '0').slice(-12)}`);
+
+  const saved = await persistTaxCodeUpdate(supabase, {
+    id: persistId,
+    organizationId,
+    updates: {
+      code: code || 'TAX',
+      name: taxCode.name || code || 'Tax',
+      rate: Number(taxCode.rate ?? 0),
+      jurisdiction: taxCode.jurisdiction ?? null,
+      tax_type: taxCode.tax_type || code || 'GST',
+      is_recoverable: taxCode.is_recoverable ?? true,
+      is_compound: taxCode.is_compound ?? false,
+      is_active: taxCode.is_active ?? true,
+      gl_collected_account_id: taxCode.gl_collected_account_id ?? null,
+      gl_paid_account_id: taxCode.gl_paid_account_id ?? null,
+      applies_to: taxCode.applies_to ?? undefined,
+      paid_name: taxCode.paid_name ?? undefined,
+    },
+  });
+  return (typeof saved.id === 'string' && saved.id) || persistId;
+}
