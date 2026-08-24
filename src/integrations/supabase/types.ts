@@ -9188,6 +9188,117 @@ export type Database = {
           },
         ]
       }
+      employee_time_clock_breaks: {
+        Row: {
+          break_end_at: string | null
+          break_start_at: string
+          created_at: string
+          id: string
+          minutes: number | null
+          punch_id: string
+        }
+        Insert: {
+          break_end_at?: string | null
+          break_start_at?: string
+          created_at?: string
+          id?: string
+          minutes?: number | null
+          punch_id: string
+        }
+        Update: {
+          break_end_at?: string | null
+          break_start_at?: string
+          created_at?: string
+          id?: string
+          minutes?: number | null
+          punch_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_time_clock_breaks_punch_id_fkey"
+            columns: ["punch_id"]
+            isOneToOne: false
+            referencedRelation: "employee_time_clock_punches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      employee_time_clock_punches: {
+        Row: {
+          break_minutes: number
+          clock_in_at: string
+          clock_out_at: string | null
+          created_at: string
+          employee_id: string
+          id: string
+          notes: string | null
+          organization_id: string | null
+          overtime_hours: number | null
+          regular_hours: number | null
+          status: string
+          timesheet_entry_id: string | null
+          total_hours: number | null
+          updated_at: string
+          work_date: string
+        }
+        Insert: {
+          break_minutes?: number
+          clock_in_at?: string
+          clock_out_at?: string | null
+          created_at?: string
+          employee_id: string
+          id?: string
+          notes?: string | null
+          organization_id?: string | null
+          overtime_hours?: number | null
+          regular_hours?: number | null
+          status?: string
+          timesheet_entry_id?: string | null
+          total_hours?: number | null
+          updated_at?: string
+          work_date?: string
+        }
+        Update: {
+          break_minutes?: number
+          clock_in_at?: string
+          clock_out_at?: string | null
+          created_at?: string
+          employee_id?: string
+          id?: string
+          notes?: string | null
+          organization_id?: string | null
+          overtime_hours?: number | null
+          regular_hours?: number | null
+          status?: string
+          timesheet_entry_id?: string | null
+          total_hours?: number | null
+          updated_at?: string
+          work_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_time_clock_punches_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_time_clock_punches_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_time_clock_punches_timesheet_entry_id_fkey"
+            columns: ["timesheet_entry_id"]
+            isOneToOne: false
+            referencedRelation: "timesheet_entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       employee_timesheets: {
         Row: {
           approval_method: Database["public"]["Enums"]["approval_method"] | null
