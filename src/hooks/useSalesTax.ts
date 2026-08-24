@@ -3,6 +3,12 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { appendPaidRetailTaxCodes } from '@/lib/retailTaxRateCatalog';
 import { persistTaxCodeUpdate } from '@/lib/persistTaxCode';
+import {
+  mergeRstPaidSettings,
+  readRstPaidFallback,
+  upsertSalesTaxSettingsRow,
+  writeRstPaidFallback,
+} from '@/lib/salesTaxSettingsWrite';
 import { resolveCountryCode } from '@/data/countryLocalizations';
 
 export interface SalesTaxSettings {
@@ -96,7 +102,15 @@ export function useSalesTaxSettings(organizationId?: string) {
         .maybeSingle();
       
       if (error) throw error;
-      return data as SalesTaxSettings | null;
+
+      const { data: orgRow } = await supabase
+        .from('organizations')
+        .select('efinconnect_preferences')
+        .eq('id', organizationId)
+        .maybeSingle();
+      const fallback = readRstPaidFallback((orgRow as { efinconnect_preferences?: unknown } | null)?.efinconnect_preferences);
+      if (!data) return null;
+      return mergeRstPaidSettings(data as SalesTaxSettings, fallback) as SalesTaxSettings;
     },
     enabled: !!organizationId,
   });
@@ -117,24 +131,54 @@ export function useUpsertSalesTaxSettings() {
         .eq('organization_id', organizationId)
         .maybeSingle();
 
+      const persistFallback = async (fallback: Record<string, unknown>) => {
+        if (Object.keys(fallback).length === 0) return;
+        const { data: orgRow } = await supabase
+          .from('organizations')
+          .select('efinconnect_preferences')
+          .eq('id', organizationId)
+          .maybeSingle();
+        const next = writeRstPaidFallback(
+          (orgRow as { efinconnect_preferences?: unknown } | null)?.efinconnect_preferences,
+          fallback,
+        );
+        const { error: prefError } = await supabase
+          .from('organizations')
+          .update({ efinconnect_preferences: next as never })
+          .eq('id', organizationId);
+        if (prefError) throw prefError;
+      };
+
       if (existing) {
-        const { data, error } = await supabase
-          .from('sales_tax_settings')
-          .update(settings)
-          .eq('organization_id', organizationId)
-          .select()
-          .single();
-        if (error) throw error;
-        return data;
-      } else {
-        const { data, error } = await supabase
-          .from('sales_tax_settings')
-          .insert({ ...settings, organization_id: organizationId })
-          .select()
-          .single();
-        if (error) throw error;
-        return data;
+        const { row, fallback } = await upsertSalesTaxSettingsRow(
+          async (payload) => {
+            const { data, error } = await supabase
+              .from('sales_tax_settings')
+              .update(payload as never)
+              .eq('organization_id', organizationId)
+              .select()
+              .maybeSingle();
+            return { data: data as Record<string, unknown> | null, error };
+          },
+          settings as Record<string, unknown>,
+        );
+        await persistFallback(fallback);
+        return mergeRstPaidSettings(row, fallback) as SalesTaxSettings;
       }
+
+      const { row, fallback } = await upsertSalesTaxSettingsRow(
+        async (payload) => {
+          const { data, error } = await supabase
+            .from('sales_tax_settings')
+            .insert({ ...payload, organization_id: organizationId } as never)
+            .select()
+            .maybeSingle();
+          return { data: data as Record<string, unknown> | null, error };
+        },
+        settings as Record<string, unknown>,
+      );
+      await persistFallback(fallback);
+      return mergeRstPaidSettings(row, fallback) as SalesTaxSettings;
     },
     onSuccess: (_, { organizationId }) => {
       queryClient.invalidateQueries({ queryKey: ['sales-tax-settings', organizationId] });
