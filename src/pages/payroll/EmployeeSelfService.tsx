@@ -34,6 +34,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useEmployees } from '@/hooks/useEmployees';
 import { useTimesheets, TimesheetStatus } from '@/hooks/useTimesheets';
 import { CreateTimesheetDialog } from '@/components/payroll/CreateTimesheetDialog';
+import { TimeClockCard } from '@/components/payroll/TimeClockCard';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -232,6 +233,9 @@ export default function EmployeeSelfService() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Time Clock - primary way to record hours */}
+      <TimeClockCard employee={currentEmployee} submitTimesheet={submitTimesheet} />
 
       {/* Quick Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
