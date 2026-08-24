@@ -1,6 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { appendPaidRetailTaxCodes } from '@/lib/retailTaxRateCatalog';
+import { resolveCountryCode } from '@/data/countryLocalizations';
 
 export interface SalesTaxSettings {
   id: string;
@@ -50,6 +52,8 @@ export interface TaxCode {
   is_active: boolean;
   gl_collected_account_id: string | null;
   gl_paid_account_id: string | null;
+  applies_to?: 'sales' | 'purchases' | 'both' | string | null;
+  paid_name?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -180,6 +184,20 @@ export function useTaxCodes(organizationId?: string, countryCode?: string) {
     queryKey: ['tax-codes', organizationId, countryCode],
     queryFn: async () => {
       if (!organizationId) return [];
+
+      let cc = (countryCode || '').toUpperCase();
+      if (!cc) {
+        const { data: org } = await supabase
+          .from('organizations')
+          .select('country')
+          .eq('id', organizationId)
+          .maybeSingle();
+        cc = resolveCountryCode(org?.country);
+      }
+      const withPaid = (list: TaxCode[]) =>
+        appendPaidRetailTaxCodes(list, cc, (source, paidCode) =>
+          generateDeterministicUuid(source.organization_id || organizationId, paidCode),
+        );
       
       // First try to get explicit tax codes
       const { data: taxCodes, error: taxCodesError } = await supabase
@@ -190,9 +208,9 @@ export function useTaxCodes(organizationId?: string, countryCode?: string) {
       
       if (taxCodesError) throw taxCodesError;
       
-      // If we have explicit tax codes, use them
+      // If we have explicit tax codes, use them (plus synthesized paid/ITC siblings)
       if (taxCodes && taxCodes.length > 0) {
-        return taxCodes as TaxCode[];
+        return withPaid(taxCodes as TaxCode[]);
       }
       
       // Otherwise, derive tax codes from sales_tax_settings
@@ -205,7 +223,7 @@ export function useTaxCodes(organizationId?: string, countryCode?: string) {
       if (settingsError) throw settingsError;
       
       const now = new Date().toISOString();
-      const cc = (countryCode || 'CA').toUpperCase();
+      cc = (cc || countryCode || 'CA').toUpperCase();
 
       // Country-specific derivation for non-Canadian jurisdictions
       if (cc !== 'CA' && cc !== 'US') {
@@ -305,7 +323,7 @@ export function useTaxCodes(organizationId?: string, countryCode?: string) {
           updated_at: now,
         });
 
-        return list;
+        return withPaid(list);
       }
 
       // Build derived tax codes - include all standard Canadian taxes for place-of-supply
@@ -567,7 +585,7 @@ export function useTaxCodes(organizationId?: string, countryCode?: string) {
         updated_at: now,
       });
       
-      return derivedCodes;
+      return withPaid(derivedCodes);
     },
     enabled: !!organizationId,
   });

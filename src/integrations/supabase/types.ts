@@ -24158,6 +24158,8 @@ export type Database = {
           jurisdiction: string | null
           name: string
           organization_id: string | null
+          paid_name: string | null
+          applies_to: string
           rate: number
           show_combined_display: boolean | null
           tax_authority_id: string | null
@@ -24182,6 +24184,8 @@ export type Database = {
           jurisdiction?: string | null
           name: string
           organization_id?: string | null
+          paid_name?: string | null
+          applies_to?: string
           rate?: number
           show_combined_display?: boolean | null
           tax_authority_id?: string | null
@@ -24206,6 +24210,8 @@ export type Database = {
           jurisdiction?: string | null
           name?: string
           organization_id?: string | null
+          paid_name?: string | null
+          applies_to?: string
           rate?: number
           show_combined_display?: boolean | null
           tax_authority_id?: string | null

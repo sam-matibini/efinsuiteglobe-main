@@ -100,6 +100,15 @@ describe('Country Localizations Data', () => {
     expect(isRecoverableRetailTax('PST-BC', 'CA', 'BC')).toBe(false);
   });
 
+  it('every retail tax type has a paid rate label usable in pickers', () => {
+    allCodes.forEach((code) => {
+      getRetailTaxTypes(code, 'paid').forEach((tax) => {
+        expect(tax.paidName).toMatch(/Paid|ITC|Input|Tax/);
+        expect(tax.defaultRate).toBeGreaterThanOrEqual(0);
+      });
+    });
+  });
+
   it('VAT countries expose Input VAT as the paid-side label', () => {
     const gb = getPrimaryRetailTaxType('GB');
     expect(gb?.code).toBe('VAT');

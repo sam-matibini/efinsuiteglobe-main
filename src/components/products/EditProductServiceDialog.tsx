@@ -37,6 +37,7 @@ import { useUpdateProductService, ProductService } from '@/hooks/useProductsServ
 import { useAccounts } from '@/hooks/useAccounts';
 import { useTaxCodes } from '@/hooks/useSalesTax';
 import { useCurrentOrganization } from '@/hooks/useOrganization';
+import { taxCodeGroupLabel } from '@/lib/retailTaxRateCatalog';
 import { Package, Wrench, Check, ChevronsUpDown, Percent, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -100,6 +101,20 @@ export function EditProductServiceDialog({
   const selectedTaxCode = useMemo(() => {
     return taxCodes.find(tc => tc.id === selectedTaxCodeId);
   }, [taxCodes, selectedTaxCodeId]);
+
+  const groupedTaxCodes = useMemo(() => {
+    const groups: Record<string, typeof taxCodes> = {
+      Collect: [],
+      'Paid / ITC': [],
+      Exempt: [],
+    };
+    taxCodes.forEach((tc) => {
+      const group = taxCodeGroupLabel(tc);
+      if (!groups[group]) groups[group] = [];
+      groups[group].push(tc);
+    });
+    return groups;
+  }, [taxCodes]);
 
   const incomeAccounts = accounts.filter(a => a.account_type === 'income' && !a.is_header);
   const expenseAccounts = accounts.filter(a => a.account_type === 'expense' && !a.is_header);
@@ -298,31 +313,35 @@ export function EditProductServiceDialog({
                         <CommandInput placeholder="Search tax codes..." />
                         <CommandList>
                           <CommandEmpty>No tax code found.</CommandEmpty>
-                          <CommandGroup>
-                            {taxCodes.map((tc) => (
-                              <CommandItem
-                                key={tc.id}
-                                value={`${tc.code} ${tc.name}`}
-                                onSelect={() => {
-                                  setSelectedTaxCodeId(tc.id === selectedTaxCodeId ? '' : tc.id);
-                                  setTaxRate(tc.rate.toString());
-                                  setTaxCodeOpen(false);
-                                }}
-                              >
-                                <Check
-                                  className={cn(
-                                    "mr-2 h-4 w-4",
-                                    selectedTaxCodeId === tc.id ? "opacity-100" : "opacity-0"
-                                  )}
-                                />
-                                <div className="flex-1">
-                                  <span className="font-medium">{tc.code}</span>
-                                  <span className="text-muted-foreground ml-2">{tc.name}</span>
-                                </div>
-                                <span className="text-muted-foreground">{tc.rate}%</span>
-                              </CommandItem>
-                            ))}
-                          </CommandGroup>
+                          {(['Collect', 'Paid / ITC', 'Exempt'] as const).map((group) =>
+                            groupedTaxCodes[group].length > 0 ? (
+                              <CommandGroup key={group} heading={group}>
+                                {groupedTaxCodes[group].map((tc) => (
+                                  <CommandItem
+                                    key={tc.id}
+                                    value={`${tc.code} ${tc.name} ${group}`}
+                                    onSelect={() => {
+                                      setSelectedTaxCodeId(tc.id === selectedTaxCodeId ? '' : tc.id);
+                                      setTaxRate(tc.rate.toString());
+                                      setTaxCodeOpen(false);
+                                    }}
+                                  >
+                                    <Check
+                                      className={cn(
+                                        "mr-2 h-4 w-4",
+                                        selectedTaxCodeId === tc.id ? "opacity-100" : "opacity-0"
+                                      )}
+                                    />
+                                    <div className="flex-1">
+                                      <span className="font-medium">{tc.code}</span>
+                                      <span className="text-muted-foreground ml-2">{tc.name}</span>
+                                    </div>
+                                    <span className="text-muted-foreground">{tc.rate}%</span>
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            ) : null
+                          )}
                         </CommandList>
                       </Command>
                     </PopoverContent>

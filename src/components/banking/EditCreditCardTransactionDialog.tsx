@@ -722,6 +722,7 @@ export function EditCreditCardTransactionDialog({
                           onValueChange={setSelectedTaxCode}
                           placeholder="Select tax..."
                           disabled={isLocked}
+                          direction="paid"
                         />
                       </div>
                     </div>

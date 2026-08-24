@@ -649,6 +649,7 @@ export function EditTransactionDialog({
                       onValueChange={setSelectedTaxCode}
                       placeholder="Select tax..."
                       disabled={isReconciled}
+                      direction={transactionType === 'deposit' ? 'collected' : 'paid'}
                     />
                   </div>
                 </div>
