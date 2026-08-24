@@ -22,6 +22,7 @@ interface UseTimeClockResult {
   summary: ReturnType<typeof summarizePunches>;
   liveElapsedMinutes: number | null;
   isLoading: boolean;
+  isMutating: boolean;
   clockIn: () => void;
   startBreak: () => void;
   endBreak: () => void;
@@ -40,7 +41,7 @@ export function useTimeClock(employee: EmployeeLite | undefined | null): UseTime
   const period = currentPayPeriod(employee?.pay_frequency);
 
   const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ['time-clock', employeeId] });
+    queryClient.invalidateQueries({ queryKey: ['time-clock'] });
     queryClient.invalidateQueries({ queryKey: ['timesheets'] });
     queryClient.invalidateQueries({ queryKey: ['timesheet-entries'] });
   };
@@ -233,6 +234,11 @@ export function useTimeClock(employee: EmployeeLite | undefined | null): UseTime
     summary: summarizePunches(allPunches),
     liveElapsedMinutes,
     isLoading: punchesQuery.isLoading || breaksQuery.isLoading || timesheetsQuery.isLoading,
+    isMutating:
+      clockIn.isPending ||
+      startBreak.isPending ||
+      endBreak.isPending ||
+      clockOut.isPending,
     clockIn: () => clockIn.mutate(),
     startBreak: () => startBreak.mutate(),
     endBreak: () => endBreak.mutate(),
