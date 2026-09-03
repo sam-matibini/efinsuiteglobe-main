@@ -34,12 +34,12 @@ ON CONFLICT (id) DO NOTHING;
 -- Storage bucket RLS is configured via storage.objects; allow authenticated org
 -- members full CRUD within the bucket. We scope by bucket id only here; finer
 -- org-level scoping is enforced upstream by the Edge Function membership check.
-CREATE POLICY IF NOT EXISTS "Org members can read cra-filings"
+CREATE POLICY "Org members can read cra-filings"
   ON storage.objects FOR SELECT
   USING (bucket_id = 'cra-filings');
-CREATE POLICY IF NOT EXISTS "Org members can insert cra-filings"
+CREATE POLICY "Org members can insert cra-filings"
   ON storage.objects FOR INSERT
   WITH CHECK (bucket_id = 'cra-filings');
-CREATE POLICY IF NOT EXISTS "Org members can update cra-filings"
+CREATE POLICY "Org members can update cra-filings"
   ON storage.objects FOR UPDATE
   USING (bucket_id = 'cra-filings');
