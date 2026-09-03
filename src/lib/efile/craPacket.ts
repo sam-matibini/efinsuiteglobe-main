@@ -8,31 +8,28 @@
  */
 import type { FilingFormResult } from '@/lib/filings/types';
 import type { EFilePacket } from './types';
-
-const xmlEscape = (s: string | number | undefined | null): string =>
-  String(s ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
-
-const fmt = (n: number) => (Math.round(n * 100) / 100).toFixed(2);
+import { xmlEscape, formatCraAmount, omitEmptyOptionalTags } from './craXmlUtils';
+import { schemaForTaxYear, type CraSchemaYear } from './craSchemaVersion';
 
 interface CraOptions {
   businessNumber: string;       // 9-digit BN + RT0001
   webAccessCode?: string;       // optional WAC for NETFILE
   contactName?: string;
   contactPhone?: string;
+  /** CRA schema year (2026 | 2027). Defaults from the filing period. */
+  schemaYear?: CraSchemaYear;
 }
 
 export function buildCraGstHstPacket(form: FilingFormResult, opts: CraOptions): EFilePacket {
   const lineMap = new Map(form.lines.map((l) => [l.code, l.amount]));
-  const get = (code: string) => fmt(lineMap.get(code) ?? 0);
+  const get = (code: string) => formatCraAmount(lineMap.get(code) ?? 0);
+  const year = form.periodEnd ? Number(form.periodEnd.slice(0, 4)) || new Date().getFullYear() : new Date().getFullYear();
+  const schemaYear = opts.schemaYear ?? schemaForTaxYear(year);
 
-  const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<GSTHSTReturn xmlns="http://www.cra-arc.gc.ca/gst-hst/return/1.0">
+  const xml = omitEmptyOptionalTags(`<?xml version="1.0" encoding="UTF-8"?>
+<GSTHSTReturn xmlns="http://www.cra-arc.gc.ca/gst-hst/return/1.0" schemaVersion="${schemaYear}">
   <Header>
+    <SchemaVersion>${schemaYear}</SchemaVersion>
     <BusinessNumber>${xmlEscape(opts.businessNumber)}</BusinessNumber>
     ${opts.webAccessCode ? `<WebAccessCode>${xmlEscape(opts.webAccessCode)}</WebAccessCode>` : ''}
     <FilerType>Software</FilerType>
@@ -56,12 +53,12 @@ export function buildCraGstHstPacket(form: FilingFormResult, opts: CraOptions): 
     <Line code="110" label="Instalment and other annual filer payments">${get('110')}</Line>
     <Line code="111" label="Rebates">${get('111')}</Line>
     <Line code="112" label="Total other credits">${get('112')}</Line>
-    <Line code="113" label="Balance">${fmt(form.netPayable)}</Line>
+    <Line code="113" label="Balance">${formatCraAmount(form.netPayable)}</Line>
   </Lines>
   <Summary>
-    <NetPayable>${fmt(form.netPayable)}</NetPayable>
+    <NetPayable>${formatCraAmount(form.netPayable)}</NetPayable>
   </Summary>
-</GSTHSTReturn>`;
+</GSTHSTReturn>`);
 
   return {
     channel: 'cra_packet',
@@ -71,6 +68,7 @@ export function buildCraGstHstPacket(form: FilingFormResult, opts: CraOptions): 
     contents: xml,
     portalUrl: 'https://www.canada.ca/en/revenue-agency/services/e-services/digital-services-businesses/business-account.html',
     canDirectSubmit: false,
+    schemaVersion: schemaYear,
     instructions: [
       'Sign in to CRA My Business Account or use GST/HST NETFILE.',
       'Select the GST/HST return for this period.',

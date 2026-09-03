@@ -141,6 +141,7 @@ export default function VendorTaxProfiles() {
                     <SelectItem value="auto">Auto</SelectItem>
                     <SelectItem value="T4A">T4A</SelectItem>
                     <SelectItem value="T5018">T5018</SelectItem>
+                    <SelectItem value="T5">T5</SelectItem>
                     <SelectItem value="1099-NEC">1099-NEC</SelectItem>
                     <SelectItem value="1099-MISC">1099-MISC</SelectItem>
                   </SelectContent>

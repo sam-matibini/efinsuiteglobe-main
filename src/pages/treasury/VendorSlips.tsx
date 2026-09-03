@@ -8,7 +8,7 @@ import { FileSignature, Send, Sparkles, Download } from 'lucide-react';
 import { useVendorSlips } from '@/hooks/useVendorSlips';
 import { useCurrencyFormatter } from '@/hooks/useCurrencyFormatter';
 
-const SLIP_TYPES = ['T4A', 'T5018', '1099-NEC', '1099-MISC'];
+const SLIP_TYPES = ['T4A', 'T5018', 'T5', '1099-NEC', '1099-MISC'];
 
 function statusBadge(status: string) {
   const map: Record<string, any> = {
@@ -39,7 +39,7 @@ export default function VendorSlips() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Vendor Tax Slips</h1>
-          <p className="text-muted-foreground">Year-end T4A, T5018, 1099-NEC and 1099-MISC issuance.</p>
+          <p className="text-muted-foreground">Year-end T4A, T5018, T5, 1099-NEC and 1099-MISC issuance.</p>
         </div>
         <div className="flex items-center gap-3">
           <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>

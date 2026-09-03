@@ -9,7 +9,7 @@ const corsHeaders = {
 interface Body {
   organization_id: string;
   tax_year: number;
-  slip_type?: "T4A" | "T5018" | "1099-NEC" | "1099-MISC";
+  slip_type?: "T4A" | "T5018" | "1099-NEC" | "1099-MISC" | "T5";
   vendor_ids?: string[];
 }
 
@@ -58,7 +58,7 @@ Deno.serve(async (req) => {
         return sum + sign * Number(p.amount ?? 0);
       }, 0);
 
-      // Determine slip type
+      // Determine slip type — explicit body.slip_type wins over profile override.
       let slipType = body.slip_type ?? profile.slip_type_override;
       if (!slipType) {
         if (profile.country === "US") slipType = total >= 600 ? "1099-NEC" : null;
@@ -67,10 +67,15 @@ Deno.serve(async (req) => {
       if (!slipType) continue;
 
       const threshold =
-        slipType === "T4A" ? 500 : slipType === "T5018" ? 500 : 600;
+        slipType === "T4A" ? 500 : slipType === "T5018" ? 500 : slipType === "T5" ? 50 : 600;
       if (total < threshold) continue;
 
-      const boxCode = slipType === "T4A" ? "048" : slipType === "T5018" ? "022" : "1";
+      // T5: box mapping differs — interest/dividend income uses T5 box codes.
+      const boxCode =
+        slipType === "T4A" ? "048"
+        : slipType === "T5018" ? "022"
+        : slipType === "T5" ? "13" // default T5 interest box
+        : "1";
       const boxTotals: Record<string, number> = { [boxCode]: Number(total.toFixed(2)) };
 
       // Upsert slip row

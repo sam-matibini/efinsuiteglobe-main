@@ -13,6 +13,7 @@ const FILING_LABELS: Record<CraFilingType, string> = {
   t4_summary: 'T4 Summary',
   t4_slips: 'T4 Slip batch',
   t5018: 'T5018 contractor slips',
+  t5_summary: 'T5 investment income slips',
   pd7a: 'PD7A payroll remittance summary',
   gst_hst_netfile: 'GST/HST NETFILE',
 };
@@ -45,7 +46,7 @@ export default function CraFilings() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold">CRA XML Filings</h1>
-          <p className="text-muted-foreground">Generate T4, T5018, PD7A and GST/HST NETFILE XML for upload to CRA Internet File Transfer.</p>
+          <p className="text-muted-foreground">Generate T4, T5, T5018, PD7A and GST/HST NETFILE XML for upload to CRA Internet File Transfer.</p>
         </div>
         <Button onClick={() => setGenOpen(true)}><Plus className="mr-1 h-4 w-4" /> Generate filing</Button>
       </div>
@@ -62,6 +63,7 @@ export default function CraFilings() {
                   <span>
                     <span className="font-medium mr-2">{FILING_LABELS[f.filing_type] ?? f.filing_type}</span>
                     <span className="text-muted-foreground font-mono text-xs">{f.period_start} → {f.period_end}</span>
+                    {f.schema_version && <span className="ml-2 text-xs text-muted-foreground border rounded px-1.5 py-0.5">Schema {f.schema_version}</span>}
                     {f.confirmation_number && <span className="ml-2 text-xs">CRA #{f.confirmation_number}</span>}
                   </span>
                   <span className="flex items-center gap-2">

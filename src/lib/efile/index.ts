@@ -7,6 +7,7 @@ import type { EFilePacket } from './types';
 import { buildCraGstHstPacket } from './craPacket';
 import { buildUsStatePacket, SUPPORTED_US_STATES } from './usStatePacket';
 import { buildHmrcPacket } from './hmrcMtd';
+import { schemaForTaxYear } from './craSchemaVersion';
 
 export * from './types';
 export { SUPPORTED_US_STATES };
@@ -19,6 +20,10 @@ export interface EFileContext {
   webAccessCode?: string;
   contactName?: string;
   contactPhone?: string;
+  /** Tax year for schema-version routing (multi-year support). */
+  taxYear?: number;
+  /** Explicit CRA schema year override (falls back to schemaForTaxYear). */
+  schemaVersion?: '2026' | '2027';
   // HMRC
   vrn?: string;
   periodKey?: string;
@@ -42,11 +47,14 @@ export function buildEFilePacket(form: FilingFormResult, ctx: EFileContext): EFi
     return buildUsStatePacket(form, state, ctx.registrationNumber);
   }
 
-  // Default Canada / GST/HST
+  // Default Canada / GST/HST — resolve schema year for multi-year support.
+  const periodYear = ctx.taxYear ?? (form.periodEnd ? Number(form.periodEnd.slice(0, 4)) || new Date().getFullYear() : new Date().getFullYear());
+  const schemaYear = ctx.schemaVersion ?? schemaForTaxYear(periodYear);
   return buildCraGstHstPacket(form, {
     businessNumber: ctx.businessNumber ?? '',
     webAccessCode: ctx.webAccessCode,
     contactName: ctx.contactName,
     contactPhone: ctx.contactPhone,
+    schemaYear,
   });
 }

@@ -3,9 +3,11 @@ import { createClient } from 'npm:@supabase/supabase-js@2.49.4';
 
 interface FilingRequest {
   organization_id: string;
-  filing_type: 't4_summary' | 't4_slips' | 't5018' | 'pd7a' | 'gst_hst_netfile';
+  filing_type: 't4_summary' | 't4_slips' | 't5018' | 'pd7a' | 'gst_hst_netfile' | 't5_summary';
   period_start: string;
   period_end: string;
+  tax_year?: number;
+  schema_version?: '2026' | '2027';
 }
 
 function xmlEscape(s: string | number | null | undefined): string {
@@ -14,13 +16,14 @@ function xmlEscape(s: string | number | null | undefined): string {
   );
 }
 
-function buildXml(req: FilingRequest, summary: Record<string, unknown>): string {
+function buildXml(req: FilingRequest, summary: Record<string, unknown>, schemaVersion: string): string {
   const root = req.filing_type.replace(/_/g, '-');
   const inner = Object.entries(summary)
     .map(([k, v]) => `  <${k}>${xmlEscape(v as any)}</${k}>`)
     .join('\n');
   return `<?xml version="1.0" encoding="UTF-8"?>
-<${root} period-start="${xmlEscape(req.period_start)}" period-end="${xmlEscape(req.period_end)}">
+<${root} xmlns="http://www.cra-arc.gc.ca/xmlns/return" schema-version="${xmlEscape(schemaVersion)}" period-start="${xmlEscape(req.period_start)}" period-end="${xmlEscape(req.period_end)}">
+  <SchemaVersion>${xmlEscape(schemaVersion)}</SchemaVersion>
 ${inner}
 </${root}>`;
 }
@@ -80,6 +83,8 @@ Deno.serve(async (req) => {
     filing_type: body.filing_type,
     period_start: body.period_start,
     period_end: body.period_end,
+    tax_year: body.tax_year,
+    schema_version: body.schema_version,
     generated_at: new Date().toISOString(),
   };
 
@@ -106,9 +111,22 @@ Deno.serve(async (req) => {
     summary.total_source_deductions = (payments ?? [])
       .filter((p: any) => ['completed', 'paid', 'submitted'].includes(p.status))
       .reduce((s: number, p: any) => s + Number(p.amount ?? 0), 0);
+  } else if (body.filing_type === 't5_summary') {
+    // Aggregate T5 investment income slips for the period.
+    const { data: slips } = await admin
+      .from('vendor_tax_slips')
+      .select('total_amount')
+      .eq('organization_id', body.organization_id)
+      .eq('slip_type', 'T5')
+      .eq('tax_year', body.tax_year)
+      .in('status', ['draft', 'issued']);
+    summary.slip_count = slips?.length ?? 0;
+    summary.total_investment_income = (slips ?? [])
+      .reduce((s: number, p: any) => s + Number(p.total_amount ?? 0), 0);
   }
 
-  const xml = buildXml(body, summary);
+  const schemaVersion = body.schema_version ?? (body.tax_year! >= 2027 ? '2027' : '2026');
+  const xml = buildXml(body, summary, schemaVersion);
   const path = `${body.organization_id}/${body.filing_type}/${body.period_start}_${body.period_end}_${Date.now()}.xml`;
 
   const { error: uploadErr } = await admin.storage
@@ -128,6 +146,8 @@ Deno.serve(async (req) => {
       filing_type: body.filing_type,
       period_start: body.period_start,
       period_end: body.period_end,
+      tax_year: body.tax_year ?? new Date(body.period_end).getFullYear(),
+      schema_version: schemaVersion,
       xml_storage_path: path,
       human_summary: summary,
       status: 'generated',

@@ -33,13 +33,14 @@ Deno.serve(async (req) => {
 
     if (!slips?.length) return j({ error: "No slips to e-file" }, 400);
 
-    const isCRA = slip_type === "T4A" || slip_type === "T5018";
+    const isCRA = ["T4A", "T5018", "T5"].includes(slip_type);
     const isIRS = slip_type === "1099-NEC" || slip_type === "1099-MISC";
+    const schemaYear = tax_year >= 2027 ? "2027" : "2026";
 
     let envelope = "";
     if (isCRA) {
-      // CRA T619 transmitter envelope (simplified)
-      envelope = `<?xml version="1.0" encoding="UTF-8"?>\n<T619 xmlns="http://www.cra-arc.gc.ca/xmlns/return">\n  <TransmitterNumber>MM000000</TransmitterNumber>\n  <SummaryType>${slip_type}</SummaryType>\n  <TaxYear>${tax_year}</TaxYear>\n  <SlipCount>${slips.length}</SlipCount>\n  <TotalAmount>${slips.reduce((s: number, x: any) => s + Number(x.total_amount), 0).toFixed(2)}</TotalAmount>\n  <Slips>\n${slips
+      // CRA T619 transmitter envelope (simplified) with schema version
+      envelope = `<?xml version="1.0" encoding="UTF-8"?>\n<T619 xmlns="http://www.cra-arc.gc.ca/xmlns/return" schemaVersion="T619-${schemaYear.slice(2)}">\n  <TransmitterNumber>MM000000</TransmitterNumber>\n  <SummaryType>${slip_type}</SummaryType>\n  <TaxYear>${tax_year}</TaxYear>\n  <SchemaVersion>${schemaYear}</SchemaVersion>\n  <SlipCount>${slips.length}</SlipCount>\n  <TotalAmount>${slips.reduce((s: number, x: any) => s + Number(x.total_amount), 0).toFixed(2)}</TotalAmount>\n  <Slips>\n${slips
         .map(
           (s: any) =>
             `    <Slip><VendorId>${s.vendor_id}</VendorId><Total>${Number(s.total_amount).toFixed(2)}</Total><Boxes>${JSON.stringify(s.box_totals)}</Boxes></Slip>`
@@ -81,16 +82,19 @@ Deno.serve(async (req) => {
         tax_year,
         status: "generated",
         xml_url: signed?.signedUrl,
-        payload: { slip_count: slips.length },
+        payload: { slip_count: slips.length, schema_version: schemaYear },
       });
     } else {
       await supabase.from("cra_filings").insert({
         organization_id,
         filing_type: slip_type,
         tax_year,
-        status: "generated",
+        period_start: `${tax_year}-01-01`,
+        period_end: `${tax_year}-12-31`,
+        schema_version: schemaYear,
         xml_url: signed?.signedUrl,
-        payload: { slip_count: slips.length },
+        status: "generated",
+        payload: { slip_count: slips.length, schema_version: schemaYear },
       });
     }
 

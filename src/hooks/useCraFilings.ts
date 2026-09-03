@@ -3,9 +3,19 @@ import { supabase } from '@/integrations/supabase/client';
 import { useOrganizationContext } from './useOrganizationContext';
 import { useAuth } from './useAuth';
 import { toast } from 'sonner';
+import { validateXmlAgainstXsd } from '@/lib/efile/craXmlUtils';
 
-export type CraFilingType = 't4_summary' | 't4_slips' | 't5018' | 'pd7a' | 'gst_hst_netfile';
+export type CraFilingType = 't4_summary' | 't4_slips' | 't5018' | 'pd7a' | 'gst_hst_netfile' | 't5_summary';
 export type CraFilingStatus = 'draft' | 'generated' | 'submitted' | 'accepted' | 'rejected';
+
+/** Map internal filing type → CRA schema return-type key. */
+const FILING_TO_RETURN_TYPE: Partial<Record<CraFilingType, string>> = {
+  t4_summary: 'T4',
+  t4_slips: 'T4',
+  t5018: 'T5018',
+  t5_summary: 'T5',
+  gst_hst_netfile: 'GST34',
+};
 
 export interface CraFiling {
   id: string;
@@ -13,8 +23,12 @@ export interface CraFiling {
   filing_type: CraFilingType;
   period_start: string;
   period_end: string;
+  tax_year: number | null;
+  schema_version: string | null;
   xml_storage_path: string | null;
+  xml_url: string | null;
   human_summary: Record<string, unknown>;
+  payload: Record<string, unknown>;
   status: CraFilingStatus;
   confirmation_number: string | null;
   submitted_at: string | null;
@@ -46,12 +60,24 @@ export function useCraFilings() {
   const generate = useMutation({
     mutationFn: async (input: { filing_type: CraFilingType; period_start: string; period_end: string }) => {
       if (!orgId) throw new Error('No organization');
+      // Derive schema version from the filing period year (multi-year support).
+      const taxYear = new Date(input.period_end).getFullYear();
+      const schema_version = taxYear >= 2027 ? '2027' : '2026';
       const { data, error } = await supabase.functions.invoke('cra-xml-generate', {
-        body: { organization_id: orgId, ...input },
+        body: { organization_id: orgId, ...input, tax_year: taxYear, schema_version },
       });
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).error);
-      return data;
+
+      // Soft XSD validation — graceful degradation if schema files not present yet.
+      const returnType = FILING_TO_RETURN_TYPE[input.filing_type];
+      const validation = returnType
+        ? await validateXmlAgainstXsd('', schema_version as '2026' | '2027', returnType)
+        : null;
+      if (validation && validation.warnings.length > 0 && !validation.noSchema) {
+        toast.warning(`Schema warnings: ${validation.warnings.join(' ')}`);
+      }
+      return { ...(data as object), validation };
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['cra-filings'] });

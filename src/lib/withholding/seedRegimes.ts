@@ -66,4 +66,28 @@ export const DEFAULT_REGIMES: SeedRegime[] = [
     is_active: true,
     notes: 'Default 25% non-resident WHT. Reduced by tax treaty (typically 10–15%).',
   },
+  {
+    code: 'T5-INT',
+    name: 'T5 — Interest Income',
+    country_code: 'CA',
+    authority: 'CRA',
+    slip_type: 'T5',
+    default_rate: 0,
+    threshold_cents: 5000, // CRA $50 threshold for T5
+    box_code: 'box_13',
+    is_active: true,
+    notes: 'Interest income paid by financial institutions. CRA T5 slip box 13.',
+  },
+  {
+    code: 'T5-DIV',
+    name: 'T5 — Dividend Income',
+    country_code: 'CA',
+    authority: 'CRA',
+    slip_type: 'T5',
+    default_rate: 0,
+    threshold_cents: 5000,
+    box_code: 'box_23',
+    is_active: true,
+    notes: 'Eligible dividends paid. CRA T5 slip box 23.',
+  },
 ];

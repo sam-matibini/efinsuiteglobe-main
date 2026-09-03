@@ -26,6 +26,8 @@ export interface EFilePacket {
   instructions?: string[];
   /** True if this channel can submit directly via API (HMRC) */
   canDirectSubmit: boolean;
+  /** CRA schema year used to generate this packet (2026 | 2027). */
+  schemaVersion?: string;
   /** Pre-filled filing form snapshot */
   form: FilingFormResult;
 }
@@ -47,6 +49,8 @@ export interface SubmissionRow {
   payload_format: 'xml' | 'json' | 'csv' | 'pdf' | null;
   authority_response: unknown;
   confirmation_number: string | null;
+  /** CRA schema year used (2026 | 2027). */
+  schema_version?: string | null;
   transmitted_at: string | null;
   acknowledged_at: string | null;
   error_message: string | null;
