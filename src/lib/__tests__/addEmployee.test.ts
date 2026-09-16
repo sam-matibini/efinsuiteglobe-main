@@ -5,6 +5,7 @@ import {
   firstEmployeeFormError,
   generateEmployeeNumber,
   tabForEmployeeField,
+  canSubmitWithGuarantors,
 } from '../addEmployee';
 
 const validBase = {
@@ -97,5 +98,18 @@ describe('add employee helpers', () => {
       employeeInsertErrorMessage('duplicate key value violates unique constraint "employees_organization_employee_number_unique"'),
     ).toMatch(/employee number already exists/i);
     expect(employeeInsertErrorMessage(null)).toBe('Failed to add employee');
+  });
+});
+
+describe('guarantor requirement', () => {
+  it('allows submit without guarantors when optional', () => {
+    expect(canSubmitWithGuarantors('optional', false, false)).toBe(true);
+    expect(canSubmitWithGuarantors('optional', true, false)).toBe(true);
+  });
+
+  it('blocks submit when mandatory until both guarantors are complete', () => {
+    expect(canSubmitWithGuarantors('mandatory', false, false)).toBe(false);
+    expect(canSubmitWithGuarantors('mandatory', true, false)).toBe(false);
+    expect(canSubmitWithGuarantors('mandatory', true, true)).toBe(true);
   });
 });

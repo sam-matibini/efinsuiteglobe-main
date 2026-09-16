@@ -3,16 +3,19 @@ import { useForm, type FieldErrors } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { FileText, User, Sparkles, UserPlus } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
-import { GuarantorsForm, EMPTY_GUARANTOR, type GuarantorDraft } from './GuarantorForm';
+import { GuarantorsForm, EMPTY_GUARANTOR, isGuarantorComplete, type GuarantorDraft } from './GuarantorForm';
 import { saveGuarantorsForEmployee } from '@/hooks/useEmployeeGuarantors';
 import {
+  canSubmitWithGuarantors,
   createEmployeeSchema,
   employeeInsertErrorMessage,
   emptyToNull,
   firstEmployeeFormError,
   generateEmployeeNumber,
   tabForEmployeeField,
+  GUARANTORS_MANDATORY_ERROR,
   type EmployeeFormData,
+  type GuarantorRequirement,
 } from '@/lib/addEmployee';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
@@ -67,6 +70,7 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
   const [selectedJurisdiction, setSelectedJurisdiction] = useState<string>('');
   const [guarantor1, setGuarantor1] = useState<GuarantorDraft>(EMPTY_GUARANTOR(1));
   const [guarantor2, setGuarantor2] = useState<GuarantorDraft>(EMPTY_GUARANTOR(2));
+  const [guarantorRequirement, setGuarantorRequirement] = useState<GuarantorRequirement>('optional');
 
   // Determine country from organization
   const countryCode = useMemo(() => {
@@ -172,6 +176,7 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
     setSelectedJurisdiction(defaultJurisdiction);
     setGuarantor1(EMPTY_GUARANTOR(1));
     setGuarantor2(EMPTY_GUARANTOR(2));
+    setGuarantorRequirement('optional');
     form.reset(getDefaultValues(payrollConfig, defaultJurisdiction));
     // Reset only when the dialog opens so in-progress edits are not wiped.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -250,6 +255,17 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
   const onSubmit = async (data: EmployeeFormData) => {
     if (!organization?.id) {
       toast.error('No organization selected. Create or select an organization first.');
+      return;
+    }
+    if (
+      !canSubmitWithGuarantors(
+        guarantorRequirement,
+        isGuarantorComplete(guarantor1),
+        isGuarantorComplete(guarantor2),
+      )
+    ) {
+      setActiveTab('guarantors');
+      toast.error(GUARANTORS_MANDATORY_ERROR);
       return;
     }
     setIsSubmitting(true);
@@ -345,6 +361,7 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
       form.reset(getDefaultValues(payrollConfig, defaultJurisdiction));
       setGuarantor1(EMPTY_GUARANTOR(1));
       setGuarantor2(EMPTY_GUARANTOR(2));
+      setGuarantorRequirement('optional');
       setActiveTab('personal');
       onOpenChange(false);
       onSuccess?.();
@@ -1041,6 +1058,8 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
                   second={guarantor2}
                   onChangeFirst={setGuarantor1}
                   onChangeSecond={setGuarantor2}
+                  requirement={guarantorRequirement}
+                  onRequirementChange={setGuarantorRequirement}
                 />
               </TabsContent>
             </Tabs>

@@ -2,11 +2,12 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Textarea } from '@/components/ui/textarea';
 import { UserPlus, ShieldCheck, ShieldAlert } from 'lucide-react';
 import type { EmployeeGuarantor } from '@/hooks/useEmployeeGuarantors';
+import type { GuarantorRequirement } from '@/lib/addEmployee';
 
 export type GuarantorDraft = Omit<EmployeeGuarantor, 'employee_id' | 'organization_id' | 'id'>;
 
@@ -42,9 +43,10 @@ interface Props {
   value: GuarantorDraft;
   onChange: (next: GuarantorDraft) => void;
   title: string;
+  required: boolean;
 }
 
-function GuarantorFields({ value, onChange, title }: Props) {
+function GuarantorFields({ value, onChange, title, required }: Props) {
   const set = <K extends keyof GuarantorDraft>(k: K, v: GuarantorDraft[K]) =>
     onChange({ ...value, [k]: v });
 
@@ -57,7 +59,7 @@ function GuarantorFields({ value, onChange, title }: Props) {
 
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5 col-span-2">
-          <Label>Full Name *</Label>
+          <Label>Full Name{required ? ' *' : ''}</Label>
           <Input
             value={value.full_name ?? ''}
             onChange={(e) => set('full_name', e.target.value)}
@@ -256,11 +258,13 @@ function GuarantorFields({ value, onChange, title }: Props) {
               ) : (
                 <ShieldAlert className="w-4 h-4 text-amber-600" />
               )}
-              Guarantor confirmation (required) *
+              Guarantor confirmation{required ? ' (required) *' : ' (optional)'}
             </Label>
             <p className="text-xs text-muted-foreground">
-              I confirm this guarantor has agreed to act as surety for the employee. This confirmation is
-              mandatory before the employee can be marked as fully onboarded / active.
+              I confirm this guarantor has agreed to act as surety for the employee.
+              {required
+                ? ' This confirmation is required before the employee can be added.'
+                : ' You can confirm later if guarantors are optional for this hire.'}
             </p>
             {value.confirmed && (
               <div className="space-y-1.5">
@@ -292,21 +296,59 @@ interface GuarantorsFormProps {
   second: GuarantorDraft;
   onChangeFirst: (g: GuarantorDraft) => void;
   onChangeSecond: (g: GuarantorDraft) => void;
+  requirement?: GuarantorRequirement;
+  onRequirementChange?: (requirement: GuarantorRequirement) => void;
 }
 
-export function GuarantorsForm({ first, second, onChangeFirst, onChangeSecond }: GuarantorsFormProps) {
+export function GuarantorsForm({
+  first,
+  second,
+  onChangeFirst,
+  onChangeSecond,
+  requirement = 'optional',
+  onRequirementChange,
+}: GuarantorsFormProps) {
+  const required = requirement === 'mandatory';
   const bothOk = isGuarantorComplete(first) && isGuarantorComplete(second);
   return (
     <div className="space-y-4">
-      <div className={`rounded-md border p-3 text-sm ${bothOk ? 'border-emerald-300 bg-emerald-50/40 text-emerald-800' : 'border-amber-300 bg-amber-50/40 text-amber-900'}`}>
+      {onRequirementChange && (
+        <div className="flex flex-col gap-3 rounded-md border p-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="space-y-0.5">
+            <Label htmlFor="guarantor-requirement" className="text-sm font-medium">
+              Guarantor requirement
+            </Label>
+            <p className="text-xs text-muted-foreground">
+              Choose whether both guarantors must be populated before this employee can be added.
+            </p>
+          </div>
+          <div className="flex items-center gap-3 shrink-0">
+            <span className={`text-sm ${required ? 'text-muted-foreground' : 'font-medium text-foreground'}`}>
+              Optional
+            </span>
+            <Switch
+              id="guarantor-requirement"
+              checked={required}
+              onCheckedChange={(checked) => onRequirementChange(checked ? 'mandatory' : 'optional')}
+              aria-label="Make guarantors mandatory"
+            />
+            <span className={`text-sm ${required ? 'font-medium text-foreground' : 'text-muted-foreground'}`}>
+              Mandatory
+            </span>
+          </div>
+        </div>
+      )}
+      <div className={`rounded-md border p-3 text-sm ${bothOk ? 'border-emerald-300 bg-emerald-50/40 text-emerald-800' : required ? 'border-amber-300 bg-amber-50/40 text-amber-900' : 'border-muted bg-muted/40 text-muted-foreground'}`}>
         {bothOk ? (
           <span className="flex items-center gap-1.5"><ShieldCheck className="w-4 h-4" /> Both guarantors provided and confirmed — employee can be fully onboarded.</span>
+        ) : required ? (
+          <span className="flex items-center gap-1.5"><ShieldAlert className="w-4 h-4" /> Both guarantors (name + confirmation checkbox) are required before this employee can be added.</span>
         ) : (
-          <span className="flex items-center gap-1.5"><ShieldAlert className="w-4 h-4" /> Both guarantors (name + confirmation checkbox) are required before this employee can be marked active.</span>
+          <span className="flex items-center gap-1.5"><ShieldCheck className="w-4 h-4" /> Guarantors are optional for this hire. You can add them later before marking the employee active.</span>
         )}
       </div>
-      <GuarantorFields title="1st Guarantor" value={first} onChange={onChangeFirst} />
-      <GuarantorFields title="2nd Guarantor" value={second} onChange={onChangeSecond} />
+      <GuarantorFields title="1st Guarantor" value={first} onChange={onChangeFirst} required={required} />
+      <GuarantorFields title="2nd Guarantor" value={second} onChange={onChangeSecond} required={required} />
     </div>
   );
 }

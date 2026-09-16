@@ -130,3 +130,17 @@ export function emptyToNull<T extends string | number>(value: T | null | undefin
   if (value === '' || value === undefined || value === null) return null;
   return value;
 }
+
+export type GuarantorRequirement = 'optional' | 'mandatory';
+
+export const GUARANTORS_MANDATORY_ERROR =
+  'Both guarantors are required and each must be confirmed before adding this employee.';
+
+export function canSubmitWithGuarantors(
+  requirement: GuarantorRequirement,
+  firstComplete: boolean,
+  secondComplete: boolean,
+): boolean {
+  if (requirement === 'optional') return true;
+  return firstComplete && secondComplete;
+}

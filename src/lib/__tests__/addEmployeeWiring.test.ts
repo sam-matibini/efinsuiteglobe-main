@@ -28,4 +28,13 @@ describe('add employee wiring', () => {
     expect(onboarding).toContain('.insert(');
     expect(onboarding).toContain("status: 'onboarding'");
   });
+
+  it('exposes an optional/mandatory toggle on the add-employee guarantors tab', () => {
+    const form = readFileSync(join(root, 'src/components/employees/GuarantorForm.tsx'), 'utf8');
+    expect(form).toContain('Guarantor requirement');
+    expect(form).toContain('onRequirementChange');
+    const dialog = readFileSync(join(root, 'src/components/employees/AddEmployeeDialog.tsx'), 'utf8');
+    expect(dialog).toContain('onRequirementChange={setGuarantorRequirement}');
+    expect(dialog).toContain('canSubmitWithGuarantors');
+  });
 });
