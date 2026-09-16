@@ -1,11 +1,13 @@
+import { useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Switch } from '@/components/ui/switch';
+import { Button } from '@/components/ui/button';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Textarea } from '@/components/ui/textarea';
 import { UserPlus, ShieldCheck, ShieldAlert } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import type { EmployeeGuarantor } from '@/hooks/useEmployeeGuarantors';
 import type { GuarantorRequirement } from '@/lib/addEmployee';
 
@@ -308,36 +310,44 @@ export function GuarantorsForm({
   requirement = 'optional',
   onRequirementChange,
 }: GuarantorsFormProps) {
-  const required = requirement === 'mandatory';
+  const [localRequirement, setLocalRequirement] = useState<GuarantorRequirement>(requirement);
+  const currentRequirement = onRequirementChange ? requirement : localRequirement;
+  const required = currentRequirement === 'mandatory';
   const bothOk = isGuarantorComplete(first) && isGuarantorComplete(second);
+
+  const setRequirement = (next: GuarantorRequirement) => {
+    setLocalRequirement(next);
+    onRequirementChange?.(next);
+  };
+
   return (
     <div className="space-y-4">
-      {onRequirementChange && (
-        <div className="flex flex-col gap-3 rounded-md border p-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="space-y-0.5">
-            <Label htmlFor="guarantor-requirement" className="text-sm font-medium">
-              Guarantor requirement
-            </Label>
-            <p className="text-xs text-muted-foreground">
-              Choose whether both guarantors must be populated before this employee can be added.
-            </p>
-          </div>
-          <div className="flex items-center gap-3 shrink-0">
-            <span className={`text-sm ${required ? 'text-muted-foreground' : 'font-medium text-foreground'}`}>
-              Optional
-            </span>
-            <Switch
-              id="guarantor-requirement"
-              checked={required}
-              onCheckedChange={(checked) => onRequirementChange(checked ? 'mandatory' : 'optional')}
-              aria-label="Make guarantors mandatory"
-            />
-            <span className={`text-sm ${required ? 'font-medium text-foreground' : 'text-muted-foreground'}`}>
-              Mandatory
-            </span>
-          </div>
+      <div className="rounded-lg border bg-card p-4 space-y-3">
+        <div>
+          <p className="text-sm font-semibold">Guarantor requirement</p>
+          <p className="text-xs text-muted-foreground">
+            Choose whether populating both guarantors is optional or mandatory for this employee.
+          </p>
         </div>
-      )}
+        <div role="group" aria-label="Guarantor requirement" className="grid grid-cols-2 gap-2">
+          <Button
+            type="button"
+            variant={currentRequirement === 'optional' ? 'default' : 'outline'}
+            className={cn('h-10', currentRequirement === 'optional' && 'shadow-sm')}
+            onClick={() => setRequirement('optional')}
+          >
+            Optional
+          </Button>
+          <Button
+            type="button"
+            variant={currentRequirement === 'mandatory' ? 'default' : 'outline'}
+            className={cn('h-10', currentRequirement === 'mandatory' && 'shadow-sm')}
+            onClick={() => setRequirement('mandatory')}
+          >
+            Mandatory
+          </Button>
+        </div>
+      </div>
       <div className={`rounded-md border p-3 text-sm ${bothOk ? 'border-emerald-300 bg-emerald-50/40 text-emerald-800' : required ? 'border-amber-300 bg-amber-50/40 text-amber-900' : 'border-muted bg-muted/40 text-muted-foreground'}`}>
         {bothOk ? (
           <span className="flex items-center gap-1.5"><ShieldCheck className="w-4 h-4" /> Both guarantors provided and confirmed — employee can be fully onboarded.</span>
