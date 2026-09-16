@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Save, Sparkles, CheckCircle2, Circle, Clock, AlertCircle, User, Briefcase, CreditCard, FileText, Shield } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -24,6 +25,7 @@ import { toast } from 'sonner';
 import { useCurrentOrganization } from '@/hooks/useOrganization';
 import { COUNTRY_LOCALIZATIONS } from '@/data/countryLocalizations';
 import { getCountryPayrollConfig } from '@/data/globalPayrollDefaults';
+import { employeeInsertErrorMessage, emptyToNull, generateEmployeeNumber } from '@/lib/addEmployee';
 
 interface TD1Suggestion {
   credit_name: string;
@@ -106,9 +108,11 @@ function getLocalizedOnboardingTasks(countryCode: string) {
 
 export default function EmployeeOnboarding() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { organization } = useCurrentOrganization();
   const [activeTab, setActiveTab] = useState('personal');
   const [isLoadingAI, setIsLoadingAI] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [td1Suggestions, setTd1Suggestions] = useState<TD1Suggestion[]>([]);
   
   // Determine country code from organization
@@ -274,18 +278,121 @@ export default function EmployeeOnboarding() {
   };
 
   const handleSave = async () => {
-    if (!formData.first_name || !formData.last_name || !formData.email) {
-      toast.error('Please fill in required fields');
+    if (!formData.first_name || !formData.last_name || !formData.email || !formData.hire_date) {
+      toast.error('Please fill in first name, last name, email, and hire date.');
+      return;
+    }
+    if (!organization?.id) {
+      toast.error('No organization selected. Create or select an organization first.');
       return;
     }
 
-    // Send onboarding welcome email via SendGrid
-    try {
-      const orgName = organization?.name || 'Your Organization';
-      const employeeName = `${formData.first_name} ${formData.last_name}`;
-      const hireDate = formData.hire_date ? new Date(formData.hire_date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : 'TBD';
+    const nin = formData.national_id.replace(/\D/g, '');
+    if (countryCode === 'NG' && !/^\d{11}$/.test(nin)) {
+      toast.error('National Identification Number (NIN) is required and must be exactly 11 digits.');
+      setActiveTab('personal');
+      return;
+    }
 
-      const onboardingHtml = `
+    setIsSaving(true);
+    try {
+      const { data: employee, error: empError } = await supabase
+        .from('employees')
+        .insert({
+          employee_number: generateEmployeeNumber(),
+          first_name: formData.first_name.trim(),
+          last_name: formData.last_name.trim(),
+          email: formData.email.trim(),
+          phone: emptyToNull(formData.phone.trim()),
+          date_of_birth: emptyToNull(formData.date_of_birth),
+          sin_encrypted: emptyToNull(formData.national_id.trim()),
+          nin: countryCode === 'NG' ? nin : emptyToNull(formData.national_id.trim()),
+          address_line1: emptyToNull(formData.address_line1.trim()),
+          address_line2: emptyToNull(formData.address_line2.trim()),
+          city: emptyToNull(formData.city.trim()),
+          province: formData.jurisdiction || 'ON',
+          postal_code: emptyToNull(formData.postal_code.trim()),
+          hire_date: formData.hire_date,
+          employment_type: formData.employment_type as 'full_time' | 'part_time' | 'contract' | 'temporary',
+          department: emptyToNull(formData.department.trim()),
+          job_title: emptyToNull(formData.job_title.trim()),
+          pay_frequency: formData.pay_frequency as 'weekly' | 'bi_weekly' | 'semi_monthly' | 'monthly',
+          annual_salary: formData.annual_salary ? Number(formData.annual_salary) : null,
+          hourly_rate: formData.hourly_rate ? Number(formData.hourly_rate) : null,
+          bank_institution: emptyToNull(formData.bank_institution.trim()),
+          bank_transit: emptyToNull(formData.bank_transit.trim()),
+          bank_account: emptyToNull(formData.bank_account.trim()),
+          emergency_contact_name: emptyToNull(formData.emergency_contact_name.trim()),
+          emergency_contact_phone: emptyToNull(formData.emergency_contact_phone.trim()),
+          emergency_contact_relationship: emptyToNull(formData.emergency_contact_relationship.trim()),
+          status: 'onboarding',
+          organization_id: organization.id,
+        })
+        .select()
+        .single();
+
+      if (empError) throw empError;
+
+      if (isCanada) {
+        const federalTotal = Object.values(td1Data.federal).reduce((a, b) => a + b, 0);
+        const provincialTotal = Object.values(td1Data.provincial).reduce((a, b) => a + b, 0);
+        const { error: fedTD1Error } = await supabase.from('employee_td1').insert({
+          employee_id: employee.id,
+          form_type: 'federal',
+          tax_year: new Date().getFullYear(),
+          basic_personal_amount: td1Data.federal.basic_personal_amount,
+          canada_employment_amount: td1Data.federal.canada_employment_amount,
+          age_amount: td1Data.federal.age_amount,
+          disability_amount: td1Data.federal.disability_amount,
+          spouse_amount: td1Data.federal.spouse_amount,
+          tuition_amount: td1Data.federal.tuition_amount,
+          other_credits: td1Data.federal.other_credits,
+          total_claim_amount: federalTotal,
+        });
+        if (fedTD1Error) throw fedTD1Error;
+
+        const { error: provTD1Error } = await supabase.from('employee_td1').insert({
+          employee_id: employee.id,
+          form_type: formData.jurisdiction,
+          tax_year: new Date().getFullYear(),
+          basic_personal_amount: td1Data.provincial.basic_personal_amount,
+          age_amount: td1Data.provincial.age_amount,
+          disability_amount: td1Data.provincial.disability_amount,
+          spouse_amount: td1Data.provincial.spouse_amount,
+          tuition_amount: td1Data.provincial.tuition_amount,
+          other_credits: td1Data.provincial.other_credits,
+          total_claim_amount: provincialTotal,
+        });
+        if (provTD1Error) throw provTD1Error;
+      }
+
+      if (tasks.length > 0) {
+        const { error: taskError } = await supabase.from('onboarding_tasks').insert(
+          tasks.map((task, index) => ({
+            employee_id: employee.id,
+            task_name: task.task_name,
+            task_category: task.task_category,
+            description: task.description || null,
+            status: task.status,
+            sort_order: index + 1,
+            completed_date: task.status === 'completed' ? new Date().toISOString() : null,
+          })),
+        );
+        if (taskError) {
+          console.warn('Onboarding tasks save warning:', taskError.message);
+        }
+      }
+
+      await queryClient.invalidateQueries({ queryKey: ['employees'] });
+      toast.success(`Employee ${formData.first_name} ${formData.last_name} added successfully!`);
+
+      // Send onboarding welcome email via SendGrid
+      try {
+        const orgName = organization?.name || 'Your Organization';
+        const employeeName = `${formData.first_name} ${formData.last_name}`;
+        const hireDate = formData.hire_date ? new Date(formData.hire_date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : 'TBD';
+
+        const onboardingHtml = `
         <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px; background: #ffffff;">
           <div style="text-align: center; margin-bottom: 30px;">
             <h1 style="color: #1e3a5f; margin: 0; font-size: 28px;">Welcome to the Team! 🎉</h1>
@@ -320,29 +427,33 @@ export default function EmployeeOnboarding() {
         </div>
       `;
 
-      const { error: emailError } = await supabase.functions.invoke('resend-integration', {
-        body: {
-          action: 'send-email',
-          to: formData.email,
-          subject: `Welcome to ${orgName} - Your Onboarding Information`,
-          html: onboardingHtml,
-          message: `Welcome to ${orgName}! Your start date is ${hireDate}.`,
-          includeBranding: false, // branding is already in the HTML
-        },
-      });
+        const { error: emailError } = await supabase.functions.invoke('resend-integration', {
+          body: {
+            action: 'send-email',
+            to: formData.email,
+            subject: `Welcome to ${orgName} - Your Onboarding Information`,
+            html: onboardingHtml,
+            message: `Welcome to ${orgName}! Your start date is ${hireDate}.`,
+            includeBranding: false,
+          },
+        });
 
-      if (emailError) {
-        console.error('Onboarding email error:', emailError);
-        toast.warning('Employee saved but onboarding email could not be sent');
-      } else {
-        toast.success('Employee saved and onboarding email sent!');
+        if (emailError) {
+          console.error('Onboarding email error:', emailError);
+          toast.warning('Employee saved but onboarding email could not be sent');
+        }
+      } catch (err) {
+        console.error('Onboarding email send failed:', err);
+        toast.warning('Employee saved but onboarding email failed to send');
       }
-    } catch (err) {
-      console.error('Onboarding email send failed:', err);
-      toast.warning('Employee saved but onboarding email failed to send');
-    }
 
-    navigate('/payroll/employees');
+      navigate('/payroll/employees');
+    } catch (error: any) {
+      console.error('Error adding employee:', error);
+      toast.error(employeeInsertErrorMessage(error));
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const taskCategories = ['compliance', 'documents', 'setup', 'training'];
@@ -652,9 +763,9 @@ export default function EmployeeOnboarding() {
             <p className="text-muted-foreground">Complete the onboarding process for a new employee</p>
           </div>
         </div>
-        <Button onClick={handleSave}>
+        <Button onClick={handleSave} disabled={isSaving}>
           <Save className="w-4 h-4 mr-2" />
-          Save Employee
+          {isSaving ? 'Saving...' : 'Save Employee'}
         </Button>
       </div>
 

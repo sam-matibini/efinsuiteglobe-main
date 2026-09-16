@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { parseLocalDate } from '@/lib/utils';
 import { Plus, Search, MoreHorizontal, Building2, FileText, Edit, History, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -20,7 +20,7 @@ import { AddEmployeeDialog } from '@/components/employees/AddEmployeeDialog';
 import EditEmployeeDialog from '@/components/employees/EditEmployeeDialog';
 import EmployeePayHistoryDialog from '@/components/employees/EmployeePayHistoryDialog';
 import DeleteEmployeeDialog from '@/components/employees/DeleteEmployeeDialog';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useIsReadOnly } from '@/hooks/useIsReadOnly';
 import { useUsageLimits } from '@/hooks/useUsageLimits';
 import { useSubscription } from '@/hooks/useSubscription';
@@ -28,6 +28,7 @@ import { SubscriptionUpgradeModal } from '@/components/SubscriptionUpgradeModal'
 
 export default function Employees() {
   const navigate = useNavigate();
+  const location = useLocation();
   const isReadOnly = useIsReadOnly();
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -50,6 +51,15 @@ export default function Employees() {
     }
     setIsAddOpen(true);
   };
+
+  useEffect(() => {
+    if (location.pathname !== '/payroll/employees/new') return;
+    if (!isActive || !canAddEmployee) {
+      setUpgradeOpen(true);
+      return;
+    }
+    setIsAddOpen(true);
+  }, [location.pathname, isActive, canAddEmployee]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-CA', {
@@ -132,7 +142,12 @@ export default function Employees() {
         )}
         <AddEmployeeDialog 
           open={isAddOpen} 
-          onOpenChange={setIsAddOpen}
+          onOpenChange={(open) => {
+            setIsAddOpen(open);
+            if (!open && location.pathname === '/payroll/employees/new') {
+              navigate('/payroll/employees', { replace: true });
+            }
+          }}
         />
         <SubscriptionUpgradeModal
           open={upgradeOpen}
