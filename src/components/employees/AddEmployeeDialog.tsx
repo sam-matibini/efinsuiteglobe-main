@@ -14,6 +14,7 @@ import {
   generateEmployeeNumber,
   tabForEmployeeField,
   GUARANTORS_MANDATORY_ERROR,
+  todayISODate,
   type EmployeeFormData,
   type GuarantorRequirement,
 } from '@/lib/addEmployee';
@@ -127,7 +128,7 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
       employmentType: 'full_time' as const,
       payFrequency: 'bi_weekly' as const,
       jurisdiction: jurisdictionCode || countryConfig.jurisdictions[0]?.code || '',
-      hireDate: '',
+      hireDate: todayISODate(),
       payType: 'salary' as const,
       annualSalary: 0,
       hourlyRate: 0,
@@ -165,6 +166,7 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
   const form = useForm<EmployeeFormData>({
     resolver: zodResolver(employeeSchema),
     defaultValues: getDefaultValues(payrollConfig, defaultJurisdiction),
+    shouldUseNativeValidation: false,
   });
 
   useEffect(() => {
@@ -578,6 +580,8 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
     );
   };
 
+  const submitEmployee = form.handleSubmit(onSubmit, onInvalid);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
@@ -590,7 +594,7 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit, onInvalid)}>
+          <form noValidate onSubmit={submitEmployee}>
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
               <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="personal" className="flex items-center gap-2">
@@ -1091,7 +1095,7 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
                     Next
                   </Button>
                 )}
-                <Button type="submit" disabled={isSubmitting}>
+                <Button type="button" disabled={isSubmitting} onClick={submitEmployee}>
                   {isSubmitting ? 'Adding...' : 'Add Employee'}
                 </Button>
               </div>

@@ -38,5 +38,8 @@ describe('add employee wiring', () => {
     const dialog = readFileSync(join(root, 'src/components/employees/AddEmployeeDialog.tsx'), 'utf8');
     expect(dialog).toContain('onRequirementChange={setGuarantorRequirement}');
     expect(dialog).toContain('canSubmitWithGuarantors');
+    expect(dialog).toContain('noValidate');
+    expect(dialog).toContain('onClick={submitEmployee}');
+    expect(dialog).toContain('todayISODate()');
   });
 });

@@ -6,6 +6,7 @@ import {
   generateEmployeeNumber,
   tabForEmployeeField,
   canSubmitWithGuarantors,
+  todayISODate,
 } from '../addEmployee';
 
 const validBase = {
@@ -73,6 +74,10 @@ describe('createEmployeeSchema', () => {
 describe('add employee helpers', () => {
   it('generates EMP + last 6 timestamp digits', () => {
     expect(generateEmployeeNumber(1712345678901)).toBe('EMP678901');
+  });
+
+  it('formats today as a local YYYY-MM-DD hire date', () => {
+    expect(todayISODate(new Date(2026, 8, 17))).toBe('2026-09-17');
   });
 
   it('maps invalid fields to the tab that contains them', () => {

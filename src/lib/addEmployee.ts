@@ -94,6 +94,13 @@ export function generateEmployeeNumber(now = Date.now()) {
   return `EMP${now.toString().slice(-6)}`;
 }
 
+export function todayISODate(now = new Date()) {
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 export function tabForEmployeeField(field: string): AddEmployeeTab {
   if (field.startsWith('taxCredit')) return 'tax';
   if (ADD_EMPLOYEE_PERSONAL_FIELDS.has(field)) return 'personal';
@@ -101,10 +108,13 @@ export function tabForEmployeeField(field: string): AddEmployeeTab {
 }
 
 export function firstEmployeeFormError(
-  errors: Record<string, { message?: string } | undefined>,
+  errors: Record<string, { message?: string } | Record<string, unknown> | undefined>,
 ): { field: string; message: string } | undefined {
   for (const [field, value] of Object.entries(errors)) {
-    if (value?.message) return { field, message: value.message };
+    if (!value || typeof value !== 'object') continue;
+    if (typeof (value as { message?: string }).message === 'string' && (value as { message: string }).message) {
+      return { field, message: (value as { message: string }).message };
+    }
   }
   return undefined;
 }
