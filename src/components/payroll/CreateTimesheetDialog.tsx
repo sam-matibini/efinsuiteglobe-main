@@ -331,6 +331,7 @@ export function CreateTimesheetDialog({
       <AddEmployeeDialog
         open={addEmployeeOpen}
         onOpenChange={setAddEmployeeOpen}
+        onSuccess={() => setAddEmployeeOpen(false)}
       />
     </Dialog>
   );

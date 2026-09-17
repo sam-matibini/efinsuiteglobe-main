@@ -1,10 +1,23 @@
-import { useState, useMemo } from 'react';
-import { useForm } from 'react-hook-form';
+import { useState, useMemo, useEffect } from 'react';
+import { useForm, type FieldErrors } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
 import { FileText, User, Sparkles, UserPlus } from 'lucide-react';
-import { GuarantorsForm, EMPTY_GUARANTOR, isGuarantorComplete, type GuarantorDraft } from './GuarantorForm';
+import { useQueryClient } from '@tanstack/react-query';
+import { GuarantorsForm, EMPTY_GUARANTOR, isGuarantorComplete, GuarantorRequirementToggle, type GuarantorDraft } from './GuarantorForm';
 import { saveGuarantorsForEmployee } from '@/hooks/useEmployeeGuarantors';
+import {
+  canSubmitWithGuarantors,
+  createEmployeeSchema,
+  employeeInsertErrorMessage,
+  emptyToNull,
+  firstEmployeeFormError,
+  generateEmployeeNumber,
+  tabForEmployeeField,
+  GUARANTORS_MANDATORY_ERROR,
+  todayISODate,
+  type EmployeeFormData,
+  type GuarantorRequirement,
+} from '@/lib/addEmployee';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -40,64 +53,8 @@ import { COUNTRY_LOCALIZATIONS, getCountryLocalization } from '@/data/countryLoc
 import { 
   getCountryPayrollConfig, 
   getProvincialBPA, 
-  CANADIAN_PROVINCIAL_BPA,
   type CountryPayrollConfig 
 } from '@/data/globalPayrollDefaults';
-
-// Dynamic schema based on country - we'll use a flexible approach
-const createEmployeeSchema = (countryCode: string) => {
-  const baseSchema = {
-    firstName: z.string().min(1, 'First name is required'),
-    lastName: z.string().min(1, 'Last name is required'),
-    email: z.string().email('Valid email required'),
-    phone: z.string().optional(),
-    nationalId: z.string().optional(),
-    nin: countryCode === 'NG'
-      ? z.string().regex(/^\d{11}$/, 'NIN must be exactly 11 digits')
-      : z.string().optional(),
-    dateOfBirth: z.string().optional(),
-    // Mailing address
-    addressLine1: z.string().optional(),
-    addressLine2: z.string().optional(),
-    city: z.string().optional(),
-    mailingProvince: z.string().optional(),
-    postalCode: z.string().optional(),
-    mailingCountry: z.string().optional(),
-    department: z.string().optional(),
-    jobTitle: z.string().optional(),
-    jobSiteId: z.string().min(1, 'Job site is required'),
-    employmentType: z.enum(['full_time', 'part_time', 'contract', 'temporary']),
-    payFrequency: z.enum(['weekly', 'bi_weekly', 'semi_monthly', 'monthly']),
-    jurisdiction: z.string().min(1, 'Location is required'),
-    hireDate: z.string().min(1, 'Hire date is required'),
-    annualSalary: z.number().optional(),
-    hourlyRate: z.number().optional(),
-    cppExempt: z.boolean().optional(),
-    eiExempt: z.boolean().optional(),
-    payType: z.enum(['salary', 'hourly']),
-    // Generic tax credits/deductions as numbers (flexible for all countries)
-    taxCredit1: z.number(),
-    taxCredit2: z.number(),
-    taxCredit3: z.number(),
-    taxCredit4: z.number(),
-    taxCredit5: z.number(),
-    taxCredit6: z.number(),
-    taxCredit7: z.number(),
-    taxCredit8: z.number(),
-    // Jurisdictional credits
-    taxCreditJ1: z.number(),
-    taxCreditJ2: z.number(),
-    taxCreditJ3: z.number(),
-    taxCreditJ4: z.number(),
-    taxCreditJ5: z.number(),
-    taxCreditJ6: z.number(),
-    taxCreditJ7: z.number(),
-  };
-
-  return z.object(baseSchema);
-};
-
-type EmployeeFormData = z.infer<ReturnType<typeof createEmployeeSchema>>;
 
 interface AddEmployeeDialogProps {
   open: boolean;
@@ -106,6 +63,7 @@ interface AddEmployeeDialogProps {
 }
 
 export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployeeDialogProps) {
+  const queryClient = useQueryClient();
   const { organization } = useCurrentOrganization();
   const { jobSites: activeJobSites } = useJobSites({ activeOnly: true });
   const [activeTab, setActiveTab] = useState('personal');
@@ -113,6 +71,7 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
   const [selectedJurisdiction, setSelectedJurisdiction] = useState<string>('');
   const [guarantor1, setGuarantor1] = useState<GuarantorDraft>(EMPTY_GUARANTOR(1));
   const [guarantor2, setGuarantor2] = useState<GuarantorDraft>(EMPTY_GUARANTOR(2));
+  const [guarantorRequirement, setGuarantorRequirement] = useState<GuarantorRequirement>('optional');
 
   // Determine country from organization
   const countryCode = useMemo(() => {
@@ -169,7 +128,7 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
       employmentType: 'full_time' as const,
       payFrequency: 'bi_weekly' as const,
       jurisdiction: jurisdictionCode || countryConfig.jurisdictions[0]?.code || '',
-      hireDate: '',
+      hireDate: todayISODate(),
       payType: 'salary' as const,
       annualSalary: 0,
       hourlyRate: 0,
@@ -207,7 +166,23 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
   const form = useForm<EmployeeFormData>({
     resolver: zodResolver(employeeSchema),
     defaultValues: getDefaultValues(payrollConfig, defaultJurisdiction),
+    shouldUseNativeValidation: false,
   });
+
+  useEffect(() => {
+    if (!open) {
+      setIsSubmitting(false);
+      return;
+    }
+    setActiveTab('personal');
+    setSelectedJurisdiction(defaultJurisdiction);
+    setGuarantor1(EMPTY_GUARANTOR(1));
+    setGuarantor2(EMPTY_GUARANTOR(2));
+    setGuarantorRequirement('optional');
+    form.reset(getDefaultValues(payrollConfig, defaultJurisdiction));
+    // Reset only when the dialog opens so in-progress edits are not wiped.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   const watchPayType = form.watch('payType');
 
@@ -273,53 +248,60 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
     );
   };
 
-  const generateEmployeeNumber = () => {
-    const prefix = 'EMP';
-    const timestamp = Date.now().toString().slice(-6);
-    return `${prefix}${timestamp}`;
+  const onInvalid = (errors: FieldErrors<EmployeeFormData>) => {
+    const first = firstEmployeeFormError(errors as Record<string, { message?: string } | undefined>);
+    if (first) setActiveTab(tabForEmployeeField(first.field));
+    toast.error(first?.message || 'Please complete the required employee fields.');
   };
 
   const onSubmit = async (data: EmployeeFormData) => {
-    // Mandatory: both guarantors must be provided AND confirmed
-    if (!isGuarantorComplete(guarantor1) || !isGuarantorComplete(guarantor2)) {
+    if (!organization?.id) {
+      toast.error('No organization selected. Create or select an organization first.');
+      return;
+    }
+    if (
+      !canSubmitWithGuarantors(
+        guarantorRequirement,
+        isGuarantorComplete(guarantor1),
+        isGuarantorComplete(guarantor2),
+      )
+    ) {
       setActiveTab('guarantors');
-      toast.error('Both guarantors are required and each must be confirmed before onboarding.');
+      toast.error(GUARANTORS_MANDATORY_ERROR);
       return;
     }
     setIsSubmitting(true);
     try {
-      // For non-Canadian employees, we still store the jurisdiction in province field
-      // The enum will only work for Canadian provinces; others get stored as-is
       const employeeData = {
         employee_number: generateEmployeeNumber(),
-        first_name: data.firstName,
-        last_name: data.lastName,
-        email: data.email,
-        phone: data.phone || null,
-        sin_encrypted: data.nationalId || null,
-        nin: (data as any).nin || null,
-        date_of_birth: data.dateOfBirth || null,
-        address_line1: data.addressLine1 || null,
-        address_line2: data.addressLine2 || null,
-        city: data.city || null,
-        mailing_province: data.mailingProvince || null,
-        postal_code: data.postalCode || null,
-        country: data.mailingCountry || null,
-        province: data.jurisdiction as any,
+        first_name: data.firstName.trim(),
+        last_name: data.lastName.trim(),
+        email: data.email.trim(),
+        phone: emptyToNull(data.phone?.trim()),
+        sin_encrypted: emptyToNull(data.nationalId?.trim()),
+        nin: emptyToNull(data.nin?.trim()),
+        date_of_birth: emptyToNull(data.dateOfBirth),
+        address_line1: emptyToNull(data.addressLine1?.trim()),
+        address_line2: emptyToNull(data.addressLine2?.trim()),
+        city: emptyToNull(data.city?.trim()),
+        mailing_province: emptyToNull(data.mailingProvince),
+        postal_code: emptyToNull(data.postalCode?.trim()),
+        country: emptyToNull(data.mailingCountry?.trim()),
+        province: data.jurisdiction,
         hire_date: data.hireDate,
         employment_type: data.employmentType,
         pay_frequency: data.payFrequency,
-        department: data.department || null,
-        job_title: data.jobTitle || null,
-        job_site_id: data.jobSiteId,
-        annual_salary: data.payType === 'salary' ? data.annualSalary : null,
-        hourly_rate: data.payType === 'hourly' ? data.hourlyRate : null,
+        department: emptyToNull(data.department),
+        job_title: emptyToNull(data.jobTitle?.trim()),
+        job_site_id: emptyToNull(data.jobSiteId),
+        annual_salary: data.payType === 'salary' ? data.annualSalary || null : null,
+        hourly_rate: data.payType === 'hourly' ? data.hourlyRate || null : null,
         status: 'onboarding' as const,
-        organization_id: organization?.id,
+        organization_id: organization.id,
         cpp_exempt: data.cppExempt || false,
         ei_exempt: data.eiExempt || false,
       };
-      
+
       const { data: employee, error: empError } = await supabase
         .from('employees')
         .insert(employeeData)
@@ -328,79 +310,66 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
 
       if (empError) throw empError;
 
-      // Create tax form records based on country
       if (countryCode === 'CA') {
-        // Federal TD1
         const { error: fedTD1Error } = await supabase
           .from('employee_td1')
           .insert({
             employee_id: employee.id,
             form_type: 'federal',
             tax_year: new Date().getFullYear(),
-            basic_personal_amount: data.taxCredit1,
-            canada_employment_amount: data.taxCredit2,
-            age_amount: data.taxCredit3,
-            disability_amount: data.taxCredit4,
-            spouse_amount: data.taxCredit5,
-            tuition_amount: data.taxCredit6,
-            other_credits: data.taxCredit7,
-            additional_tax_deduction: data.taxCredit8,
+            basic_personal_amount: Number(data.taxCredit1) || 0,
+            canada_employment_amount: Number(data.taxCredit2) || 0,
+            age_amount: Number(data.taxCredit3) || 0,
+            disability_amount: Number(data.taxCredit4) || 0,
+            spouse_amount: Number(data.taxCredit5) || 0,
+            tuition_amount: Number(data.taxCredit6) || 0,
+            other_credits: Number(data.taxCredit7) || 0,
+            additional_tax_deduction: Number(data.taxCredit8) || 0,
             total_claim_amount: calculateTotalFederal(),
           });
 
         if (fedTD1Error) throw fedTD1Error;
 
-        // Provincial TD1
         const { error: provTD1Error } = await supabase
           .from('employee_td1')
           .insert({
             employee_id: employee.id,
             form_type: data.jurisdiction,
             tax_year: new Date().getFullYear(),
-            basic_personal_amount: data.taxCreditJ1,
-            age_amount: data.taxCreditJ2,
-            disability_amount: data.taxCreditJ3,
-            spouse_amount: data.taxCreditJ4,
-            tuition_amount: data.taxCreditJ5,
-            other_credits: data.taxCreditJ6,
-            additional_tax_deduction: data.taxCreditJ7,
+            basic_personal_amount: Number(data.taxCreditJ1) || 0,
+            age_amount: Number(data.taxCreditJ2) || 0,
+            disability_amount: Number(data.taxCreditJ3) || 0,
+            spouse_amount: Number(data.taxCreditJ4) || 0,
+            tuition_amount: Number(data.taxCreditJ5) || 0,
+            other_credits: Number(data.taxCreditJ6) || 0,
+            additional_tax_deduction: Number(data.taxCreditJ7) || 0,
             total_claim_amount: calculateTotalJurisdictional(),
           });
 
         if (provTD1Error) throw provTD1Error;
       }
-      // For other countries, we could store in a generic payroll_deductions table
 
-      // Save guarantors (any provided)
-      if (organization?.id) {
-        try {
-          await saveGuarantorsForEmployee(employee.id, organization.id, [
-            { ...guarantor1, guarantor_order: 1, full_name: guarantor1.full_name?.trim() ?? '' },
-            { ...guarantor2, guarantor_order: 2, full_name: guarantor2.full_name?.trim() ?? '' },
-          ]);
-        } catch (gErr: any) {
-          console.warn('Guarantor save warning:', gErr?.message);
-        }
+      try {
+        await saveGuarantorsForEmployee(employee.id, organization.id, [
+          { ...guarantor1, guarantor_order: 1, full_name: guarantor1.full_name?.trim() ?? '' },
+          { ...guarantor2, guarantor_order: 2, full_name: guarantor2.full_name?.trim() ?? '' },
+        ]);
+      } catch (gErr: any) {
+        console.warn('Guarantor save warning:', gErr?.message);
       }
 
+      await queryClient.invalidateQueries({ queryKey: ['employees'] });
       toast.success(`Employee ${data.firstName} ${data.lastName} added successfully!`);
-      form.reset();
+      form.reset(getDefaultValues(payrollConfig, defaultJurisdiction));
+      setGuarantor1(EMPTY_GUARANTOR(1));
+      setGuarantor2(EMPTY_GUARANTOR(2));
+      setGuarantorRequirement('optional');
+      setActiveTab('personal');
       onOpenChange(false);
       onSuccess?.();
     } catch (error: any) {
       console.error('Error adding employee:', error);
-      
-      // Handle duplicate constraint violations
-      const errorMessage = error.message || '';
-      if (errorMessage.includes('employees_organization_email_unique') || 
-          errorMessage.includes('duplicate key') && errorMessage.includes('email')) {
-        toast.error('An employee with this email already exists. Please use a different email address.');
-      } else if (errorMessage.includes('employees_organization_employee_number_unique') ||
-                 errorMessage.includes('duplicate key') && errorMessage.includes('employee_number')) {
-        toast.error('An employee with this employee number already exists.');
-      } else {
-        toast.error(error.message || 'Failed to add employee');
-      }
+      toast.error(employeeInsertErrorMessage(error));
     } finally {
       setIsSubmitting(false);
     }
@@ -611,6 +580,8 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
     );
   };
 
+  const submitEmployee = form.handleSubmit(onSubmit, onInvalid);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
@@ -623,7 +594,7 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)}>
+          <form noValidate onSubmit={submitEmployee}>
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
               <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="personal" className="flex items-center gap-2">
@@ -732,7 +703,7 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
                 {countryCode === 'NG' && (
                   <FormField
                     control={form.control}
-                    name={'nin' as any}
+                    name="nin"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>National Identification Number (NIN) *</FormLabel>
@@ -990,8 +961,8 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
                   name="jobSiteId"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Job Site / Location *</FormLabel>
-                      <Select value={field.value || ''} onValueChange={field.onChange}>
+                      <FormLabel>Job Site / Location</FormLabel>
+                      <Select value={field.value || undefined} onValueChange={field.onChange}>
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue
@@ -1091,44 +1062,49 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
                   second={guarantor2}
                   onChangeFirst={setGuarantor1}
                   onChangeSecond={setGuarantor2}
+                  requirement={guarantorRequirement}
+                  onRequirementChange={setGuarantorRequirement}
                 />
               </TabsContent>
             </Tabs>
 
-            <div className="flex justify-between pt-6 border-t mt-6">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => onOpenChange(false)}
-              >
-                Cancel
-              </Button>
-              <div className="flex gap-2">
-                {activeTab === 'tax' && (
-                  <Button type="button" variant="outline" onClick={() => setActiveTab('personal')}>
-                    Previous
-                  </Button>
-                )}
-                {activeTab === 'guarantors' && (
-                  <Button type="button" variant="outline" onClick={() => setActiveTab('tax')}>
-                    Previous
-                  </Button>
-                )}
-                {activeTab === 'personal' && (
-                  <Button type="button" onClick={() => setActiveTab('tax')}>
-                    Next
-                  </Button>
-                )}
-                {activeTab === 'tax' && (
-                  <Button type="button" onClick={() => setActiveTab('guarantors')}>
-                    Next
-                  </Button>
-                )}
-                {activeTab === 'guarantors' && (
-                  <Button type="submit" disabled={isSubmitting}>
+            <div className="space-y-3 pt-6 border-t mt-6">
+              <GuarantorRequirementToggle
+                compact
+                requirement={guarantorRequirement}
+                onChange={setGuarantorRequirement}
+              />
+              <div className="flex justify-between">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => onOpenChange(false)}
+                >
+                  Cancel
+                </Button>
+                <div className="flex gap-2">
+                  {activeTab !== 'personal' && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setActiveTab(activeTab === 'guarantors' ? 'tax' : 'personal')}
+                    >
+                      Previous
+                    </Button>
+                  )}
+                  {activeTab !== 'guarantors' && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setActiveTab(activeTab === 'personal' ? 'tax' : 'guarantors')}
+                    >
+                      Next
+                    </Button>
+                  )}
+                  <Button type="button" disabled={isSubmitting} onClick={submitEmployee}>
                     {isSubmitting ? 'Adding...' : 'Add Employee'}
                   </Button>
-                )}
+                </div>
               </div>
             </div>
           </form>
