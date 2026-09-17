@@ -3,7 +3,7 @@ import { useForm, type FieldErrors } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { FileText, User, Sparkles, UserPlus } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
-import { GuarantorsForm, EMPTY_GUARANTOR, isGuarantorComplete, type GuarantorDraft } from './GuarantorForm';
+import { GuarantorsForm, EMPTY_GUARANTOR, isGuarantorComplete, GuarantorRequirementToggle, type GuarantorDraft } from './GuarantorForm';
 import { saveGuarantorsForEmployee } from '@/hooks/useEmployeeGuarantors';
 import {
   canSubmitWithGuarantors,
@@ -1068,36 +1068,42 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
               </TabsContent>
             </Tabs>
 
-            <div className="flex justify-between pt-6 border-t mt-6">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => onOpenChange(false)}
-              >
-                Cancel
-              </Button>
-              <div className="flex gap-2">
-                {activeTab !== 'personal' && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setActiveTab(activeTab === 'guarantors' ? 'tax' : 'personal')}
-                  >
-                    Previous
-                  </Button>
-                )}
-                {activeTab !== 'guarantors' && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setActiveTab(activeTab === 'personal' ? 'tax' : 'guarantors')}
-                  >
-                    Next
-                  </Button>
-                )}
-                <Button type="button" disabled={isSubmitting} onClick={submitEmployee}>
-                  {isSubmitting ? 'Adding...' : 'Add Employee'}
+            <div className="space-y-3 pt-6 border-t mt-6">
+              <GuarantorRequirementToggle
+                requirement={guarantorRequirement}
+                onChange={setGuarantorRequirement}
+              />
+              <div className="flex justify-between">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => onOpenChange(false)}
+                >
+                  Cancel
                 </Button>
+                <div className="flex gap-2">
+                  {activeTab !== 'personal' && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setActiveTab(activeTab === 'guarantors' ? 'tax' : 'personal')}
+                    >
+                      Previous
+                    </Button>
+                  )}
+                  {activeTab !== 'guarantors' && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setActiveTab(activeTab === 'personal' ? 'tax' : 'guarantors')}
+                    >
+                      Next
+                    </Button>
+                  )}
+                  <Button type="button" disabled={isSubmitting} onClick={submitEmployee}>
+                    {isSubmitting ? 'Adding...' : 'Add Employee'}
+                  </Button>
+                </div>
               </div>
             </div>
           </form>

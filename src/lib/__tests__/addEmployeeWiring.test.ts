@@ -29,17 +29,17 @@ describe('add employee wiring', () => {
     expect(onboarding).toContain("status: 'onboarding'");
   });
 
-  it('always renders optional and mandatory guarantor buttons on the guarantors tab', () => {
+  it('always renders optional and mandatory guarantor buttons next to add employee', () => {
     const form = readFileSync(join(root, 'src/components/employees/GuarantorForm.tsx'), 'utf8');
-    expect(form).toContain('Guarantor requirement');
-    expect(form).toContain("setRequirement('optional')");
-    expect(form).toContain("setRequirement('mandatory')");
-    expect(form).not.toContain('onRequirementChange &&');
+    expect(form).toContain('export function GuarantorRequirementToggle');
+    expect(form).toContain("onChange('optional')");
+    expect(form).toContain("onChange('mandatory')");
+    expect(form).toContain('Optional by default');
     const dialog = readFileSync(join(root, 'src/components/employees/AddEmployeeDialog.tsx'), 'utf8');
-    expect(dialog).toContain('onRequirementChange={setGuarantorRequirement}');
+    expect(dialog).toContain('GuarantorRequirementToggle');
+    expect(dialog).toContain("useState<GuarantorRequirement>('optional')");
     expect(dialog).toContain('canSubmitWithGuarantors');
     expect(dialog).toContain('noValidate');
     expect(dialog).toContain('onClick={submitEmployee}');
-    expect(dialog).toContain('todayISODate()');
   });
 });

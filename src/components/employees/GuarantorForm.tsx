@@ -41,6 +41,45 @@ export function isGuarantorComplete(g: GuarantorDraft): boolean {
   return !!(g.full_name && g.full_name.trim().length > 0 && g.confirmed);
 }
 
+export function GuarantorRequirementToggle({
+  requirement,
+  onChange,
+  className,
+}: {
+  requirement: GuarantorRequirement;
+  onChange: (requirement: GuarantorRequirement) => void;
+  className?: string;
+}) {
+  return (
+    <div className={cn('rounded-lg border bg-muted/40 p-3 space-y-2', className)}>
+      <div>
+        <p className="text-sm font-semibold">Guarantors</p>
+        <p className="text-xs text-muted-foreground">
+          Optional by default. Use Mandatory only where company or regional policy requires them.
+        </p>
+      </div>
+      <div role="group" aria-label="Guarantor requirement" className="grid grid-cols-2 gap-2">
+        <Button
+          type="button"
+          variant={requirement === 'optional' ? 'default' : 'outline'}
+          className={cn('h-9', requirement === 'optional' && 'shadow-sm')}
+          onClick={() => onChange('optional')}
+        >
+          Optional
+        </Button>
+        <Button
+          type="button"
+          variant={requirement === 'mandatory' ? 'default' : 'outline'}
+          className={cn('h-9', requirement === 'mandatory' && 'shadow-sm')}
+          onClick={() => onChange('mandatory')}
+        >
+          Mandatory
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 interface Props {
   value: GuarantorDraft;
   onChange: (next: GuarantorDraft) => void;
@@ -322,32 +361,7 @@ export function GuarantorsForm({
 
   return (
     <div className="space-y-4">
-      <div className="rounded-lg border bg-card p-4 space-y-3">
-        <div>
-          <p className="text-sm font-semibold">Guarantor requirement</p>
-          <p className="text-xs text-muted-foreground">
-            Choose whether populating both guarantors is optional or mandatory for this employee.
-          </p>
-        </div>
-        <div role="group" aria-label="Guarantor requirement" className="grid grid-cols-2 gap-2">
-          <Button
-            type="button"
-            variant={currentRequirement === 'optional' ? 'default' : 'outline'}
-            className={cn('h-10', currentRequirement === 'optional' && 'shadow-sm')}
-            onClick={() => setRequirement('optional')}
-          >
-            Optional
-          </Button>
-          <Button
-            type="button"
-            variant={currentRequirement === 'mandatory' ? 'default' : 'outline'}
-            className={cn('h-10', currentRequirement === 'mandatory' && 'shadow-sm')}
-            onClick={() => setRequirement('mandatory')}
-          >
-            Mandatory
-          </Button>
-        </div>
-      </div>
+      <GuarantorRequirementToggle requirement={currentRequirement} onChange={setRequirement} />
       <div className={`rounded-md border p-3 text-sm ${bothOk ? 'border-emerald-300 bg-emerald-50/40 text-emerald-800' : required ? 'border-amber-300 bg-amber-50/40 text-amber-900' : 'border-muted bg-muted/40 text-muted-foreground'}`}>
         {bothOk ? (
           <span className="flex items-center gap-1.5"><ShieldCheck className="w-4 h-4" /> Both guarantors provided and confirmed — employee can be fully onboarded.</span>
