@@ -1,15 +1,15 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Textarea } from '@/components/ui/textarea';
 import { UserPlus, ShieldCheck, ShieldAlert } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { EmployeeGuarantor } from '@/hooks/useEmployeeGuarantors';
-import type { GuarantorRequirement } from '@/lib/addEmployee';
+import { guarantorConfirmationCopy, type GuarantorRequirement } from '@/lib/addEmployee';
 
 export type GuarantorDraft = Omit<EmployeeGuarantor, 'employee_id' | 'organization_id' | 'id'>;
 
@@ -45,36 +45,39 @@ export function GuarantorRequirementToggle({
   requirement,
   onChange,
   className,
+  compact = false,
 }: {
   requirement: GuarantorRequirement;
   onChange: (requirement: GuarantorRequirement) => void;
   className?: string;
+  compact?: boolean;
 }) {
+  const switchId = useId();
+  const required = requirement === 'mandatory';
+
   return (
-    <div className={cn('rounded-lg border bg-muted/40 p-3 space-y-2', className)}>
-      <div>
-        <p className="text-sm font-semibold">Guarantors</p>
+    <div
+      className={cn(
+        'flex items-start gap-3',
+        !compact && 'rounded-lg border bg-muted/40 p-3',
+        className,
+      )}
+    >
+      <Switch
+        id={switchId}
+        checked={required}
+        onCheckedChange={(checked) => onChange(checked ? 'mandatory' : 'optional')}
+        aria-label="Require guarantors"
+      />
+      <div className="space-y-1">
+        <Label htmlFor={switchId} className="text-sm font-semibold cursor-pointer">
+          Require guarantors
+        </Label>
         <p className="text-xs text-muted-foreground">
-          Optional by default. Use Mandatory only where company or regional policy requires them.
+          {required
+            ? 'Both guarantors must be named and confirmed before this employee can be added.'
+            : 'Off by default. Leave this off if your company or region does not require guarantors.'}
         </p>
-      </div>
-      <div role="group" aria-label="Guarantor requirement" className="grid grid-cols-2 gap-2">
-        <Button
-          type="button"
-          variant={requirement === 'optional' ? 'default' : 'outline'}
-          className={cn('h-9', requirement === 'optional' && 'shadow-sm')}
-          onClick={() => onChange('optional')}
-        >
-          Optional
-        </Button>
-        <Button
-          type="button"
-          variant={requirement === 'mandatory' ? 'default' : 'outline'}
-          className={cn('h-9', requirement === 'mandatory' && 'shadow-sm')}
-          onClick={() => onChange('mandatory')}
-        >
-          Mandatory
-        </Button>
       </div>
     </div>
   );
@@ -284,8 +287,8 @@ function GuarantorFields({ value, onChange, title, required }: Props) {
         />
       </div>
 
-      {/* Mandatory confirmation */}
-      <div className={`rounded-md border p-3 ${value.confirmed ? 'border-emerald-300 bg-emerald-50/40' : 'border-amber-300 bg-amber-50/40'}`}>
+      {(required || !!value.full_name?.trim() || value.confirmed) && (
+      <div className={`rounded-md border p-3 ${value.confirmed ? 'border-emerald-300 bg-emerald-50/40' : required ? 'border-amber-300 bg-amber-50/40' : 'border-muted bg-muted/30'}`}>
         <div className="flex items-start gap-3">
           <Checkbox
             id={`confirm-${value.guarantor_order}`}
@@ -296,16 +299,16 @@ function GuarantorFields({ value, onChange, title, required }: Props) {
             <Label htmlFor={`confirm-${value.guarantor_order}`} className="flex items-center gap-1.5 font-medium">
               {value.confirmed ? (
                 <ShieldCheck className="w-4 h-4 text-emerald-600" />
-              ) : (
+              ) : required ? (
                 <ShieldAlert className="w-4 h-4 text-amber-600" />
+              ) : (
+                <ShieldCheck className="w-4 h-4 text-muted-foreground" />
               )}
-              Guarantor confirmation{required ? ' (required) *' : ' (optional)'}
+              {guarantorConfirmationCopy(required).label}
             </Label>
             <p className="text-xs text-muted-foreground">
-              I confirm this guarantor has agreed to act as surety for the employee.
-              {required
-                ? ' This confirmation is required before the employee can be added.'
-                : ' You can confirm later if guarantors are optional for this hire.'}
+              I confirm this guarantor has agreed to act as surety for the employee.{' '}
+              {guarantorConfirmationCopy(required).help}
             </p>
             {value.confirmed && (
               <div className="space-y-1.5">
@@ -328,6 +331,7 @@ function GuarantorFields({ value, onChange, title, required }: Props) {
           </div>
         </div>
       </div>
+      )}
     </Card>
   );
 }
@@ -368,7 +372,7 @@ export function GuarantorsForm({
         ) : required ? (
           <span className="flex items-center gap-1.5"><ShieldAlert className="w-4 h-4" /> Both guarantors (name + confirmation checkbox) are required before this employee can be added.</span>
         ) : (
-          <span className="flex items-center gap-1.5"><ShieldCheck className="w-4 h-4" /> Guarantors are optional for this hire. You can add them later before marking the employee active.</span>
+          <span className="flex items-center gap-1.5"><ShieldCheck className="w-4 h-4" /> Guarantors are optional. You can add this employee now and skip guarantors if your company or region does not require them.</span>
         )}
       </div>
       <GuarantorFields title="1st Guarantor" value={first} onChange={onChangeFirst} required={required} />

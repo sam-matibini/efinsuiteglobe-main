@@ -154,3 +154,12 @@ export function canSubmitWithGuarantors(
   if (requirement === 'optional') return true;
   return firstComplete && secondComplete;
 }
+
+export function guarantorConfirmationCopy(required: boolean) {
+  return {
+    label: required ? 'Guarantor confirmation (required) *' : 'Guarantor confirmation (optional)',
+    help: required
+      ? 'This confirmation is required before the employee can be added.'
+      : 'Skip this if your company or region does not require guarantors.',
+  };
+}

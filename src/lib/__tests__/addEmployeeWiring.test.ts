@@ -29,17 +29,19 @@ describe('add employee wiring', () => {
     expect(onboarding).toContain("status: 'onboarding'");
   });
 
-  it('always renders optional and mandatory guarantor buttons next to add employee', () => {
+  it('always renders a require-guarantors toggle next to add employee', () => {
     const form = readFileSync(join(root, 'src/components/employees/GuarantorForm.tsx'), 'utf8');
     expect(form).toContain('export function GuarantorRequirementToggle');
-    expect(form).toContain("onChange('optional')");
-    expect(form).toContain("onChange('mandatory')");
-    expect(form).toContain('Optional by default');
+    expect(form).toContain('Require guarantors');
+    expect(form).toContain("onChange(checked ? 'mandatory' : 'optional')");
+    expect(form).toContain('Off by default');
+    expect(form).not.toContain('Guarantor confirmation (required) *');
     const dialog = readFileSync(join(root, 'src/components/employees/AddEmployeeDialog.tsx'), 'utf8');
     expect(dialog).toContain('GuarantorRequirementToggle');
     expect(dialog).toContain("useState<GuarantorRequirement>('optional')");
     expect(dialog).toContain('canSubmitWithGuarantors');
     expect(dialog).toContain('noValidate');
     expect(dialog).toContain('onClick={submitEmployee}');
+    expect(dialog).not.toContain('before onboarding');
   });
 });

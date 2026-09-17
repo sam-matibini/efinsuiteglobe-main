@@ -1070,6 +1070,7 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
 
             <div className="space-y-3 pt-6 border-t mt-6">
               <GuarantorRequirementToggle
+                compact
                 requirement={guarantorRequirement}
                 onChange={setGuarantorRequirement}
               />

@@ -6,6 +6,7 @@ import {
   generateEmployeeNumber,
   tabForEmployeeField,
   canSubmitWithGuarantors,
+  guarantorConfirmationCopy,
   todayISODate,
 } from '../addEmployee';
 
@@ -116,5 +117,11 @@ describe('guarantor requirement', () => {
     expect(canSubmitWithGuarantors('mandatory', false, false)).toBe(false);
     expect(canSubmitWithGuarantors('mandatory', true, false)).toBe(false);
     expect(canSubmitWithGuarantors('mandatory', true, true)).toBe(true);
+  });
+
+  it('labels confirmation optional unless guarantors are required', () => {
+    expect(guarantorConfirmationCopy(false).label).toBe('Guarantor confirmation (optional)');
+    expect(guarantorConfirmationCopy(false).help).toMatch(/does not require guarantors/i);
+    expect(guarantorConfirmationCopy(true).label).toBe('Guarantor confirmation (required) *');
   });
 });
