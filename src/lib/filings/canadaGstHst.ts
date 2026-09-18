@@ -20,11 +20,38 @@ export function buildGstHstReturn(
 
   const gstHstRows = rows.filter(isGstHst);
 
-  // Line 101 = Total sales and other revenue (taxable + zero-rated + exempt),
-  // sourced from the General Ledger income accounts so deposits posted without
-  // a tax code are still reflected, per CRA GST34 instructions.
+  const taxableFromRows = sumWhere(
+    gstHstRows,
+    (r) => r.source === 'invoice' && r.is_zero_rated !== true && r.is_exempt !== true,
+    'taxable_amount',
+  );
+  const zeroRatedSales = Math.round(
+    ((totals.zeroRatedSales ?? sumWhere(
+      gstHstRows,
+      (r) => r.source === 'invoice' && r.is_zero_rated === true,
+      'taxable_amount',
+    )) + Number.EPSILON) * 100,
+  ) / 100;
+  const exemptSales = Math.round(
+    ((totals.exemptSales ?? sumWhere(
+      gstHstRows,
+      (r) => r.source === 'invoice' && r.is_exempt === true,
+      'taxable_amount',
+    )) + Number.EPSILON) * 100,
+  ) / 100;
+  const taxableSales = Math.round(
+    ((totals.taxableSales ?? taxableFromRows) + Number.EPSILON) * 100,
+  ) / 100;
+
+  // CRA electronic line 90: taxable sales including zero-rated supplies
+  // (other than zero-rated exports) made in Canada.
+  const line90 = Math.round((taxableSales + zeroRatedSales + Number.EPSILON) * 100) / 100;
+  // CRA electronic line 91: exempt supplies, zero-rated exports, and other revenue.
+  const line91 = exemptSales;
   const taxCodedSales = sumWhere(gstHstRows, (r) => r.source === 'invoice', 'taxable_amount');
-  const totalSales = Math.round((totals.totalSales || taxCodedSales) * 100) / 100;
+  const totalSales = Math.round(
+    ((totals.totalSales || line90 + line91 || taxCodedSales) + Number.EPSILON) * 100,
+  ) / 100;
 
   // Tax collected lives on a liability account (credit-normal). The RPC returns
   // collected as credit−debit, so it is already positive when sales tax was
@@ -46,22 +73,16 @@ export function buildGstHstReturn(
   const instalmentsPaid = 0;
   const netPayable = Math.round((netTax - instalmentsPaid) * 100) / 100;
 
-  const zeroRatedSales = sumWhere(
-    gstHstRows,
-    (r) => r.source === 'invoice' && r.is_zero_rated === true,
-    'taxable_amount',
-  );
-  const exemptSales = sumWhere(
-    gstHstRows,
-    (r) => r.source === 'invoice' && r.is_exempt === true,
-    'taxable_amount',
-  );
+  const zeroRatedSalesForLines = zeroRatedSales;
+  const exemptSalesForLines = exemptSales;
 
   const lines: FilingFormLine[] = [
-    { code: '90', label: 'Sales of zero-rated goods and services (e.g. exports — CRA Sch. VI)', amount: zeroRatedSales, category: 'memo' },
-    { code: '91', label: 'Exempt sales', amount: exemptSales, category: 'memo' },
-    { code: '101', label: 'Sales and other revenue', amount: totalSales, category: 'sales' },
-    { code: '103', label: 'GST/HST collected on sales', amount: taxCollected, category: 'tax_collected' },
+    { code: '90', label: 'Taxable sales including zero-rated supplies (except zero-rated exports)', amount: line90, category: 'sales', formula: 'Taxable + zero-rated' },
+    { code: '90A', label: 'Taxable sales (GST/HST charged)', amount: taxableSales, category: 'sales' },
+    { code: '90B', label: 'Zero-rated sales (GST/HST at 0%)', amount: zeroRatedSalesForLines, category: 'memo' },
+    { code: '91', label: 'Exempt sales, zero-rated exports, and other revenue', amount: line91, category: 'memo' },
+    { code: '101', label: 'Sales and other revenue', amount: totalSales, category: 'sales', formula: '90 + 91' },
+    { code: '103', label: 'GST/HST collected or collectible', amount: taxCollected, category: 'tax_collected' },
     { code: '104', label: 'Adjustments to GST/HST collected', amount: adjustmentsCollected, category: 'adjustment' },
     { code: '105', label: 'Total GST/HST and adjustments', amount: totalTaxCollected, category: 'tax_collected', formula: '103 + 104' },
     { code: '106', label: 'Input tax credits (ITCs)', amount: totalItc, category: 'itc' },

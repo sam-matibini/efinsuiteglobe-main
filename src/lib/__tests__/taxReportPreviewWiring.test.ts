@@ -7,10 +7,12 @@ const root = join(__dirname, '../../..');
 describe('tax report preview wiring', () => {
   it('loads period tax movements instead of lifetime account balances', () => {
     const preview = readFileSync(join(root, 'src/components/tax/TaxReportPreview.tsx'), 'utf8');
-    expect(preview).toContain('useTaxPeriodActivity');
-    expect(preview).toContain('TaxDateRangeBar');
-    expect(preview).toContain('Sales tax detail');
-    expect(preview).toContain('Tax liability by tax code');
+    expect(preview).toContain('useGstHstPeriodReport');
+    expect(preview).toContain('GstHstSupportReport');
+    expect(preview).toContain('Taxable sales (line 90A)');
+    expect(preview).toContain('Exempt / zero-rated sales');
+    expect(preview).toContain('GST/HST collected (line 103)');
+    expect(preview).toContain('Input tax credits (line 106)');
     expect(preview).not.toContain('current_balance');
     expect(preview).not.toContain("filter(j => j.account_name.toLowerCase().includes('collected'))");
     expect(preview).not.toContain('{false &&');

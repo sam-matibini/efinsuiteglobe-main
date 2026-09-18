@@ -22,6 +22,12 @@ export interface PeriodTotals {
   totalSales: number;          // sum of invoice subtotals
   totalPurchases: number;      // sum of bill + expense subtotals
   rows: PeriodTaxRow[];
+  /** GST/HST charged supplies (excluding tax). */
+  taxableSales?: number;
+  /** 0% GST/HST supplies (CRA Schedule VI). */
+  zeroRatedSales?: number;
+  /** Exempt supplies (no GST/HST, generally no ITC). */
+  exemptSales?: number;
 }
 
 export interface FilingFormLine {

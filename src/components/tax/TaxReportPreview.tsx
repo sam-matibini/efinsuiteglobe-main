@@ -21,7 +21,9 @@ import jsPDF from 'jspdf';
 import { addPdfBrandingFooter } from '@/lib/pdfBrandingFooter';
 import { cn } from '@/lib/utils';
 import { TaxDateRangeBar } from '@/components/tax/TaxDateRangeBar';
+import { GstHstSupportReport } from '@/components/tax/GstHstSupportReport';
 import { useTaxPeriodActivity, useTaxPeriodComparisonSummaries } from '@/hooks/useTaxPeriodActivity';
+import { useGstHstComparisonReports, useGstHstPeriodReport } from '@/hooks/useGstHstPeriodReport';
 import {
   resolveTaxDateRange,
   resolveComparisonRanges,
@@ -108,10 +110,10 @@ export function TaxReportPreview({
     periodSummary,
     detailRows,
     detailGroups,
-    filingForm,
-    isLoading,
-    isRefreshing,
-    refetch,
+    filingForm: journalFilingForm,
+    isLoading: journalLoading,
+    isRefreshing: journalRefreshing,
+    refetch: refetchJournal,
   } = useTaxPeriodActivity({
     organizationId,
     countryCode,
@@ -123,22 +125,60 @@ export function TaxReportPreview({
     authorityLabel: taxTerminology.authorityLabel,
   });
 
-  const comparisonSummaries = useTaxPeriodComparisonSummaries({
+  const gstJournal = useMemo(() => ({
+    taxCollected: periodSummary.taxCollected,
+    itcClaimed: periodSummary.itcClaimed,
+    taxableSales: periodSummary.taxableSales,
+    rows: periodSummary.rows,
+  }), [periodSummary]);
+
+  const useGstEngine = isCanada && reportCategory === 'gst';
+
+  const {
+    snapshot: gstSnapshot,
+    isLoading: gstLoading,
+    isFetching: gstFetching,
+    refetch: refetchGst,
+  } = useGstHstPeriodReport({
+    organizationId,
+    periodStart: periodStartStr,
+    periodEnd: periodEndStr,
+    journal: gstJournal,
+    authority: taxTerminology.authorityLabel,
+    enabled: useGstEngine,
+  });
+
+  const movementComparisons = useTaxPeriodComparisonSummaries({
     organizationId,
     ranges: comparisonRanges,
     category: isCanada ? reportCategory : 'all',
-    enabled: compareType !== 'none',
+    enabled: compareType !== 'none' && !useGstEngine,
   });
 
-  const summary = useMemo(() => ({
-    collected: periodSummary.taxCollected,
-    paid: periodSummary.itcClaimed,
-    pst: reportCategory === 'pst' ? periodSummary.taxCollected : 0,
-    netPayable: periodSummary.netPayable,
-    taxableSales: periodSummary.taxableSales,
-  }), [periodSummary, reportCategory]);
+  const gstComparisons = useGstHstComparisonReports({
+    organizationId,
+    ranges: comparisonRanges,
+    enabled: compareType !== 'none' && useGstEngine,
+    authority: taxTerminology.authorityLabel,
+  });
 
-  const groupedByTaxCode = periodSummary.byTaxCode.map((row) => ({
+  const filingForm = useGstEngine ? gstSnapshot.form : journalFilingForm;
+  const isLoading = journalLoading || (useGstEngine && gstLoading);
+  const isRefreshing = journalRefreshing || (useGstEngine && gstFetching);
+  const refetch = () => Promise.all([refetchJournal(), useGstEngine ? refetchGst() : Promise.resolve()]);
+
+  const summary = useMemo(() => ({
+    collected: useGstEngine ? gstSnapshot.gstHstCollected : periodSummary.taxCollected,
+    paid: useGstEngine ? gstSnapshot.itc : periodSummary.itcClaimed,
+    pst: reportCategory === 'pst' ? periodSummary.taxCollected : 0,
+    netPayable: useGstEngine ? gstSnapshot.netTax : periodSummary.netPayable,
+    taxableSales: useGstEngine ? gstSnapshot.taxableSales : periodSummary.taxableSales,
+    zeroRatedSales: useGstEngine ? gstSnapshot.zeroRatedSales : 0,
+    exemptSales: useGstEngine ? gstSnapshot.exemptSales : 0,
+    exemptZeroRatedSales: useGstEngine ? gstSnapshot.exemptZeroRatedSales : 0,
+  }), [useGstEngine, gstSnapshot, periodSummary, reportCategory]);
+
+  const groupedByTaxCode = (useGstEngine ? gstSnapshot.byTaxCode : periodSummary.byTaxCode).map((row) => ({
     code: row.code,
     name: row.name,
     collected: row.taxCollected,
@@ -177,7 +217,7 @@ export function TaxReportPreview({
   const getReportCategoryDescription = () => {
     if (!isCanada) return 'Tax reporting and analysis';
     return reportCategory === 'gst' 
-      ? 'Federal GST/HST collected and ITCs for CRA filing'
+      ? 'CRA GST/HST working copy: taxable sales, exempt/zero-rated sales, GST/HST collected, and ITCs for the selected period'
       : 'Provincial sales tax (MB PST, SK PST, BC PST, QST) reporting';
   };
 
@@ -219,6 +259,10 @@ export function TaxReportPreview({
       
       if (reportCategory === 'gst' || !isCanada) {
         summaryData.push(['Taxable sales', formatCurrency(summary.taxableSales)]);
+        if (useGstEngine) {
+          summaryData.push(['Zero-rated sales', formatCurrency(summary.zeroRatedSales)]);
+          summaryData.push(['Exempt / other revenue', formatCurrency(summary.exemptSales)]);
+        }
         summaryData.push([taxTerminology.collectedLabel, formatCurrency(summary.collected)]);
         summaryData.push([taxTerminology.paidLabel, formatCurrency(summary.paid)]);
       }
@@ -564,12 +608,12 @@ export function TaxReportPreview({
           </div>
         ) : (
           <>
-            {/* Quick Summary Cards — period activity, not lifetime GL balance */}
-            <div className="grid gap-4 mb-6 grid-cols-1 md:grid-cols-4">
+            {/* Quick Summary Cards — period activity from invoices/bills/expenses */}
+            <div className={cn('grid gap-4 mb-6 grid-cols-1', useGstEngine ? 'md:grid-cols-5' : 'md:grid-cols-4')}>
               {(reportCategory === 'gst' || !isCanada) && (
                 <div className="p-4 bg-slate-50 dark:bg-slate-950/30 rounded-lg">
                   <p className="text-xs text-muted-foreground mb-1">
-                    {isBurundi ? 'Ventes taxables' : 'Taxable sales'}
+                    {isBurundi ? 'Ventes taxables' : useGstEngine ? 'Taxable sales (line 90A)' : 'Taxable sales'}
                   </p>
                   <p className="text-xl font-bold text-foreground">
                     {formatCurrency(summary.taxableSales)}
@@ -577,17 +621,32 @@ export function TaxReportPreview({
                   <p className="text-[11px] text-muted-foreground mt-1">{periodLabel}</p>
                 </div>
               )}
+              {useGstEngine && (
+                <div className="p-4 bg-violet-50 dark:bg-violet-950/30 rounded-lg">
+                  <p className="text-xs text-muted-foreground mb-1">Exempt / zero-rated sales</p>
+                  <p className="text-xl font-bold text-foreground">
+                    {formatCurrency(summary.exemptZeroRatedSales)}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    Zero-rated {formatCurrency(summary.zeroRatedSales)} · Exempt {formatCurrency(summary.exemptSales)}
+                  </p>
+                </div>
+              )}
               {(reportCategory === 'gst' || !isCanada) && (
                 <>
                   <div className="p-4 bg-green-50 dark:bg-green-950/30 rounded-lg">
-                    <p className="text-xs text-muted-foreground mb-1">{taxTerminology.collectedLabel}</p>
+                    <p className="text-xs text-muted-foreground mb-1">
+                      {useGstEngine ? 'GST/HST collected (line 103)' : taxTerminology.collectedLabel}
+                    </p>
                     <p className="text-xl font-bold text-green-700 dark:text-green-400">
                       {formatCurrency(summary.collected)}
                     </p>
                     <p className="text-[11px] text-muted-foreground mt-1">{periodLabel}</p>
                   </div>
                   <div className="p-4 bg-blue-50 dark:bg-blue-950/30 rounded-lg">
-                    <p className="text-xs text-muted-foreground mb-1">{taxTerminology.paidLabel}</p>
+                    <p className="text-xs text-muted-foreground mb-1">
+                      {useGstEngine ? 'Input tax credits (line 106)' : taxTerminology.paidLabel}
+                    </p>
                     <p className="text-xl font-bold text-blue-700 dark:text-blue-400">
                       {formatCurrency(summary.paid)}
                     </p>
@@ -643,34 +702,45 @@ export function TaxReportPreview({
                       <TableRow>
                         <TableHead>Metric</TableHead>
                         <TableHead className="text-right">Current Period</TableHead>
-                        {comparisonSummaries.map((range) => (
+                        {(useGstEngine ? gstComparisons : movementComparisons).map((range) => (
                           <TableHead key={range.label} className="text-right">{range.label}</TableHead>
                         ))}
                         <TableHead className="text-right">Change</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {([
-                        { label: taxTerminology.collectedLabel, current: summary.collected, key: 'taxCollected' as const },
-                        { label: taxTerminology.paidLabel, current: summary.paid, key: 'itcClaimed' as const },
-                        { label: taxTerminology.netLabel, current: summary.netPayable, key: 'netPayable' as const },
-                      ]).map((row) => {
-                        const compareValue = comparisonSummaries[0]?.summary[row.key] ?? 0;
+                      {(useGstEngine
+                        ? [
+                            { label: 'Taxable sales', current: summary.taxableSales, read: (i: number) => gstComparisons[i]?.snapshot.taxableSales ?? 0 },
+                            { label: 'Zero-rated sales', current: summary.zeroRatedSales, read: (i: number) => gstComparisons[i]?.snapshot.zeroRatedSales ?? 0 },
+                            { label: 'Exempt / other revenue', current: summary.exemptSales, read: (i: number) => gstComparisons[i]?.snapshot.exemptSales ?? 0 },
+                            { label: 'GST/HST collected', current: summary.collected, read: (i: number) => gstComparisons[i]?.snapshot.gstHstCollected ?? 0 },
+                            { label: 'Input tax credits', current: summary.paid, read: (i: number) => gstComparisons[i]?.snapshot.itc ?? 0 },
+                            { label: 'Net tax', current: summary.netPayable, read: (i: number) => gstComparisons[i]?.snapshot.netTax ?? 0, net: true },
+                          ]
+                        : [
+                            { label: taxTerminology.collectedLabel, current: summary.collected, read: (i: number) => movementComparisons[i]?.summary.taxCollected ?? 0 },
+                            { label: taxTerminology.paidLabel, current: summary.paid, read: (i: number) => movementComparisons[i]?.summary.itcClaimed ?? 0 },
+                            { label: taxTerminology.netLabel, current: summary.netPayable, read: (i: number) => movementComparisons[i]?.summary.netPayable ?? 0, net: true },
+                          ]
+                      ).map((row) => {
+                        const compareValue = row.read(0);
                         const change = row.current - compareValue;
+                        const ranges = useGstEngine ? gstComparisons : movementComparisons;
                         return (
-                          <TableRow key={row.key} className={row.key === 'netPayable' ? 'bg-muted/50 font-medium' : undefined}>
+                          <TableRow key={row.label} className={row.net ? 'bg-muted/50 font-medium' : undefined}>
                             <TableCell className="font-medium">{row.label}</TableCell>
                             <TableCell className="text-right font-mono">{formatCurrency(row.current)}</TableCell>
-                            {comparisonSummaries.map((range) => (
-                              <TableCell key={`${row.key}-${range.label}`} className="text-right font-mono">
-                                {range.isLoading ? '…' : formatCurrency(range.summary[row.key])}
+                            {ranges.map((range, index) => (
+                              <TableCell key={`${row.label}-${range.label}`} className="text-right font-mono">
+                                {range.isLoading ? '…' : formatCurrency(row.read(index))}
                               </TableCell>
                             ))}
                             <TableCell className={cn(
                               'text-right font-mono',
                               change > 0 ? 'text-amber-700' : change < 0 ? 'text-emerald-700' : undefined,
                             )}>
-                              {comparisonSummaries[0]?.isLoading ? '…' : `${change > 0 ? '+' : ''}${formatCurrency(change)}`}
+                              {ranges[0]?.isLoading ? '…' : `${change > 0 ? '+' : ''}${formatCurrency(change)}`}
                             </TableCell>
                           </TableRow>
                         );
@@ -679,7 +749,8 @@ export function TaxReportPreview({
                   </Table>
                 </div>
                 <p className="text-xs text-muted-foreground mt-2">
-                  Change is current period vs {comparisonSummaries[0]?.label || 'the previous period'}.
+                  Change is current period vs {(useGstEngine ? gstComparisons : movementComparisons)[0]?.label || 'the previous period'}.
+                  Empty periods show $0.00 from that period's invoices, bills, and expenses.
                 </p>
               </div>
             )}
@@ -692,7 +763,9 @@ export function TaxReportPreview({
                     {filingForm.formName}
                   </h4>
                   <p className="text-xs text-muted-foreground mb-3">
-                    {isCanada
+                    {useGstEngine
+                      ? 'CRA GST34 working copy for the selected period. Line 90 is taxable sales including zero-rated supplies; line 91 is exempt/other revenue; line 103 is GST/HST collected; line 106 is ITCs.'
+                      : isCanada
                       ? 'Structured like a CRA GST/HST return (Zoho GST summary). Amounts are activity in the selected period, excluding remittances.'
                       : 'Return-style summary for the selected period. Amounts exclude tax-authority settlements.'}
                   </p>
@@ -723,6 +796,21 @@ export function TaxReportPreview({
                     </Table>
                   </div>
                 </div>
+                )}
+
+                {useGstEngine && (
+                  <GstHstSupportReport
+                    periods={[
+                      { id: 'current', label: 'Current period', snapshot: gstSnapshot },
+                      ...gstComparisons.map((range) => ({
+                        id: range.label,
+                        label: range.label,
+                        snapshot: range.snapshot,
+                        isLoading: range.isLoading,
+                      })),
+                    ]}
+                    formatCurrency={formatCurrency}
+                  />
                 )}
 
                 <div className="mb-6">
