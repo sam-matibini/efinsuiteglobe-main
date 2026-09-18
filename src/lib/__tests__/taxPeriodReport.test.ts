@@ -4,6 +4,10 @@ import {
   classifyTaxAccountName,
   summarizeJournalTaxLines,
   summarizeTaxMovements,
+  resolveTaxDateRange,
+  toISODate,
+  buildTaxDetailRows,
+  mergePeriodSummary,
   type TaxMovementRow,
 } from '../taxPeriodReport';
 
@@ -136,5 +140,74 @@ describe('GST34 from period movements', () => {
     expect(line('106')).toBe(200);
     expect(line('109')).toBe(1100);
     expect(form.netPayable).toBe(1100);
+  });
+});
+
+describe('resolveTaxDateRange', () => {
+  const now = new Date(2026, 8, 18);
+
+  it('switches this quarter and last quarter to different bounds', () => {
+    const current = resolveTaxDateRange('this_quarter', now);
+    const previous = resolveTaxDateRange('last_quarter', now);
+    expect(toISODate(current.start)).toBe('2026-07-01');
+    expect(toISODate(current.end)).toBe('2026-09-30');
+    expect(toISODate(previous.start)).toBe('2026-04-01');
+    expect(toISODate(previous.end)).toBe('2026-06-30');
+  });
+
+  it('uses explicit From/To when the preset is custom', () => {
+    const range = resolveTaxDateRange('custom', now, '2026-01-01', '2026-01-31');
+    expect(toISODate(range.start)).toBe('2026-01-01');
+    expect(toISODate(range.end)).toBe('2026-01-31');
+  });
+});
+
+describe('period switching changes amounts', () => {
+  it('does not reuse Q3 totals when summarizing Q2 journal lines', () => {
+    const q2 = summarizeJournalTaxLines(
+      [{ account_name: 'GST/HST Collected', debit: 0, credit: 1000, entry_date: '2026-05-15' }],
+      'gst',
+    );
+    const q3 = summarizeJournalTaxLines(
+      [{ account_name: 'GST/HST Collected', debit: 0, credit: 250, entry_date: '2026-08-15' }],
+      'gst',
+    );
+    expect(q2.taxCollected).toBe(1000);
+    expect(q3.taxCollected).toBe(250);
+    expect(q2.taxCollected).not.toBe(q3.taxCollected);
+  });
+
+  it('keeps journal period totals even if RPC still has a lifetime balance', () => {
+    const journal = summarizeJournalTaxLines(
+      [{ account_name: 'GST/HST Collected', debit: 0, credit: 250 }],
+      'gst',
+    );
+    const rpc = summarizeTaxMovements([hstCollected(45134.93, 347191)], 'gst');
+    const merged = mergePeriodSummary(journal, rpc, true);
+    expect(merged.taxCollected).toBe(250);
+    expect(merged.taxCollected).not.toBe(45134.93);
+  });
+});
+
+describe('buildTaxDetailRows', () => {
+  it('builds a QuickBooks-style transaction row with tax amount for the period', () => {
+    const [row] = buildTaxDetailRows(
+      [{
+        account_name: 'GST/HST Collected',
+        account_code: '2-01-102-0001',
+        debit: 0,
+        credit: 130,
+        tax_code: 'HST-ON',
+        entry_date: '2026-05-02',
+        description: 'Invoice INV-1044',
+        reference: 'INV-1044',
+      }],
+      { 'HST-ON': 13 },
+    );
+    expect(row.type).toBe('Invoice');
+    expect(row.number).toBe('INV-1044');
+    expect(row.taxAmount).toBe(130);
+    expect(row.taxableAmount).toBe(1000);
+    expect(row.side).toBe('collected');
   });
 });

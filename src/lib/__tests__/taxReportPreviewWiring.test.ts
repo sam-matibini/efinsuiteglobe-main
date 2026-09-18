@@ -11,6 +11,10 @@ describe('tax report preview wiring', () => {
     expect(preview).toContain('summarizeTaxMovements');
     expect(preview).toContain('Period activity');
     expect(preview).toContain('Tax liability by tax code');
+    expect(preview).toContain('Date range');
+    expect(preview).toContain('Transaction detail');
+    expect(preview).toContain('mergePeriodSummary');
+    expect(preview).toContain('journal_entries!inner');
     expect(preview).not.toContain('balance: Math.abs(Number(acc.current_balance || 0))');
     expect(preview).not.toContain("filter(j => j.account_name.toLowerCase().includes('collected'))");
   });

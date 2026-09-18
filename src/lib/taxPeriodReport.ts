@@ -34,12 +34,40 @@ export interface TaxMovementRow {
   taxable_amount: number | string;
 }
 
+export type TaxDatePreset =
+  | 'today'
+  | 'this_week'
+  | 'this_month'
+  | 'last_month'
+  | 'this_quarter'
+  | 'last_quarter'
+  | 'this_year'
+  | 'last_year'
+  | 'custom';
+
 export interface JournalTaxLine {
   account_name: string;
   account_code?: string;
   debit: number;
   credit: number;
   tax_code?: string;
+  entry_date?: string;
+  description?: string;
+  reference?: string;
+  line_description?: string;
+}
+
+export interface TaxDetailRow {
+  date: string;
+  type: string;
+  number: string;
+  description: string;
+  accountCode: string;
+  accountName: string;
+  taxCode: string;
+  side: TaxAccountSide;
+  taxAmount: number;
+  taxableAmount: number;
 }
 
 export interface TaxCodePeriodRow {
@@ -254,9 +282,10 @@ export function buildPeriodFilingForm(
 export function summarizeJournalTaxLines(
   lines: JournalTaxLine[],
   category: TaxReportCategory = 'all',
-): Pick<PeriodTaxSummary, 'taxCollected' | 'itcClaimed' | 'netPayable'> {
+): Pick<PeriodTaxSummary, 'taxCollected' | 'itcClaimed' | 'netPayable' | 'byAccount'> {
   let taxCollected = 0;
   let itcClaimed = 0;
+  const accountMap = new Map<string, TaxAccountPeriodRow>();
 
   for (const line of lines) {
     const hay = `${line.account_name} ${line.tax_code ?? ''}`;
@@ -264,8 +293,25 @@ export function summarizeJournalTaxLines(
     if (category === 'pst' && !isProvincialTaxHaystack(hay)) continue;
 
     const side = classifyTaxAccountName(line.account_name);
-    if (side === 'collected') taxCollected += Number(line.credit || 0) - Number(line.debit || 0);
-    else if (side === 'paid') itcClaimed += Number(line.debit || 0) - Number(line.credit || 0);
+    if (!side) continue;
+    const amount =
+      side === 'collected'
+        ? Number(line.credit || 0) - Number(line.debit || 0)
+        : Number(line.debit || 0) - Number(line.credit || 0);
+
+    if (side === 'collected') taxCollected += amount;
+    else itcClaimed += amount;
+
+    const accountKey = `${line.account_code ?? ''}|${line.account_name}`;
+    if (!accountMap.has(accountKey)) {
+      accountMap.set(accountKey, {
+        accountCode: line.account_code || '',
+        accountName: line.account_name,
+        side,
+        periodAmount: 0,
+      });
+    }
+    accountMap.get(accountKey)!.periodAmount += amount;
   }
 
   taxCollected = round2(taxCollected);
@@ -274,5 +320,118 @@ export function summarizeJournalTaxLines(
     taxCollected,
     itcClaimed,
     netPayable: round2(taxCollected - itcClaimed),
+    byAccount: Array.from(accountMap.values()).map((row) => ({
+      ...row,
+      periodAmount: round2(row.periodAmount),
+    })),
+  };
+}
+
+export function toISODate(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+export function parseISODate(value: string): Date {
+  const [year, month, day] = value.split('-').map(Number);
+  return new Date(year, (month || 1) - 1, day || 1);
+}
+
+export function resolveTaxDateRange(
+  preset: TaxDatePreset,
+  now = new Date(),
+  customStart?: Date | string | null,
+  customEnd?: Date | string | null,
+): { start: Date; end: Date } {
+  const toDate = (value: Date | string) => (value instanceof Date ? value : parseISODate(value));
+
+  if (preset === 'custom') {
+    const start = customStart ? toDate(customStart) : new Date(now.getFullYear(), now.getMonth(), 1);
+    const end = customEnd ? toDate(customEnd) : now;
+    return start <= end ? { start, end } : { start: end, end: start };
+  }
+
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const quarterStartMonth = Math.floor(month / 3) * 3;
+
+  switch (preset) {
+    case 'today':
+      return { start: new Date(year, month, now.getDate()), end: new Date(year, month, now.getDate()) };
+    case 'this_week': {
+      const start = new Date(year, month, now.getDate() - now.getDay());
+      const end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 6);
+      return { start, end };
+    }
+    case 'this_month':
+      return { start: new Date(year, month, 1), end: new Date(year, month + 1, 0) };
+    case 'last_month':
+      return { start: new Date(year, month - 1, 1), end: new Date(year, month, 0) };
+    case 'this_quarter':
+      return { start: new Date(year, quarterStartMonth, 1), end: new Date(year, quarterStartMonth + 3, 0) };
+    case 'last_quarter':
+      return { start: new Date(year, quarterStartMonth - 3, 1), end: new Date(year, quarterStartMonth, 0) };
+    case 'this_year':
+      return { start: new Date(year, 0, 1), end: new Date(year, 11, 31) };
+    case 'last_year':
+      return { start: new Date(year - 1, 0, 1), end: new Date(year - 1, 11, 31) };
+    default:
+      return { start: new Date(year, quarterStartMonth, 1), end: new Date(year, quarterStartMonth + 3, 0) };
+  }
+}
+
+export function inferTaxTransactionType(description?: string, reference?: string): string {
+  const hay = `${description ?? ''} ${reference ?? ''}`.toLowerCase();
+  if (hay.includes('invoice') || /\binv[-_ ]?\d/i.test(hay)) return 'Invoice';
+  if (hay.includes('bill') || /\bbill[-_ ]?\d/i.test(hay)) return 'Bill';
+  if (hay.includes('expense')) return 'Expense';
+  if (hay.includes('credit note') || hay.includes('refund')) return 'Credit note';
+  return 'Journal';
+}
+
+export function buildTaxDetailRows(lines: JournalTaxLine[], rateByCode: Record<string, number> = {}): TaxDetailRow[] {
+  const rows: TaxDetailRow[] = [];
+  for (const line of lines) {
+    const side = classifyTaxAccountName(line.account_name);
+    if (!side) continue;
+    const taxAmount = round2(
+      side === 'collected'
+        ? Number(line.credit || 0) - Number(line.debit || 0)
+        : Number(line.debit || 0) - Number(line.credit || 0),
+    );
+    const rate = rateByCode[line.tax_code ?? ''] || 0;
+    const taxableAmount = rate > 0 ? round2(taxAmount / (rate / 100)) : 0;
+    rows.push({
+      date: line.entry_date || '',
+      type: inferTaxTransactionType(line.description, line.reference),
+      number: line.reference || '',
+      description: line.line_description || line.description || '',
+      accountCode: line.account_code || '',
+      accountName: line.account_name,
+      taxCode: line.tax_code || '',
+      side,
+      taxAmount,
+      taxableAmount,
+    });
+  }
+  return rows.sort((a, b) => a.date.localeCompare(b.date) || a.number.localeCompare(b.number));
+}
+
+/** Prefer date-filtered journal activity so changing the range always changes the totals. */
+export function mergePeriodSummary(
+  journal: Pick<PeriodTaxSummary, 'taxCollected' | 'itcClaimed' | 'netPayable' | 'byAccount'>,
+  rpc: PeriodTaxSummary,
+  hasJournalLines: boolean,
+): PeriodTaxSummary {
+  if (!hasJournalLines) return rpc;
+  return {
+    ...rpc,
+    taxCollected: journal.taxCollected,
+    itcClaimed: journal.itcClaimed,
+    netPayable: journal.netPayable,
+    taxableSales: rpc.taxableSales || rpc.totals.totalSales,
+    byAccount: journal.byAccount.length > 0 ? journal.byAccount : rpc.byAccount,
   };
 }

@@ -29,6 +29,12 @@ import {
   isProvincialTaxHaystack,
   summarizeJournalTaxLines,
   summarizeTaxMovements,
+  resolveTaxDateRange,
+  toISODate,
+  parseISODate,
+  mergePeriodSummary,
+  buildTaxDetailRows,
+  type TaxDatePreset,
   type TaxMovementRow,
 } from '@/lib/taxPeriodReport';
 
@@ -71,7 +77,6 @@ interface JournalEntryLine {
   vendor_customer?: string;
 }
 
-type PeriodType = 'current_month' | 'last_month' | 'current_quarter' | 'last_quarter' | 'current_year' | 'last_year' | 'custom';
 type ReportType = 'summary' | 'detailed' | 'by_tax_code' | 'by_jurisdiction';
 type AccountTypeFilter = 'all' | 'collected' | 'paid' | 'pst';
 type CompareType = 'none' | 'previous_period' | 'previous_year';
@@ -85,7 +90,7 @@ export function TaxReportPreview({
   formatCurrency,
 }: TaxReportPreviewProps) {
   const [reportCategory, setReportCategory] = useState<ReportCategory>('gst');
-  const [periodType, setPeriodType] = useState<PeriodType>('current_quarter');
+  const [periodType, setPeriodType] = useState<TaxDatePreset>('this_quarter');
   const [showPreview, setShowPreview] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
@@ -107,28 +112,10 @@ export function TaxReportPreview({
   const isCanada = countryCode === 'CA';
 
   // Calculate date range based on period type
-  const dateRange = useMemo(() => {
-    const now = new Date();
-    if (periodType === 'custom' && customStartDate && customEndDate) {
-      return { start: customStartDate, end: customEndDate };
-    }
-    switch (periodType) {
-      case 'current_month':
-        return { start: startOfMonth(now), end: endOfMonth(now) };
-      case 'last_month':
-        return { start: startOfMonth(subMonths(now, 1)), end: endOfMonth(subMonths(now, 1)) };
-      case 'current_quarter':
-        return { start: startOfQuarter(now), end: endOfQuarter(now) };
-      case 'last_quarter':
-        return { start: startOfQuarter(subQuarters(now, 1)), end: endOfQuarter(subQuarters(now, 1)) };
-      case 'current_year':
-        return { start: startOfYear(now), end: endOfYear(now) };
-      case 'last_year':
-        return { start: startOfYear(subYears(now, 1)), end: endOfYear(subYears(now, 1)) };
-      default:
-        return { start: startOfQuarter(now), end: endOfQuarter(now) };
-    }
-  }, [periodType, customStartDate, customEndDate]);
+  const dateRange = useMemo(
+    () => resolveTaxDateRange(periodType, new Date(), customStartDate, customEndDate),
+    [periodType, customStartDate, customEndDate],
+  );
 
   // Calculate comparison date ranges
   const comparisonRanges = useMemo(() => {
@@ -142,13 +129,13 @@ export function TaxReportPreview({
       if (compareType === 'previous_period') {
         // Calculate based on current period type
         switch (periodType) {
-          case 'current_month':
+          case 'this_month':
           case 'last_month':
             start = startOfMonth(subMonths(dateRange.start, i));
             end = endOfMonth(subMonths(dateRange.start, i));
             label = format(start, 'MMM yyyy');
             break;
-          case 'current_quarter':
+          case 'this_quarter':
           case 'last_quarter':
             start = startOfQuarter(subQuarters(dateRange.start, i));
             end = endOfQuarter(subQuarters(dateRange.start, i));
@@ -183,7 +170,7 @@ export function TaxReportPreview({
       if (!organizationId) return [];
       const { data, error } = await supabase
         .from('tax_codes')
-        .select('id, code, name, jurisdiction')
+        .select('id, code, name, jurisdiction, rate')
         .eq('organization_id', organizationId)
         .eq('is_active', true);
       if (error) throw error;
@@ -231,7 +218,7 @@ export function TaxReportPreview({
   const periodStartStr = format(dateRange.start, 'yyyy-MM-dd');
   const periodEndStr = format(dateRange.end, 'yyyy-MM-dd');
 
-  const { data: periodMovements, isLoading: movementsLoading } = useQuery({
+  const { data: periodMovements, isLoading: movementsLoading, isFetching: movementsFetching } = useQuery({
     queryKey: ['tax-period-movements', organizationId, periodStartStr, periodEndStr],
     queryFn: async () => {
       if (!organizationId) return { movements: [] as TaxMovementRow[], revenue: 0 };
@@ -273,76 +260,61 @@ export function TaxReportPreview({
   }, [taxAccounts, reportCategory, isCanada]);
 
   // Fetch journal entry details for the period with enhanced data
-  const { data: journalDetails = [], isLoading: journalLoading } = useQuery({
-    queryKey: ['tax-report-journal', organizationId, dateRange.start, dateRange.end, taxAccounts.length],
+  const { data: journalDetails = [], isLoading: journalLoading, isFetching: journalFetching } = useQuery({
+    queryKey: ['tax-report-journal', organizationId, periodStartStr, periodEndStr, taxAccounts.map((a) => a.accountId).join(',')],
     queryFn: async () => {
       if (!organizationId || taxAccounts.length === 0) return [];
-      
-      const accountIds = taxAccounts.map(a => a.accountId);
-      const startDateStr = format(dateRange.start, 'yyyy-MM-dd');
-      const endDateStr = format(dateRange.end, 'yyyy-MM-dd');
-      
-      // Fetch journal entries first to get IDs within date range
-      const { data: journalEntries, error: jeError } = await supabase
-        .from('journal_entries')
-        .select('id, entry_date, description, reference')
-        .eq('organization_id', organizationId)
-        .in('status', ['posted', 'reversed'])
-        .gte('entry_date', startDateStr)
-        .lte('entry_date', endDateStr);
-      
-      if (jeError) throw jeError;
-      if (!journalEntries || journalEntries.length === 0) return [];
-      
-      const journalEntryIds = journalEntries.map(je => je.id);
-      const journalEntriesMap = new Map(journalEntries.map(je => [je.id, je]));
-      
-      // Fetch journal entry lines for tax accounts
-      const { data: lines, error: linesError } = await supabase
-        .from('journal_entry_lines')
-        .select(`
-          id,
-          journal_entry_id,
-          account_id,
-          debit,
-          credit,
-          description
-        `)
-        .in('journal_entry_id', journalEntryIds)
-        .in('account_id', accountIds);
-      
-      if (linesError) throw linesError;
-      
-      // Fetch accounts for display
-      const { data: accounts, error: accError } = await supabase
-        .from('accounts')
-        .select('id, code, name')
-        .in('id', accountIds);
-      
-      if (accError) throw accError;
-      
-      const accountsMap = new Map(accounts?.map(a => [a.id, a]) || []);
-      
-      return (lines || []).map((line: any) => {
-        const je = journalEntriesMap.get(line.journal_entry_id);
-        const acc = accountsMap.get(line.account_id);
-        
-        // Extract tax code from line description (e.g., "GST - Federal on ...")
-        const taxCodeMatch = line.description?.match(/^(GST|HST|PST|QST|VAT)(\s*-\s*\w+)?/i);
-        const taxCode = taxCodeMatch ? taxCodeMatch[0].trim() : undefined;
-        
-        return {
-          entry_date: je?.entry_date,
-          description: je?.description || line.description,
-          line_description: line.description,
-          reference: je?.reference,
-          debit: Number(line.debit || 0),
-          credit: Number(line.credit || 0),
-          account_code: acc?.code,
-          account_name: acc?.name,
-          tax_code: taxCode,
-        };
-      }) as JournalEntryLine[];
+
+      const accountIds = taxAccounts.map((a) => a.accountId);
+      const accountsMap = new Map(taxAccounts.map((a) => [a.accountId, a]));
+      const PAGE_SIZE = 1000;
+      const rows: JournalEntryLine[] = [];
+
+      for (let offset = 0; offset < 20; offset += 1) {
+        const from = offset * PAGE_SIZE;
+        const { data: lines, error: linesError } = await supabase
+          .from('journal_entry_lines')
+          .select(`
+            id,
+            journal_entry_id,
+            account_id,
+            debit,
+            credit,
+            description,
+            journal_entries!inner(id, entry_date, description, reference, status, organization_id)
+          `)
+          .in('account_id', accountIds)
+          .eq('journal_entries.organization_id', organizationId)
+          .in('journal_entries.status', ['posted', 'reversed'])
+          .gte('journal_entries.entry_date', periodStartStr)
+          .lte('journal_entries.entry_date', periodEndStr)
+          .range(from, from + PAGE_SIZE - 1);
+
+        if (linesError) throw linesError;
+        if (!lines || lines.length === 0) break;
+
+        for (const line of lines as any[]) {
+          const je = line.journal_entries;
+          if (String(je?.reference || '').startsWith('CLOSE-')) continue;
+          const acc = accountsMap.get(line.account_id);
+          const taxCodeMatch = String(line.description || je?.description || '').match(/^(GST|HST|PST|QST|VAT)(\s*-\s*\w+)?/i);
+          rows.push({
+            entry_date: je?.entry_date,
+            description: je?.description || line.description,
+            line_description: line.description,
+            reference: je?.reference,
+            debit: Number(line.debit || 0),
+            credit: Number(line.credit || 0),
+            account_code: acc?.accountCode,
+            account_name: acc?.accountName,
+            tax_code: taxCodeMatch ? taxCodeMatch[0].trim() : undefined,
+          });
+        }
+
+        if (lines.length < PAGE_SIZE) break;
+      }
+
+      return rows;
     },
     enabled: !!organizationId && taxAccounts.length > 0,
   });
@@ -421,12 +393,9 @@ export function TaxReportPreview({
     }
     // Apply account type filter
     if (accountTypeFilter === 'collected') {
-      details = details.filter((j: any) => j.account_name?.toLowerCase().includes('collected'));
+      details = details.filter((j: any) => classifyTaxAccountName(j.account_name) === 'collected');
     } else if (accountTypeFilter === 'paid') {
-      details = details.filter((j: any) => 
-        j.account_name?.toLowerCase().includes('paid') || 
-        j.account_name?.toLowerCase().includes('input')
-      );
+      details = details.filter((j: any) => classifyTaxAccountName(j.account_name) === 'paid');
     }
     return details;
   }, [categoryFilteredJournalDetails, selectedTaxCodes, accountTypeFilter]);
@@ -434,31 +403,49 @@ export function TaxReportPreview({
   // Period totals from GL movements (not lifetime current_balance).
   const periodSummary = useMemo(() => {
     const category = isCanada ? reportCategory : 'all';
-    const movements = periodMovements?.movements ?? [];
-    if (movements.length > 0) {
-      return summarizeTaxMovements(movements, category, periodMovements?.revenue ?? 0);
+    const journalLines = filteredJournalDetails.map((j) => ({
+      account_name: j.account_name,
+      account_code: j.account_code,
+      debit: j.debit,
+      credit: j.credit,
+      tax_code: j.tax_code,
+      entry_date: j.entry_date,
+      description: j.description,
+      reference: j.reference,
+      line_description: j.line_description,
+    }));
+    const journal = summarizeJournalTaxLines(journalLines, category);
+    const rpc = summarizeTaxMovements(
+      periodMovements?.movements ?? [],
+      category,
+      periodMovements?.revenue ?? 0,
+    );
+    return mergePeriodSummary(journal, rpc, journalLines.length > 0);
+  }, [periodMovements, reportCategory, isCanada, filteredJournalDetails]);
+
+  const detailRows = useMemo(() => {
+    const rateByCode: Record<string, number> = {};
+    for (const code of allTaxCodes) {
+      if (code.code) rateByCode[code.code] = Number((code as { rate?: number }).rate ?? 0);
     }
-    const fallback = summarizeJournalTaxLines(
+    for (const row of periodSummary.byTaxCode) {
+      if (row.rate) rateByCode[row.code] = row.rate;
+    }
+    return buildTaxDetailRows(
       filteredJournalDetails.map((j) => ({
         account_name: j.account_name,
         account_code: j.account_code,
         debit: j.debit,
         credit: j.credit,
         tax_code: j.tax_code,
+        entry_date: j.entry_date,
+        description: j.description,
+        reference: j.reference,
+        line_description: j.line_description,
       })),
-      category,
+      rateByCode,
     );
-    return {
-      taxableSales: 0,
-      taxCollected: fallback.taxCollected,
-      itcClaimed: fallback.itcClaimed,
-      netPayable: fallback.netPayable,
-      byTaxCode: [] as ReturnType<typeof summarizeTaxMovements>['byTaxCode'],
-      byAccount: [] as ReturnType<typeof summarizeTaxMovements>['byAccount'],
-      rows: [],
-      totals: { rows: [], totalSales: 0, totalPurchases: 0 },
-    };
-  }, [periodMovements, reportCategory, isCanada, filteredJournalDetails]);
+  }, [filteredJournalDetails, allTaxCodes, periodSummary.byTaxCode]);
 
   const filingForm = useMemo(() => {
     return buildPeriodFilingForm(periodSummary, {
@@ -686,6 +673,7 @@ export function TaxReportPreview({
   };
 
   const isLoading = accountsLoading || journalLoading || movementsLoading;
+  const isRefreshing = journalFetching || movementsFetching;
 
   return (
     <>
@@ -752,73 +740,63 @@ export function TaxReportPreview({
           <p className="text-sm text-muted-foreground">{getReportCategoryDescription()}</p>
         </div>
 
-        {/* Filter Bar */}
-        <div className="flex flex-wrap items-center gap-3 p-4 bg-muted/30 rounded-lg border mb-4">
-          {/* Period Selector */}
-          <div className="flex items-center gap-2">
-            <Label className="text-sm text-muted-foreground whitespace-nowrap">{isBurundi ? 'Période:' : 'Period:'}</Label>
-            <Select value={periodType} onValueChange={(v) => setPeriodType(v as PeriodType)}>
-              <SelectTrigger className="w-[160px] h-9">
+        {/* Zoho-style date range: preset plus always-visible From/To */}
+        <div className="flex flex-wrap items-end gap-3 p-4 bg-muted/30 rounded-lg border mb-4">
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">{isBurundi ? 'Plage de dates' : 'Date range'}</Label>
+            <Select
+              value={periodType}
+              onValueChange={(v) => setPeriodType(v as TaxDatePreset)}
+            >
+              <SelectTrigger className="w-[180px] h-9">
                 <Calendar className="w-4 h-4 mr-2" />
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="current_month">{isBurundi ? 'Mois Courant' : 'Current Month'}</SelectItem>
-                <SelectItem value="last_month">{isBurundi ? 'Mois Dernier' : 'Last Month'}</SelectItem>
-                <SelectItem value="current_quarter">{isBurundi ? 'Trimestre Courant' : 'Current Quarter'}</SelectItem>
-                <SelectItem value="last_quarter">{isBurundi ? 'Trimestre Dernier' : 'Last Quarter'}</SelectItem>
-                <SelectItem value="current_year">{isBurundi ? 'Année Courante' : 'Current Year'}</SelectItem>
-                <SelectItem value="last_year">{isBurundi ? 'Année Dernière' : 'Last Year'}</SelectItem>
-                <SelectItem value="custom">{isBurundi ? 'Personnalisé' : 'Custom Range'}</SelectItem>
+                <SelectItem value="today">{isBurundi ? "Aujourd'hui" : 'Today'}</SelectItem>
+                <SelectItem value="this_week">{isBurundi ? 'Cette semaine' : 'This Week'}</SelectItem>
+                <SelectItem value="this_month">{isBurundi ? 'Ce mois' : 'This Month'}</SelectItem>
+                <SelectItem value="last_month">{isBurundi ? 'Mois précédent' : 'Previous Month'}</SelectItem>
+                <SelectItem value="this_quarter">{isBurundi ? 'Ce trimestre' : 'This Quarter'}</SelectItem>
+                <SelectItem value="last_quarter">{isBurundi ? 'Trimestre précédent' : 'Previous Quarter'}</SelectItem>
+                <SelectItem value="this_year">{isBurundi ? 'Cette année' : 'This Year'}</SelectItem>
+                <SelectItem value="last_year">{isBurundi ? 'Année précédente' : 'Previous Year'}</SelectItem>
+                <SelectItem value="custom">{isBurundi ? 'Personnalisé' : 'Custom'}</SelectItem>
               </SelectContent>
             </Select>
           </div>
-
-          {/* Custom Date Range */}
-          {periodType === 'custom' && (
-            <>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" size="sm" className="h-9">
-                    <Calendar className="w-4 h-4 mr-2" />
-                    {customStartDate ? format(customStartDate, 'MMM d, yyyy') : (isBurundi ? 'Début' : 'Start')}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <CalendarComponent
-                    mode="single"
-                    selected={customStartDate}
-                    onSelect={setCustomStartDate}
-                    initialFocus
-                    className="pointer-events-auto"
-                  />
-                </PopoverContent>
-              </Popover>
-              <span className="text-muted-foreground">→</span>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" size="sm" className="h-9">
-                    <Calendar className="w-4 h-4 mr-2" />
-                    {customEndDate ? format(customEndDate, 'MMM d, yyyy') : (isBurundi ? 'Fin' : 'End')}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <CalendarComponent
-                    mode="single"
-                    selected={customEndDate}
-                    onSelect={setCustomEndDate}
-                    initialFocus
-                    className="pointer-events-auto"
-                  />
-                </PopoverContent>
-              </Popover>
-            </>
-          )}
-
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">{isBurundi ? 'Du' : 'From'}</Label>
+            <Input
+              type="date"
+              className="h-9 w-[150px]"
+              value={toISODate(dateRange.start)}
+              onChange={(e) => {
+                setPeriodType('custom');
+                setCustomStartDate(parseISODate(e.target.value));
+                setCustomEndDate((prev) => prev ?? dateRange.end);
+              }}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">{isBurundi ? 'Au' : 'To'}</Label>
+            <Input
+              type="date"
+              className="h-9 w-[150px]"
+              value={toISODate(dateRange.end)}
+              onChange={(e) => {
+                setPeriodType('custom');
+                setCustomEndDate(parseISODate(e.target.value));
+                setCustomStartDate((prev) => prev ?? dateRange.start);
+              }}
+            />
+          </div>
           <Badge variant="outline" className="h-9 px-3 flex items-center">
             {periodLabel}
           </Badge>
-
+          {isRefreshing && !isLoading && (
+            <span className="text-xs text-muted-foreground">Updating…</span>
+          )}
           {compareType !== 'none' && (
             <Badge variant="secondary" className="h-9 px-3 flex items-center gap-1">
               <GitCompare className="w-3 h-3" />
@@ -1056,7 +1034,7 @@ export function TaxReportPreview({
             )}
 
             {/* Report Content Based on Type */}
-            {reportType === 'detailed' && filteredJournalDetails.length > 0 ? (
+            {false && filteredJournalDetails.length > 0 ? (
               <div className="mb-6">
                 <h4 className="text-sm font-medium text-foreground mb-3">
                   {isBurundi ? 'Transactions Détaillées' : 'Detailed Transactions'} ({filteredJournalDetails.length})
@@ -1252,6 +1230,77 @@ export function TaxReportPreview({
                     </div>
                   </div>
                 )}
+
+                <div className="mb-6">
+                  <h4 className="text-sm font-medium text-foreground mb-1">
+                    {isBurundi ? 'Détail des transactions' : 'Transaction detail'}
+                  </h4>
+                  <p className="text-xs text-muted-foreground mb-3">
+                    QuickBooks-style listing of every tax posting from {periodLabel}. Switching the date range reloads this list.
+                  </p>
+                  <div className="border rounded-lg overflow-hidden max-h-[28rem] overflow-y-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Date</TableHead>
+                          <TableHead>Type</TableHead>
+                          <TableHead>Number</TableHead>
+                          <TableHead>Description</TableHead>
+                          <TableHead>Account</TableHead>
+                          <TableHead>Tax code</TableHead>
+                          <TableHead className="text-right">Taxable</TableHead>
+                          <TableHead className="text-right">Tax amount</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {detailRows.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={8} className="text-sm text-muted-foreground text-center py-6">
+                              No tax postings in this date range.
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          <>
+                            {detailRows.map((row, idx) => (
+                              <TableRow key={`${row.date}-${row.number}-${idx}`}>
+                                <TableCell className="text-sm whitespace-nowrap">
+                                  {row.date ? format(parseLocalDate(row.date), 'MMM d, yyyy') : '—'}
+                                </TableCell>
+                                <TableCell className="text-sm">{row.type}</TableCell>
+                                <TableCell className="font-mono text-xs">{row.number || '—'}</TableCell>
+                                <TableCell className="text-sm max-w-[220px] truncate">{row.description}</TableCell>
+                                <TableCell className="font-mono text-xs">
+                                  {row.accountCode} {row.accountName}
+                                </TableCell>
+                                <TableCell>
+                                  {row.taxCode ? <Badge variant="outline">{row.taxCode}</Badge> : '—'}
+                                </TableCell>
+                                <TableCell className="text-right font-mono text-sm">
+                                  {row.taxableAmount ? formatCurrency(row.taxableAmount) : '—'}
+                                </TableCell>
+                                <TableCell className={cn(
+                                  'text-right font-mono text-sm',
+                                  row.side === 'collected' ? 'text-green-700' : 'text-blue-700',
+                                )}>
+                                  {formatCurrency(row.taxAmount)}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                            <TableRow className="bg-muted/50 font-medium">
+                              <TableCell colSpan={6}>Total ({detailRows.length} transactions)</TableCell>
+                              <TableCell className="text-right font-mono">
+                                {formatCurrency(detailRows.reduce((s, r) => s + r.taxableAmount, 0))}
+                              </TableCell>
+                              <TableCell className="text-right font-mono">
+                                {formatCurrency(detailRows.reduce((s, r) => s + r.taxAmount, 0))}
+                              </TableCell>
+                            </TableRow>
+                          </>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
               </>
             )}
 
