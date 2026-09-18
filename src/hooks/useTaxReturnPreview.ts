@@ -7,6 +7,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrganization } from '@/hooks/useOrganization';
 import { buildFilingForm, FilingFormResult, PeriodTaxRow, PeriodTotals } from '@/lib/filings';
 import { movementsToPeriodRows, type TaxMovementRow } from '@/lib/taxPeriodReport';
+import { fetchGstHstPeriodDocuments } from '@/hooks/useGstHstPeriodReport';
+import { summarizeGstHstDocuments } from '@/lib/gstHstPeriodEngine';
 
 export interface TaxReturnPreviewInput {
   periodId: string;
@@ -83,6 +85,25 @@ export function useTaxReturnPreview(input: TaxReturnPreviewInput | null) {
     ],
     enabled: Boolean(orgId && input),
     queryFn: async (): Promise<TaxReturnPreview> => {
+      const region = (input!.authorityRegion ?? '').toUpperCase();
+      const country = (input!.authorityCountryCode ?? '').toUpperCase();
+      const isProvincial = region.includes('BC') || region.includes('SK') || region.includes('MB') || region.includes('QC') || region.includes('PST') || region.includes('QST');
+      const useGstDocuments = !isProvincial && (country === 'CA' || country === '' || region.startsWith('CA'));
+
+      if (useGstDocuments) {
+        const docs = await fetchGstHstPeriodDocuments(orgId!, input!.periodStart, input!.periodEnd);
+        const snapshot = summarizeGstHstDocuments({
+          periodStart: input!.periodStart,
+          periodEnd: input!.periodEnd,
+          invoices: docs.invoices,
+          purchases: docs.purchases,
+          bankDocuments: docs.bankDocuments,
+          taxCodes: docs.taxCodes,
+          authority: input!.authorityName,
+        });
+        return { form: snapshot.form, totals: snapshot.totals };
+      }
+
       const { rows, totalSales, totalPurchases } = await fetchPeriodRows(
         orgId!,
         input!.authorityId,

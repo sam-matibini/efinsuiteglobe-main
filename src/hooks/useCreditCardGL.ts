@@ -310,7 +310,7 @@ export function usePostCreditCardTransactionToGL() {
       if (dimensions?.department_id) ccTxUpdate.department_id = dimensions.department_id;
       const persistedTaxCodeId = await ensurePersistedTaxCode(supabase, organizationId, taxCode);
       if (persistedTaxCodeId) ccTxUpdate.tax_code_id = persistedTaxCodeId;
-      if (postedTaxTotal > 0) {
+      if (taxCode || postedTaxTotal > 0 || (taxBreakdown && taxBreakdown.length > 0)) {
         ccTxUpdate.tax_amount = postedTaxTotal;
         ccTxUpdate.subtotal_amount = grossAmount - postedTaxTotal;
       }
@@ -334,6 +334,9 @@ export function usePostCreditCardTransactionToGL() {
       queryClient.invalidateQueries({ queryKey: ['credit-cards'] });
       queryClient.invalidateQueries({ queryKey: ['journal-entries'] });
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['gst-hst-period-documents'] });
+      queryClient.invalidateQueries({ queryKey: ['tax-period-movements'] });
+      queryClient.invalidateQueries({ queryKey: ['tax-report-journal'] });
       toast.success('Transaction posted to General Ledger');
     },
     onError: (error: Error) => {
@@ -483,6 +486,9 @@ export function useBulkPostCreditCardToGL() {
       queryClient.invalidateQueries({ queryKey: ['credit-cards'] });
       queryClient.invalidateQueries({ queryKey: ['journal-entries'] });
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['gst-hst-period-documents'] });
+      queryClient.invalidateQueries({ queryKey: ['tax-period-movements'] });
+      queryClient.invalidateQueries({ queryKey: ['tax-report-journal'] });
       if (successCount > 0) {
         toast.success(`Posted ${successCount} transaction(s) to General Ledger`);
       }

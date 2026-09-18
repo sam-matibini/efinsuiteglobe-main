@@ -3,7 +3,10 @@ import { useQuery, useQueries } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import {
   emptyGstHstSnapshot,
+  isBankCollectedSide,
   summarizeGstHstDocuments,
+  taxesFromBankingPosting,
+  type GstHstBankDocument,
   type GstHstDocumentTax,
   type GstHstInvoiceDocument,
   type GstHstJournalFallback,
@@ -90,9 +93,10 @@ export async function fetchGstHstPeriodDocuments(
 ): Promise<{
   invoices: GstHstInvoiceDocument[];
   purchases: GstHstPurchaseDocument[];
+  bankDocuments: GstHstBankDocument[];
   taxCodes: GstHstTaxCodeFlag[];
 }> {
-  const [invoiceRows, billRows, expenseRows, taxCodeRows] = await Promise.all([
+  const [invoiceRows, billRows, expenseRows, taxCodeRows, bankRows, cardRows] = await Promise.all([
     pageQuery<Record<string, unknown>>((from, to) =>
       supabase
         .from('invoices')
@@ -130,13 +134,33 @@ export async function fetchGstHstPeriodDocuments(
       if (error) throw error;
       return data ?? [];
     })(),
+    pageQuery<Record<string, unknown>>((from, to) =>
+      supabase
+        .from('bank_transactions')
+        .select('id, transaction_date, description, reference, amount, subtotal_amount, tax_amount, tax_code_id, tax_breakdown, transaction_type, journal_entry_id, matched_invoice_id, matched_bill_id, bank_accounts!inner(organization_id)')
+        .eq('bank_accounts.organization_id', organizationId)
+        .not('journal_entry_id', 'is', null)
+        .gte('transaction_date', periodStart)
+        .lte('transaction_date', periodEnd)
+        .range(from, to),
+    ),
+    pageQuery<Record<string, unknown>>((from, to) =>
+      supabase
+        .from('credit_card_transactions')
+        .select('id, transaction_date, description, reference, amount, subtotal_amount, tax_amount, tax_code_id, tax_breakdown, transaction_type, journal_entry_id, credit_cards!inner(organization_id)')
+        .eq('credit_cards.organization_id', organizationId)
+        .not('journal_entry_id', 'is', null)
+        .gte('transaction_date', periodStart)
+        .lte('transaction_date', periodEnd)
+        .range(from, to),
+    ),
   ]);
 
   const invoiceIds = invoiceRows.map((row) => String(row.id));
   const billIds = billRows.map((row) => String(row.id));
   const expenseIds = expenseRows.map((row) => String(row.id));
 
-  const [invoiceTaxRows, billTaxRows, expenseTaxRows] = await Promise.all([
+  const [invoiceTaxRows, billTaxRows, expenseTaxRows, invoiceLineRows] = await Promise.all([
     fetchByIds<Record<string, unknown>>(invoiceIds, (chunk) =>
       supabase
         .from('invoice_taxes')
@@ -155,11 +179,28 @@ export async function fetchGstHstPeriodDocuments(
         .select('expense_id, tax_code, tax_type, rate, taxable_amount, tax_amount, is_recoverable, authority')
         .in('expense_id', chunk),
     ),
+    fetchByIds<Record<string, unknown>>(invoiceIds, (chunk) =>
+      supabase
+        .from('invoice_lines')
+        .select('invoice_id, amount, tax_amount, tax_rate, description')
+        .in('invoice_id', chunk),
+    ),
   ]);
 
   const invoiceTaxes = groupTaxes(invoiceTaxRows.map((row) => toTax(row, 'invoice_id')));
   const billTaxes = groupTaxes(billTaxRows.map((row) => toTax(row, 'bill_id')));
   const expenseTaxes = groupTaxes(expenseTaxRows.map((row) => toTax(row, 'expense_id')));
+  const invoiceLines = new Map<string, { amount: number; tax_amount: number; tax_rate: number; description: string }[]>();
+  for (const row of invoiceLineRows) {
+    const id = String(row.invoice_id ?? '');
+    if (!invoiceLines.has(id)) invoiceLines.set(id, []);
+    invoiceLines.get(id)!.push({
+      amount: Number(row.amount ?? 0),
+      tax_amount: Number(row.tax_amount ?? 0),
+      tax_rate: Number(row.tax_rate ?? 0),
+      description: String(row.description ?? ''),
+    });
+  }
 
   const taxCodes: GstHstTaxCodeFlag[] = taxCodeRows.map((row) => ({
     code: row.code,
@@ -183,6 +224,7 @@ export async function fetchGstHstPeriodDocuments(
     gst_hst_amount: Number(row.gst_hst_amount ?? 0),
     is_gst_hst_exempt: Boolean(row.is_gst_hst_exempt),
     taxes: invoiceTaxes.get(String(row.id)) ?? [],
+    lines: invoiceLines.get(String(row.id)) ?? [],
   }));
 
   const purchases: GstHstPurchaseDocument[] = [
@@ -229,7 +271,58 @@ export async function fetchGstHstPeriodDocuments(
     }),
   ];
 
-  return { invoices, purchases, taxCodes };
+  const taxCodeByCode = new Map(taxCodes.map((code) => [code.code.toUpperCase(), code]));
+  const toBankDoc = (
+    row: Record<string, unknown>,
+    source: 'bank' | 'credit_card',
+  ): GstHstBankDocument => {
+    const code = row.tax_code_id ? taxCodeById.get(String(row.tax_code_id)) : undefined;
+    const flag: GstHstTaxCodeFlag | undefined = code
+      ? {
+          code: code.code,
+          name: code.name,
+          tax_type: code.tax_type,
+          rate: code.rate,
+          is_zero_rated: code.is_zero_rated,
+          is_exempt: code.is_exempt,
+          is_recoverable: code.is_recoverable,
+        }
+      : undefined;
+    const taxes = taxesFromBankingPosting({
+      taxCode: flag,
+      taxAmount: Number(row.tax_amount ?? 0),
+      subtotal: Number(row.subtotal_amount ?? 0) || undefined,
+      amount: Number(row.amount ?? 0),
+      taxBreakdown: Array.isArray(row.tax_breakdown) ? row.tax_breakdown as Array<{ code?: string; rate?: number; amount?: number }> : null,
+    }).map((tax) => {
+      const byCode = tax.tax_code ? taxCodeByCode.get(String(tax.tax_code).toUpperCase()) : undefined;
+      return {
+        ...tax,
+        tax_type: tax.tax_type || byCode?.tax_type || flag?.tax_type,
+        is_recoverable: tax.is_recoverable ?? byCode?.is_recoverable ?? flag?.is_recoverable,
+      };
+    });
+    return {
+      source,
+      direction: isBankCollectedSide(String(row.transaction_type ?? '')) ? 'collected' : 'paid',
+      id: String(row.id),
+      date: String(row.transaction_date ?? ''),
+      number: String(row.reference || row.id),
+      description: String(row.description || row.payee_payor || ''),
+      amount: Number(row.amount ?? 0),
+      subtotal: Number(row.subtotal_amount ?? 0),
+      matchedInvoiceId: row.matched_invoice_id ? String(row.matched_invoice_id) : null,
+      matchedBillId: row.matched_bill_id ? String(row.matched_bill_id) : null,
+      taxes,
+    };
+  };
+
+  const bankDocuments: GstHstBankDocument[] = [
+    ...bankRows.map((row) => toBankDoc(row, 'bank')),
+    ...cardRows.map((row) => toBankDoc(row, 'credit_card')),
+  ];
+
+  return { invoices, purchases, bankDocuments, taxCodes };
 }
 
 export function useGstHstPeriodReport({
@@ -260,6 +353,7 @@ export function useGstHstPeriodReport({
         periodEnd,
         invoices: [],
         purchases: [],
+        bankDocuments: [],
         journal,
         authority,
       });
@@ -269,6 +363,7 @@ export function useGstHstPeriodReport({
       periodEnd,
       invoices: query.data.invoices,
       purchases: query.data.purchases,
+      bankDocuments: query.data.bankDocuments,
       taxCodes: query.data.taxCodes,
       journal,
       authority,
@@ -319,6 +414,7 @@ export function useGstHstComparisonReports({
             periodEnd: end,
             invoices: data.invoices,
             purchases: data.purchases,
+            bankDocuments: data.bankDocuments,
             taxCodes: data.taxCodes,
             authority,
           })

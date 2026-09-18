@@ -468,7 +468,7 @@ export function usePostTransactionToGL() {
       if (dimensions?.department_id) txUpdate.department_id = dimensions.department_id;
       const persistedTaxCodeId = await ensurePersistedTaxCode(supabase, organizationId, taxCode);
       if (persistedTaxCodeId) txUpdate.tax_code_id = persistedTaxCodeId;
-      if (effectiveTax > 0) {
+      if (taxCode || effectiveTax > 0 || (taxBreakdown && taxBreakdown.length > 0)) {
         txUpdate.tax_amount = effectiveTax;
         txUpdate.subtotal_amount = subtotal;
       }
@@ -509,6 +509,9 @@ export function usePostTransactionToGL() {
       queryClient.invalidateQueries({ queryKey: ['bank-accounts'] });
       queryClient.invalidateQueries({ queryKey: ['journal-entries'] });
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['gst-hst-period-documents'] });
+      queryClient.invalidateQueries({ queryKey: ['tax-period-movements'] });
+      queryClient.invalidateQueries({ queryKey: ['tax-report-journal'] });
       toast.success('Transaction posted to General Ledger');
     },
     onError: (error: Error) => {
@@ -737,6 +740,9 @@ export function useBulkPostToGL() {
       queryClient.invalidateQueries({ queryKey: ['bank-accounts'] });
       queryClient.invalidateQueries({ queryKey: ['journal-entries'] });
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['gst-hst-period-documents'] });
+      queryClient.invalidateQueries({ queryKey: ['tax-period-movements'] });
+      queryClient.invalidateQueries({ queryKey: ['tax-report-journal'] });
       if (successCount > 0) {
         toast.success(`Posted ${successCount} transaction(s) to General Ledger`);
       }

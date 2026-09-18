@@ -34,6 +34,7 @@ describe('tax report preview wiring', () => {
   it('keeps Tax Summary on period activity, not lifetime GL balances', () => {
     const salesTax = readFileSync(join(root, 'src/pages/SalesTax.tsx'), 'utf8');
     expect(salesTax).toContain('<TaxReportPreview');
+    expect(salesTax).toContain('defaultValue="summary"');
     expect(salesTax).not.toContain('Account Breakdown');
     expect(salesTax).not.toContain('summaryPeriod');
     expect(salesTax).not.toContain('glTaxSummary');

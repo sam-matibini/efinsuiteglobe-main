@@ -116,6 +116,21 @@ describe('documentTaxEngine', () => {
     expect(result.taxes[0].isRecoverable).toBe(true);
   });
 
+  it('persists a 0% GST/HST line so zero-rated sales reach the tax engine', () => {
+    const result = computeDocumentTaxes({
+      countryCode: 'CA',
+      jurisdictionCode: 'ON',
+      amount: 400,
+      direction: 'collected',
+      taxRateOverride: 0,
+      settings: caSettings,
+    });
+    expect(result.taxes).toHaveLength(1);
+    expect(result.taxes[0].taxAmount).toBe(0);
+    expect(result.taxes[0].taxableAmount).toBe(400);
+    expect(result.totalTax).toBe(0);
+  });
+
   it('splits purchase posting into recoverable vs expense', () => {
     const computed = computeDocumentTaxes({
       countryCode: 'CA',

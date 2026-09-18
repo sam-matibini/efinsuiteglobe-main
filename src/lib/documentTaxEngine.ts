@@ -186,9 +186,6 @@ export function computeDocumentTaxes(params: {
     const rate = params.taxRateOverride;
     const taxableAmount = params.taxInclusive ? amount / (1 + rate / 100) : amount;
     const taxAmount = roundCurrency(params.taxInclusive ? amount - taxableAmount : taxableAmount * (rate / 100));
-    if (taxAmount === 0 && rate === 0) {
-      return toComputation([], taxableAmount);
-    }
     const family = classifyRetailTaxFamily(taxType);
     const recoverable =
       direction === 'paid' &&
@@ -244,8 +241,6 @@ export function computeDocumentTaxes(params: {
           taxDirection: direction,
         } satisfies DocumentTaxLine;
       })
-      .filter((t) => t.taxAmount !== 0);
-
     return toComputation(taxes, split.taxableAmount);
   }
 

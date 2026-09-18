@@ -274,7 +274,7 @@ export default function SalesTax() {
         </div>
       </div>
 
-      <Tabs defaultValue="returns" className="space-y-6">
+      <Tabs defaultValue="summary" className="space-y-6">
         <TabsList>
           <TabsTrigger value="returns">{taxTerminology.returnLabel}</TabsTrigger>
           <TabsTrigger value="reports" className="gap-1">

@@ -228,6 +228,105 @@ describe('summarizeGstHstDocuments', () => {
     expect(snapshot.itc).not.toBe(68265.98);
   });
 
+  it('does not mix lifetime journal ITCs with current-period invoice tax', () => {
+    const snapshot = summarizeGstHstDocuments({
+      periodStart: '2026-07-01',
+      periodEnd: '2026-09-30',
+      invoices: [taxableInvoice({
+        subtotal: 2307.69,
+        tax_amount: 300,
+        gst_hst_amount: 300,
+        taxes: [{ tax_code: 'HST-ON', tax_type: 'hst', rate: 13, taxable_amount: 2307.69, tax_amount: 300 }],
+      })],
+      purchases: [],
+      journal: { taxCollected: 300, itcClaimed: 68265.98, taxableSales: 2307.69 },
+      taxCodes,
+    });
+    expect(snapshot.taxableSales).toBe(2307.69);
+    expect(snapshot.gstHstCollected).toBe(300);
+    expect(snapshot.itc).toBe(0);
+  });
+
+  it('classifies invoice lines as taxable, zero-rated, and exempt', () => {
+    const snapshot = summarizeGstHstDocuments({
+      periodStart: '2026-07-01',
+      periodEnd: '2026-09-30',
+      invoices: [{
+        id: 'inv-lines',
+        date: '2026-08-01',
+        number: 'INV-200',
+        status: 'sent',
+        subtotal: 1500,
+        tax_amount: 130,
+        taxes: [],
+        lines: [
+          { amount: 1000, tax_amount: 130, tax_rate: 13, description: 'Consulting' },
+          { amount: 400, tax_amount: 0, tax_rate: 0, description: 'Groceries' },
+          { amount: 100, tax_amount: 0, tax_rate: 0, description: 'Rent' },
+        ],
+      }, {
+        id: 'inv-ex',
+        date: '2026-08-02',
+        number: 'INV-201',
+        status: 'sent',
+        subtotal: 100,
+        is_gst_hst_exempt: true,
+        taxes: [],
+        lines: [{ amount: 100, tax_amount: 0, tax_rate: 0, description: 'Exempt fee' }],
+      }],
+      purchases: [],
+      taxCodes,
+    });
+    expect(snapshot.taxableSales).toBe(1000);
+    expect(snapshot.zeroRatedSales).toBe(500);
+    expect(snapshot.exemptSales).toBe(100);
+    expect(snapshot.gstHstCollected).toBe(130);
+    expect(snapshot.exemptZeroRatedSales).toBe(600);
+  });
+
+  it('includes posted bank deposits and withdrawals and skips invoice matches', () => {
+    const snapshot = summarizeGstHstDocuments({
+      periodStart: '2026-07-01',
+      periodEnd: '2026-09-30',
+      invoices: [],
+      purchases: [],
+      bankDocuments: [
+        {
+          source: 'bank',
+          direction: 'collected',
+          id: 'dep-1',
+          date: '2026-08-04',
+          number: 'DEP-1',
+          description: 'Retail sale',
+          taxes: [{ tax_code: 'HST-ON', tax_type: 'hst', rate: 13, taxable_amount: 200, tax_amount: 26 }],
+        },
+        {
+          source: 'credit_card',
+          direction: 'paid',
+          id: 'cc-1',
+          date: '2026-08-05',
+          number: 'CC-1',
+          description: 'Office store',
+          taxes: [{ tax_code: 'HST-ON', tax_type: 'hst', rate: 13, taxable_amount: 80, tax_amount: 10.40, is_recoverable: true }],
+        },
+        {
+          source: 'bank',
+          direction: 'collected',
+          id: 'dep-match',
+          date: '2026-08-06',
+          number: 'DEP-2',
+          matchedInvoiceId: 'inv-1',
+          taxes: [{ tax_code: 'HST-ON', tax_type: 'hst', rate: 13, taxable_amount: 1000, tax_amount: 130 }],
+        },
+      ],
+      taxCodes,
+    });
+    expect(snapshot.taxableSales).toBe(200);
+    expect(snapshot.gstHstCollected).toBe(26);
+    expect(snapshot.itc).toBe(10.4);
+    expect(snapshot.supportRows.some((row) => row.number === 'DEP-2')).toBe(false);
+  });
+
   it('builds a detailed support listing grouped by CRA line', () => {
     const snapshot = summarizeGstHstDocuments({
       periodStart: '2026-07-01',

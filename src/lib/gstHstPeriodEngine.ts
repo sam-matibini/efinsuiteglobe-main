@@ -42,6 +42,13 @@ export interface GstHstDocumentTax {
   authority?: string | null;
 }
 
+export interface GstHstInvoiceLine {
+  amount?: number | null;
+  tax_amount?: number | null;
+  tax_rate?: number | null;
+  description?: string | null;
+}
+
 export interface GstHstInvoiceDocument {
   id: string;
   date: string;
@@ -53,6 +60,7 @@ export interface GstHstInvoiceDocument {
   gst_hst_amount?: number | null;
   is_gst_hst_exempt?: boolean | null;
   taxes?: GstHstDocumentTax[] | null;
+  lines?: GstHstInvoiceLine[] | null;
 }
 
 export interface GstHstPurchaseDocument {
@@ -67,9 +75,23 @@ export interface GstHstPurchaseDocument {
   taxes?: GstHstDocumentTax[] | null;
 }
 
+export interface GstHstBankDocument {
+  source: 'bank' | 'credit_card';
+  direction: 'collected' | 'paid';
+  id: string;
+  date: string;
+  number: string;
+  description?: string | null;
+  amount?: number | null;
+  subtotal?: number | null;
+  matchedInvoiceId?: string | null;
+  matchedBillId?: string | null;
+  taxes?: GstHstDocumentTax[] | null;
+}
+
 export interface GstHstSupportRow {
   date: string;
-  type: 'Invoice' | 'Bill' | 'Expense';
+  type: 'Invoice' | 'Bill' | 'Expense' | 'Bank' | 'Credit card';
   number: string;
   description: string;
   taxCode: string;
@@ -163,6 +185,43 @@ export function classifyGstHstSupply(
   return 'taxable';
 }
 
+export function taxesFromBankingPosting(input: {
+  taxCode?: GstHstTaxCodeFlag | null;
+  taxAmount?: number | null;
+  subtotal?: number | null;
+  amount?: number | null;
+  taxBreakdown?: Array<{ code?: string; rate?: number; amount?: number }> | null;
+}): GstHstDocumentTax[] {
+  const breakdown = Array.isArray(input.taxBreakdown) ? input.taxBreakdown : [];
+  const subtotal = Number(
+    input.subtotal ??
+      (Number(input.amount ?? 0) - Number(input.taxAmount ?? 0)),
+  );
+  if (breakdown.length > 0) {
+    return breakdown.map((item) => ({
+      tax_code: item.code ?? input.taxCode?.code ?? null,
+      tax_type: item.code ?? input.taxCode?.tax_type ?? null,
+      rate: Number(item.rate ?? input.taxCode?.rate ?? 0),
+      taxable_amount: subtotal,
+      tax_amount: Number(item.amount ?? 0),
+      is_recoverable: input.taxCode?.is_recoverable !== false,
+    }));
+  }
+  if (!input.taxCode && !Number(input.taxAmount ?? 0)) return [];
+  return [{
+    tax_code: input.taxCode?.code ?? null,
+    tax_type: input.taxCode?.tax_type ?? null,
+    rate: Number(input.taxCode?.rate ?? 0),
+    taxable_amount: subtotal,
+    tax_amount: Number(input.taxAmount ?? 0),
+    is_recoverable: input.taxCode?.is_recoverable !== false,
+  }];
+}
+
+export function isBankCollectedSide(transactionType?: string | null): boolean {
+  return /^(deposit|credit|refund|interest)$/i.test(String(transactionType ?? ''));
+}
+
 function flagMap(flags: GstHstTaxCodeFlag[]): Map<string, GstHstTaxCodeFlag> {
   const map = new Map<string, GstHstTaxCodeFlag>();
   for (const flag of flags) {
@@ -226,6 +285,7 @@ export function summarizeGstHstDocuments(input: {
   periodEnd: string;
   invoices: GstHstInvoiceDocument[];
   purchases: GstHstPurchaseDocument[];
+  bankDocuments?: GstHstBankDocument[];
   taxCodes?: GstHstTaxCodeFlag[];
   journal?: GstHstJournalFallback;
   authority?: string;
@@ -315,6 +375,60 @@ export function summarizeGstHstDocuments(input: {
         bumpCode(codeMap, code, flag?.name || code, Number(tax.rate ?? flag?.rate ?? 0), {
           taxableAmount: taxable,
           taxCollected: taxAmount,
+        });
+      }
+      continue;
+    }
+
+    const lines = (inv.lines ?? []).filter((line) => Number(line.amount ?? 0) !== 0 || Number(line.tax_amount ?? 0) !== 0);
+    if (lines.length > 0) {
+      for (const line of lines) {
+        const amount = Number(line.amount ?? 0);
+        const lineTax = Number(line.tax_amount ?? 0);
+        const rate = Number(line.tax_rate ?? 0);
+        if (inv.is_gst_hst_exempt) {
+          exemptSales += amount;
+          supportRows.push({
+            date: inv.date,
+            type: 'Invoice',
+            number: inv.number,
+            description: line.description || description,
+            taxCode: 'EXEMPT',
+            supplyClass: 'exempt',
+            craLine: '91',
+            taxableAmount: amount,
+            taxAmount: 0,
+          });
+          continue;
+        }
+        if (rate === 0 && lineTax === 0) {
+          zeroRatedSales += amount;
+          supportRows.push({
+            date: inv.date,
+            type: 'Invoice',
+            number: inv.number,
+            description: line.description || description,
+            taxCode: 'GST-ZR',
+            supplyClass: 'zero_rated',
+            craLine: '90B',
+            taxableAmount: amount,
+            taxAmount: 0,
+          });
+          continue;
+        }
+        taxableSales += amount;
+        gstHstCollected += lineTax;
+        invoiceGstTaxPosted += lineTax;
+        supportRows.push({
+          date: inv.date,
+          type: 'Invoice',
+          number: inv.number,
+          description: line.description || description,
+          taxCode: 'GST/HST',
+          supplyClass: 'taxable',
+          craLine: '90A / 103',
+          taxableAmount: amount,
+          taxAmount: lineTax,
         });
       }
       continue;
@@ -434,18 +548,86 @@ export function summarizeGstHstDocuments(input: {
     }
   }
 
+  const bankDocuments = (input.bankDocuments ?? []).filter(
+    (doc) => !doc.matchedInvoiceId && !doc.matchedBillId,
+  );
+
+  for (const doc of bankDocuments) {
+    const gstRows = (doc.taxes ?? []).filter((tax) => isGstHstTax(tax));
+    const type = doc.source === 'credit_card' ? 'Credit card' : 'Bank';
+    const description = doc.description || doc.number || type;
+    const source = doc.direction === 'collected' ? 'invoice' : 'bill';
+
+    for (const tax of gstRows) {
+      const flag = lookupFlag(flags, tax.tax_code);
+      const supply = classifyGstHstSupply(tax, flag, false);
+      const taxable = Number(tax.taxable_amount ?? doc.subtotal ?? 0);
+      const taxAmount = Number(tax.tax_amount ?? 0);
+      const code = tax.tax_code || flag?.code || 'GST/HST';
+      rows.push(toPeriodRow(source, tax, flag, supply));
+
+      if (doc.direction === 'collected') {
+        invoiceGstTaxPosted += taxAmount;
+        if (supply === 'exempt') {
+          exemptSales += taxable;
+          supportRows.push({
+            date: doc.date, type, number: doc.number, description, taxCode: code,
+            supplyClass: 'exempt', craLine: '91', taxableAmount: taxable, taxAmount: 0,
+          });
+        } else if (supply === 'zero_rated') {
+          zeroRatedSales += taxable;
+          supportRows.push({
+            date: doc.date, type, number: doc.number, description, taxCode: code,
+            supplyClass: 'zero_rated', craLine: '90B', taxableAmount: taxable, taxAmount: 0,
+          });
+        } else {
+          taxableSales += taxable;
+          gstHstCollected += taxAmount;
+          supportRows.push({
+            date: doc.date, type, number: doc.number, description, taxCode: code,
+            supplyClass: 'taxable', craLine: '90A / 103', taxableAmount: taxable, taxAmount,
+          });
+          bumpCode(codeMap, code, flag?.name || code, Number(tax.rate ?? flag?.rate ?? 0), {
+            taxableAmount: taxable,
+            taxCollected: taxAmount,
+          });
+        }
+      } else {
+        purchaseGstTaxPosted += taxAmount;
+        totalPurchases += taxable;
+        const recoverable = tax.is_recoverable !== false && flag?.is_recoverable !== false;
+        if (recoverable) {
+          itc += taxAmount;
+          supportRows.push({
+            date: doc.date, type, number: doc.number, description, taxCode: code,
+            supplyClass: 'itc', craLine: '106', taxableAmount: taxable, taxAmount,
+          });
+          bumpCode(codeMap, code, flag?.name || code, Number(tax.rate ?? flag?.rate ?? 0), {
+            itcClaimed: taxAmount,
+          });
+        } else {
+          supportRows.push({
+            date: doc.date, type, number: doc.number, description, taxCode: code,
+            supplyClass: 'non_recoverable', craLine: '—', taxableAmount: taxable, taxAmount,
+          });
+        }
+      }
+    }
+  }
+
   const journal = input.journal;
   const usedDocumentCollected = invoiceGstTaxPosted !== 0 || gstHstCollected !== 0;
   const usedDocumentItc = purchaseGstTaxPosted !== 0 || itc !== 0;
-  const usedDocumentSales = invoices.length > 0;
+  const usedDocumentSales = invoices.length > 0 || bankDocuments.some((d) => d.direction === 'collected');
+  const hasSourceDocuments = invoices.length > 0 || purchases.length > 0 || bankDocuments.length > 0;
 
-  if (journal) {
+  if (journal && !hasSourceDocuments) {
     if (!usedDocumentCollected) {
       gstHstCollected = journal.taxCollected;
       if (!usedDocumentSales && journal.taxableSales) taxableSales = journal.taxableSales;
     }
     if (!usedDocumentItc) itc = journal.itcClaimed;
-    if (!usedDocumentSales && journal.rows?.length) {
+    if (journal.rows?.length) {
       for (const row of journal.rows) {
         if (!rows.some((existing) => existing.tax_code === row.tax_code && existing.source === row.source && existing.tax_amount === row.tax_amount)) {
           rows.push(row);
