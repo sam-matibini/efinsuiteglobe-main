@@ -19,6 +19,11 @@
 import { buildGstHstReturn } from '@/lib/filings/canadaGstHst';
 import type { FilingFormResult, PeriodTaxRow, PeriodTotals } from '@/lib/filings/types';
 import type { TaxCodePeriodRow } from '@/lib/taxPeriodReport';
+import {
+  bumpRstAgency,
+  finalizeRstAgencies,
+  type RstAgencyTotals,
+} from '@/lib/rstAgencies';
 
 export type GstHstSupplyClass = 'taxable' | 'zero_rated' | 'exempt';
 
@@ -54,6 +59,7 @@ export interface GstHstInvoiceDocument {
   date: string;
   number: string;
   description?: string | null;
+  partyName?: string | null;
   status?: string | null;
   subtotal?: number | null;
   tax_amount?: number | null;
@@ -69,6 +75,7 @@ export interface GstHstPurchaseDocument {
   date: string;
   number: string;
   description?: string | null;
+  partyName?: string | null;
   status?: string | null;
   subtotal?: number | null;
   tax_amount?: number | null;
@@ -82,6 +89,7 @@ export interface GstHstBankDocument {
   date: string;
   number: string;
   description?: string | null;
+  partyName?: string | null;
   amount?: number | null;
   subtotal?: number | null;
   matchedInvoiceId?: string | null;
@@ -94,7 +102,9 @@ export interface GstHstSupportRow {
   type: 'Invoice' | 'Bill' | 'Expense' | 'Bank' | 'Credit card';
   number: string;
   description: string;
+  name: string;
   taxCode: string;
+  taxRate: number;
   supplyClass: GstHstSupplyClass | 'itc' | 'non_recoverable';
   craLine: string;
   taxableAmount: number;
@@ -112,8 +122,13 @@ export interface GstHstPeriodSnapshot {
   line91: number;
   line101: number;
   gstHstCollected: number;
+  gstHstCollectedGross: number;
+  gstHstCollectedException: number;
   itc: number;
+  itcGross: number;
+  itcException: number;
   netTax: number;
+  agencies: RstAgencyTotals[];
   invoiceCount: number;
   purchaseCount: number;
   usedDocumentCollected: boolean;
@@ -133,6 +148,22 @@ export interface GstHstJournalFallback {
 }
 
 const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+
+function addSupport(
+  rows: GstHstSupportRow[],
+  row: Omit<GstHstSupportRow, 'name' | 'taxRate'> & Partial<Pick<GstHstSupportRow, 'name' | 'taxRate'>>,
+) {
+  rows.push({
+    ...row,
+    name: row.name ?? '',
+    taxRate: Number(row.taxRate ?? 0),
+  });
+}
+
+function splitSignedTax(amount: number): { gross: number; exception: number } {
+  if (amount < 0) return { gross: 0, exception: amount };
+  return { gross: amount, exception: 0 };
+}
 
 export const EXCLUDED_GST_HST_STATUSES = new Set([
   'draft',
@@ -298,7 +329,11 @@ export function summarizeGstHstDocuments(input: {
   let zeroRatedSales = 0;
   let exemptSales = 0;
   let gstHstCollected = 0;
+  let gstHstCollectedGross = 0;
+  let gstHstCollectedException = 0;
   let itc = 0;
+  let itcGross = 0;
+  let itcException = 0;
   let totalPurchases = 0;
   let invoiceGstTaxPosted = 0;
   let purchaseGstTaxPosted = 0;
@@ -306,12 +341,19 @@ export function summarizeGstHstDocuments(input: {
   const supportRows: GstHstSupportRow[] = [];
   const rows: PeriodTaxRow[] = [];
   const codeMap = new Map<string, TaxCodePeriodRow>();
+  const agencyMap = new Map<string, RstAgencyTotals>();
 
   for (const inv of invoices) {
     const gstRows = (inv.taxes ?? []).filter((tax) => isGstHstTax(tax));
+    const pstRows = (inv.taxes ?? []).filter((tax) => isProvincialSalesTax(tax));
     const subtotal = Number(inv.subtotal ?? 0);
     const headerGst = Number(inv.gst_hst_amount ?? 0);
     const description = inv.description || inv.number || 'Invoice';
+    const partyName = inv.partyName || '';
+
+    for (const tax of pstRows) {
+      bumpRstAgency(agencyMap, tax, 'collected', Number(tax.tax_amount ?? 0));
+    }
 
     if (gstRows.length > 0) {
       for (const tax of gstRows) {
@@ -320,23 +362,26 @@ export function summarizeGstHstDocuments(input: {
         const taxable = Number(tax.taxable_amount ?? 0);
         const taxAmount = Number(tax.tax_amount ?? 0);
         const code = tax.tax_code || flag?.code || 'GST/HST';
+        const taxRate = Number(tax.rate ?? flag?.rate ?? 0);
         rows.push(toPeriodRow('invoice', tax, flag, supply));
         invoiceGstTaxPosted += taxAmount;
 
         if (supply === 'exempt') {
           exemptSales += taxable || subtotal;
-          supportRows.push({
+          addSupport(supportRows, {
             date: inv.date,
             type: 'Invoice',
             number: inv.number,
             description,
+            name: partyName,
             taxCode: code,
+            taxRate,
             supplyClass: 'exempt',
             craLine: '91',
             taxableAmount: taxable || subtotal,
             taxAmount: 0,
           });
-          bumpCode(codeMap, code, flag?.name || code, Number(tax.rate ?? flag?.rate ?? 0), {
+          bumpCode(codeMap, code, flag?.name || code, taxRate, {
             taxableAmount: taxable || subtotal,
           });
           continue;
@@ -344,12 +389,14 @@ export function summarizeGstHstDocuments(input: {
 
         if (supply === 'zero_rated') {
           zeroRatedSales += taxable || subtotal;
-          supportRows.push({
+          addSupport(supportRows, {
             date: inv.date,
             type: 'Invoice',
             number: inv.number,
             description,
+            name: partyName,
             taxCode: code,
+            taxRate: 0,
             supplyClass: 'zero_rated',
             craLine: '90B',
             taxableAmount: taxable || subtotal,
@@ -361,18 +408,24 @@ export function summarizeGstHstDocuments(input: {
 
         taxableSales += taxable;
         gstHstCollected += taxAmount;
-        supportRows.push({
+        const collectedSplit = splitSignedTax(taxAmount);
+        gstHstCollectedGross += collectedSplit.gross;
+        gstHstCollectedException += collectedSplit.exception;
+        bumpRstAgency(agencyMap, { tax_type: tax.tax_type || 'hst', tax_code: code, authority: tax.authority || 'CRA' }, 'collected', taxAmount);
+        addSupport(supportRows, {
           date: inv.date,
           type: 'Invoice',
           number: inv.number,
           description,
+          name: partyName,
           taxCode: code,
+          taxRate,
           supplyClass: 'taxable',
           craLine: '90A / 103',
           taxableAmount: taxable,
           taxAmount,
         });
-        bumpCode(codeMap, code, flag?.name || code, Number(tax.rate ?? flag?.rate ?? 0), {
+        bumpCode(codeMap, code, flag?.name || code, taxRate, {
           taxableAmount: taxable,
           taxCollected: taxAmount,
         });
@@ -388,12 +441,14 @@ export function summarizeGstHstDocuments(input: {
         const rate = Number(line.tax_rate ?? 0);
         if (inv.is_gst_hst_exempt) {
           exemptSales += amount;
-          supportRows.push({
+          addSupport(supportRows, {
             date: inv.date,
             type: 'Invoice',
             number: inv.number,
             description: line.description || description,
+            name: partyName,
             taxCode: 'EXEMPT',
+            taxRate: 0,
             supplyClass: 'exempt',
             craLine: '91',
             taxableAmount: amount,
@@ -403,12 +458,14 @@ export function summarizeGstHstDocuments(input: {
         }
         if (rate === 0 && lineTax === 0) {
           zeroRatedSales += amount;
-          supportRows.push({
+          addSupport(supportRows, {
             date: inv.date,
             type: 'Invoice',
             number: inv.number,
             description: line.description || description,
+            name: partyName,
             taxCode: 'GST-ZR',
+            taxRate: 0,
             supplyClass: 'zero_rated',
             craLine: '90B',
             taxableAmount: amount,
@@ -419,12 +476,18 @@ export function summarizeGstHstDocuments(input: {
         taxableSales += amount;
         gstHstCollected += lineTax;
         invoiceGstTaxPosted += lineTax;
-        supportRows.push({
+        const collectedSplit = splitSignedTax(lineTax);
+        gstHstCollectedGross += collectedSplit.gross;
+        gstHstCollectedException += collectedSplit.exception;
+        bumpRstAgency(agencyMap, { tax_type: 'hst', tax_code: 'GST/HST', authority: 'CRA' }, 'collected', lineTax);
+        addSupport(supportRows, {
           date: inv.date,
           type: 'Invoice',
           number: inv.number,
           description: line.description || description,
+          name: partyName,
           taxCode: 'GST/HST',
+          taxRate: rate,
           supplyClass: 'taxable',
           craLine: '90A / 103',
           taxableAmount: amount,
@@ -436,12 +499,14 @@ export function summarizeGstHstDocuments(input: {
 
     if (inv.is_gst_hst_exempt) {
       exemptSales += subtotal;
-      supportRows.push({
+      addSupport(supportRows, {
         date: inv.date,
         type: 'Invoice',
         number: inv.number,
         description,
+        name: partyName,
         taxCode: 'EXEMPT',
+        taxRate: 0,
         supplyClass: 'exempt',
         craLine: '91',
         taxableAmount: subtotal,
@@ -454,12 +519,18 @@ export function summarizeGstHstDocuments(input: {
       taxableSales += subtotal;
       gstHstCollected += headerGst;
       invoiceGstTaxPosted += headerGst;
-      supportRows.push({
+      const collectedSplit = splitSignedTax(headerGst);
+      gstHstCollectedGross += collectedSplit.gross;
+      gstHstCollectedException += collectedSplit.exception;
+      bumpRstAgency(agencyMap, { tax_type: 'hst', tax_code: 'GST/HST', authority: 'CRA' }, 'collected', headerGst);
+      addSupport(supportRows, {
         date: inv.date,
         type: 'Invoice',
         number: inv.number,
         description,
+        name: partyName,
         taxCode: 'GST/HST',
+        taxRate: subtotal > 0 ? round2((headerGst / subtotal) * 100) : 0,
         supplyClass: 'taxable',
         craLine: '90A / 103',
         taxableAmount: subtotal,
@@ -487,12 +558,14 @@ export function summarizeGstHstDocuments(input: {
 
     if (subtotal > 0 && Number(inv.tax_amount ?? 0) === 0) {
       exemptSales += subtotal;
-      supportRows.push({
+      addSupport(supportRows, {
         date: inv.date,
         type: 'Invoice',
         number: inv.number,
         description,
+        name: partyName,
         taxCode: 'OTHER',
+        taxRate: 0,
         supplyClass: 'exempt',
         craLine: '91',
         taxableAmount: subtotal,
@@ -503,8 +576,14 @@ export function summarizeGstHstDocuments(input: {
 
   for (const doc of purchases) {
     const gstRows = (doc.taxes ?? []).filter((tax) => isGstHstTax(tax));
+    const pstRows = (doc.taxes ?? []).filter((tax) => isProvincialSalesTax(tax));
     const type = doc.source === 'expense' ? 'Expense' : 'Bill';
     const description = doc.description || doc.number || type;
+    const partyName = doc.partyName || '';
+
+    for (const tax of pstRows) {
+      bumpRstAgency(agencyMap, tax, 'paid', Number(tax.tax_amount ?? 0));
+    }
 
     for (const tax of gstRows) {
       const flag = lookupFlag(flags, tax.tax_code);
@@ -512,33 +591,42 @@ export function summarizeGstHstDocuments(input: {
       const taxAmount = Number(tax.tax_amount ?? 0);
       const recoverable = tax.is_recoverable !== false && flag?.is_recoverable !== false;
       const code = tax.tax_code || flag?.code || 'GST/HST';
+      const taxRate = Number(tax.rate ?? flag?.rate ?? 0);
       purchaseGstTaxPosted += taxAmount;
       totalPurchases += taxable;
       rows.push(toPeriodRow(doc.source, tax, flag, 'taxable'));
 
       if (recoverable) {
         itc += taxAmount;
-        supportRows.push({
+        const itcSplit = splitSignedTax(taxAmount);
+        itcGross += itcSplit.gross;
+        itcException += itcSplit.exception;
+        bumpRstAgency(agencyMap, { tax_type: tax.tax_type || 'hst', tax_code: code, authority: tax.authority || 'CRA' }, 'paid', taxAmount);
+        addSupport(supportRows, {
           date: doc.date,
           type,
           number: doc.number,
           description,
+          name: partyName,
           taxCode: code,
+          taxRate,
           supplyClass: 'itc',
           craLine: '106',
           taxableAmount: taxable,
           taxAmount,
         });
-        bumpCode(codeMap, code, flag?.name || code, Number(tax.rate ?? flag?.rate ?? 0), {
+        bumpCode(codeMap, code, flag?.name || code, taxRate, {
           itcClaimed: taxAmount,
         });
       } else {
-        supportRows.push({
+        addSupport(supportRows, {
           date: doc.date,
           type,
           number: doc.number,
           description,
+          name: partyName,
           taxCode: code,
+          taxRate,
           supplyClass: 'non_recoverable',
           craLine: '—',
           taxableAmount: taxable,
@@ -554,9 +642,15 @@ export function summarizeGstHstDocuments(input: {
 
   for (const doc of bankDocuments) {
     const gstRows = (doc.taxes ?? []).filter((tax) => isGstHstTax(tax));
+    const pstRows = (doc.taxes ?? []).filter((tax) => isProvincialSalesTax(tax));
     const type = doc.source === 'credit_card' ? 'Credit card' : 'Bank';
     const description = doc.description || doc.number || type;
+    const partyName = doc.partyName || doc.description || '';
     const source = doc.direction === 'collected' ? 'invoice' : 'bill';
+
+    for (const tax of pstRows) {
+      bumpRstAgency(agencyMap, tax, doc.direction === 'collected' ? 'collected' : 'paid', Number(tax.tax_amount ?? 0));
+    }
 
     for (const tax of gstRows) {
       const flag = lookupFlag(flags, tax.tax_code);
@@ -564,30 +658,35 @@ export function summarizeGstHstDocuments(input: {
       const taxable = Number(tax.taxable_amount ?? doc.subtotal ?? 0);
       const taxAmount = Number(tax.tax_amount ?? 0);
       const code = tax.tax_code || flag?.code || 'GST/HST';
+      const taxRate = Number(tax.rate ?? flag?.rate ?? 0);
       rows.push(toPeriodRow(source, tax, flag, supply));
 
       if (doc.direction === 'collected') {
         invoiceGstTaxPosted += taxAmount;
         if (supply === 'exempt') {
           exemptSales += taxable;
-          supportRows.push({
-            date: doc.date, type, number: doc.number, description, taxCode: code,
+          addSupport(supportRows, {
+            date: doc.date, type, number: doc.number, description, name: partyName, taxCode: code, taxRate,
             supplyClass: 'exempt', craLine: '91', taxableAmount: taxable, taxAmount: 0,
           });
         } else if (supply === 'zero_rated') {
           zeroRatedSales += taxable;
-          supportRows.push({
-            date: doc.date, type, number: doc.number, description, taxCode: code,
+          addSupport(supportRows, {
+            date: doc.date, type, number: doc.number, description, name: partyName, taxCode: code, taxRate: 0,
             supplyClass: 'zero_rated', craLine: '90B', taxableAmount: taxable, taxAmount: 0,
           });
         } else {
           taxableSales += taxable;
           gstHstCollected += taxAmount;
-          supportRows.push({
-            date: doc.date, type, number: doc.number, description, taxCode: code,
+          const collectedSplit = splitSignedTax(taxAmount);
+          gstHstCollectedGross += collectedSplit.gross;
+          gstHstCollectedException += collectedSplit.exception;
+          bumpRstAgency(agencyMap, { tax_type: tax.tax_type || 'hst', tax_code: code, authority: tax.authority || 'CRA' }, 'collected', taxAmount);
+          addSupport(supportRows, {
+            date: doc.date, type, number: doc.number, description, name: partyName, taxCode: code, taxRate,
             supplyClass: 'taxable', craLine: '90A / 103', taxableAmount: taxable, taxAmount,
           });
-          bumpCode(codeMap, code, flag?.name || code, Number(tax.rate ?? flag?.rate ?? 0), {
+          bumpCode(codeMap, code, flag?.name || code, taxRate, {
             taxableAmount: taxable,
             taxCollected: taxAmount,
           });
@@ -598,16 +697,20 @@ export function summarizeGstHstDocuments(input: {
         const recoverable = tax.is_recoverable !== false && flag?.is_recoverable !== false;
         if (recoverable) {
           itc += taxAmount;
-          supportRows.push({
-            date: doc.date, type, number: doc.number, description, taxCode: code,
+          const itcSplit = splitSignedTax(taxAmount);
+          itcGross += itcSplit.gross;
+          itcException += itcSplit.exception;
+          bumpRstAgency(agencyMap, { tax_type: tax.tax_type || 'hst', tax_code: code, authority: tax.authority || 'CRA' }, 'paid', taxAmount);
+          addSupport(supportRows, {
+            date: doc.date, type, number: doc.number, description, name: partyName, taxCode: code, taxRate,
             supplyClass: 'itc', craLine: '106', taxableAmount: taxable, taxAmount,
           });
-          bumpCode(codeMap, code, flag?.name || code, Number(tax.rate ?? flag?.rate ?? 0), {
+          bumpCode(codeMap, code, flag?.name || code, taxRate, {
             itcClaimed: taxAmount,
           });
         } else {
-          supportRows.push({
-            date: doc.date, type, number: doc.number, description, taxCode: code,
+          addSupport(supportRows, {
+            date: doc.date, type, number: doc.number, description, name: partyName, taxCode: code, taxRate,
             supplyClass: 'non_recoverable', craLine: '—', taxableAmount: taxable, taxAmount,
           });
         }
@@ -624,9 +727,17 @@ export function summarizeGstHstDocuments(input: {
   if (journal && !hasSourceDocuments) {
     if (!usedDocumentCollected) {
       gstHstCollected = journal.taxCollected;
+      gstHstCollectedGross = journal.taxCollected >= 0 ? journal.taxCollected : 0;
+      gstHstCollectedException = journal.taxCollected < 0 ? journal.taxCollected : 0;
+      bumpRstAgency(agencyMap, { tax_type: 'hst', tax_code: 'GST/HST', authority: 'CRA' }, 'collected', journal.taxCollected);
       if (!usedDocumentSales && journal.taxableSales) taxableSales = journal.taxableSales;
     }
-    if (!usedDocumentItc) itc = journal.itcClaimed;
+    if (!usedDocumentItc) {
+      itc = journal.itcClaimed;
+      itcGross = journal.itcClaimed >= 0 ? journal.itcClaimed : 0;
+      itcException = journal.itcClaimed < 0 ? journal.itcClaimed : 0;
+      bumpRstAgency(agencyMap, { tax_type: 'hst', tax_code: 'GST/HST', authority: 'CRA' }, 'paid', journal.itcClaimed);
+    }
     if (journal.rows?.length) {
       for (const row of journal.rows) {
         if (!rows.some((existing) => existing.tax_code === row.tax_code && existing.source === row.source && existing.tax_amount === row.tax_amount)) {
@@ -636,16 +747,31 @@ export function summarizeGstHstDocuments(input: {
     }
   }
 
+  for (const code of input.taxCodes ?? []) {
+    if (isProvincialSalesTax(code)) {
+      bumpRstAgency(agencyMap, {
+        tax_type: code.tax_type,
+        tax_code: code.code,
+        authority: undefined,
+      }, 'collected', 0);
+    }
+  }
+
   taxableSales = round2(taxableSales);
   zeroRatedSales = round2(zeroRatedSales);
   exemptSales = round2(exemptSales);
   gstHstCollected = round2(gstHstCollected);
+  gstHstCollectedGross = round2(gstHstCollectedGross);
+  gstHstCollectedException = round2(gstHstCollectedException);
   itc = round2(itc);
+  itcGross = round2(itcGross);
+  itcException = round2(itcException);
   const line90 = round2(taxableSales + zeroRatedSales);
   const line91 = exemptSales;
   const line101 = round2(line90 + line91);
   const netTax = round2(gstHstCollected - itc);
   const exemptZeroRatedSales = round2(zeroRatedSales + exemptSales);
+  const agencies = finalizeRstAgencies(agencyMap);
 
   const byTaxCode = Array.from(codeMap.values())
     .map((row) => ({
@@ -686,8 +812,13 @@ export function summarizeGstHstDocuments(input: {
     line91,
     line101,
     gstHstCollected,
+    gstHstCollectedGross,
+    gstHstCollectedException,
     itc,
+    itcGross,
+    itcException,
     netTax,
+    agencies,
     invoiceCount: invoices.length,
     purchaseCount: purchases.length,
     usedDocumentCollected,

@@ -31,10 +31,15 @@ describe('tax report preview wiring', () => {
     expect(bar).toContain('TAX_DATE_PRESET_OPTIONS');
   });
 
-  it('keeps Tax Summary on period activity, not lifetime GL balances', () => {
+  it('opens on a QuickBooks-style Sales Tax overview with GST/HST reports', () => {
     const salesTax = readFileSync(join(root, 'src/pages/SalesTax.tsx'), 'utf8');
+    expect(salesTax).toContain('Sales Tax overview');
+    expect(salesTax).toContain('<SalesTaxOverview');
+    expect(salesTax).toContain('<SalesTaxFilings');
+    expect(salesTax).toContain('<GstHstSummaryReport');
+    expect(salesTax).toContain('<GstHstDetailReport');
     expect(salesTax).toContain('<TaxReportPreview');
-    expect(salesTax).toContain('defaultValue="summary"');
+    expect(salesTax).toContain('useGstHstPeriodReport');
     expect(salesTax).not.toContain('Account Breakdown');
     expect(salesTax).not.toContain('summaryPeriod');
     expect(salesTax).not.toContain('glTaxSummary');

@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Calendar, FileText, AlertTriangle, Check, Settings, Plus, Trash2, BarChart3, Sparkles, Pencil } from 'lucide-react';
+import { Check, Plus, Trash2, Pencil, ChevronDown, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -9,12 +9,26 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { useCurrentOrganization } from '@/hooks/useOrganization';
-import { useTaxCodes, useTaxReturns, useCreateTaxCode, useUpdateTaxCode, useDeleteTaxCode, useSalesTaxSettings } from '@/hooks/useSalesTax';
+import { useTaxCodes, useTaxReturns, useCreateTaxCode, useUpdateTaxCode, useDeleteTaxCode, useSalesTaxSettings, useUpdateTaxReturn } from '@/hooks/useSalesTax';
 import { useAccounts } from '@/hooks/useAccounts';
 import { TaxReportPreview } from '@/components/tax/TaxReportPreview';
+import { TaxDateRangeBar } from '@/components/tax/TaxDateRangeBar';
+import { SalesTaxOverview, type SalesTaxAgencyCard } from '@/components/tax/SalesTaxOverview';
+import { SalesTaxFilings, type SalesTaxFilingRow } from '@/components/tax/SalesTaxFilings';
+import { GstHstSummaryReport } from '@/components/tax/GstHstSummaryReport';
+import { GstHstDetailReport } from '@/components/tax/GstHstDetailReport';
+import { useGstHstPeriodReport } from '@/hooks/useGstHstPeriodReport';
+import { resolveTaxDateRange, toISODate, type TaxDatePreset } from '@/lib/taxPeriodReport';
 import { format } from 'date-fns';
 import { parseLocalDate } from '@/lib/utils';
 import { Link } from 'react-router-dom';
@@ -54,11 +68,17 @@ export default function SalesTax() {
   const createTaxCode = useCreateTaxCode();
   const updateTaxCode = useUpdateTaxCode();
   const deleteTaxCode = useDeleteTaxCode();
+  const updateTaxReturn = useUpdateTaxReturn();
 
-
-  const [selectedPeriod, setSelectedPeriod] = useState<string>('');
   const [showAddCodeDialog, setShowAddCodeDialog] = useState(false);
   const [editingCode, setEditingCode] = useState<any | null>(null);
+  const [showManageCodes, setShowManageCodes] = useState(false);
+  const [salesTaxView, setSalesTaxView] = useState<'overview' | 'summary' | 'detail' | 'advanced'>('overview');
+  const [filingsTab, setFilingsTab] = useState<'filings' | 'payments'>('filings');
+  const [selectedAgencyId, setSelectedAgencyId] = useState('cra-gst-hst');
+  const [periodType, setPeriodType] = useState<TaxDatePreset>('this_quarter');
+  const [customStartDate, setCustomStartDate] = useState<Date | undefined>(undefined);
+  const [customEndDate, setCustomEndDate] = useState<Date | undefined>(undefined);
 
   const form = useForm({
     defaultValues: {
@@ -158,28 +178,56 @@ export default function SalesTax() {
     }).format(value);
   };
 
-  const currentPeriod = useMemo(() => {
-    if (!selectedPeriod && taxReturns.length > 0) {
-      return taxReturns[0];
+  const dateRange = useMemo(
+    () => resolveTaxDateRange(periodType, new Date(), customStartDate, customEndDate),
+    [periodType, customStartDate, customEndDate],
+  );
+  const periodStartStr = toISODate(dateRange.start);
+  const periodEndStr = toISODate(dateRange.end);
+  const todayIso = toISODate(new Date());
+
+  const { snapshot, isLoading: gstLoading, isFetching: gstFetching, refetch: refetchGst } = useGstHstPeriodReport({
+    organizationId: organization?.id,
+    periodStart: periodStartStr,
+    periodEnd: periodEndStr,
+    authority: taxTerminology.authorityLabel,
+    enabled: !!organization?.id,
+  });
+
+  const agencyCards: SalesTaxAgencyCard[] = useMemo(
+    () =>
+      (snapshot.agencies ?? []).map((agency) => ({
+        ...agency,
+        periodStart: periodStartStr,
+        periodEnd: periodEndStr,
+        isCurrent: todayIso >= periodStartStr && todayIso <= periodEndStr,
+      })),
+    [snapshot.agencies, periodStartStr, periodEndStr, todayIso],
+  );
+
+  const filingRows: SalesTaxFilingRow[] = useMemo(() => {
+    const rows: SalesTaxFilingRow[] = taxReturns.map((ret) => ({
+      id: ret.id,
+      taxLabel: taxTerminology.title.includes('GST') || countryCode === 'CA' ? 'GST/HST' : taxTerminology.title,
+      periodStart: ret.period_start,
+      periodEnd: ret.period_end,
+      net: Number(ret.net_payable),
+      status: ret.status,
+    }));
+    const hasCurrent = rows.some((row) => row.periodStart === periodStartStr && row.periodEnd === periodEndStr);
+    if (!hasCurrent) {
+      rows.unshift({
+        id: `current-${periodStartStr}`,
+        taxLabel: countryCode === 'CA' ? 'GST/HST' : taxTerminology.title,
+        periodStart: periodStartStr,
+        periodEnd: periodEndStr,
+        net: snapshot.netTax,
+        status: 'draft',
+        isSynthetic: true,
+      });
     }
-    return taxReturns.find(p => p.id === selectedPeriod) || taxReturns[0];
-  }, [selectedPeriod, taxReturns]);
-
-  const annualSummary = useMemo(() => {
-    const currentYear = new Date().getFullYear();
-    const yearReturns = taxReturns.filter(r => parseLocalDate(r.period_end).getFullYear() === currentYear);
-    return {
-      collected: yearReturns.reduce((sum, r) => sum + Number(r.tax_collected), 0),
-      paid: yearReturns.reduce((sum, r) => sum + Number(r.tax_paid), 0),
-      remitted: yearReturns.filter(r => r.status === 'paid').reduce((sum, r) => sum + Number(r.net_payable), 0),
-    };
-  }, [taxReturns]);
-
-  const statusConfig = {
-    draft: { label: countryCode === 'BI' ? 'Brouillon' : 'Draft', color: 'bg-amber-100 text-amber-800' },
-    filed: { label: countryCode === 'BI' ? 'Soumis' : 'Filed', color: 'bg-blue-100 text-blue-800' },
-    paid: { label: countryCode === 'BI' ? 'Payé' : 'Paid', color: 'bg-green-100 text-green-800' },
-  };
+    return rows;
+  }, [taxReturns, periodStartStr, periodEndStr, snapshot.netTax, taxTerminology.title, countryCode]);
 
   const handleAddTaxCode = async (data: any) => {
     if (!organization?.id) return;
@@ -237,172 +285,207 @@ export default function SalesTax() {
     }
   };
 
+  const openQbReport = (view: 'summary' | 'detail' | 'advanced', row?: SalesTaxFilingRow) => {
+    if (row) {
+      setPeriodType('custom');
+      setCustomStartDate(parseLocalDate(row.periodStart));
+      setCustomEndDate(parseLocalDate(row.periodEnd));
+    }
+    setSalesTaxView(view);
+  };
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">{taxTerminology.title}</h1>
-          <p className="text-muted-foreground">
-            {getSettingsDescription()}
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <Link to="/tax/setup">
-            <Button variant="outline" size="sm">
-              <Sparkles className="w-4 h-4 mr-2" />
-              Setup Wizard
-            </Button>
-          </Link>
-          <Link to="/tax/reports">
-            <Button variant="outline" size="sm">
-              <BarChart3 className="w-4 h-4 mr-2" />
-              Advanced Reports
-            </Button>
-          </Link>
-          <Link to="/settings">
-            <Button variant="outline" size="sm">
-              <Settings className="w-4 h-4 mr-2" />
-              {countryCode === 'BI' ? 'Paramètres' : 'Tax Settings'}
-            </Button>
-          </Link>
-          {!isReadOnly && (
-            <Button>
-              <FileText className="w-4 h-4 mr-2" />
-              {countryCode === 'BI' ? 'Soumettre Déclaration' : 'File Return'}
+          {salesTaxView !== 'overview' && (
+            <Button variant="ghost" size="sm" className="mb-1 -ml-2 print:hidden" onClick={() => setSalesTaxView('overview')}>
+              <ArrowLeft className="w-4 h-4 mr-1" />
+              Sales Tax overview
             </Button>
           )}
+          <h1 className="text-2xl font-bold text-foreground">
+            {salesTaxView === 'summary'
+              ? 'GST/HST Summary Report'
+              : salesTaxView === 'detail'
+                ? 'GST/HST Detail Report'
+                : salesTaxView === 'advanced'
+                  ? 'Tax Reports'
+                  : 'Sales Tax overview'}
+          </h1>
+          <p className="text-muted-foreground">{getSettingsDescription()}</p>
+        </div>
+        <div className="flex items-center gap-2 print:hidden">
+          <Button
+            variant="outline"
+            size="sm"
+            className="border-[#2CA01C] text-[#2CA01C] hover:bg-[#2CA01C]/10"
+            onClick={() => setShowManageCodes(true)}
+          >
+            Manage sales tax
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm" className="bg-[#2CA01C] hover:bg-[#249018] text-white">
+                Reports
+                <ChevronDown className="w-4 h-4 ml-1" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => openQbReport('summary')}>GST/HST Summary</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => openQbReport('detail')}>GST/HST Detail</DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link to="/tax/exceptions">Exception details</Link>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => openQbReport('advanced')}>Advanced comparison</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm" className="bg-[#2CA01C] hover:bg-[#249018] text-white">
+                New
+                <ChevronDown className="w-4 h-4 ml-1" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem asChild>
+                <Link to="/tax/filing-periods">Prepare return</Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link to="/tax/setup">Setup wizard</Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link to="/settings">Tax settings</Link>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
-      <Tabs defaultValue="summary" className="space-y-6">
-        <TabsList>
-          <TabsTrigger value="returns">{taxTerminology.returnLabel}</TabsTrigger>
-          <TabsTrigger value="reports" className="gap-1">
-            <BarChart3 className="w-3.5 h-3.5" />
-            {countryCode === 'BI' ? 'Rapports' : 'Reports'}
-          </TabsTrigger>
-          <TabsTrigger value="codes">{countryCode === 'BI' ? 'Codes TVA' : 'Tax Codes'}</TabsTrigger>
-          <TabsTrigger value="summary">{countryCode === 'BI' ? 'Résumé' : 'Tax Summary'}</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="returns" className="space-y-6">
-          {taxReturns.length > 0 && currentPeriod && (
-            <>
-              <Card className="p-4">
-                <div className="flex items-center gap-4">
-                  <Calendar className="w-4 h-4 text-muted-foreground" />
-                  <span className="text-sm text-muted-foreground">
-                    {countryCode === 'BI' ? 'Période:' : 'Period:'}
-                  </span>
-                  <Select value={currentPeriod.id} onValueChange={setSelectedPeriod}>
-                    <SelectTrigger className="w-40">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {taxReturns.map(p => (
-                        <SelectItem key={p.id} value={p.id}>{p.period_name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <div className="ml-auto">
-                    <Badge className={statusConfig[currentPeriod.status]?.color || statusConfig.draft.color}>
-                      {statusConfig[currentPeriod.status]?.label || currentPeriod.status}
-                    </Badge>
-                  </div>
-                </div>
-              </Card>
-
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <Card className="p-4 border-l-4 border-l-green-500">
-                  <p className="text-sm text-muted-foreground mb-1">{taxTerminology.collectedLabel}</p>
-                  <p className="text-2xl font-bold text-foreground">{formatCurrency(Number(currentPeriod.tax_collected))}</p>
-                </Card>
-                <Card className="p-4 border-l-4 border-l-blue-500">
-                  <p className="text-sm text-muted-foreground mb-1">{taxTerminology.paidLabel}</p>
-                  <p className="text-2xl font-bold text-foreground">{formatCurrency(Number(currentPeriod.tax_paid))}</p>
-                </Card>
-                <Card className="p-4 border-l-4 border-l-amber-500">
-                  <p className="text-sm text-muted-foreground mb-1">{taxTerminology.netLabel}</p>
-                  <p className="text-2xl font-bold text-amber-600">{formatCurrency(Number(currentPeriod.net_payable))}</p>
-                </Card>
-                <Card className="p-4 border-l-4 border-l-destructive">
-                  <p className="text-sm text-muted-foreground mb-1">
-                    {countryCode === 'BI' ? 'Date Limite' : 'Due Date'}
-                  </p>
-                  <p className="text-2xl font-bold text-foreground">{format(parseLocalDate(currentPeriod.due_date), 'MMM d, yyyy')}</p>
-                  {currentPeriod.status === 'draft' && (
-                    <p className="text-xs text-destructive mt-1 flex items-center gap-1">
-                      <AlertTriangle className="w-3 h-3" />
-                      {countryCode === 'BI' ? 'Non soumis' : 'Not yet filed'}
-                    </p>
-                  )}
-                </Card>
-              </div>
-            </>
-          )}
-
-          <Card className="overflow-hidden">
-            <div className="bg-muted/50 px-4 py-3 border-b">
-              <h3 className="font-semibold text-foreground">
-                {countryCode === 'BI' ? 'Historique des Déclarations' : 'Filing History'}
-              </h3>
-            </div>
-            {taxReturns.length === 0 ? (
-              <div className="p-8 text-center text-muted-foreground">
-                {countryCode === 'BI' 
-                  ? 'Aucune déclaration trouvée. Créez votre première déclaration pour commencer.'
-                  : 'No tax returns found. Create your first tax return to start tracking.'}
-              </div>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>{countryCode === 'BI' ? 'Période' : 'Period'}</TableHead>
-                    <TableHead>{countryCode === 'BI' ? 'Date Limite' : 'Due Date'}</TableHead>
-                    <TableHead className="text-right">{taxTerminology.collectedLabel}</TableHead>
-                    <TableHead className="text-right">{taxTerminology.itcLabel}</TableHead>
-                    <TableHead className="text-right">{taxTerminology.netLabel}</TableHead>
-                    <TableHead>{countryCode === 'BI' ? 'Statut' : 'Status'}</TableHead>
-                    <TableHead>{countryCode === 'BI' ? 'Actions' : 'Actions'}</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {taxReturns.map((period) => (
-                    <TableRow key={period.id}>
-                      <TableCell className="font-medium">{period.period_name}</TableCell>
-                      <TableCell className="text-muted-foreground">{format(parseLocalDate(period.due_date), 'MMM d, yyyy')}</TableCell>
-                      <TableCell className="text-right font-mono">{formatCurrency(Number(period.tax_collected))}</TableCell>
-                      <TableCell className="text-right font-mono">{formatCurrency(Number(period.tax_paid))}</TableCell>
-                      <TableCell className="text-right font-mono font-medium">{formatCurrency(Number(period.net_payable))}</TableCell>
-                      <TableCell>
-                        <Badge className={statusConfig[period.status]?.color || statusConfig.draft.color}>
-                          {statusConfig[period.status]?.label || period.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Button variant="ghost" size="sm">
-                          {countryCode === 'BI' ? 'Voir' : 'View'}
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="reports" className="space-y-6">
-          <TaxReportPreview
-            organizationId={organization?.id}
-            organizationName={organization?.name}
+      {salesTaxView !== 'overview' && (
+        <div className="print:hidden">
+          <TaxDateRangeBar
+            preset={periodType}
+            start={dateRange.start}
+            end={dateRange.end}
+            periodLabel={`${format(dateRange.start, 'MMM d, yyyy')} - ${format(dateRange.end, 'MMM d, yyyy')}`}
             countryCode={countryCode}
-            taxTerminology={taxTerminology}
+            isRefreshing={gstFetching}
+            onPresetChange={(preset) => {
+              setPeriodType(preset);
+              if (preset !== 'custom') {
+                setCustomStartDate(undefined);
+                setCustomEndDate(undefined);
+              }
+            }}
+            onStartChange={(date) => {
+              setPeriodType('custom');
+              setCustomStartDate(date);
+            }}
+            onEndChange={(date) => {
+              setPeriodType('custom');
+              setCustomEndDate(date);
+            }}
+            onRun={() => refetchGst()}
+          />
+        </div>
+      )}
+
+      {salesTaxView === 'overview' && (
+        <>
+          <SalesTaxOverview
+            cards={agencyCards}
+            selectedId={selectedAgencyId}
+            formatCurrency={formatCurrency}
+            onSelect={setSelectedAgencyId}
+          />
+          <div className="flex items-center justify-between border-b">
+            <Tabs value={filingsTab} onValueChange={(value) => setFilingsTab(value as 'filings' | 'payments')}>
+              <TabsList className="bg-transparent p-0 h-auto">
+                <TabsTrigger
+                  value="filings"
+                  className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#2CA01C] data-[state=active]:shadow-none"
+                >
+                  Filings
+                </TabsTrigger>
+                <TabsTrigger
+                  value="payments"
+                  className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#2CA01C] data-[state=active]:shadow-none"
+                >
+                  Payments
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
+          {filingsTab === 'filings' ? (
+            gstLoading ? (
+              <Skeleton className="h-48" />
+            ) : (
+              <SalesTaxFilings
+                rows={filingRows}
+                formatCurrency={formatCurrency}
+                isReadOnly={isReadOnly}
+                onPrepareReturn={(row) => openQbReport('summary', row)}
+                onViewSummary={(row) => openQbReport('summary', row)}
+                onViewDetail={(row) => openQbReport('detail', row)}
+                onUndoFiling={async (row) => {
+                  if (!organization?.id || row.isSynthetic) return;
+                  await updateTaxReturn.mutateAsync({
+                    id: row.id,
+                    organizationId: organization.id,
+                    updates: { status: 'draft', filed_at: null },
+                  });
+                }}
+              />
+            )
+          ) : (
+            <Card className="p-8 text-center text-muted-foreground">
+              Record GST/HST and PST remittances from{' '}
+              <Link to="/treasury/tax-payments" className="text-[#2CA01C] underline">
+                Tax payments
+              </Link>
+              .
+            </Card>
+          )}
+        </>
+      )}
+
+      {salesTaxView === 'summary' && (
+        gstLoading ? <Skeleton className="h-96" /> : (
+          <GstHstSummaryReport
+            organizationName={organization?.legal_name || organization?.name}
+            snapshot={snapshot}
             formatCurrency={formatCurrency}
           />
-        </TabsContent>
+        )
+      )}
 
-        <TabsContent value="codes" className="space-y-6">
+      {salesTaxView === 'detail' && (
+        gstLoading ? <Skeleton className="h-96" /> : (
+          <GstHstDetailReport
+            organizationName={organization?.legal_name || organization?.name}
+            snapshot={snapshot}
+            formatCurrency={formatCurrency}
+          />
+        )
+      )}
+
+      {salesTaxView === 'advanced' && (
+        <TaxReportPreview
+          organizationId={organization?.id}
+          organizationName={organization?.name}
+          countryCode={countryCode}
+          taxTerminology={taxTerminology}
+          formatCurrency={formatCurrency}
+        />
+      )}
+
+      <Dialog open={showManageCodes} onOpenChange={setShowManageCodes}>
+        <DialogContent className="max-w-5xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Manage sales tax</DialogTitle>
+          </DialogHeader>
           <Card className="overflow-hidden">
             <div className="bg-muted/50 px-4 py-3 border-b flex items-center justify-between">
               <h3 className="font-semibold text-foreground">
@@ -510,65 +593,8 @@ export default function SalesTax() {
               </Table>
             )}
           </Card>
-        </TabsContent>
-
-        <TabsContent value="summary" className="space-y-6">
-          <TaxReportPreview
-            organizationId={organization?.id}
-            organizationName={organization?.name}
-            countryCode={countryCode}
-            taxTerminology={taxTerminology}
-            formatCurrency={formatCurrency}
-          />
-
-          {/* Annual Summary from Tax Returns */}
-          <Card className="p-6">
-            <h3 className="text-lg font-semibold text-foreground mb-4">
-              {new Date().getFullYear()} {countryCode === 'BI' ? 'Résumé des Déclarations' : 'Filed Returns Summary'}
-            </h3>
-            {taxReturns.length === 0 ? (
-              <p className="text-muted-foreground text-center py-8">
-                {countryCode === 'BI' 
-                  ? 'Aucune déclaration soumise. Les soldes ci-dessus proviennent du grand livre.'
-                  : 'No tax returns filed yet.'}
-              </p>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                <div>
-                  <p className="text-sm text-muted-foreground mb-2">
-                    {countryCode === 'BI' ? 'Total TVA Collectée' : 'Total Tax Collected'}
-                  </p>
-                  <p className="text-3xl font-bold text-foreground">{formatCurrency(annualSummary.collected)}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground mb-2">
-                    {countryCode === 'BI' ? 'Total TVA Déductible' : `Total ${taxTerminology.itcLabel} Claimed`}
-                  </p>
-                  <p className="text-3xl font-bold text-foreground">{formatCurrency(annualSummary.paid)}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground mb-2">
-                    {countryCode === 'BI' ? 'TVA Nette Versée' : 'Net Tax Remitted'}
-                  </p>
-                  <p className="text-3xl font-bold text-green-600">{formatCurrency(annualSummary.remitted)}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground mb-2">
-                    {countryCode === 'BI' ? 'Remboursement / Dû' : 'Refund / Owing'}
-                  </p>
-                  <p className={`text-3xl font-bold ${annualSummary.remitted < 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                    {annualSummary.remitted < 0 ? (
-                      <>{formatCurrency(Math.abs(annualSummary.remitted))} <span className="text-lg">(refund)</span></>
-                    ) : (
-                      <>{formatCurrency(annualSummary.remitted)} <span className="text-lg">(owing)</span></>
-                    )}
-                  </p>
-                </div>
-              </div>
-            )}
-          </Card>
-        </TabsContent>
-      </Tabs>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={showAddCodeDialog} onOpenChange={setShowAddCodeDialog}>
         <DialogContent>

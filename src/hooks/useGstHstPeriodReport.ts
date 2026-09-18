@@ -73,6 +73,15 @@ function groupTaxes(rows: StoredTaxRow[]): Map<string, GstHstDocumentTax[]> {
   return map;
 }
 
+function nestedName(value: unknown): string {
+  if (!value) return '';
+  if (Array.isArray(value)) return String((value[0] as { name?: string } | undefined)?.name ?? '');
+  if (typeof value === 'object' && value !== null && 'name' in value) {
+    return String((value as { name?: string }).name ?? '');
+  }
+  return '';
+}
+
 function toTax(row: Record<string, unknown>, parentKey: string): StoredTaxRow {
   return {
     parentId: String(row[parentKey] ?? ''),
@@ -100,7 +109,7 @@ export async function fetchGstHstPeriodDocuments(
     pageQuery<Record<string, unknown>>((from, to) =>
       supabase
         .from('invoices')
-        .select('id, invoice_date, invoice_number, status, subtotal, tax_amount, gst_hst_amount, is_gst_hst_exempt, subject, notes')
+        .select('id, invoice_date, invoice_number, status, subtotal, tax_amount, gst_hst_amount, is_gst_hst_exempt, subject, notes, customer_id, customers(name)')
         .eq('organization_id', organizationId)
         .is('deleted_at', null)
         .gte('invoice_date', periodStart)
@@ -110,7 +119,7 @@ export async function fetchGstHstPeriodDocuments(
     pageQuery<Record<string, unknown>>((from, to) =>
       supabase
         .from('bills')
-        .select('id, bill_date, bill_number, status, subtotal, tax_amount, notes')
+        .select('id, bill_date, bill_number, status, subtotal, tax_amount, notes, vendor_id, vendors(name)')
         .eq('organization_id', organizationId)
         .is('deleted_at', null)
         .gte('bill_date', periodStart)
@@ -120,7 +129,7 @@ export async function fetchGstHstPeriodDocuments(
     pageQuery<Record<string, unknown>>((from, to) =>
       supabase
         .from('expenses')
-        .select('id, expense_date, reference, notes, approval_status, is_posted, amount, tax_amount, tax_code_id')
+        .select('id, expense_date, reference, notes, approval_status, is_posted, amount, tax_amount, tax_code_id, vendor_id, vendors(name)')
         .eq('organization_id', organizationId)
         .gte('expense_date', periodStart)
         .lte('expense_date', periodEnd)
@@ -137,7 +146,7 @@ export async function fetchGstHstPeriodDocuments(
     pageQuery<Record<string, unknown>>((from, to) =>
       supabase
         .from('bank_transactions')
-        .select('id, transaction_date, description, reference, amount, subtotal_amount, tax_amount, tax_code_id, tax_breakdown, transaction_type, journal_entry_id, matched_invoice_id, matched_bill_id, bank_accounts!inner(organization_id)')
+        .select('id, transaction_date, description, reference, payee_payor, amount, subtotal_amount, tax_amount, tax_code_id, tax_breakdown, transaction_type, journal_entry_id, matched_invoice_id, matched_bill_id, bank_accounts!inner(organization_id)')
         .eq('bank_accounts.organization_id', organizationId)
         .not('journal_entry_id', 'is', null)
         .gte('transaction_date', periodStart)
@@ -147,7 +156,7 @@ export async function fetchGstHstPeriodDocuments(
     pageQuery<Record<string, unknown>>((from, to) =>
       supabase
         .from('credit_card_transactions')
-        .select('id, transaction_date, description, reference, amount, subtotal_amount, tax_amount, tax_code_id, tax_breakdown, transaction_type, journal_entry_id, credit_cards!inner(organization_id)')
+        .select('id, transaction_date, description, reference, payee_payor, amount, subtotal_amount, tax_amount, tax_code_id, tax_breakdown, transaction_type, journal_entry_id, credit_cards!inner(organization_id)')
         .eq('credit_cards.organization_id', organizationId)
         .not('journal_entry_id', 'is', null)
         .gte('transaction_date', periodStart)
@@ -218,6 +227,7 @@ export async function fetchGstHstPeriodDocuments(
     date: String(row.invoice_date ?? ''),
     number: String(row.invoice_number ?? ''),
     description: String(row.subject || row.notes || row.invoice_number || ''),
+    partyName: nestedName(row.customers),
     status: String(row.status ?? ''),
     subtotal: Number(row.subtotal ?? 0),
     tax_amount: Number(row.tax_amount ?? 0),
@@ -234,6 +244,7 @@ export async function fetchGstHstPeriodDocuments(
       date: String(row.bill_date ?? ''),
       number: String(row.bill_number ?? ''),
       description: String(row.notes || row.bill_number || ''),
+      partyName: nestedName(row.vendors),
       status: String(row.status ?? ''),
       subtotal: Number(row.subtotal ?? 0),
       tax_amount: Number(row.tax_amount ?? 0),
@@ -263,6 +274,7 @@ export async function fetchGstHstPeriodDocuments(
         date: String(row.expense_date ?? ''),
         number: String(row.reference || id),
         description: String(row.notes || row.reference || ''),
+        partyName: nestedName(row.vendors),
         status: row.is_posted ? 'posted' : String(row.approval_status ?? ''),
         subtotal: Number(row.amount ?? 0) - Number(row.tax_amount ?? 0),
         tax_amount: Number(row.tax_amount ?? 0),
@@ -309,6 +321,7 @@ export async function fetchGstHstPeriodDocuments(
       date: String(row.transaction_date ?? ''),
       number: String(row.reference || row.id),
       description: String(row.description || row.payee_payor || ''),
+      partyName: String(row.payee_payor || row.description || ''),
       amount: Number(row.amount ?? 0),
       subtotal: Number(row.subtotal_amount ?? 0),
       matchedInvoiceId: row.matched_invoice_id ? String(row.matched_invoice_id) : null,

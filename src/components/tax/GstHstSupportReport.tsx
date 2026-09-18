@@ -57,7 +57,9 @@ export function GstHstSupportReport({ periods, formatCurrency }: GstHstSupportRe
               <TableHead>Type</TableHead>
               <TableHead>Number</TableHead>
               <TableHead>Description</TableHead>
+              <TableHead>Name</TableHead>
               <TableHead>Tax code</TableHead>
+              <TableHead>Tax rate</TableHead>
               <TableHead>CRA line</TableHead>
               <TableHead className="text-right">Amount (ex tax)</TableHead>
               <TableHead className="text-right">GST/HST</TableHead>
@@ -66,13 +68,13 @@ export function GstHstSupportReport({ periods, formatCurrency }: GstHstSupportRe
           <TableBody>
             {selected?.isLoading ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-sm text-muted-foreground text-center py-6">
+                <TableCell colSpan={10} className="text-sm text-muted-foreground text-center py-6">
                   Loading period support…
                 </TableCell>
               </TableRow>
             ) : groups.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-sm text-muted-foreground text-center py-6">
+                <TableCell colSpan={10} className="text-sm text-muted-foreground text-center py-6">
                   No invoices, bills, or expenses in this period.
                 </TableCell>
               </TableRow>
@@ -80,7 +82,7 @@ export function GstHstSupportReport({ periods, formatCurrency }: GstHstSupportRe
               groups.map((group) => (
                 <Fragment key={group.line}>
                   <TableRow className="bg-muted/40">
-                    <TableCell colSpan={6} className="font-medium">
+                    <TableCell colSpan={8} className="font-medium">
                       Line {group.line}: {group.label}
                       <span className="ml-2 text-xs font-normal text-muted-foreground">
                         ({group.rows.length} {group.rows.length === 1 ? 'document' : 'documents'})
@@ -97,9 +99,11 @@ export function GstHstSupportReport({ periods, formatCurrency }: GstHstSupportRe
                       <TableCell className="text-sm">{row.type}</TableCell>
                       <TableCell className="font-mono text-xs">{row.number || '—'}</TableCell>
                       <TableCell className="text-sm max-w-[220px] truncate">{row.description}</TableCell>
+                      <TableCell className="text-sm max-w-[180px] truncate">{row.name || '—'}</TableCell>
                       <TableCell>
                         {row.taxCode ? <Badge variant="outline">{row.taxCode}</Badge> : '—'}
                       </TableCell>
+                      <TableCell className="font-mono text-xs text-right">{Number(row.taxRate ?? 0).toFixed(2)}%</TableCell>
                       <TableCell className="font-mono text-xs">{row.craLine}</TableCell>
                       <TableCell className="text-right font-mono text-sm">{formatCurrency(row.taxableAmount)}</TableCell>
                       <TableCell className="text-right font-mono text-sm">{formatCurrency(row.taxAmount)}</TableCell>
