@@ -23,6 +23,14 @@ import { addPdfBrandingFooter } from '@/lib/pdfBrandingFooter';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
+import {
+  buildPeriodFilingForm,
+  classifyTaxAccountName,
+  isProvincialTaxHaystack,
+  summarizeJournalTaxLines,
+  summarizeTaxMovements,
+  type TaxMovementRow,
+} from '@/lib/taxPeriodReport';
 
 interface TaxReportPreviewProps {
   organizationId?: string;
@@ -198,31 +206,53 @@ export function TaxReportPreview({
       
       if (error) throw error;
       
-      return (data || []).map(acc => {
-        let type: 'collected' | 'paid' | 'pst' = 'collected';
+      return (data || []).flatMap((acc) => {
         const nameLower = acc.name.toLowerCase();
-        
-        // ITC/Input/Paid accounts = tax paid (deductible)
-        if (nameLower.includes('input') || nameLower.includes('itc') || 
-            (nameLower.includes('paid') && !nameLower.includes('payable'))) {
-          type = 'paid';
-        } 
-        // PST/QST payable accounts = provincial tax
-        else if ((nameLower.includes('pst') || nameLower.includes('qst')) && 
-                 (nameLower.includes('payable') || nameLower.includes('collected'))) {
+        const side = classifyTaxAccountName(acc.name);
+        if (!side) return [];
+
+        let type: 'collected' | 'paid' | 'pst' = side;
+        if (isProvincialTaxHaystack(nameLower) && side === 'collected') {
           type = 'pst';
         }
-        // GST/HST Payable or Collected = tax collected (liability)
-        // Default is 'collected' for GST/HST/VAT payable accounts
-        
-        return {
+
+        return [{
           accountId: acc.id,
           accountCode: acc.code,
           accountName: acc.name,
-          balance: Math.abs(Number(acc.current_balance || 0)),
+          balance: Number(acc.current_balance || 0),
           type,
-        } as TaxAccountDetail;
+        } as TaxAccountDetail];
       });
+    },
+    enabled: !!organizationId,
+  });
+
+  const periodStartStr = format(dateRange.start, 'yyyy-MM-dd');
+  const periodEndStr = format(dateRange.end, 'yyyy-MM-dd');
+
+  const { data: periodMovements, isLoading: movementsLoading } = useQuery({
+    queryKey: ['tax-period-movements', organizationId, periodStartStr, periodEndStr],
+    queryFn: async () => {
+      if (!organizationId) return { movements: [] as TaxMovementRow[], revenue: 0 };
+      const [{ data, error }, { data: revenue, error: revErr }] = await Promise.all([
+        (supabase.rpc as any)('get_tax_movements_by_code', {
+          p_org_id: organizationId,
+          p_start_date: periodStartStr,
+          p_end_date: periodEndStr,
+        }),
+        (supabase.rpc as any)('get_period_revenue_total', {
+          p_org_id: organizationId,
+          p_start_date: periodStartStr,
+          p_end_date: periodEndStr,
+        }),
+      ]);
+      if (error) throw error;
+      if (revErr) throw revErr;
+      return {
+        movements: (data ?? []) as TaxMovementRow[],
+        revenue: Number(revenue ?? 0),
+      };
     },
     enabled: !!organizationId,
   });
@@ -257,6 +287,7 @@ export function TaxReportPreview({
         .from('journal_entries')
         .select('id, entry_date, description, reference')
         .eq('organization_id', organizationId)
+        .in('status', ['posted', 'reversed'])
         .gte('entry_date', startDateStr)
         .lte('entry_date', endDateStr);
       
@@ -400,61 +431,63 @@ export function TaxReportPreview({
     return details;
   }, [categoryFilteredJournalDetails, selectedTaxCodes, accountTypeFilter]);
 
-  // Calculate summary with filters applied
-  const summary = useMemo(() => {
-    const collected = filteredAccounts
-      .filter(a => a.type === 'collected')
-      .reduce((sum, a) => sum + a.balance, 0);
-    
-    const paid = filteredAccounts
-      .filter(a => a.type === 'paid')
-      .reduce((sum, a) => sum + a.balance, 0);
-    
-    const pst = filteredAccounts
-      .filter(a => a.type === 'pst')
-      .reduce((sum, a) => sum + a.balance, 0);
-    
-    const netPayable = collected - paid + pst;
-    
-    // Calculate period totals from filtered journal entries
-    const periodCollected = filteredJournalDetails
-      .filter(j => j.account_name.toLowerCase().includes('collected'))
-      .reduce((sum, j) => sum + j.credit - j.debit, 0);
-    
-    const periodPaid = filteredJournalDetails
-      .filter(j => j.account_name.toLowerCase().includes('paid') || j.account_name.toLowerCase().includes('input'))
-      .reduce((sum, j) => sum + j.debit - j.credit, 0);
-    
+  // Period totals from GL movements (not lifetime current_balance).
+  const periodSummary = useMemo(() => {
+    const category = isCanada ? reportCategory : 'all';
+    const movements = periodMovements?.movements ?? [];
+    if (movements.length > 0) {
+      return summarizeTaxMovements(movements, category, periodMovements?.revenue ?? 0);
+    }
+    const fallback = summarizeJournalTaxLines(
+      filteredJournalDetails.map((j) => ({
+        account_name: j.account_name,
+        account_code: j.account_code,
+        debit: j.debit,
+        credit: j.credit,
+        tax_code: j.tax_code,
+      })),
+      category,
+    );
     return {
-      collected,
-      paid,
-      pst,
-      netPayable,
-      periodCollected: Math.abs(periodCollected),
-      periodPaid: Math.abs(periodPaid),
-      periodNet: Math.abs(periodCollected) - Math.abs(periodPaid),
+      taxableSales: 0,
+      taxCollected: fallback.taxCollected,
+      itcClaimed: fallback.itcClaimed,
+      netPayable: fallback.netPayable,
+      byTaxCode: [] as ReturnType<typeof summarizeTaxMovements>['byTaxCode'],
+      byAccount: [] as ReturnType<typeof summarizeTaxMovements>['byAccount'],
+      rows: [],
+      totals: { rows: [], totalSales: 0, totalPurchases: 0 },
     };
-  }, [filteredAccounts, filteredJournalDetails]);
+  }, [periodMovements, reportCategory, isCanada, filteredJournalDetails]);
 
-  // Group by tax code for detailed report
-  const groupedByTaxCode = useMemo(() => {
-    const groups: Record<string, { code: string; name: string; collected: number; paid: number; net: number }> = {};
-    
-    filteredJournalDetails.forEach((line: any) => {
-      const code = line.tax_code || 'Unclassified';
-      if (!groups[code]) {
-        groups[code] = { code, name: code, collected: 0, paid: 0, net: 0 };
-      }
-      if (line.account_name.toLowerCase().includes('collected')) {
-        groups[code].collected += line.credit - line.debit;
-      } else {
-        groups[code].paid += line.debit - line.credit;
-      }
-      groups[code].net = groups[code].collected - groups[code].paid;
+  const filingForm = useMemo(() => {
+    return buildPeriodFilingForm(periodSummary, {
+      authority: taxTerminology.authorityLabel,
+      periodStart: periodStartStr,
+      periodEnd: periodEndStr,
+      currency: countryCode === 'US' ? 'USD' : countryCode === 'GB' ? 'GBP' : countryCode === 'BI' ? 'BIF' : 'CAD',
+      countryCode,
+      region: isCanada ? (reportCategory === 'pst' ? 'CA-BC' : 'CA-ON') : countryCode,
     });
-    
-    return Object.values(groups);
-  }, [filteredJournalDetails]);
+  }, [periodSummary, taxTerminology.authorityLabel, periodStartStr, periodEndStr, countryCode, isCanada, reportCategory]);
+
+  const summary = useMemo(() => ({
+    collected: periodSummary.taxCollected,
+    paid: periodSummary.itcClaimed,
+    pst: reportCategory === 'pst' ? periodSummary.taxCollected : 0,
+    netPayable: periodSummary.netPayable,
+    taxableSales: periodSummary.taxableSales,
+  }), [periodSummary, reportCategory]);
+
+  const groupedByTaxCode = periodSummary.byTaxCode.map((row) => ({
+    code: row.code,
+    name: row.name,
+    collected: row.taxCollected,
+    paid: row.itcClaimed,
+    net: row.taxDue,
+    rate: row.rate,
+    taxableAmount: row.taxableAmount,
+  }));
 
   const hasActiveFilters = selectedTaxCodes.length > 0 || accountTypeFilter !== 'all' || reportType !== 'summary';
 
@@ -521,6 +554,7 @@ export function TaxReportPreview({
       const summaryData: [string, string][] = [];
       
       if (reportCategory === 'gst' || !isCanada) {
+        summaryData.push(['Taxable sales', formatCurrency(summary.taxableSales)]);
         summaryData.push([taxTerminology.collectedLabel, formatCurrency(summary.collected)]);
         summaryData.push([taxTerminology.paidLabel, formatCurrency(summary.paid)]);
       }
@@ -559,11 +593,11 @@ export function TaxReportPreview({
       doc.text('Account', 20, y);
       doc.text('Code', 80, y);
       doc.text('Type', 110, y);
-      doc.text('Balance', pageWidth - 20, y, { align: 'right' });
+      doc.text('Period activity', pageWidth - 20, y, { align: 'right' });
       y += 8;
       
       doc.setFont('helvetica', 'normal');
-      filteredAccounts.forEach((acc, idx) => {
+      (periodSummary.byAccount.length > 0 ? periodSummary.byAccount : []).forEach((acc, idx) => {
         if (y > 260) {
           doc.addPage();
           y = 20;
@@ -574,11 +608,11 @@ export function TaxReportPreview({
           doc.rect(15, y - 4, pageWidth - 30, 6, 'F');
         }
         
-        const typeLabel = acc.type === 'collected' ? 'Collected' : acc.type === 'paid' ? 'Paid/ITC' : 'PST/QST';
+        const typeLabel = acc.side === 'collected' ? 'Collected' : 'Paid/ITC';
         doc.text(acc.accountName.substring(0, 30), 20, y);
         doc.text(acc.accountCode, 80, y);
         doc.text(typeLabel, 110, y);
-        doc.text(formatCurrency(acc.balance), pageWidth - 20, y, { align: 'right' });
+        doc.text(formatCurrency(acc.periodAmount), pageWidth - 20, y, { align: 'right' });
         y += 6;
       });
       
@@ -651,7 +685,7 @@ export function TaxReportPreview({
     }
   };
 
-  const isLoading = accountsLoading || journalLoading;
+  const isLoading = accountsLoading || journalLoading || movementsLoading;
 
   return (
     <>
@@ -905,11 +939,18 @@ export function TaxReportPreview({
           </div>
         ) : (
           <>
-            {/* Quick Summary Cards */}
-            <div className={cn(
-              "grid gap-4 mb-6",
-              reportCategory === 'pst' ? "grid-cols-1 md:grid-cols-3" : "grid-cols-1 md:grid-cols-5"
-            )}>
+            {/* Quick Summary Cards — period activity, not lifetime GL balance */}
+            <div className="grid gap-4 mb-6 grid-cols-1 md:grid-cols-4">
+              {(reportCategory === 'gst' || !isCanada) && (
+                <div className="p-4 bg-slate-50 dark:bg-slate-950/30 rounded-lg">
+                  <p className="text-xs text-muted-foreground mb-1">
+                    {isBurundi ? 'Ventes taxables' : 'Taxable sales'}
+                  </p>
+                  <p className="text-xl font-bold text-foreground">
+                    {formatCurrency(summary.taxableSales)}
+                  </p>
+                </div>
+              )}
               {(reportCategory === 'gst' || !isCanada) && (
                 <>
                   <div className="p-4 bg-green-50 dark:bg-green-950/30 rounded-lg">
@@ -928,49 +969,35 @@ export function TaxReportPreview({
               )}
               {reportCategory === 'pst' && (
                 <div className="p-4 bg-purple-50 dark:bg-purple-950/30 rounded-lg">
-                  <p className="text-xs text-muted-foreground mb-1">PST/QST Payable</p>
+                  <p className="text-xs text-muted-foreground mb-1">PST/QST collected</p>
                   <p className="text-xl font-bold text-purple-700 dark:text-purple-400">
                     {formatCurrency(summary.pst)}
                   </p>
                 </div>
               )}
-              <div className="p-4 bg-amber-50 dark:bg-amber-950/30 rounded-lg">
-                <p className="text-xs text-muted-foreground mb-1">{taxTerminology.netLabel}</p>
-                <p className={`text-xl font-bold ${summary.netPayable >= 0 ? 'text-amber-700 dark:text-amber-400' : 'text-green-700 dark:text-green-400'}`}>
-                  {formatCurrency(Math.abs(summary.netPayable))}
-                </p>
-              </div>
-              {/* Refund/Owing indicator */}
               <div className={cn(
                 "p-4 rounded-lg",
-                summary.netPayable < 0 
-                  ? "bg-emerald-50 dark:bg-emerald-950/30" 
-                  : "bg-red-50 dark:bg-red-950/30"
+                summary.netPayable < 0
+                  ? "bg-emerald-50 dark:bg-emerald-950/30"
+                  : "bg-amber-50 dark:bg-amber-950/30"
               )}>
                 <p className="text-xs text-muted-foreground mb-1">
-                  {isBurundi ? 'Remboursement / Dû' : 'Refund / Owing'}
+                  {summary.netPayable < 0
+                    ? (isBurundi ? 'Remboursement' : 'Refund due')
+                    : (isBurundi ? 'Montant dû' : 'Tax due')}
                 </p>
                 <p className={cn(
                   "text-xl font-bold",
-                  summary.netPayable < 0 
-                    ? "text-emerald-700 dark:text-emerald-400" 
-                    : "text-red-700 dark:text-red-400"
+                  summary.netPayable < 0
+                    ? "text-emerald-700 dark:text-emerald-400"
+                    : "text-amber-700 dark:text-amber-400"
                 )}>
-                  {summary.netPayable < 0 ? (
-                    <>
-                      {formatCurrency(Math.abs(summary.netPayable))}
-                      <span className="text-xs font-normal ml-1">
-                        {isBurundi ? '(remboursement)' : '(refund)'}
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      {formatCurrency(summary.netPayable)}
-                      <span className="text-xs font-normal ml-1">
-                        {isBurundi ? '(dû)' : '(owing)'}
-                      </span>
-                    </>
-                  )}
+                  {formatCurrency(Math.abs(summary.netPayable))}
+                  <span className="text-xs font-normal ml-1">
+                    {summary.netPayable < 0
+                      ? (isBurundi ? '(remboursement)' : '(refund)')
+                      : (isBurundi ? '(dû)' : '(owing)')}
+                  </span>
                 </p>
               </div>
             </div>
@@ -1029,53 +1056,7 @@ export function TaxReportPreview({
             )}
 
             {/* Report Content Based on Type */}
-            {reportType === 'by_tax_code' && groupedByTaxCode.length > 0 ? (
-              <div className="mb-6">
-                <h4 className="text-sm font-medium text-foreground mb-3">
-                  {isBurundi ? 'Résumé par Code TVA' : 'Summary by Tax Code'}
-                </h4>
-                <div className="border rounded-lg overflow-hidden">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>{isBurundi ? 'Code TVA' : 'Tax Code'}</TableHead>
-                        <TableHead className="text-right">{taxTerminology.collectedLabel}</TableHead>
-                        <TableHead className="text-right">{taxTerminology.paidLabel}</TableHead>
-                        <TableHead className="text-right">{taxTerminology.netLabel}</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {groupedByTaxCode.map((group) => (
-                        <TableRow key={group.code}>
-                          <TableCell className="font-medium">{group.code}</TableCell>
-                          <TableCell className="text-right font-mono text-green-600">
-                            {formatCurrency(Math.abs(group.collected))}
-                          </TableCell>
-                          <TableCell className="text-right font-mono text-blue-600">
-                            {formatCurrency(Math.abs(group.paid))}
-                          </TableCell>
-                          <TableCell className="text-right font-mono font-medium">
-                            {formatCurrency(group.net)}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                      <TableRow className="bg-muted/50 font-medium">
-                        <TableCell>{isBurundi ? 'Total' : 'Total'}</TableCell>
-                        <TableCell className="text-right font-mono">
-                          {formatCurrency(groupedByTaxCode.reduce((s, g) => s + Math.abs(g.collected), 0))}
-                        </TableCell>
-                        <TableCell className="text-right font-mono">
-                          {formatCurrency(groupedByTaxCode.reduce((s, g) => s + Math.abs(g.paid), 0))}
-                        </TableCell>
-                        <TableCell className="text-right font-mono">
-                          {formatCurrency(groupedByTaxCode.reduce((s, g) => s + g.net, 0))}
-                        </TableCell>
-                      </TableRow>
-                    </TableBody>
-                  </Table>
-                </div>
-              </div>
-            ) : reportType === 'detailed' && filteredJournalDetails.length > 0 ? (
+            {reportType === 'detailed' && filteredJournalDetails.length > 0 ? (
               <div className="mb-6">
                 <h4 className="text-sm font-medium text-foreground mb-3">
                   {isBurundi ? 'Transactions Détaillées' : 'Detailed Transactions'} ({filteredJournalDetails.length})
@@ -1122,47 +1103,156 @@ export function TaxReportPreview({
                 </div>
               </div>
             ) : (
-              /* Account Breakdown (Default Summary View) */
-              filteredAccounts.length > 0 && (
+              <>
                 <div className="mb-6">
-                  <h4 className="text-sm font-medium text-foreground mb-3">
-                    {isBurundi ? 'Détail des Comptes' : 'Account Breakdown'}
-                    {accountTypeFilter !== 'all' && (
-                      <Badge variant="secondary" className="ml-2">
-                        {accountTypeFilter === 'collected' ? (isBurundi ? 'Collectée' : 'Collected Only') : 
-                         accountTypeFilter === 'paid' ? (isBurundi ? 'Payée' : 'Paid/ITC Only') : 'PST/QST Only'}
-                      </Badge>
-                    )}
+                  <h4 className="text-sm font-medium text-foreground mb-1">
+                    {filingForm.formName}
                   </h4>
+                  <p className="text-xs text-muted-foreground mb-3">
+                    {isCanada
+                      ? 'Structured like a CRA GST/HST return (Zoho GST summary). Amounts are activity in the selected period, excluding remittances.'
+                      : 'Return-style summary for the selected period. Amounts exclude tax-authority settlements.'}
+                  </p>
                   <div className="border rounded-lg overflow-hidden">
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>{isBurundi ? 'Compte' : 'Account'}</TableHead>
-                          <TableHead>Code</TableHead>
-                          <TableHead>Type</TableHead>
-                          <TableHead className="text-right">{isBurundi ? 'Solde' : 'Balance'}</TableHead>
+                          <TableHead className="w-24">Line</TableHead>
+                          <TableHead>Description</TableHead>
+                          <TableHead className="w-32">Formula</TableHead>
+                          <TableHead className="text-right">Amount</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {filteredAccounts.map((acc) => (
-                          <TableRow key={acc.accountId}>
-                            <TableCell className="font-medium">{acc.accountName}</TableCell>
-                            <TableCell className="font-mono text-muted-foreground">{acc.accountCode}</TableCell>
-                            <TableCell>
-                              <Badge variant={acc.type === 'collected' ? 'default' : acc.type === 'paid' ? 'secondary' : 'outline'}>
-                                {acc.type === 'collected' ? (isBurundi ? 'Collectée' : 'Collected') : 
-                                 acc.type === 'paid' ? (isBurundi ? 'Payée' : 'Paid/ITC') : 'PST/QST'}
-                              </Badge>
+                        {filingForm.lines.map((line) => (
+                          <TableRow key={line.code} className={line.category === 'net' ? 'bg-muted/50 font-medium' : undefined}>
+                            <TableCell className="font-mono text-xs">{line.code}</TableCell>
+                            <TableCell>{line.label}</TableCell>
+                            <TableCell className="text-xs text-muted-foreground font-mono">
+                              {line.formula ?? '—'}
                             </TableCell>
-                            <TableCell className="text-right font-mono">{formatCurrency(acc.balance)}</TableCell>
+                            <TableCell className="text-right font-mono">
+                              {formatCurrency(line.amount)}
+                            </TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
                     </Table>
                   </div>
                 </div>
-              )
+
+                <div className="mb-6">
+                  <h4 className="text-sm font-medium text-foreground mb-1">
+                    {isBurundi ? 'Par code de taxe' : 'Tax liability by tax code'}
+                  </h4>
+                  <p className="text-xs text-muted-foreground mb-3">
+                    QuickBooks-style liability: taxable sales, tax collected, credits, and tax due for the period.
+                  </p>
+                  <div className="border rounded-lg overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>{isBurundi ? 'Code TVA' : 'Tax code'}</TableHead>
+                          <TableHead className="text-right">Rate</TableHead>
+                          <TableHead className="text-right">Taxable sales</TableHead>
+                          <TableHead className="text-right">{taxTerminology.collectedLabel}</TableHead>
+                          <TableHead className="text-right">{taxTerminology.paidLabel}</TableHead>
+                          <TableHead className="text-right">{taxTerminology.netLabel}</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {groupedByTaxCode.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={6} className="text-sm text-muted-foreground text-center py-6">
+                              No tax activity in this period.
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          <>
+                            {groupedByTaxCode.map((group) => (
+                              <TableRow key={group.code}>
+                                <TableCell className="font-medium">
+                                  {group.code}
+                                  {group.name && group.name !== group.code && (
+                                    <span className="block text-xs text-muted-foreground font-normal">{group.name}</span>
+                                  )}
+                                </TableCell>
+                                <TableCell className="text-right font-mono text-sm">
+                                  {group.rate ? `${group.rate}%` : '—'}
+                                </TableCell>
+                                <TableCell className="text-right font-mono">
+                                  {formatCurrency(group.taxableAmount)}
+                                </TableCell>
+                                <TableCell className="text-right font-mono text-green-600">
+                                  {formatCurrency(group.collected)}
+                                </TableCell>
+                                <TableCell className="text-right font-mono text-blue-600">
+                                  {formatCurrency(group.paid)}
+                                </TableCell>
+                                <TableCell className="text-right font-mono font-medium">
+                                  {formatCurrency(group.net)}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                            <TableRow className="bg-muted/50 font-medium">
+                              <TableCell colSpan={2}>{isBurundi ? 'Total' : 'Total'}</TableCell>
+                              <TableCell className="text-right font-mono">
+                                {formatCurrency(groupedByTaxCode.reduce((s, g) => s + g.taxableAmount, 0))}
+                              </TableCell>
+                              <TableCell className="text-right font-mono">
+                                {formatCurrency(groupedByTaxCode.reduce((s, g) => s + g.collected, 0))}
+                              </TableCell>
+                              <TableCell className="text-right font-mono">
+                                {formatCurrency(groupedByTaxCode.reduce((s, g) => s + g.paid, 0))}
+                              </TableCell>
+                              <TableCell className="text-right font-mono">
+                                {formatCurrency(groupedByTaxCode.reduce((s, g) => s + g.net, 0))}
+                              </TableCell>
+                            </TableRow>
+                          </>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+
+                {periodSummary.byAccount.length > 0 && (
+                  <div className="mb-6">
+                    <h4 className="text-sm font-medium text-foreground mb-1">
+                      {isBurundi ? 'Activité des comptes' : 'Account activity this period'}
+                    </h4>
+                    <p className="text-xs text-muted-foreground mb-3">
+                      Credits minus debits on tax GLs during {periodLabel}. This is not the lifetime account balance.
+                    </p>
+                    <div className="border rounded-lg overflow-hidden">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>{isBurundi ? 'Compte' : 'Account'}</TableHead>
+                            <TableHead>Code</TableHead>
+                            <TableHead>Type</TableHead>
+                            <TableHead className="text-right">Period activity</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {periodSummary.byAccount.map((acc) => (
+                            <TableRow key={`${acc.accountCode}-${acc.accountName}`}>
+                              <TableCell className="font-medium">{acc.accountName}</TableCell>
+                              <TableCell className="font-mono text-muted-foreground">{acc.accountCode}</TableCell>
+                              <TableCell>
+                                <Badge variant={acc.side === 'collected' ? 'default' : 'secondary'}>
+                                  {acc.side === 'collected' ? (isBurundi ? 'Collectée' : 'Collected') : (isBurundi ? 'Payée' : 'Paid/ITC')}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-right font-mono">{formatCurrency(acc.periodAmount)}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
 
             <Separator className="my-4" />
@@ -1298,52 +1388,46 @@ export function TaxReportPreview({
 
             {/* Summary */}
             <div>
-              <h3 className="font-semibold mb-3">Summary</h3>
-              <div className="grid grid-cols-2 gap-2">
-                {(reportCategory === 'gst' || !isCanada) && (
-                  <>
-                    <div className="flex justify-between p-2 bg-muted/50 rounded">
-                      <span>{taxTerminology.collectedLabel}</span>
-                      <span className="font-mono font-medium">{formatCurrency(summary.collected)}</span>
-                    </div>
-                    <div className="flex justify-between p-2 bg-muted/50 rounded">
-                      <span>{taxTerminology.paidLabel}</span>
-                      <span className="font-mono font-medium">{formatCurrency(summary.paid)}</span>
-                    </div>
-                  </>
-                )}
-                {reportCategory === 'pst' && (
-                  <div className="flex justify-between p-2 bg-muted/50 rounded">
-                    <span>PST/QST Payable</span>
-                    <span className="font-mono font-medium">{formatCurrency(summary.pst)}</span>
-                  </div>
-                )}
-                <div className="flex justify-between p-2 bg-primary/10 rounded col-span-2">
-                  <span className="font-semibold">{taxTerminology.netLabel}</span>
-                  <span className="font-mono font-bold">{formatCurrency(summary.netPayable)}</span>
-                </div>
-              </div>
+              <h3 className="font-semibold mb-3">{filingForm.formName}</h3>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Line</TableHead>
+                    <TableHead>Description</TableHead>
+                    <TableHead className="text-right">Amount</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filingForm.lines.map((line) => (
+                    <TableRow key={line.code}>
+                      <TableCell className="font-mono text-xs">{line.code}</TableCell>
+                      <TableCell>{line.label}</TableCell>
+                      <TableCell className="text-right font-mono">{formatCurrency(line.amount)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </div>
 
             {/* Account Details */}
             <div>
-              <h3 className="font-semibold mb-3">Account Details</h3>
+              <h3 className="font-semibold mb-3">Account activity this period</h3>
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Account</TableHead>
                     <TableHead>Code</TableHead>
                     <TableHead>Type</TableHead>
-                    <TableHead className="text-right">Balance</TableHead>
+                    <TableHead className="text-right">Period activity</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredAccounts.map((acc) => (
-                    <TableRow key={acc.accountId}>
+                  {periodSummary.byAccount.map((acc) => (
+                    <TableRow key={`${acc.accountCode}-${acc.accountName}`}>
                       <TableCell>{acc.accountName}</TableCell>
                       <TableCell className="font-mono">{acc.accountCode}</TableCell>
-                      <TableCell>{acc.type === 'collected' ? 'Collected' : acc.type === 'paid' ? 'Paid/ITC' : 'PST/QST'}</TableCell>
-                      <TableCell className="text-right font-mono">{formatCurrency(acc.balance)}</TableCell>
+                      <TableCell>{acc.side === 'collected' ? 'Collected' : 'Paid/ITC'}</TableCell>
+                      <TableCell className="text-right font-mono">{formatCurrency(acc.periodAmount)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrganization } from '@/hooks/useOrganization';
 import { buildFilingForm, FilingFormResult, PeriodTaxRow, PeriodTotals } from '@/lib/filings';
+import { movementsToPeriodRows, type TaxMovementRow } from '@/lib/taxPeriodReport';
 
 export interface TaxReturnPreviewInput {
   periodId: string;
@@ -52,47 +53,12 @@ async function fetchPeriodRows(
     flagMap.set(t.id, { zr: !!t.is_zero_rated, ex: !!t.is_exempt });
   }
 
-  const rows: PeriodTaxRow[] = [];
-  let totalSales = 0;
-  let totalPurchases = 0;
-
-  // Normalize a movement's tax_type so filing mappers can recognize it.
-  // GL codes / authority names are the source of truth — the column tax_type
-  // can be "both" (sales + purchases) which the form mappers don't understand.
-  const normalizeType = (m: any): string => {
-    const code = String(m.code ?? '').toUpperCase();
-    const authority = String(m.authority_name ?? '').toUpperCase();
-    const account = String(m.account_name ?? '').toUpperCase();
-    if (code.startsWith('HST') || authority.includes('HST') || account.includes('HST')) return 'hst';
-    if (code.startsWith('GST') || authority.includes('GST') || account.includes('GST')) return 'gst';
-    if (code.startsWith('QST') || authority.includes('QST') || account.includes('QST') || code.startsWith('TVQ')) return 'qst';
-    if (code.startsWith('PST') || authority.includes('PST') || account.includes('PST') || code.startsWith('RST')) return 'pst';
-    if (code.startsWith('VAT') || authority.includes('VAT')) return 'vat';
-    const t = String(m.tax_type ?? '').toLowerCase();
-    return t && t !== 'both' ? t : 'sales';
-  };
-
-  for (const m of (movements ?? []) as any[]) {
-    if (m.authority_id && m.authority_id !== authorityId) continue;
-    const taxAmount = Number(m.tax_amount ?? 0);
-    const taxableAmount = Number(m.taxable_amount ?? 0);
-    const flags = m.tax_code_id ? flagMap.get(m.tax_code_id) : undefined;
-    rows.push({
-      source: m.side === 'collected' ? 'invoice' : 'bill',
-      tax_type: normalizeType(m),
-      tax_code: m.code ?? null,
-      authority: m.authority_name ?? null,
-      jurisdiction_code: m.jurisdiction ?? null,
-      rate: Number(m.rate ?? 0),
-      taxable_amount: taxableAmount,
-      tax_amount: taxAmount,
-      is_recoverable: m.is_recoverable !== false,
-      is_zero_rated: flags?.zr ?? false,
-      is_exempt: flags?.ex ?? false,
-    });
-    if (m.side === 'collected') totalSales += taxableAmount;
-    else totalPurchases += taxableAmount;
-  }
+  const scoped = ((movements ?? []) as TaxMovementRow[]).filter(
+    (m) => !m.authority_id || m.authority_id === authorityId,
+  );
+  const rows = movementsToPeriodRows(scoped, flagMap);
+  const totalSales = rows.filter((r) => r.source === 'invoice').reduce((s, r) => s + r.taxable_amount, 0);
+  const totalPurchases = rows.filter((r) => r.source !== 'invoice').reduce((s, r) => s + r.taxable_amount, 0);
 
   const glRevenue = Number(revenueTotal ?? 0);
   return {
