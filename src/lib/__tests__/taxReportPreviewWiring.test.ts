@@ -14,6 +14,10 @@ describe('tax report preview wiring', () => {
     expect(preview).not.toContain('current_balance');
     expect(preview).not.toContain("filter(j => j.account_name.toLowerCase().includes('collected'))");
     expect(preview).not.toContain('{false &&');
+    expect(preview).toContain('sanitizeComparePeriodCountInput');
+    expect(preview).toContain('draftCompareCount');
+    expect(preview).not.toContain('max={5}');
+    expect(preview).not.toContain('Math.min(5, Math.max(1, parseInt(e.target.value) || 1))');
   });
 
   it('uses a Zoho-style Date Range + From + To + Run Report bar', () => {

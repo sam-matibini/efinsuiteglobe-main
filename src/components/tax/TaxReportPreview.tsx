@@ -1,7 +1,7 @@
 import { useState, useMemo, Fragment } from 'react';
-import { format, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear, endOfYear, subMonths, subQuarters, subYears } from 'date-fns';
+import { format } from 'date-fns';
 import { parseLocalDate } from '@/lib/utils';
-import { Download, Eye, FileText, Printer, Filter, SlidersHorizontal, GitCompare, Check } from 'lucide-react';
+import { Download, Eye, FileText, Printer, Filter, SlidersHorizontal, GitCompare, Minus, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -21,11 +21,17 @@ import jsPDF from 'jspdf';
 import { addPdfBrandingFooter } from '@/lib/pdfBrandingFooter';
 import { cn } from '@/lib/utils';
 import { TaxDateRangeBar } from '@/components/tax/TaxDateRangeBar';
-import { useTaxPeriodActivity } from '@/hooks/useTaxPeriodActivity';
+import { useTaxPeriodActivity, useTaxPeriodComparisonSummaries } from '@/hooks/useTaxPeriodActivity';
 import {
   resolveTaxDateRange,
+  resolveComparisonRanges,
   toISODate,
+  sanitizeComparePeriodCountInput,
+  commitComparePeriodCount,
+  stepComparePeriodCount,
+  MAX_COMPARE_PERIODS,
   type TaxDatePreset,
+  type TaxCompareType,
 } from '@/lib/taxPeriodReport';
 
 interface TaxReportPreviewProps {
@@ -45,7 +51,6 @@ interface TaxReportPreviewProps {
 
 type ReportType = 'summary' | 'detailed' | 'by_tax_code' | 'by_jurisdiction';
 type AccountTypeFilter = 'all' | 'collected' | 'paid' | 'pst';
-type CompareType = 'none' | 'previous_period' | 'previous_year';
 type ReportCategory = 'gst' | 'pst';
 
 export function TaxReportPreview({
@@ -61,11 +66,14 @@ export function TaxReportPreview({
   const [isGenerating, setIsGenerating] = useState(false);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   
-  // Compare With states
+  // Compare With states (applied vs dialog draft so the count field can be typed)
   const [showCompareDialog, setShowCompareDialog] = useState(false);
-  const [compareType, setCompareType] = useState<CompareType>('none');
+  const [compareType, setCompareType] = useState<TaxCompareType>('none');
   const [comparePeriodsCount, setComparePeriodsCount] = useState(1);
   const [compareArrangeLatest, setCompareArrangeLatest] = useState(true);
+  const [draftCompareType, setDraftCompareType] = useState<TaxCompareType>('none');
+  const [draftCompareCount, setDraftCompareCount] = useState('1');
+  const [draftArrangeLatest, setDraftArrangeLatest] = useState(true);
   
   // Advanced filter states
   const [reportType, setReportType] = useState<ReportType>('detailed');
@@ -82,44 +90,10 @@ export function TaxReportPreview({
     [periodType, customStartDate, customEndDate],
   );
 
-  const comparisonRanges = useMemo(() => {
-    if (compareType === 'none') return [];
-    
-    const ranges: { start: Date; end: Date; label: string }[] = [];
-    
-    for (let i = 1; i <= comparePeriodsCount; i++) {
-      let start: Date, end: Date, label: string;
-      
-      if (compareType === 'previous_period') {
-        switch (periodType) {
-          case 'this_month':
-          case 'last_month':
-            start = startOfMonth(subMonths(dateRange.start, i));
-            end = endOfMonth(subMonths(dateRange.start, i));
-            label = format(start, 'MMM yyyy');
-            break;
-          case 'this_quarter':
-          case 'last_quarter':
-            start = startOfQuarter(subQuarters(dateRange.start, i));
-            end = endOfQuarter(subQuarters(dateRange.start, i));
-            label = `Q${Math.ceil((start.getMonth() + 1) / 3)} ${start.getFullYear()}`;
-            break;
-          default:
-            start = startOfYear(subYears(dateRange.start, i));
-            end = endOfYear(subYears(dateRange.start, i));
-            label = start.getFullYear().toString();
-        }
-      } else {
-        start = subYears(dateRange.start, i);
-        end = subYears(dateRange.end, i);
-        label = `${format(start, 'MMM d')} - ${format(end, 'MMM d, yyyy')}`;
-      }
-      
-      ranges.push({ start, end, label });
-    }
-    
-    return compareArrangeLatest ? ranges : ranges.reverse();
-  }, [compareType, comparePeriodsCount, compareArrangeLatest, periodType, dateRange]);
+  const comparisonRanges = useMemo(
+    () => resolveComparisonRanges(compareType, comparePeriodsCount, dateRange, periodType, compareArrangeLatest),
+    [compareType, comparePeriodsCount, compareArrangeLatest, periodType, dateRange],
+  );
 
   const periodLabel = useMemo(() => {
     return `${format(dateRange.start, 'MMM d, yyyy')} - ${format(dateRange.end, 'MMM d, yyyy')}`;
@@ -149,6 +123,13 @@ export function TaxReportPreview({
     authorityLabel: taxTerminology.authorityLabel,
   });
 
+  const comparisonSummaries = useTaxPeriodComparisonSummaries({
+    organizationId,
+    ranges: comparisonRanges,
+    category: isCanada ? reportCategory : 'all',
+    enabled: compareType !== 'none',
+  });
+
   const summary = useMemo(() => ({
     collected: periodSummary.taxCollected,
     paid: periodSummary.itcClaimed,
@@ -176,10 +157,15 @@ export function TaxReportPreview({
   };
 
   const applyComparison = () => {
+    const count = commitComparePeriodCount(draftCompareCount);
+    setCompareType(draftCompareType);
+    setComparePeriodsCount(count);
+    setCompareArrangeLatest(draftArrangeLatest);
+    setDraftCompareCount(String(count));
     setShowCompareDialog(false);
-    toast.success(compareType === 'none' 
-      ? 'Comparison removed' 
-      : `Comparing with ${comparePeriodsCount} ${compareType === 'previous_period' ? 'period(s)' : 'year(s)'}`
+    toast.success(draftCompareType === 'none'
+      ? 'Comparison removed'
+      : `Comparing with ${count} ${draftCompareType === 'previous_period' ? 'period(s)' : 'year(s)'}`
     );
   };
 
@@ -651,48 +637,49 @@ export function TaxReportPreview({
                   <GitCompare className="w-4 h-4" />
                   Period Comparison
                 </h4>
-                <div className="border rounded-lg overflow-hidden">
+                <div className="border rounded-lg overflow-hidden overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
                         <TableHead>Metric</TableHead>
                         <TableHead className="text-right">Current Period</TableHead>
-                        {comparisonRanges.map((range, idx) => (
-                          <TableHead key={idx} className="text-right">{range.label}</TableHead>
+                        {comparisonSummaries.map((range) => (
+                          <TableHead key={range.label} className="text-right">{range.label}</TableHead>
                         ))}
                         <TableHead className="text-right">Change</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      <TableRow>
-                        <TableCell className="font-medium">{taxTerminology.collectedLabel}</TableCell>
-                        <TableCell className="text-right font-mono">{formatCurrency(summary.collected)}</TableCell>
-                        {comparisonRanges.map((_, idx) => (
-                          <TableCell key={idx} className="text-right font-mono text-muted-foreground">-</TableCell>
-                        ))}
-                        <TableCell className="text-right font-mono">-</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell className="font-medium">{taxTerminology.paidLabel}</TableCell>
-                        <TableCell className="text-right font-mono">{formatCurrency(summary.paid)}</TableCell>
-                        {comparisonRanges.map((_, idx) => (
-                          <TableCell key={idx} className="text-right font-mono text-muted-foreground">-</TableCell>
-                        ))}
-                        <TableCell className="text-right font-mono">-</TableCell>
-                      </TableRow>
-                      <TableRow className="bg-muted/50 font-medium">
-                        <TableCell>{taxTerminology.netLabel}</TableCell>
-                        <TableCell className="text-right font-mono">{formatCurrency(summary.netPayable)}</TableCell>
-                        {comparisonRanges.map((_, idx) => (
-                          <TableCell key={idx} className="text-right font-mono text-muted-foreground">-</TableCell>
-                        ))}
-                        <TableCell className="text-right font-mono">-</TableCell>
-                      </TableRow>
+                      {([
+                        { label: taxTerminology.collectedLabel, current: summary.collected, key: 'taxCollected' as const },
+                        { label: taxTerminology.paidLabel, current: summary.paid, key: 'itcClaimed' as const },
+                        { label: taxTerminology.netLabel, current: summary.netPayable, key: 'netPayable' as const },
+                      ]).map((row) => {
+                        const compareValue = comparisonSummaries[0]?.summary[row.key] ?? 0;
+                        const change = row.current - compareValue;
+                        return (
+                          <TableRow key={row.key} className={row.key === 'netPayable' ? 'bg-muted/50 font-medium' : undefined}>
+                            <TableCell className="font-medium">{row.label}</TableCell>
+                            <TableCell className="text-right font-mono">{formatCurrency(row.current)}</TableCell>
+                            {comparisonSummaries.map((range) => (
+                              <TableCell key={`${row.key}-${range.label}`} className="text-right font-mono">
+                                {range.isLoading ? '…' : formatCurrency(range.summary[row.key])}
+                              </TableCell>
+                            ))}
+                            <TableCell className={cn(
+                              'text-right font-mono',
+                              change > 0 ? 'text-amber-700' : change < 0 ? 'text-emerald-700' : undefined,
+                            )}>
+                              {comparisonSummaries[0]?.isLoading ? '…' : `${change > 0 ? '+' : ''}${formatCurrency(change)}`}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 </div>
                 <p className="text-xs text-muted-foreground mt-2">
-                  Note: Historical comparison data will be populated from journal entries for each period.
+                  Change is current period vs {comparisonSummaries[0]?.label || 'the previous period'}.
                 </p>
               </div>
             )}
@@ -966,10 +953,10 @@ export function TaxReportPreview({
         open={showCompareDialog}
         onOpenChange={(open) => {
           setShowCompareDialog(open);
-          // When comparison is currently off, reset count so it doesn't "stick" to a previous value (e.g. 5)
-          if (open && compareType === 'none') {
-            setComparePeriodsCount(1);
-            setCompareArrangeLatest(true);
+          if (open) {
+            setDraftCompareType(compareType);
+            setDraftCompareCount(String(comparePeriodsCount));
+            setDraftArrangeLatest(compareArrangeLatest);
           }
         }}
       >
@@ -983,24 +970,21 @@ export function TaxReportPreview({
           
           <div className="space-y-6 py-4">
             <div className="space-y-2">
-              <Label>Compare Based on Period/Year</Label>
+              <Label htmlFor="compare-type">Compare Based on Period/Year</Label>
               <Select
-                value={compareType}
+                value={draftCompareType}
                 onValueChange={(v) => {
-                  const next = v as CompareType;
-                  setCompareType(next);
-
-                  // If user turns comparison off, or turns it on from "none",
-                  // default to 1 (not the previous value).
+                  const next = v as TaxCompareType;
+                  setDraftCompareType(next);
                   if (next === 'none') {
-                    setComparePeriodsCount(1);
-                    setCompareArrangeLatest(true);
-                  } else if (compareType === 'none') {
-                    setComparePeriodsCount(1);
+                    setDraftCompareCount('1');
+                    setDraftArrangeLatest(true);
+                  } else if (draftCompareType === 'none') {
+                    setDraftCompareCount('1');
                   }
                 }}
               >
-                <SelectTrigger>
+                <SelectTrigger id="compare-type">
                   <SelectValue placeholder="Select comparison type" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1011,29 +995,67 @@ export function TaxReportPreview({
               </Select>
             </div>
 
-            {compareType !== 'none' && (
+            {draftCompareType !== 'none' && (
               <>
                 <div className="space-y-2">
-                  <Label>
-                    Number of {compareType === 'previous_period' ? 'Period(s)' : 'Year(s)'}
+                  <Label htmlFor="compare-count">
+                    Number of {draftCompareType === 'previous_period' ? 'Period(s)' : 'Year(s)'}
                   </Label>
-                  <Input
-                    type="number"
-                    min={1}
-                    max={5}
-                    value={comparePeriodsCount}
-                    onChange={(e) => setComparePeriodsCount(Math.min(5, Math.max(1, parseInt(e.target.value) || 1)))}
-                  />
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="h-9 w-9 shrink-0"
+                      aria-label="Decrease period count"
+                      disabled={commitComparePeriodCount(draftCompareCount) <= 1}
+                      onClick={() => setDraftCompareCount(String(stepComparePeriodCount(draftCompareCount, -1)))}
+                    >
+                      <Minus className="w-4 h-4" />
+                    </Button>
+                    <Input
+                      id="compare-count"
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      className="h-9 text-center"
+                      value={draftCompareCount}
+                      onChange={(e) => setDraftCompareCount(sanitizeComparePeriodCountInput(e.target.value))}
+                      onBlur={() => setDraftCompareCount(String(commitComparePeriodCount(draftCompareCount)))}
+                      onKeyDown={(e) => {
+                        if (e.key === 'ArrowUp') {
+                          e.preventDefault();
+                          setDraftCompareCount(String(stepComparePeriodCount(draftCompareCount, 1)));
+                        } else if (e.key === 'ArrowDown') {
+                          e.preventDefault();
+                          setDraftCompareCount(String(stepComparePeriodCount(draftCompareCount, -1)));
+                        }
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="h-9 w-9 shrink-0"
+                      aria-label="Increase period count"
+                      disabled={commitComparePeriodCount(draftCompareCount) >= MAX_COMPARE_PERIODS}
+                      onClick={() => setDraftCompareCount(String(stepComparePeriodCount(draftCompareCount, 1)))}
+                    >
+                      <Plus className="w-4 h-4" />
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Enter 1–{MAX_COMPARE_PERIODS}. Use + / − or type the number.
+                  </p>
                 </div>
 
                 <div className="flex items-center gap-2">
                   <Checkbox
                     id="arrange-latest"
-                    checked={compareArrangeLatest}
-                    onCheckedChange={(checked) => setCompareArrangeLatest(!!checked)}
+                    checked={draftArrangeLatest}
+                    onCheckedChange={(checked) => setDraftArrangeLatest(!!checked)}
                   />
-                  <label htmlFor="arrange-latest" className="text-sm cursor-pointer flex items-center gap-2">
-                    <Check className="w-4 h-4 text-primary" />
+                  <label htmlFor="arrange-latest" className="text-sm cursor-pointer">
                     Arrange period/year from latest to oldest
                   </label>
                 </div>

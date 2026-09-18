@@ -6,6 +6,10 @@ import {
   summarizeTaxMovements,
   resolveTaxDateRange,
   toISODate,
+  sanitizeComparePeriodCountInput,
+  commitComparePeriodCount,
+  stepComparePeriodCount,
+  resolveComparisonRanges,
   buildTaxDetailRows,
   mergePeriodSummary,
   groupTaxDetailByCode,
@@ -160,6 +164,38 @@ describe('resolveTaxDateRange', () => {
     const range = resolveTaxDateRange('custom', now, '2026-01-01', '2026-01-31');
     expect(toISODate(range.start)).toBe('2026-01-01');
     expect(toISODate(range.end)).toBe('2026-01-31');
+  });
+});
+
+describe('compare period count selector', () => {
+  it('lets the user type 12 without clamping to 5 mid-keystroke', () => {
+    expect(sanitizeComparePeriodCountInput('1')).toBe('1');
+    expect(sanitizeComparePeriodCountInput('12')).toBe('12');
+    expect(sanitizeComparePeriodCountInput('12a')).toBe('12');
+    expect(sanitizeComparePeriodCountInput('')).toBe('');
+  });
+
+  it('commits empty or invalid values to 1 and caps at 12, not 5', () => {
+    expect(commitComparePeriodCount('')).toBe(1);
+    expect(commitComparePeriodCount('5')).toBe(5);
+    expect(commitComparePeriodCount('12')).toBe(12);
+    expect(commitComparePeriodCount('50')).toBe(12);
+    expect(stepComparePeriodCount('5', 1)).toBe(6);
+    expect(stepComparePeriodCount('1', -1)).toBe(1);
+  });
+});
+
+describe('resolveComparisonRanges', () => {
+  it('builds N previous quarters from the current quarter without repeating the current range', () => {
+    const current = resolveTaxDateRange('this_quarter', new Date(2026, 8, 18));
+    const ranges = resolveComparisonRanges('previous_period', 2, current, 'this_quarter', true);
+    expect(ranges).toHaveLength(2);
+    expect(toISODate(ranges[0].start)).toBe('2026-04-01');
+    expect(toISODate(ranges[0].end)).toBe('2026-06-30');
+    expect(ranges[0].label).toBe('Q2 2026');
+    expect(toISODate(ranges[1].start)).toBe('2026-01-01');
+    expect(toISODate(ranges[1].end)).toBe('2026-03-31');
+    expect(ranges[1].label).toBe('Q1 2026');
   });
 });
 

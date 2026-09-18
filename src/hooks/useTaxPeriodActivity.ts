@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueries } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import {
   buildPeriodFilingForm,
@@ -10,7 +10,9 @@ import {
   mergePeriodSummary,
   summarizeJournalTaxLines,
   summarizeTaxMovements,
+  toISODate,
   type JournalTaxLine,
+  type TaxComparisonRange,
   type TaxMovementRow,
   type TaxReportCategory,
 } from '@/lib/taxPeriodReport';
@@ -91,24 +93,7 @@ export function useTaxPeriodActivity({
     queryKey: ['tax-period-movements', organizationId, periodStart, periodEnd],
     queryFn: async () => {
       if (!organizationId) return { movements: [] as TaxMovementRow[], revenue: 0 };
-      const [{ data, error }, { data: revenue, error: revErr }] = await Promise.all([
-        (supabase.rpc as any)('get_tax_movements_by_code', {
-          p_org_id: organizationId,
-          p_start_date: periodStart,
-          p_end_date: periodEnd,
-        }),
-        (supabase.rpc as any)('get_period_revenue_total', {
-          p_org_id: organizationId,
-          p_start_date: periodStart,
-          p_end_date: periodEnd,
-        }),
-      ]);
-      if (error) throw error;
-      if (revErr) throw revErr;
-      return {
-        movements: (data ?? []) as TaxMovementRow[],
-        revenue: Number(revenue ?? 0),
-      };
+      return fetchPeriodMovements(organizationId, periodStart, periodEnd);
     },
     enabled: !!organizationId,
   });
@@ -306,4 +291,58 @@ export function useTaxPeriodActivity({
     isRefreshing: journalQuery.isFetching || movementsQuery.isFetching,
     refetch: () => Promise.all([movementsQuery.refetch(), journalQuery.refetch()]),
   };
+}
+
+async function fetchPeriodMovements(organizationId: string, periodStart: string, periodEnd: string) {
+  const [{ data, error }, { data: revenue, error: revErr }] = await Promise.all([
+    (supabase.rpc as any)('get_tax_movements_by_code', {
+      p_org_id: organizationId,
+      p_start_date: periodStart,
+      p_end_date: periodEnd,
+    }),
+    (supabase.rpc as any)('get_period_revenue_total', {
+      p_org_id: organizationId,
+      p_start_date: periodStart,
+      p_end_date: periodEnd,
+    }),
+  ]);
+  if (error) throw error;
+  if (revErr) throw revErr;
+  return {
+    movements: (data ?? []) as TaxMovementRow[],
+    revenue: Number(revenue ?? 0),
+  };
+}
+
+export function useTaxPeriodComparisonSummaries({
+  organizationId,
+  ranges,
+  category,
+  enabled,
+}: {
+  organizationId?: string;
+  ranges: TaxComparisonRange[];
+  category: TaxReportCategory;
+  enabled: boolean;
+}) {
+  const queries = useQueries({
+    queries: ranges.map((range) => {
+      const start = toISODate(range.start);
+      const end = toISODate(range.end);
+      return {
+        queryKey: ['tax-period-movements', organizationId, start, end],
+        enabled: enabled && !!organizationId,
+        queryFn: () => fetchPeriodMovements(organizationId!, start, end),
+      };
+    }),
+  });
+
+  return ranges.map((range, index) => {
+    const data = queries[index]?.data;
+    return {
+      ...range,
+      isLoading: queries[index]?.isLoading ?? false,
+      summary: summarizeTaxMovements(data?.movements ?? [], category, data?.revenue ?? 0),
+    };
+  });
 }

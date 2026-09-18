@@ -464,6 +464,105 @@ export function resolveTaxDateRange(
   }
 }
 
+export type TaxCompareType = 'none' | 'previous_period' | 'previous_year';
+
+export const MIN_COMPARE_PERIODS = 1;
+export const MAX_COMPARE_PERIODS = 12;
+
+/** Keep only digits while typing so the field does not jump to the max (e.g. 5). */
+export function sanitizeComparePeriodCountInput(value: string): string {
+  return value.replace(/\D/g, '').slice(0, 2);
+}
+
+export function commitComparePeriodCount(
+  value: string | number,
+  max = MAX_COMPARE_PERIODS,
+): number {
+  const num = typeof value === 'number' ? value : parseInt(value, 10);
+  if (Number.isNaN(num) || num < MIN_COMPARE_PERIODS) return MIN_COMPARE_PERIODS;
+  return Math.min(max, Math.floor(num));
+}
+
+export function stepComparePeriodCount(
+  current: string | number,
+  delta: number,
+  max = MAX_COMPARE_PERIODS,
+): number {
+  return commitComparePeriodCount(commitComparePeriodCount(current, max) + delta, max);
+}
+
+export interface TaxComparisonRange {
+  start: Date;
+  end: Date;
+  label: string;
+}
+
+export function resolveComparisonRanges(
+  compareType: TaxCompareType,
+  count: number,
+  current: { start: Date; end: Date },
+  preset: TaxDatePreset,
+  latestFirst = true,
+): TaxComparisonRange[] {
+  const n = commitComparePeriodCount(count);
+  if (compareType === 'none' || n < 1) return [];
+
+  const ranges: TaxComparisonRange[] = [];
+  const startMonth = current.start.getMonth();
+  const startYear = current.start.getFullYear();
+  const quarterStartMonth = Math.floor(startMonth / 3) * 3;
+
+  for (let i = 1; i <= n; i += 1) {
+    let start: Date;
+    let end: Date;
+    let label: string;
+
+    if (compareType === 'previous_year') {
+      start = new Date(current.start.getFullYear() - i, current.start.getMonth(), current.start.getDate());
+      end = new Date(current.end.getFullYear() - i, current.end.getMonth(), current.end.getDate());
+      label = `${toISODate(start) === toISODate(end) ? toISODate(start) : `${start.toLocaleString('en-US', { month: 'short', day: 'numeric' })} - ${end.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`}`;
+    } else {
+      switch (preset) {
+        case 'today': {
+          start = new Date(startYear, startMonth, current.start.getDate() - i);
+          end = new Date(start);
+          label = start.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+          break;
+        }
+        case 'this_week': {
+          start = new Date(startYear, startMonth, current.start.getDate() - i * 7);
+          end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 6);
+          label = `${start.toLocaleString('en-US', { month: 'short', day: 'numeric' })} - ${end.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+          break;
+        }
+        case 'this_month':
+        case 'last_month': {
+          start = new Date(startYear, startMonth - i, 1);
+          end = new Date(startYear, startMonth - i + 1, 0);
+          label = start.toLocaleString('en-US', { month: 'short', year: 'numeric' });
+          break;
+        }
+        case 'this_quarter':
+        case 'last_quarter': {
+          start = new Date(startYear, quarterStartMonth - 3 * i, 1);
+          end = new Date(start.getFullYear(), start.getMonth() + 3, 0);
+          label = `Q${Math.ceil((start.getMonth() + 1) / 3)} ${start.getFullYear()}`;
+          break;
+        }
+        default: {
+          start = new Date(startYear - i, 0, 1);
+          end = new Date(startYear - i, 11, 31);
+          label = String(start.getFullYear());
+        }
+      }
+    }
+
+    ranges.push({ start, end, label });
+  }
+
+  return latestFirst ? ranges : [...ranges].reverse();
+}
+
 export function inferTaxTransactionType(description?: string, reference?: string): string {
   const hay = `${description ?? ''} ${reference ?? ''}`.toLowerCase();
   if (hay.includes('invoice') || /\binv[-_ ]?\d/i.test(hay)) return 'Invoice';
