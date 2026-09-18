@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Calendar, FileText, AlertTriangle, Check, Settings, Plus, Trash2, TrendingUp, BarChart3, Sparkles, Pencil } from 'lucide-react';
+import { Calendar, FileText, AlertTriangle, Check, Settings, Plus, Trash2, BarChart3, Sparkles, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -15,7 +15,7 @@ import { useCurrentOrganization } from '@/hooks/useOrganization';
 import { useTaxCodes, useTaxReturns, useCreateTaxCode, useUpdateTaxCode, useDeleteTaxCode, useSalesTaxSettings } from '@/hooks/useSalesTax';
 import { useAccounts } from '@/hooks/useAccounts';
 import { TaxReportPreview } from '@/components/tax/TaxReportPreview';
-import { format, parseISO } from 'date-fns';
+import { format } from 'date-fns';
 import { parseLocalDate } from '@/lib/utils';
 import { Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
@@ -59,11 +59,6 @@ export default function SalesTax() {
   const [selectedPeriod, setSelectedPeriod] = useState<string>('');
   const [showAddCodeDialog, setShowAddCodeDialog] = useState(false);
   const [editingCode, setEditingCode] = useState<any | null>(null);
-  
-  // Tax Summary filters
-  const [summaryPeriod, setSummaryPeriod] = useState<'current_year' | 'last_year' | 'current_quarter' | 'last_quarter'>('last_year');
-  const [summaryAccountType, setSummaryAccountType] = useState<'all' | 'collected' | 'paid' | 'pst'>('all');
-  const [summaryCategory, setSummaryCategory] = useState<'gst' | 'pst'>('gst');
 
   const form = useForm({
     defaultValues: {
@@ -179,58 +174,6 @@ export default function SalesTax() {
       remitted: yearReturns.filter(r => r.status === 'paid').reduce((sum, r) => sum + Number(r.net_payable), 0),
     };
   }, [taxReturns]);
-
-  // Calculate real-time tax balances from GL accounts
-  const glTaxSummary = useMemo(() => {
-    // Find GST/HST/VAT collected (payable) accounts - includes "Payable" naming convention
-    const taxCollectedAccounts = accounts.filter(a => {
-      const nameLower = a.name.toLowerCase();
-      // Match: GST/HST Payable, GST/HST Collected, VAT Payable, Tax Collected, TVA Collectée
-      const isGstHstVat = nameLower.includes('gst') || nameLower.includes('hst') || 
-                          nameLower.includes('vat') || nameLower.includes('tva');
-      const isCollectedType = nameLower.includes('collected') || nameLower.includes('collectée') ||
-                              (nameLower.includes('payable') && !nameLower.includes('pst') && !nameLower.includes('qst'));
-      // Exclude ITC/Input accounts
-      const isNotInput = !nameLower.includes('input') && !nameLower.includes('itc') && !nameLower.includes('déductible');
-      return isGstHstVat && (isCollectedType || (!nameLower.includes('input') && !nameLower.includes('itc'))) && isNotInput;
-    });
-    
-    // Find GST/HST/VAT paid (input/ITC) accounts
-    const taxPaidAccounts = accounts.filter(a => {
-      const nameLower = a.name.toLowerCase();
-      const isGstHstVat = nameLower.includes('gst') || nameLower.includes('hst') || 
-                          nameLower.includes('vat') || nameLower.includes('tva');
-      const isInputType = nameLower.includes('input') || nameLower.includes('itc') || 
-                          nameLower.includes('déductible') || nameLower.includes('credit');
-      return isGstHstVat && isInputType;
-    });
-    
-    // Find PST/QST payable accounts (provincial taxes)
-    const pstPayableAccounts = accounts.filter(a => {
-      const nameLower = a.name.toLowerCase();
-      return (nameLower.includes('pst') || nameLower.includes('qst') || nameLower.includes('rst')) && 
-             (nameLower.includes('payable') || nameLower.includes('collected'));
-    });
-
-    // Sum balances (collected is typically a credit balance, paid is debit)
-    const collected = taxCollectedAccounts.reduce((sum, a) => sum + Math.abs(Number(a.current_balance || 0)), 0);
-    const paid = taxPaidAccounts.reduce((sum, a) => sum + Math.abs(Number(a.current_balance || 0)), 0);
-    const pstPayable = pstPayableAccounts.reduce((sum, a) => sum + Number(a.current_balance || 0), 0);
-    const netPayable = collected - paid;
-
-    return {
-      collected,
-      paid,
-      pstPayable,
-      netPayable,
-      hasData: collected > 0 || paid > 0 || pstPayable !== 0,
-      accounts: {
-        collected: taxCollectedAccounts,
-        paid: taxPaidAccounts,
-        pst: pstPayableAccounts,
-      }
-    };
-  }, [accounts]);
 
   const statusConfig = {
     draft: { label: countryCode === 'BI' ? 'Brouillon' : 'Draft', color: 'bg-amber-100 text-amber-800' },
@@ -570,291 +513,24 @@ export default function SalesTax() {
         </TabsContent>
 
         <TabsContent value="summary" className="space-y-6">
-          {/* Category Tabs for Canada */}
-          {countryCode === 'CA' && (
-            <Tabs value={summaryCategory} onValueChange={(v) => setSummaryCategory(v as 'gst' | 'pst')} className="mb-4">
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger
-                  value="gst"
-                  className="gap-2 data-[state=active]:bg-emerald-500/10 data-[state=active]:text-emerald-700 dark:data-[state=active]:text-emerald-400 data-[state=active]:shadow-sm data-[state=active]:border-b-2 data-[state=active]:border-emerald-500"
-                >
-                  <FileText className="w-4 h-4" />
-                  CRA GST/HST
-                </TabsTrigger>
-                <TabsTrigger
-                  value="pst"
-                  className="gap-2 data-[state=active]:bg-sky-500/10 data-[state=active]:text-sky-700 dark:data-[state=active]:text-sky-400 data-[state=active]:shadow-sm data-[state=active]:border-b-2 data-[state=active]:border-sky-500"
-                >
-                  <FileText className="w-4 h-4" />
-                  Provincial (PST/QST)
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
-          )}
-
-          {/* Summary Filters */}
-          <div className="flex flex-wrap items-center gap-3 p-4 bg-muted/30 rounded-lg border">
-            <Label className="text-sm text-muted-foreground">{countryCode === 'BI' ? 'Période:' : 'Period:'}</Label>
-            <Select value={summaryPeriod} onValueChange={(v) => setSummaryPeriod(v as any)}>
-              <SelectTrigger className="w-[160px] h-9">
-                <Calendar className="w-4 h-4 mr-2" />
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="current_year">{countryCode === 'BI' ? 'Année Courante' : 'Current Year'}</SelectItem>
-                <SelectItem value="last_year">{countryCode === 'BI' ? 'Année Dernière' : 'Last Year'}</SelectItem>
-                <SelectItem value="current_quarter">{countryCode === 'BI' ? 'Trimestre Courant' : 'Current Quarter'}</SelectItem>
-                <SelectItem value="last_quarter">{countryCode === 'BI' ? 'Trimestre Dernier' : 'Last Quarter'}</SelectItem>
-              </SelectContent>
-            </Select>
-            
-            {countryCode !== 'CA' && (
-              <>
-                <Label className="text-sm text-muted-foreground ml-2">{countryCode === 'BI' ? 'Type:' : 'Type:'}</Label>
-                <Select value={summaryAccountType} onValueChange={(v) => setSummaryAccountType(v as any)}>
-                  <SelectTrigger className="w-[140px] h-9">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">{countryCode === 'BI' ? 'Tous' : 'All Types'}</SelectItem>
-                    <SelectItem value="collected">{countryCode === 'BI' ? 'Collectée' : 'Collected'}</SelectItem>
-                    <SelectItem value="paid">{countryCode === 'BI' ? 'Payée' : 'Paid/ITC'}</SelectItem>
-                  </SelectContent>
-                </Select>
-              </>
-            )}
-          </div>
-
-          {/* Real-time GL Tax Balances - GST/HST or All */}
-          {(summaryCategory === 'gst' || countryCode !== 'CA') && glTaxSummary.hasData && (
-            <Card className="p-6 border-l-4 border-l-primary">
-              <div className="flex items-center gap-2 mb-4">
-                <TrendingUp className="w-5 h-5 text-primary" />
-                <h3 className="text-lg font-semibold text-foreground">
-                  {countryCode === 'BI' 
-                    ? 'Soldes TVA en Temps Réel' 
-                    : countryCode === 'CA' 
-                      ? 'CRA GST/HST Balances (from GL)' 
-                      : 'Current Tax Balances (from GL)'}
-                </h3>
-              </div>
-              <p className="text-sm text-muted-foreground mb-4">
-                {countryCode === 'BI' 
-                  ? 'Montants actuels dans vos comptes de taxes du grand livre'
-                  : countryCode === 'CA'
-                    ? 'Federal GST/HST amounts from your General Ledger accounts'
-                    : 'Current amounts posted to your tax liability accounts'}
-              </p>
-              <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
-                <div className="p-4 bg-green-50 dark:bg-green-950/30 rounded-lg">
-                  <p className="text-sm text-muted-foreground mb-1">
-                    {taxTerminology.collectedLabel}
-                  </p>
-                  <p className="text-2xl font-bold text-green-700 dark:text-green-400">
-                    {formatCurrency(glTaxSummary.collected)}
-                  </p>
-                  {glTaxSummary.accounts.collected.length > 0 && (
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {glTaxSummary.accounts.collected.map(a => a.code).join(', ')}
-                    </p>
-                  )}
-                </div>
-                <div className="p-4 bg-blue-50 dark:bg-blue-950/30 rounded-lg">
-                  <p className="text-sm text-muted-foreground mb-1">
-                    {taxTerminology.paidLabel}
-                  </p>
-                  <p className="text-2xl font-bold text-blue-700 dark:text-blue-400">
-                    {formatCurrency(glTaxSummary.paid)}
-                  </p>
-                  {glTaxSummary.accounts.paid.length > 0 && (
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {glTaxSummary.accounts.paid.map(a => a.code).join(', ')}
-                    </p>
-                  )}
-                </div>
-                <div className="p-4 bg-amber-50 dark:bg-amber-950/30 rounded-lg">
-                  <p className="text-sm text-muted-foreground mb-1">
-                    {taxTerminology.netLabel}
-                  </p>
-                  <p className={`text-2xl font-bold ${glTaxSummary.netPayable >= 0 ? 'text-amber-700 dark:text-amber-400' : 'text-green-700 dark:text-green-400'}`}>
-                    {formatCurrency(Math.abs(glTaxSummary.netPayable))}
-                  </p>
-                </div>
-                {/* Refund/Owing indicator */}
-                <div className={`p-4 rounded-lg ${glTaxSummary.netPayable < 0 ? 'bg-emerald-50 dark:bg-emerald-950/30' : 'bg-red-50 dark:bg-red-950/30'}`}>
-                  <p className="text-sm text-muted-foreground mb-1">
-                    {countryCode === 'BI' ? 'Remboursement / Dû' : 'Refund / Owing'}
-                  </p>
-                  <p className={`text-2xl font-bold ${glTaxSummary.netPayable < 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-700 dark:text-red-400'}`}>
-                    {glTaxSummary.netPayable < 0 ? (
-                      <>
-                        {formatCurrency(Math.abs(glTaxSummary.netPayable))}
-                        <span className="text-sm font-normal ml-1">
-                          {countryCode === 'BI' ? '(remboursement)' : '(refund)'}
-                        </span>
-                      </>
-                    ) : (
-                      <>
-                        {formatCurrency(glTaxSummary.netPayable)}
-                        <span className="text-sm font-normal ml-1">
-                          {countryCode === 'BI' ? '(dû)' : '(owing)'}
-                        </span>
-                      </>
-                    )}
-                  </p>
-                </div>
-              </div>
-            </Card>
-          )}
-
-          {/* PST Summary for Canada */}
-          {summaryCategory === 'pst' && countryCode === 'CA' && (
-            <Card className="p-6 border-l-4 border-l-purple-500">
-              <div className="flex items-center gap-2 mb-4">
-                <TrendingUp className="w-5 h-5 text-purple-500" />
-                <h3 className="text-lg font-semibold text-foreground">
-                  Provincial Sales Tax Balances (from GL)
-                </h3>
-              </div>
-              <p className="text-sm text-muted-foreground mb-4">
-                Provincial sales tax (PST, RST, QST) amounts from your General Ledger accounts
-              </p>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="p-4 bg-purple-50 dark:bg-purple-950/30 rounded-lg">
-                  <p className="text-sm text-muted-foreground mb-1">PST/QST Payable</p>
-                  <p className="text-2xl font-bold text-purple-700 dark:text-purple-400">
-                    {formatCurrency(Math.abs(glTaxSummary.pstPayable))}
-                  </p>
-                  {glTaxSummary.accounts.pst.length > 0 && (
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {glTaxSummary.accounts.pst.map(a => a.code).join(', ')}
-                    </p>
-                  )}
-                </div>
-                {/* Refund/Owing indicator for PST */}
-                <div className={`p-4 rounded-lg ${glTaxSummary.pstPayable < 0 ? 'bg-emerald-50 dark:bg-emerald-950/30' : 'bg-red-50 dark:bg-red-950/30'}`}>
-                  <p className="text-sm text-muted-foreground mb-1">Refund / Owing</p>
-                  <p className={`text-2xl font-bold ${glTaxSummary.pstPayable < 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-700 dark:text-red-400'}`}>
-                    {glTaxSummary.pstPayable < 0 ? (
-                      <>
-                        {formatCurrency(Math.abs(glTaxSummary.pstPayable))}
-                        <span className="text-sm font-normal ml-1">(refund)</span>
-                      </>
-                    ) : (
-                      <>
-                        {formatCurrency(Math.abs(glTaxSummary.pstPayable))}
-                        <span className="text-sm font-normal ml-1">(owing)</span>
-                      </>
-                    )}
-                  </p>
-                </div>
-              </div>
-            </Card>
-          )}
-
-          {/* Account Breakdown Table */}
-          <Card className="overflow-hidden">
-            <div className="bg-muted/50 px-4 py-3 border-b">
-              <h3 className="font-semibold text-foreground">
-                {countryCode === 'BI' ? 'Détail des Comptes' : 'Account Breakdown'}
-              </h3>
-            </div>
-            {(summaryCategory === 'gst' || countryCode !== 'CA') ? (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>{countryCode === 'BI' ? 'Compte' : 'Account'}</TableHead>
-                    <TableHead>Code</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead className="text-right">{countryCode === 'BI' ? 'Solde' : 'Balance'}</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {glTaxSummary.accounts.collected.map((acc) => (
-                    <TableRow key={acc.id}>
-                      <TableCell className="font-medium">{acc.name}</TableCell>
-                      <TableCell className="font-mono text-muted-foreground">{acc.code}</TableCell>
-                      <TableCell>
-                        <Badge className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
-                          {countryCode === 'BI' ? 'Collectée' : 'Collected'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right font-mono">{formatCurrency(Math.abs(Number(acc.current_balance || 0)))}</TableCell>
-                    </TableRow>
-                  ))}
-                  {glTaxSummary.accounts.paid.map((acc) => (
-                    <TableRow key={acc.id}>
-                      <TableCell className="font-medium">{acc.name}</TableCell>
-                      <TableCell className="font-mono text-muted-foreground">{acc.code}</TableCell>
-                      <TableCell>
-                        <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
-                          {countryCode === 'BI' ? 'TVA Déductible' : 'Paid/ITC'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right font-mono">{formatCurrency(Math.abs(Number(acc.current_balance || 0)))}</TableCell>
-                    </TableRow>
-                  ))}
-                  {glTaxSummary.accounts.collected.length === 0 && glTaxSummary.accounts.paid.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
-                        {countryCode === 'BI' 
-                          ? 'Aucun compte de taxes trouvé. Configurez vos comptes GST/HST dans le plan comptable.'
-                          : 'No tax accounts found. Set up your GST/HST accounts in the chart of accounts.'}
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Account</TableHead>
-                    <TableHead>Code</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead className="text-right">Balance</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {glTaxSummary.accounts.pst.map((acc) => (
-                    <TableRow key={acc.id}>
-                      <TableCell className="font-medium">{acc.name}</TableCell>
-                      <TableCell className="font-mono text-muted-foreground">{acc.code}</TableCell>
-                      <TableCell>
-                        <Badge className="bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400">
-                          PST/QST
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right font-mono">{formatCurrency(Math.abs(Number(acc.current_balance || 0)))}</TableCell>
-                    </TableRow>
-                  ))}
-                  {glTaxSummary.accounts.pst.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
-                        No PST/QST accounts found. Set up your provincial tax accounts in the chart of accounts.
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            )}
-          </Card>
+          <TaxReportPreview
+            organizationId={organization?.id}
+            organizationName={organization?.name}
+            countryCode={countryCode}
+            taxTerminology={taxTerminology}
+            formatCurrency={formatCurrency}
+          />
 
           {/* Annual Summary from Tax Returns */}
           <Card className="p-6">
             <h3 className="text-lg font-semibold text-foreground mb-4">
               {new Date().getFullYear()} {countryCode === 'BI' ? 'Résumé des Déclarations' : 'Filed Returns Summary'}
-              {countryCode === 'CA' && (
-                <span className="text-sm font-normal text-muted-foreground ml-2">
-                  ({summaryCategory === 'gst' ? 'GST/HST' : 'PST/QST'})
-                </span>
-              )}
             </h3>
             {taxReturns.length === 0 ? (
               <p className="text-muted-foreground text-center py-8">
                 {countryCode === 'BI' 
                   ? 'Aucune déclaration soumise. Les soldes ci-dessus proviennent du grand livre.'
-                  : 'No tax returns filed yet. The balances above are from your General Ledger.'}
+                  : 'No tax returns filed yet.'}
               </p>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-4 gap-6">

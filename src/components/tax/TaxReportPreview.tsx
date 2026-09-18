@@ -1,7 +1,7 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, Fragment } from 'react';
 import { format, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear, endOfYear, subMonths, subQuarters, subYears } from 'date-fns';
 import { parseLocalDate } from '@/lib/utils';
-import { Download, Eye, FileText, Printer, Calendar, ArrowRight, Filter, SlidersHorizontal, GitCompare, Check, ChevronDown } from 'lucide-react';
+import { Download, Eye, FileText, Printer, Filter, SlidersHorizontal, GitCompare, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -13,29 +13,19 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import jsPDF from 'jspdf';
 import { addPdfBrandingFooter } from '@/lib/pdfBrandingFooter';
-import { supabase } from '@/integrations/supabase/client';
-import { useQuery } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
+import { TaxDateRangeBar } from '@/components/tax/TaxDateRangeBar';
+import { useTaxPeriodActivity } from '@/hooks/useTaxPeriodActivity';
 import {
-  buildPeriodFilingForm,
-  classifyTaxAccountName,
-  isProvincialTaxHaystack,
-  summarizeJournalTaxLines,
-  summarizeTaxMovements,
   resolveTaxDateRange,
   toISODate,
-  parseISODate,
-  mergePeriodSummary,
-  buildTaxDetailRows,
   type TaxDatePreset,
-  type TaxMovementRow,
 } from '@/lib/taxPeriodReport';
 
 interface TaxReportPreviewProps {
@@ -51,30 +41,6 @@ interface TaxReportPreviewProps {
     authorityLabel: string;
   };
   formatCurrency: (value: number) => string;
-}
-
-interface TaxAccountDetail {
-  accountId: string;
-  accountCode: string;
-  accountName: string;
-  balance: number;
-  type: 'collected' | 'paid' | 'pst';
-  taxCodeId?: string;
-  taxCodeName?: string;
-  jurisdiction?: string;
-}
-
-interface JournalEntryLine {
-  entry_date: string;
-  description: string;
-  line_description?: string;
-  reference: string;
-  debit: number;
-  credit: number;
-  account_code: string;
-  account_name: string;
-  tax_code?: string;
-  vendor_customer?: string;
 }
 
 type ReportType = 'summary' | 'detailed' | 'by_tax_code' | 'by_jurisdiction';
@@ -102,7 +68,7 @@ export function TaxReportPreview({
   const [compareArrangeLatest, setCompareArrangeLatest] = useState(true);
   
   // Advanced filter states
-  const [reportType, setReportType] = useState<ReportType>('summary');
+  const [reportType, setReportType] = useState<ReportType>('detailed');
   const [accountTypeFilter, setAccountTypeFilter] = useState<AccountTypeFilter>('all');
   const [selectedTaxCodes, setSelectedTaxCodes] = useState<string[]>([]);
   const [customStartDate, setCustomStartDate] = useState<Date | undefined>(undefined);
@@ -111,13 +77,11 @@ export function TaxReportPreview({
   const isBurundi = countryCode === 'BI';
   const isCanada = countryCode === 'CA';
 
-  // Calculate date range based on period type
   const dateRange = useMemo(
     () => resolveTaxDateRange(periodType, new Date(), customStartDate, customEndDate),
     [periodType, customStartDate, customEndDate],
   );
 
-  // Calculate comparison date ranges
   const comparisonRanges = useMemo(() => {
     if (compareType === 'none') return [];
     
@@ -127,7 +91,6 @@ export function TaxReportPreview({
       let start: Date, end: Date, label: string;
       
       if (compareType === 'previous_period') {
-        // Calculate based on current period type
         switch (periodType) {
           case 'this_month':
           case 'last_month':
@@ -147,7 +110,6 @@ export function TaxReportPreview({
             label = start.getFullYear().toString();
         }
       } else {
-        // Previous year comparison
         start = subYears(dateRange.start, i);
         end = subYears(dateRange.end, i);
         label = `${format(start, 'MMM d')} - ${format(end, 'MMM d, yyyy')}`;
@@ -163,300 +125,29 @@ export function TaxReportPreview({
     return `${format(dateRange.start, 'MMM d, yyyy')} - ${format(dateRange.end, 'MMM d, yyyy')}`;
   }, [dateRange]);
 
-  // Fetch tax codes for filter
-  const { data: taxCodes = [] } = useQuery({
-    queryKey: ['tax-codes-filter', organizationId],
-    queryFn: async () => {
-      if (!organizationId) return [];
-      const { data, error } = await supabase
-        .from('tax_codes')
-        .select('id, code, name, jurisdiction, rate')
-        .eq('organization_id', organizationId)
-        .eq('is_active', true);
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!organizationId,
+  const periodStartStr = toISODate(dateRange.start);
+  const periodEndStr = toISODate(dateRange.end);
+
+  const {
+    allTaxCodes: filteredTaxCodesByCategory,
+    journalDetails: filteredJournalDetails,
+    periodSummary,
+    detailRows,
+    detailGroups,
+    filingForm,
+    isLoading,
+    isRefreshing,
+    refetch,
+  } = useTaxPeriodActivity({
+    organizationId,
+    countryCode,
+    periodStart: periodStartStr,
+    periodEnd: periodEndStr,
+    category: isCanada ? reportCategory : 'all',
+    accountTypeFilter,
+    selectedTaxCodes,
+    authorityLabel: taxTerminology.authorityLabel,
   });
-
-  // Fetch tax account balances
-  const { data: taxAccounts = [], isLoading: accountsLoading } = useQuery({
-    queryKey: ['tax-report-accounts', organizationId],
-    queryFn: async () => {
-      if (!organizationId) return [];
-      
-      const { data, error } = await supabase
-        .from('accounts')
-        .select('id, code, name, current_balance')
-        .eq('organization_id', organizationId)
-        .or('name.ilike.%gst%,name.ilike.%hst%,name.ilike.%pst%,name.ilike.%vat%,name.ilike.%tax collected%,name.ilike.%tax paid%,name.ilike.%input tax%,name.ilike.%qst%,name.ilike.%tva%');
-      
-      if (error) throw error;
-      
-      return (data || []).flatMap((acc) => {
-        const nameLower = acc.name.toLowerCase();
-        const side = classifyTaxAccountName(acc.name);
-        if (!side) return [];
-
-        let type: 'collected' | 'paid' | 'pst' = side;
-        if (isProvincialTaxHaystack(nameLower) && side === 'collected') {
-          type = 'pst';
-        }
-
-        return [{
-          accountId: acc.id,
-          accountCode: acc.code,
-          accountName: acc.name,
-          balance: Number(acc.current_balance || 0),
-          type,
-        } as TaxAccountDetail];
-      });
-    },
-    enabled: !!organizationId,
-  });
-
-  const periodStartStr = format(dateRange.start, 'yyyy-MM-dd');
-  const periodEndStr = format(dateRange.end, 'yyyy-MM-dd');
-
-  const { data: periodMovements, isLoading: movementsLoading, isFetching: movementsFetching } = useQuery({
-    queryKey: ['tax-period-movements', organizationId, periodStartStr, periodEndStr],
-    queryFn: async () => {
-      if (!organizationId) return { movements: [] as TaxMovementRow[], revenue: 0 };
-      const [{ data, error }, { data: revenue, error: revErr }] = await Promise.all([
-        (supabase.rpc as any)('get_tax_movements_by_code', {
-          p_org_id: organizationId,
-          p_start_date: periodStartStr,
-          p_end_date: periodEndStr,
-        }),
-        (supabase.rpc as any)('get_period_revenue_total', {
-          p_org_id: organizationId,
-          p_start_date: periodStartStr,
-          p_end_date: periodEndStr,
-        }),
-      ]);
-      if (error) throw error;
-      if (revErr) throw revErr;
-      return {
-        movements: (data ?? []) as TaxMovementRow[],
-        revenue: Number(revenue ?? 0),
-      };
-    },
-    enabled: !!organizationId,
-  });
-
-  // Filter accounts by report category
-  const categoryFilteredAccounts = useMemo(() => {
-    if (!isCanada) return taxAccounts;
-    
-    return taxAccounts.filter(acc => {
-      const nameLower = acc.accountName.toLowerCase();
-      if (reportCategory === 'gst') {
-        return (nameLower.includes('gst') || nameLower.includes('hst')) && 
-               !nameLower.includes('pst') && !nameLower.includes('qst');
-      } else {
-        return nameLower.includes('pst') || nameLower.includes('qst');
-      }
-    });
-  }, [taxAccounts, reportCategory, isCanada]);
-
-  // Fetch journal entry details for the period with enhanced data
-  const { data: journalDetails = [], isLoading: journalLoading, isFetching: journalFetching } = useQuery({
-    queryKey: ['tax-report-journal', organizationId, periodStartStr, periodEndStr, taxAccounts.map((a) => a.accountId).join(',')],
-    queryFn: async () => {
-      if (!organizationId || taxAccounts.length === 0) return [];
-
-      const accountIds = taxAccounts.map((a) => a.accountId);
-      const accountsMap = new Map(taxAccounts.map((a) => [a.accountId, a]));
-      const PAGE_SIZE = 1000;
-      const rows: JournalEntryLine[] = [];
-
-      for (let offset = 0; offset < 20; offset += 1) {
-        const from = offset * PAGE_SIZE;
-        const { data: lines, error: linesError } = await supabase
-          .from('journal_entry_lines')
-          .select(`
-            id,
-            journal_entry_id,
-            account_id,
-            debit,
-            credit,
-            description,
-            journal_entries!inner(id, entry_date, description, reference, status, organization_id)
-          `)
-          .in('account_id', accountIds)
-          .eq('journal_entries.organization_id', organizationId)
-          .in('journal_entries.status', ['posted', 'reversed'])
-          .gte('journal_entries.entry_date', periodStartStr)
-          .lte('journal_entries.entry_date', periodEndStr)
-          .range(from, from + PAGE_SIZE - 1);
-
-        if (linesError) throw linesError;
-        if (!lines || lines.length === 0) break;
-
-        for (const line of lines as any[]) {
-          const je = line.journal_entries;
-          if (String(je?.reference || '').startsWith('CLOSE-')) continue;
-          const acc = accountsMap.get(line.account_id);
-          const taxCodeMatch = String(line.description || je?.description || '').match(/^(GST|HST|PST|QST|VAT)(\s*-\s*\w+)?/i);
-          rows.push({
-            entry_date: je?.entry_date,
-            description: je?.description || line.description,
-            line_description: line.description,
-            reference: je?.reference,
-            debit: Number(line.debit || 0),
-            credit: Number(line.credit || 0),
-            account_code: acc?.accountCode,
-            account_name: acc?.accountName,
-            tax_code: taxCodeMatch ? taxCodeMatch[0].trim() : undefined,
-          });
-        }
-
-        if (lines.length < PAGE_SIZE) break;
-      }
-
-      return rows;
-    },
-    enabled: !!organizationId && taxAccounts.length > 0,
-  });
-
-  // Filter journal details by category
-  const categoryFilteredJournalDetails = useMemo(() => {
-    if (!isCanada) return journalDetails;
-    
-    return journalDetails.filter((line: any) => {
-      const nameLower = line.account_name?.toLowerCase() || '';
-      const codeLower = line.tax_code?.toLowerCase() || '';
-      
-      if (reportCategory === 'gst') {
-        return (nameLower.includes('gst') || nameLower.includes('hst') || 
-                codeLower.includes('gst') || codeLower.includes('hst')) &&
-               !nameLower.includes('pst') && !codeLower.includes('pst') &&
-               !nameLower.includes('qst') && !codeLower.includes('qst');
-      } else {
-        return nameLower.includes('pst') || nameLower.includes('qst') ||
-               codeLower.includes('pst') || codeLower.includes('qst');
-      }
-    });
-  }, [journalDetails, reportCategory, isCanada]);
-
-  // Derive available tax codes from journal details when tax_codes table is empty
-  const derivedTaxCodes = useMemo(() => {
-    if (taxCodes.length > 0) return [];
-    
-    const codes = new Set<string>();
-    journalDetails.forEach((line: any) => {
-      if (line.tax_code) {
-        codes.add(line.tax_code);
-      }
-    });
-    
-    return Array.from(codes).map(code => ({
-      id: code,
-      code: code,
-      name: code,
-      jurisdiction: null
-    }));
-  }, [journalDetails, taxCodes]);
-
-  // Combined tax codes (from table or derived)
-  const allTaxCodes = taxCodes.length > 0 ? taxCodes : derivedTaxCodes;
-
-  // Filter tax codes by category
-  const filteredTaxCodesByCategory = useMemo(() => {
-    if (!isCanada) return allTaxCodes;
-    
-    return allTaxCodes.filter(tc => {
-      const codeLower = tc.code.toLowerCase();
-      if (reportCategory === 'gst') {
-        return codeLower.includes('gst') || codeLower.includes('hst') || 
-               (!codeLower.includes('pst') && !codeLower.includes('qst'));
-      } else {
-        return codeLower.includes('pst') || codeLower.includes('qst');
-      }
-    });
-  }, [allTaxCodes, reportCategory, isCanada]);
-
-  // Filter accounts based on selected filters
-  const filteredAccounts = useMemo(() => {
-    let accounts = [...categoryFilteredAccounts];
-    if (accountTypeFilter !== 'all') {
-      accounts = accounts.filter(a => a.type === accountTypeFilter);
-    }
-    return accounts;
-  }, [categoryFilteredAccounts, accountTypeFilter]);
-
-  // Filter journal entries based on selected tax codes
-  const filteredJournalDetails = useMemo(() => {
-    let details = categoryFilteredJournalDetails;
-    if (selectedTaxCodes.length > 0) {
-      details = details.filter((j: any) => j.tax_code && selectedTaxCodes.includes(j.tax_code));
-    }
-    // Apply account type filter
-    if (accountTypeFilter === 'collected') {
-      details = details.filter((j: any) => classifyTaxAccountName(j.account_name) === 'collected');
-    } else if (accountTypeFilter === 'paid') {
-      details = details.filter((j: any) => classifyTaxAccountName(j.account_name) === 'paid');
-    }
-    return details;
-  }, [categoryFilteredJournalDetails, selectedTaxCodes, accountTypeFilter]);
-
-  // Period totals from GL movements (not lifetime current_balance).
-  const periodSummary = useMemo(() => {
-    const category = isCanada ? reportCategory : 'all';
-    const journalLines = filteredJournalDetails.map((j) => ({
-      account_name: j.account_name,
-      account_code: j.account_code,
-      debit: j.debit,
-      credit: j.credit,
-      tax_code: j.tax_code,
-      entry_date: j.entry_date,
-      description: j.description,
-      reference: j.reference,
-      line_description: j.line_description,
-    }));
-    const journal = summarizeJournalTaxLines(journalLines, category);
-    const rpc = summarizeTaxMovements(
-      periodMovements?.movements ?? [],
-      category,
-      periodMovements?.revenue ?? 0,
-    );
-    return mergePeriodSummary(journal, rpc, journalLines.length > 0);
-  }, [periodMovements, reportCategory, isCanada, filteredJournalDetails]);
-
-  const detailRows = useMemo(() => {
-    const rateByCode: Record<string, number> = {};
-    for (const code of allTaxCodes) {
-      if (code.code) rateByCode[code.code] = Number((code as { rate?: number }).rate ?? 0);
-    }
-    for (const row of periodSummary.byTaxCode) {
-      if (row.rate) rateByCode[row.code] = row.rate;
-    }
-    return buildTaxDetailRows(
-      filteredJournalDetails.map((j) => ({
-        account_name: j.account_name,
-        account_code: j.account_code,
-        debit: j.debit,
-        credit: j.credit,
-        tax_code: j.tax_code,
-        entry_date: j.entry_date,
-        description: j.description,
-        reference: j.reference,
-        line_description: j.line_description,
-      })),
-      rateByCode,
-    );
-  }, [filteredJournalDetails, allTaxCodes, periodSummary.byTaxCode]);
-
-  const filingForm = useMemo(() => {
-    return buildPeriodFilingForm(periodSummary, {
-      authority: taxTerminology.authorityLabel,
-      periodStart: periodStartStr,
-      periodEnd: periodEndStr,
-      currency: countryCode === 'US' ? 'USD' : countryCode === 'GB' ? 'GBP' : countryCode === 'BI' ? 'BIF' : 'CAD',
-      countryCode,
-      region: isCanada ? (reportCategory === 'pst' ? 'CA-BC' : 'CA-ON') : countryCode,
-    });
-  }, [periodSummary, taxTerminology.authorityLabel, periodStartStr, periodEndStr, countryCode, isCanada, reportCategory]);
 
   const summary = useMemo(() => ({
     collected: periodSummary.taxCollected,
@@ -476,12 +167,12 @@ export function TaxReportPreview({
     taxableAmount: row.taxableAmount,
   }));
 
-  const hasActiveFilters = selectedTaxCodes.length > 0 || accountTypeFilter !== 'all' || reportType !== 'summary';
+  const hasActiveFilters = selectedTaxCodes.length > 0 || accountTypeFilter !== 'all' || reportType !== 'detailed';
 
   const clearFilters = () => {
     setSelectedTaxCodes([]);
     setAccountTypeFilter('all');
-    setReportType('summary');
+    setReportType('detailed');
   };
 
   const applyComparison = () => {
@@ -672,9 +363,6 @@ export function TaxReportPreview({
     }
   };
 
-  const isLoading = accountsLoading || journalLoading || movementsLoading;
-  const isRefreshing = journalFetching || movementsFetching;
-
   return (
     <>
       <Card className="p-6">
@@ -707,7 +395,7 @@ export function TaxReportPreview({
             >
               <SlidersHorizontal className="w-4 h-4 mr-2" />
               {isBurundi ? 'Filtres' : 'Filters'}
-              {hasActiveFilters && <Badge variant="secondary" className="ml-2">{selectedTaxCodes.length + (accountTypeFilter !== 'all' ? 1 : 0) + (reportType !== 'summary' ? 1 : 0)}</Badge>}
+              {hasActiveFilters && <Badge variant="secondary" className="ml-2">{selectedTaxCodes.length + (accountTypeFilter !== 'all' ? 1 : 0) + (reportType !== 'detailed' ? 1 : 0)}</Badge>}
             </Button>
           </div>
         </div>
@@ -740,70 +428,43 @@ export function TaxReportPreview({
           <p className="text-sm text-muted-foreground">{getReportCategoryDescription()}</p>
         </div>
 
-        {/* Zoho-style date range: preset plus always-visible From/To */}
-        <div className="flex flex-wrap items-end gap-3 p-4 bg-muted/30 rounded-lg border mb-4">
-          <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">{isBurundi ? 'Plage de dates' : 'Date range'}</Label>
-            <Select
-              value={periodType}
-              onValueChange={(v) => setPeriodType(v as TaxDatePreset)}
-            >
-              <SelectTrigger className="w-[180px] h-9">
-                <Calendar className="w-4 h-4 mr-2" />
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="today">{isBurundi ? "Aujourd'hui" : 'Today'}</SelectItem>
-                <SelectItem value="this_week">{isBurundi ? 'Cette semaine' : 'This Week'}</SelectItem>
-                <SelectItem value="this_month">{isBurundi ? 'Ce mois' : 'This Month'}</SelectItem>
-                <SelectItem value="last_month">{isBurundi ? 'Mois précédent' : 'Previous Month'}</SelectItem>
-                <SelectItem value="this_quarter">{isBurundi ? 'Ce trimestre' : 'This Quarter'}</SelectItem>
-                <SelectItem value="last_quarter">{isBurundi ? 'Trimestre précédent' : 'Previous Quarter'}</SelectItem>
-                <SelectItem value="this_year">{isBurundi ? 'Cette année' : 'This Year'}</SelectItem>
-                <SelectItem value="last_year">{isBurundi ? 'Année précédente' : 'Previous Year'}</SelectItem>
-                <SelectItem value="custom">{isBurundi ? 'Personnalisé' : 'Custom'}</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">{isBurundi ? 'Du' : 'From'}</Label>
-            <Input
-              type="date"
-              className="h-9 w-[150px]"
-              value={toISODate(dateRange.start)}
-              onChange={(e) => {
-                setPeriodType('custom');
-                setCustomStartDate(parseISODate(e.target.value));
-                setCustomEndDate((prev) => prev ?? dateRange.end);
-              }}
-            />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">{isBurundi ? 'Au' : 'To'}</Label>
-            <Input
-              type="date"
-              className="h-9 w-[150px]"
-              value={toISODate(dateRange.end)}
-              onChange={(e) => {
-                setPeriodType('custom');
-                setCustomEndDate(parseISODate(e.target.value));
-                setCustomStartDate((prev) => prev ?? dateRange.start);
-              }}
-            />
-          </div>
-          <Badge variant="outline" className="h-9 px-3 flex items-center">
-            {periodLabel}
-          </Badge>
-          {isRefreshing && !isLoading && (
-            <span className="text-xs text-muted-foreground">Updating…</span>
-          )}
-          {compareType !== 'none' && (
-            <Badge variant="secondary" className="h-9 px-3 flex items-center gap-1">
+        {/* Zoho-style date range: Date Range + From + To + Run Report */}
+        <TaxDateRangeBar
+          preset={periodType}
+          start={dateRange.start}
+          end={dateRange.end}
+          periodLabel={periodLabel}
+          countryCode={countryCode}
+          isRefreshing={isRefreshing && !isLoading}
+          onPresetChange={(next) => {
+            setPeriodType(next);
+            if (next !== 'custom') {
+              setCustomStartDate(undefined);
+              setCustomEndDate(undefined);
+            }
+          }}
+          onStartChange={(date) => {
+            setPeriodType('custom');
+            setCustomStartDate(date);
+            setCustomEndDate((prev) => prev ?? dateRange.end);
+          }}
+          onEndChange={(date) => {
+            setPeriodType('custom');
+            setCustomEndDate(date);
+            setCustomStartDate((prev) => prev ?? dateRange.start);
+          }}
+          onRun={() => {
+            void refetch();
+          }}
+        />
+        {compareType !== 'none' && (
+          <div className="mb-4">
+            <Badge variant="secondary" className="h-9 px-3 inline-flex items-center gap-1">
               <GitCompare className="w-3 h-3" />
               vs {comparePeriodsCount} {compareType === 'previous_period' ? 'period(s)' : 'year(s)'}
             </Badge>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Advanced Filters */}
         <Collapsible open={showAdvancedFilters} onOpenChange={setShowAdvancedFilters}>
@@ -866,12 +527,12 @@ export function TaxReportPreview({
                             <div key={tc.id} className="flex items-center space-x-2">
                               <Checkbox
                                 id={tc.id}
-                                checked={selectedTaxCodes.includes(tc.id)}
+                                checked={selectedTaxCodes.includes(tc.code)}
                                 onCheckedChange={() => {
-                                  if (selectedTaxCodes.includes(tc.id)) {
-                                    setSelectedTaxCodes(selectedTaxCodes.filter(c => c !== tc.id));
+                                  if (selectedTaxCodes.includes(tc.code)) {
+                                    setSelectedTaxCodes(selectedTaxCodes.filter(c => c !== tc.code));
                                   } else {
-                                    setSelectedTaxCodes([...selectedTaxCodes, tc.id]);
+                                    setSelectedTaxCodes([...selectedTaxCodes, tc.code]);
                                   }
                                 }}
                               />
@@ -927,6 +588,7 @@ export function TaxReportPreview({
                   <p className="text-xl font-bold text-foreground">
                     {formatCurrency(summary.taxableSales)}
                   </p>
+                  <p className="text-[11px] text-muted-foreground mt-1">{periodLabel}</p>
                 </div>
               )}
               {(reportCategory === 'gst' || !isCanada) && (
@@ -936,12 +598,14 @@ export function TaxReportPreview({
                     <p className="text-xl font-bold text-green-700 dark:text-green-400">
                       {formatCurrency(summary.collected)}
                     </p>
+                    <p className="text-[11px] text-muted-foreground mt-1">{periodLabel}</p>
                   </div>
                   <div className="p-4 bg-blue-50 dark:bg-blue-950/30 rounded-lg">
                     <p className="text-xs text-muted-foreground mb-1">{taxTerminology.paidLabel}</p>
                     <p className="text-xl font-bold text-blue-700 dark:text-blue-400">
                       {formatCurrency(summary.paid)}
                     </p>
+                    <p className="text-[11px] text-muted-foreground mt-1">{periodLabel}</p>
                   </div>
                 </>
               )}
@@ -1034,54 +698,8 @@ export function TaxReportPreview({
             )}
 
             {/* Report Content Based on Type */}
-            {false && filteredJournalDetails.length > 0 ? (
-              <div className="mb-6">
-                <h4 className="text-sm font-medium text-foreground mb-3">
-                  {isBurundi ? 'Transactions Détaillées' : 'Detailed Transactions'} ({filteredJournalDetails.length})
-                </h4>
-                <div className="border rounded-lg overflow-hidden max-h-96 overflow-y-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>{isBurundi ? 'Date' : 'Date'}</TableHead>
-                        <TableHead>Description</TableHead>
-                        <TableHead>{isBurundi ? 'Code TVA' : 'Tax Code'}</TableHead>
-                        <TableHead>{isBurundi ? 'Compte' : 'Account'}</TableHead>
-                        <TableHead className="text-right">{isBurundi ? 'Débit' : 'Debit'}</TableHead>
-                        <TableHead className="text-right">{isBurundi ? 'Crédit' : 'Credit'}</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredJournalDetails.map((line, idx) => (
-                        <TableRow key={idx}>
-                          <TableCell className="text-sm">
-                            {format(parseLocalDate(line.entry_date), 'MMM d, yyyy')}
-                          </TableCell>
-                          <TableCell className="text-sm max-w-[200px] truncate">
-                            {line.description}
-                          </TableCell>
-                          <TableCell>
-                            {line.tax_code ? (
-                              <Badge variant="outline">{line.tax_code}</Badge>
-                            ) : (
-                              <span className="text-muted-foreground">-</span>
-                            )}
-                          </TableCell>
-                          <TableCell className="font-mono text-sm">{line.account_code}</TableCell>
-                          <TableCell className="text-right font-mono text-sm">
-                            {line.debit > 0 ? formatCurrency(line.debit) : '-'}
-                          </TableCell>
-                          <TableCell className="text-right font-mono text-sm">
-                            {line.credit > 0 ? formatCurrency(line.credit) : '-'}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              </div>
-            ) : (
-              <>
+            <>
+                {(reportType === 'summary' || reportType === 'detailed') && (
                 <div className="mb-6">
                   <h4 className="text-sm font-medium text-foreground mb-1">
                     {filingForm.formName}
@@ -1118,13 +736,14 @@ export function TaxReportPreview({
                     </Table>
                   </div>
                 </div>
+                )}
 
                 <div className="mb-6">
                   <h4 className="text-sm font-medium text-foreground mb-1">
                     {isBurundi ? 'Par code de taxe' : 'Tax liability by tax code'}
                   </h4>
                   <p className="text-xs text-muted-foreground mb-3">
-                    QuickBooks-style liability: taxable sales, tax collected, credits, and tax due for the period.
+                    QuickBooks-style liability: taxable sales, tax collected, credits, and tax due for {periodLabel}.
                   </p>
                   <div className="border rounded-lg overflow-hidden">
                     <Table>
@@ -1194,7 +813,7 @@ export function TaxReportPreview({
                   </div>
                 </div>
 
-                {periodSummary.byAccount.length > 0 && (
+                {(reportType === 'summary' || reportType === 'detailed') && periodSummary.byAccount.length > 0 && (
                   <div className="mb-6">
                     <h4 className="text-sm font-medium text-foreground mb-1">
                       {isBurundi ? 'Activité des comptes' : 'Account activity this period'}
@@ -1231,14 +850,15 @@ export function TaxReportPreview({
                   </div>
                 )}
 
+                {reportType !== 'summary' && (
                 <div className="mb-6">
                   <h4 className="text-sm font-medium text-foreground mb-1">
-                    {isBurundi ? 'Détail des transactions' : 'Transaction detail'}
+                    {isBurundi ? 'Détail des transactions' : 'Sales tax detail'}
                   </h4>
                   <p className="text-xs text-muted-foreground mb-3">
-                    QuickBooks-style listing of every tax posting from {periodLabel}. Switching the date range reloads this list.
+                    QuickBooks-style tax liability detail grouped by tax code for {periodLabel}. Changing Date Range, From, or To reloads these amounts.
                   </p>
-                  <div className="border rounded-lg overflow-hidden max-h-[28rem] overflow-y-auto">
+                  <div className="border rounded-lg overflow-hidden max-h-[32rem] overflow-y-auto">
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -1261,30 +881,44 @@ export function TaxReportPreview({
                           </TableRow>
                         ) : (
                           <>
-                            {detailRows.map((row, idx) => (
-                              <TableRow key={`${row.date}-${row.number}-${idx}`}>
-                                <TableCell className="text-sm whitespace-nowrap">
-                                  {row.date ? format(parseLocalDate(row.date), 'MMM d, yyyy') : '—'}
-                                </TableCell>
-                                <TableCell className="text-sm">{row.type}</TableCell>
-                                <TableCell className="font-mono text-xs">{row.number || '—'}</TableCell>
-                                <TableCell className="text-sm max-w-[220px] truncate">{row.description}</TableCell>
-                                <TableCell className="font-mono text-xs">
-                                  {row.accountCode} {row.accountName}
-                                </TableCell>
-                                <TableCell>
-                                  {row.taxCode ? <Badge variant="outline">{row.taxCode}</Badge> : '—'}
-                                </TableCell>
-                                <TableCell className="text-right font-mono text-sm">
-                                  {row.taxableAmount ? formatCurrency(row.taxableAmount) : '—'}
-                                </TableCell>
-                                <TableCell className={cn(
-                                  'text-right font-mono text-sm',
-                                  row.side === 'collected' ? 'text-green-700' : 'text-blue-700',
-                                )}>
-                                  {formatCurrency(row.taxAmount)}
-                                </TableCell>
-                              </TableRow>
+                            {detailGroups.map((group) => (
+                              <Fragment key={group.taxCode}>
+                                <TableRow className="bg-muted/40">
+                                  <TableCell colSpan={6} className="font-medium">
+                                    {group.taxCode}
+                                    <span className="ml-2 text-xs font-normal text-muted-foreground">
+                                      ({group.rows.length} {group.rows.length === 1 ? 'transaction' : 'transactions'})
+                                    </span>
+                                  </TableCell>
+                                  <TableCell className="text-right font-mono text-sm">{formatCurrency(group.taxableAmount)}</TableCell>
+                                  <TableCell className="text-right font-mono text-sm">{formatCurrency(group.taxAmount)}</TableCell>
+                                </TableRow>
+                                {group.rows.map((row, idx) => (
+                                  <TableRow key={`${group.taxCode}-${row.date}-${row.number}-${idx}`}>
+                                    <TableCell className="text-sm whitespace-nowrap">
+                                      {row.date ? format(parseLocalDate(row.date), 'MMM d, yyyy') : '—'}
+                                    </TableCell>
+                                    <TableCell className="text-sm">{row.type}</TableCell>
+                                    <TableCell className="font-mono text-xs">{row.number || '—'}</TableCell>
+                                    <TableCell className="text-sm max-w-[220px] truncate">{row.description}</TableCell>
+                                    <TableCell className="font-mono text-xs">
+                                      {row.accountCode} {row.accountName}
+                                    </TableCell>
+                                    <TableCell>
+                                      {row.taxCode ? <Badge variant="outline">{row.taxCode}</Badge> : '—'}
+                                    </TableCell>
+                                    <TableCell className="text-right font-mono text-sm">
+                                      {row.taxableAmount ? formatCurrency(row.taxableAmount) : '—'}
+                                    </TableCell>
+                                    <TableCell className={cn(
+                                      'text-right font-mono text-sm',
+                                      row.side === 'collected' ? 'text-green-700' : 'text-blue-700',
+                                    )}>
+                                      {formatCurrency(row.taxAmount)}
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </Fragment>
                             ))}
                             <TableRow className="bg-muted/50 font-medium">
                               <TableCell colSpan={6}>Total ({detailRows.length} transactions)</TableCell>
@@ -1301,8 +935,8 @@ export function TaxReportPreview({
                     </Table>
                   </div>
                 </div>
-              </>
-            )}
+                )}
+            </>
 
             <Separator className="my-4" />
 

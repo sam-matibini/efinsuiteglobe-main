@@ -45,6 +45,18 @@ export type TaxDatePreset =
   | 'last_year'
   | 'custom';
 
+export const TAX_DATE_PRESET_OPTIONS: { value: TaxDatePreset; label: string; labelFr: string }[] = [
+  { value: 'today', label: 'Today', labelFr: "Aujourd'hui" },
+  { value: 'this_week', label: 'This Week', labelFr: 'Cette semaine' },
+  { value: 'this_month', label: 'This Month', labelFr: 'Ce mois' },
+  { value: 'last_month', label: 'Previous Month', labelFr: 'Mois précédent' },
+  { value: 'this_quarter', label: 'This Quarter', labelFr: 'Ce trimestre' },
+  { value: 'last_quarter', label: 'Previous Quarter', labelFr: 'Trimestre précédent' },
+  { value: 'this_year', label: 'This Year', labelFr: 'Cette année' },
+  { value: 'last_year', label: 'Previous Year', labelFr: 'Année précédente' },
+  { value: 'custom', label: 'Custom', labelFr: 'Personnalisé' },
+];
+
 export interface JournalTaxLine {
   account_name: string;
   account_code?: string;
@@ -68,6 +80,13 @@ export interface TaxDetailRow {
   side: TaxAccountSide;
   taxAmount: number;
   taxableAmount: number;
+}
+
+export interface TaxDetailGroup {
+  taxCode: string;
+  rows: TaxDetailRow[];
+  taxableAmount: number;
+  taxAmount: number;
 }
 
 export interface TaxCodePeriodRow {
@@ -282,10 +301,14 @@ export function buildPeriodFilingForm(
 export function summarizeJournalTaxLines(
   lines: JournalTaxLine[],
   category: TaxReportCategory = 'all',
-): Pick<PeriodTaxSummary, 'taxCollected' | 'itcClaimed' | 'netPayable' | 'byAccount'> {
+  rateByCode: Record<string, number> = {},
+): Pick<PeriodTaxSummary, 'taxCollected' | 'itcClaimed' | 'netPayable' | 'byAccount' | 'byTaxCode' | 'taxableSales' | 'rows'> {
   let taxCollected = 0;
   let itcClaimed = 0;
+  let taxableSales = 0;
   const accountMap = new Map<string, TaxAccountPeriodRow>();
+  const codeMap = new Map<string, TaxCodePeriodRow>();
+  const rows: PeriodTaxRow[] = [];
 
   for (const line of lines) {
     const hay = `${line.account_name} ${line.tax_code ?? ''}`;
@@ -298,9 +321,16 @@ export function summarizeJournalTaxLines(
       side === 'collected'
         ? Number(line.credit || 0) - Number(line.debit || 0)
         : Number(line.debit || 0) - Number(line.credit || 0);
+    const code = line.tax_code || line.account_code || line.account_name || 'Unclassified';
+    const rate = Number(rateByCode[line.tax_code ?? ''] || rateByCode[code] || 0);
+    const taxable = rate > 0 ? round2(amount / (rate / 100)) : 0;
 
-    if (side === 'collected') taxCollected += amount;
-    else itcClaimed += amount;
+    if (side === 'collected') {
+      taxCollected += amount;
+      taxableSales += taxable;
+    } else {
+      itcClaimed += amount;
+    }
 
     const accountKey = `${line.account_code ?? ''}|${line.account_name}`;
     if (!accountMap.has(accountKey)) {
@@ -312,18 +342,70 @@ export function summarizeJournalTaxLines(
       });
     }
     accountMap.get(accountKey)!.periodAmount += amount;
+
+    if (!codeMap.has(code)) {
+      codeMap.set(code, {
+        code,
+        name: code,
+        rate,
+        taxableAmount: 0,
+        taxCollected: 0,
+        itcClaimed: 0,
+        taxDue: 0,
+      });
+    }
+    const codeRow = codeMap.get(code)!;
+    if (side === 'collected') {
+      codeRow.taxCollected += amount;
+      codeRow.taxableAmount += taxable;
+    } else {
+      codeRow.itcClaimed += amount;
+    }
+
+    rows.push({
+      source: side === 'collected' ? 'invoice' : 'bill',
+      tax_type: normalizeMovementTaxType({
+        code,
+        tax_type: null,
+        authority_name: null,
+        account_name: line.account_name,
+        side,
+        rate,
+        tax_amount: amount,
+        taxable_amount: taxable,
+      }),
+      tax_code: code,
+      authority: null,
+      jurisdiction_code: null,
+      rate,
+      taxable_amount: taxable,
+      tax_amount: amount,
+      is_recoverable: true,
+    });
   }
 
   taxCollected = round2(taxCollected);
   itcClaimed = round2(itcClaimed);
+  taxableSales = round2(taxableSales);
   return {
     taxCollected,
     itcClaimed,
     netPayable: round2(taxCollected - itcClaimed),
+    taxableSales,
+    rows,
     byAccount: Array.from(accountMap.values()).map((row) => ({
       ...row,
       periodAmount: round2(row.periodAmount),
     })),
+    byTaxCode: Array.from(codeMap.values())
+      .map((row) => ({
+        ...row,
+        taxableAmount: round2(row.taxableAmount),
+        taxCollected: round2(row.taxCollected),
+        itcClaimed: round2(row.itcClaimed),
+        taxDue: round2(row.taxCollected - row.itcClaimed),
+      }))
+      .sort((a, b) => a.code.localeCompare(b.code)),
   };
 }
 
@@ -419,19 +501,45 @@ export function buildTaxDetailRows(lines: JournalTaxLine[], rateByCode: Record<s
   return rows.sort((a, b) => a.date.localeCompare(b.date) || a.number.localeCompare(b.number));
 }
 
-/** Prefer date-filtered journal activity so changing the range always changes the totals. */
+export function groupTaxDetailByCode(rows: TaxDetailRow[]): TaxDetailGroup[] {
+  const map = new Map<string, TaxDetailGroup>();
+  for (const row of rows) {
+    const taxCode = row.taxCode || row.accountName || 'Unclassified';
+    if (!map.has(taxCode)) {
+      map.set(taxCode, { taxCode, rows: [], taxableAmount: 0, taxAmount: 0 });
+    }
+    const group = map.get(taxCode)!;
+    group.rows.push(row);
+    group.taxableAmount = round2(group.taxableAmount + row.taxableAmount);
+    group.taxAmount = round2(group.taxAmount + row.taxAmount);
+  }
+  return Array.from(map.values()).sort((a, b) => a.taxCode.localeCompare(b.taxCode));
+}
+
+/**
+ * Prefer date-filtered journal activity so changing the range always changes
+ * the totals — even when the selected period has zero postings.
+ */
 export function mergePeriodSummary(
-  journal: Pick<PeriodTaxSummary, 'taxCollected' | 'itcClaimed' | 'netPayable' | 'byAccount'>,
+  journal: Pick<PeriodTaxSummary, 'taxCollected' | 'itcClaimed' | 'netPayable' | 'byAccount' | 'byTaxCode' | 'taxableSales' | 'rows'>,
   rpc: PeriodTaxSummary,
-  hasJournalLines: boolean,
+  preferJournal: boolean,
 ): PeriodTaxSummary {
-  if (!hasJournalLines) return rpc;
+  if (!preferJournal) return rpc;
+  const rows = journal.rows.length > 0 ? journal.rows : rpc.rows;
+  const taxableSales = journal.taxableSales || rpc.taxableSales || rpc.totals.totalSales;
   return {
-    ...rpc,
     taxCollected: journal.taxCollected,
     itcClaimed: journal.itcClaimed,
     netPayable: journal.netPayable,
-    taxableSales: rpc.taxableSales || rpc.totals.totalSales,
-    byAccount: journal.byAccount.length > 0 ? journal.byAccount : rpc.byAccount,
+    taxableSales,
+    byAccount: journal.byAccount,
+    byTaxCode: journal.byTaxCode.length > 0 ? journal.byTaxCode : rpc.byTaxCode,
+    rows,
+    totals: {
+      rows,
+      totalSales: rpc.totals.totalSales || taxableSales,
+      totalPurchases: rpc.totals.totalPurchases,
+    },
   };
 }

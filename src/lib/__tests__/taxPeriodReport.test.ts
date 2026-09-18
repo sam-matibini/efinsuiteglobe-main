@@ -8,6 +8,7 @@ import {
   toISODate,
   buildTaxDetailRows,
   mergePeriodSummary,
+  groupTaxDetailByCode,
   type TaxMovementRow,
 } from '../taxPeriodReport';
 
@@ -179,13 +180,24 @@ describe('period switching changes amounts', () => {
 
   it('keeps journal period totals even if RPC still has a lifetime balance', () => {
     const journal = summarizeJournalTaxLines(
-      [{ account_name: 'GST/HST Collected', debit: 0, credit: 250 }],
+      [{ account_name: 'GST/HST Collected', debit: 0, credit: 250, tax_code: 'HST-ON' }],
       'gst',
+      { 'HST-ON': 13 },
     );
     const rpc = summarizeTaxMovements([hstCollected(45134.93, 347191)], 'gst');
     const merged = mergePeriodSummary(journal, rpc, true);
     expect(merged.taxCollected).toBe(250);
     expect(merged.taxCollected).not.toBe(45134.93);
+    expect(merged.byTaxCode[0].taxCollected).toBe(250);
+  });
+
+  it('shows zeros for an empty period instead of reusing RPC lifetime totals', () => {
+    const journal = summarizeJournalTaxLines([], 'gst');
+    const rpc = summarizeTaxMovements([hstCollected(45134.93, 347191)], 'gst');
+    const merged = mergePeriodSummary(journal, rpc, true);
+    expect(merged.taxCollected).toBe(0);
+    expect(merged.itcClaimed).toBe(0);
+    expect(merged.byAccount).toEqual([]);
   });
 });
 
@@ -209,5 +221,42 @@ describe('buildTaxDetailRows', () => {
     expect(row.taxAmount).toBe(130);
     expect(row.taxableAmount).toBe(1000);
     expect(row.side).toBe('collected');
+  });
+
+  it('groups QuickBooks-style rows by tax code with period subtotals', () => {
+    const rows = buildTaxDetailRows([
+      {
+        account_name: 'GST/HST Collected',
+        debit: 0,
+        credit: 130,
+        tax_code: 'HST-ON',
+        entry_date: '2026-04-10',
+        reference: 'INV-1',
+        description: 'Invoice INV-1',
+      },
+      {
+        account_name: 'GST/HST Collected',
+        debit: 0,
+        credit: 65,
+        tax_code: 'HST-ON',
+        entry_date: '2026-05-10',
+        reference: 'INV-2',
+        description: 'Invoice INV-2',
+      },
+      {
+        account_name: 'GST/HST Paid (Input Tax Credit)',
+        debit: 26,
+        credit: 0,
+        tax_code: 'HST-ON',
+        entry_date: '2026-05-12',
+        reference: 'BILL-9',
+        description: 'Bill BILL-9',
+      },
+    ], { 'HST-ON': 13 });
+    const groups = groupTaxDetailByCode(rows);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].taxCode).toBe('HST-ON');
+    expect(groups[0].rows).toHaveLength(3);
+    expect(groups[0].taxAmount).toBe(221);
   });
 });
