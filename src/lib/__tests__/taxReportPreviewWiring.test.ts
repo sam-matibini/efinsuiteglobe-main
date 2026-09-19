@@ -51,7 +51,7 @@ describe('tax report preview wiring', () => {
     expect(hook).toContain('gstHstDocumentsFromJournalEntries');
     expect(hook).toContain('journal_entry_lines');
     expect(hook).toContain('tax_code_id');
-    expect(hook).toContain("source: 'journal'");
+    expect(hook).toContain('fetchStandaloneGstHstJournalDocuments(organizationId, periodStart, periodEnd, taxCodes)');
 
     const engine = readFileSync(join(root, 'src/lib/gstHstPeriodEngine.ts'), 'utf8');
     expect(engine).toContain("source: 'bank' | 'credit_card' | 'journal'");
