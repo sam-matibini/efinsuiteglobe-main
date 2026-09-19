@@ -87,4 +87,26 @@ describe('tax report preview wiring', () => {
     const taxReturn = readFileSync(join(root, 'src/hooks/useTaxReturnPreview.ts'), 'utf8');
     expect(taxReturn).toContain('journal: docs.journal');
   });
+
+  it('shares RST reports by email and WhatsApp and exports PDF, Excel, and print', () => {
+    const preview = readFileSync(join(root, 'src/components/tax/TaxReportPreview.tsx'), 'utf8');
+    expect(preview).toContain('ReportActions');
+    expect(preview).toContain('buildRstPeriodShareData');
+    expect(preview).toContain('rstReportData');
+
+    const summary = readFileSync(join(root, 'src/components/tax/GstHstSummaryReport.tsx'), 'utf8');
+    expect(summary).toContain('ReportActions');
+    expect(summary).toContain('buildGstHstSummaryShareData');
+
+    const detail = readFileSync(join(root, 'src/components/tax/GstHstDetailReport.tsx'), 'utf8');
+    expect(detail).toContain('ReportActions');
+    expect(detail).toContain('buildGstHstDetailShareData');
+
+    const actions = readFileSync(join(root, 'src/components/reports/ReportActions.tsx'), 'utf8');
+    expect(actions).toContain('shareViaWhatsApp');
+    expect(actions).toContain('openEmailDialog');
+    expect(actions).toContain('exportToExcel');
+    expect(actions).toContain('exportToPDF');
+    expect(actions).toContain('handlePrint');
+  });
 });

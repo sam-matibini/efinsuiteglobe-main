@@ -1,7 +1,7 @@
 import { useState, useMemo, Fragment } from 'react';
 import { format } from 'date-fns';
 import { parseLocalDate } from '@/lib/utils';
-import { Download, Eye, FileText, Printer, Filter, SlidersHorizontal, GitCompare, Minus, Plus } from 'lucide-react';
+import { Download, Eye, FileText, Filter, SlidersHorizontal, GitCompare, Minus, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -22,8 +22,10 @@ import { addPdfBrandingFooter } from '@/lib/pdfBrandingFooter';
 import { cn } from '@/lib/utils';
 import { TaxDateRangeBar } from '@/components/tax/TaxDateRangeBar';
 import { GstHstSupportReport } from '@/components/tax/GstHstSupportReport';
+import { ReportActions } from '@/components/reports/ReportActions';
 import { useTaxPeriodActivity, useTaxPeriodComparisonSummaries } from '@/hooks/useTaxPeriodActivity';
 import { useGstHstComparisonReports, useGstHstPeriodReport } from '@/hooks/useGstHstPeriodReport';
+import { buildRstPeriodShareData } from '@/lib/rstReportShare';
 import {
   resolveTaxDateRange,
   resolveComparisonRanges,
@@ -187,6 +189,59 @@ export function TaxReportPreview({
     rate: row.rate,
     taxableAmount: row.taxableAmount,
   }));
+
+  const shareMetrics = useMemo(() => {
+    if (useGstEngine) {
+      return [
+        { label: 'Taxable sales', current: summary.taxableSales, comparisons: gstComparisons.map((range) => range.snapshot.taxableSales) },
+        { label: 'Zero-rated sales', current: summary.zeroRatedSales, comparisons: gstComparisons.map((range) => range.snapshot.zeroRatedSales) },
+        { label: 'Exempt / other revenue', current: summary.exemptSales, comparisons: gstComparisons.map((range) => range.snapshot.exemptSales) },
+        { label: 'GST/HST collected', current: summary.collected, comparisons: gstComparisons.map((range) => range.snapshot.gstHstCollected) },
+        { label: 'Input tax credits', current: summary.paid, comparisons: gstComparisons.map((range) => range.snapshot.itc) },
+        { label: 'Net tax', current: summary.netPayable, comparisons: gstComparisons.map((range) => range.snapshot.netTax) },
+      ];
+    }
+    return [
+      { label: taxTerminology.collectedLabel, current: summary.collected, comparisons: movementComparisons.map((range) => range.summary.taxCollected) },
+      { label: taxTerminology.paidLabel, current: summary.paid, comparisons: movementComparisons.map((range) => range.summary.itcClaimed) },
+      { label: taxTerminology.netLabel, current: summary.netPayable, comparisons: movementComparisons.map((range) => range.summary.netPayable) },
+    ];
+  }, [useGstEngine, summary, gstComparisons, movementComparisons, taxTerminology]);
+
+  const rstReportData = useMemo(() => buildRstPeriodShareData({
+    title: !isCanada
+      ? taxTerminology.title
+      : reportCategory === 'gst' ? 'CRA GST/HST Report' : 'Provincial Sales Tax (PST) Report',
+    organizationName,
+    dateRange: periodLabel,
+    formatCurrency,
+    comparisonLabels: compareType === 'none'
+      ? []
+      : (useGstEngine ? gstComparisons : movementComparisons).map((range) => range.label),
+    metrics: shareMetrics,
+    formLines: filingForm.lines.map((line) => ({ code: line.code, label: line.label, amount: line.amount })),
+    taxCodeRows: groupedByTaxCode.map((row) => ({
+      code: row.code,
+      name: row.name,
+      collected: row.collected,
+      paid: row.paid,
+      net: row.net,
+    })),
+  }), [
+    organizationName,
+    periodLabel,
+    formatCurrency,
+    compareType,
+    useGstEngine,
+    gstComparisons,
+    movementComparisons,
+    shareMetrics,
+    filingForm.lines,
+    groupedByTaxCode,
+    reportCategory,
+    isCanada,
+    taxTerminology.title,
+  ]);
 
   const hasActiveFilters = selectedTaxCodes.length > 0 || accountTypeFilter !== 'all' || reportType !== 'detailed';
 
@@ -408,7 +463,8 @@ export function TaxReportPreview({
                 : 'Preview and download detailed reports before filing returns'}
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 print:hidden">
+            <ReportActions reportData={rstReportData} variant="compact" />
             <Button 
               variant="outline" 
               size="sm"
@@ -1016,20 +1072,10 @@ export function TaxReportPreview({
             <Separator className="my-4" />
 
             {/* Action Buttons */}
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 print:hidden">
               <Button variant="outline" onClick={() => setShowPreview(true)}>
                 <Eye className="w-4 h-4 mr-2" />
                 {countryCode === 'BI' ? 'Prévisualiser' : 'Preview Report'}
-              </Button>
-              <Button onClick={() => generatePdf(true)} disabled={isGenerating}>
-                <Download className="w-4 h-4 mr-2" />
-                {isGenerating 
-                  ? (countryCode === 'BI' ? 'Génération...' : 'Generating...') 
-                  : (countryCode === 'BI' ? 'Télécharger PDF' : 'Download PDF')}
-              </Button>
-              <Button variant="ghost" onClick={() => generatePdf(false)} disabled={isGenerating}>
-                <Printer className="w-4 h-4 mr-2" />
-                {countryCode === 'BI' ? 'Imprimer' : 'Print'}
               </Button>
             </div>
           </>

@@ -58,6 +58,8 @@ const isTotalRow = (row: (string | number)[]): boolean => {
     firstCell === 'gross profit' ||
     firstCell === 'operating profit' ||
     firstCell === 'operating income' ||
+    firstCell === 'net tax' ||
+    firstCell.includes('net tax') ||
     firstCell.includes('liabilities and equity')
   );
 };

@@ -1,10 +1,10 @@
-import { Fragment } from 'react';
-import { Printer } from 'lucide-react';
+import { Fragment, useMemo } from 'react';
 import { format } from 'date-fns';
 import { parseLocalDate } from '@/lib/utils';
-import { Button } from '@/components/ui/button';
+import { ReportActions } from '@/components/reports/ReportActions';
 import type { GstHstPeriodSnapshot } from '@/lib/gstHstPeriodEngine';
 import { buildGstHstQbDetail, formatQbPeriodHeading } from '@/lib/gstHstStatement';
+import { buildGstHstDetailShareData } from '@/lib/rstReportShare';
 
 interface GstHstDetailReportProps {
   organizationName?: string | null;
@@ -19,14 +19,15 @@ function formatRate(rate: number) {
 export function GstHstDetailReport({ organizationName, snapshot, formatCurrency }: GstHstDetailReportProps) {
   const groups = buildGstHstQbDetail(snapshot.supportRows);
   const year = snapshot.periodEnd.slice(0, 4);
+  const reportData = useMemo(
+    () => buildGstHstDetailShareData({ organizationName, snapshot, formatCurrency }),
+    [organizationName, snapshot, formatCurrency],
+  );
 
   return (
     <div className="bg-background">
       <div className="flex justify-end mb-4 print:hidden">
-        <Button variant="outline" size="sm" onClick={() => window.print()}>
-          <Printer className="h-4 w-4 mr-2" />
-          Print
-        </Button>
+        <ReportActions reportData={reportData} variant="compact" />
       </div>
       <div className="overflow-x-auto">
         <header className="text-center mb-8">

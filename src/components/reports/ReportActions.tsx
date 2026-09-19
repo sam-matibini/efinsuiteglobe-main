@@ -148,7 +148,8 @@ export const ReportActions = React.forwardRef<HTMLDivElement, ReportActionsProps
           label === 'net profit/loss' || label === 'net income' ||
           label === 'net change in cash' || label === 'ending cash balance' ||
           label === 'gross profit' || label === 'operating profit' ||
-          label === 'operating income' || label.includes('liabilities and equity');
+          label === 'operating income' || label === 'net tax' || label.includes('net tax') ||
+          label.includes('liabilities and equity');
       };
       const isGrandTotalRow = (row: (string | number)[]) => {
         const label = String(row[0] || '').toLowerCase().trim();
@@ -306,7 +307,8 @@ export const ReportActions = React.forwardRef<HTMLDivElement, ReportActionsProps
         l === 'net profit/loss' || l === 'net income' ||
         l === 'net change in cash' || l === 'ending cash balance' ||
         l === 'gross profit' || l === 'operating profit' ||
-        l === 'operating income' || l.includes('liabilities and equity');
+        l === 'operating income' || l === 'net tax' || l.includes('net tax') ||
+        l.includes('liabilities and equity');
     };
     const isGrandLabel = (label: string) => {
       const l = label.toLowerCase().trim();

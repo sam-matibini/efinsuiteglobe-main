@@ -1,7 +1,8 @@
-import { Printer } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { useMemo } from 'react';
+import { ReportActions } from '@/components/reports/ReportActions';
 import type { GstHstPeriodSnapshot } from '@/lib/gstHstPeriodEngine';
 import { buildGstHstQbSummary, formatQbPeriodHeading } from '@/lib/gstHstStatement';
+import { buildGstHstSummaryShareData } from '@/lib/rstReportShare';
 
 interface GstHstSummaryReportProps {
   organizationName?: string | null;
@@ -17,14 +18,15 @@ function formatPlain(value: number | null) {
 export function GstHstSummaryReport({ organizationName, snapshot, formatCurrency }: GstHstSummaryReportProps) {
   const lines = buildGstHstQbSummary(snapshot);
   const year = snapshot.periodEnd.slice(0, 4);
+  const reportData = useMemo(
+    () => buildGstHstSummaryShareData({ organizationName, snapshot, formatCurrency }),
+    [organizationName, snapshot, formatCurrency],
+  );
 
   return (
     <div className="bg-background">
       <div className="flex justify-end mb-4 print:hidden">
-        <Button variant="outline" size="sm" onClick={() => window.print()}>
-          <Printer className="h-4 w-4 mr-2" />
-          Print
-        </Button>
+        <ReportActions reportData={reportData} variant="compact" />
       </div>
       <div className="max-w-4xl mx-auto text-sm">
         <header className="text-center mb-8">
