@@ -99,6 +99,7 @@ export function useTaxReturnPreview(input: TaxReturnPreviewInput | null) {
           purchases: docs.purchases,
           bankDocuments: docs.bankDocuments,
           taxCodes: docs.taxCodes,
+          journal: docs.journal,
           authority: input!.authorityName,
         });
         return { form: snapshot.form, totals: snapshot.totals };

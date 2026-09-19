@@ -2,8 +2,10 @@ import { describe, it, expect } from 'vitest';
 import { buildGstHstReturn } from '../filings/canadaGstHst';
 import {
   classifyGstHstSupply,
+  coalesceGstHstJournal,
   emptyGstHstSnapshot,
   gstHstDocumentsFromJournalEntries,
+  gstHstJournalFallbackFromEntries,
   groupGstHstSupportByLine,
   isGstHstTax,
   journalTaxDirection,
@@ -232,6 +234,72 @@ describe('summarizeGstHstDocuments', () => {
     expect(snapshot.taxableSales).toBe(9616.38);
     expect(snapshot.line101).toBe(9616.38);
     expect(snapshot.itc).not.toBe(68265.98);
+  });
+
+  it('fills each comparison quarter from that period journal when invoices are missing', () => {
+    const q2 = summarizeGstHstDocuments({
+      periodStart: '2026-04-01',
+      periodEnd: '2026-06-30',
+      invoices: [],
+      purchases: [{
+        source: 'bill',
+        id: 'bill-q2',
+        date: '2026-05-08',
+        number: 'BILL-Q2',
+        status: 'paid',
+        subtotal: 435.85,
+        tax_amount: 56.66,
+        taxes: [{ tax_code: 'HST-ON', tax_type: 'hst', rate: 13, taxable_amount: 435.85, tax_amount: 56.66, is_recoverable: true }],
+      }],
+      journal: { taxCollected: 800.8, itcClaimed: 9999, taxableSales: 6160 },
+      taxCodes,
+    });
+    const q1 = summarizeGstHstDocuments({
+      periodStart: '2026-01-01',
+      periodEnd: '2026-03-31',
+      invoices: [],
+      purchases: [{
+        source: 'bill',
+        id: 'bill-q1',
+        date: '2026-02-10',
+        number: 'BILL-Q1',
+        status: 'paid',
+        subtotal: 1000.54,
+        tax_amount: 130.07,
+        taxes: [{ tax_code: 'HST-ON', tax_type: 'hst', rate: 13, taxable_amount: 1000.54, tax_amount: 130.07, is_recoverable: true }],
+      }],
+      journal: { taxCollected: 400.4, itcClaimed: 8888, taxableSales: 3080 },
+      taxCodes,
+    });
+    const q4 = summarizeGstHstDocuments({
+      periodStart: '2025-10-01',
+      periodEnd: '2025-12-31',
+      invoices: [],
+      purchases: [{
+        source: 'bill',
+        id: 'bill-q4',
+        date: '2025-11-04',
+        number: 'BILL-Q4',
+        status: 'paid',
+        subtotal: 4064.54,
+        tax_amount: 528.39,
+        taxes: [{ tax_code: 'HST-ON', tax_type: 'hst', rate: 13, taxable_amount: 4064.54, tax_amount: 528.39, is_recoverable: true }],
+      }],
+      journal: { taxCollected: 210.21, itcClaimed: 7777, taxableSales: 1617 },
+      taxCodes,
+    });
+
+    expect(q2.itc).toBe(56.66);
+    expect(q2.gstHstCollected).toBe(800.8);
+    expect(q2.taxableSales).toBe(6160);
+    expect(q1.itc).toBe(130.07);
+    expect(q1.gstHstCollected).toBe(400.4);
+    expect(q1.taxableSales).toBe(3080);
+    expect(q4.itc).toBe(528.39);
+    expect(q4.gstHstCollected).toBe(210.21);
+    expect(q4.taxableSales).toBe(1617);
+    expect(q2.gstHstCollected).not.toBe(q1.gstHstCollected);
+    expect(q1.gstHstCollected).not.toBe(q4.gstHstCollected);
   });
 
   it('uses invoice tax_amount as collected when gst_hst_amount and tax rows are missing', () => {
@@ -639,5 +707,66 @@ describe('gstHstDocumentsFromJournalEntries', () => {
       countedLinkedSources: ['bank_transaction:dep-88'],
     });
     expect(skipped).toHaveLength(0);
+  });
+
+  it('builds period journal fallback from invoice-linked JEs and skips remittances', () => {
+    const journal = gstHstJournalFallbackFromEntries([
+      {
+        id: 'je-invoice',
+        date: '2026-05-19',
+        reference: 'INV-050',
+        status: 'posted',
+        journalType: 'sales',
+        lines: [
+          { id: 'l3', accountId: payable, accountType: 'liability', accountName: 'GST/HST Payable', debit: 0, credit: 800.8, taxCodeId: 'tc-hst', sourceDocumentType: 'invoice' },
+          { id: 'l4', accountId: revenue, accountType: 'income', debit: 0, credit: 6160, sourceDocumentType: 'invoice' },
+        ],
+      },
+      {
+        id: 'je-close',
+        date: '2026-06-30',
+        reference: 'CLOSE-Q2',
+        status: 'posted',
+        lines: [
+          { id: 'l5', accountId: payable, accountType: 'liability', accountName: 'GST/HST Payable', debit: 800.8, credit: 0 },
+          { id: 'l6', accountId: revenue, accountType: 'income', debit: 6160, credit: 0 },
+        ],
+      },
+      {
+        id: 'je-remit',
+        date: '2026-05-20',
+        reference: 'JE-REM',
+        status: 'posted',
+        journalType: 'manual',
+        lines: [
+          { id: 'l7', accountId: payable, accountType: 'liability', accountName: 'GST/HST Payable', debit: 800.8, credit: 0, taxCodeId: 'tc-hst' },
+          { id: 'l8', accountId: bank, accountType: 'asset', debit: 0, credit: 800.8 },
+        ],
+      },
+    ], journalTaxCodes);
+
+    expect(journal.taxCollected).toBe(800.8);
+    expect(journal.taxableSales).toBe(6160);
+    expect(gstHstDocumentsFromJournalEntries([{
+      id: 'je-invoice',
+      date: '2026-05-19',
+      reference: 'INV-050',
+      status: 'posted',
+      journalType: 'sales',
+      lines: [
+        { id: 'l3', accountId: payable, accountType: 'liability', accountName: 'GST/HST Payable', debit: 0, credit: 800.8, taxCodeId: 'tc-hst', sourceDocumentType: 'invoice' },
+        { id: 'l4', accountId: revenue, accountType: 'income', debit: 0, credit: 6160, sourceDocumentType: 'invoice' },
+      ],
+    }], journalTaxCodes)).toHaveLength(0);
+  });
+
+  it('prefers non-zero GL amounts and fills missing collected from period movements', () => {
+    const merged = coalesceGstHstJournal(
+      { taxCollected: 0, itcClaimed: 56.66, taxableSales: 0 },
+      { taxCollected: 800.8, itcClaimed: 9999, taxableSales: 6160 },
+    );
+    expect(merged.taxCollected).toBe(800.8);
+    expect(merged.itcClaimed).toBe(56.66);
+    expect(merged.taxableSales).toBe(6160);
   });
 });

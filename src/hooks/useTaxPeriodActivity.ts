@@ -293,7 +293,7 @@ export function useTaxPeriodActivity({
   };
 }
 
-async function fetchPeriodMovements(organizationId: string, periodStart: string, periodEnd: string) {
+export async function fetchPeriodMovements(organizationId: string, periodStart: string, periodEnd: string) {
   const [{ data, error }, { data: revenue, error: revErr }] = await Promise.all([
     (supabase.rpc as any)('get_tax_movements_by_code', {
       p_org_id: organizationId,

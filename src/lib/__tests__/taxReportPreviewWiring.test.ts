@@ -71,4 +71,20 @@ describe('tax report preview wiring', () => {
     const addDialog = readFileSync(join(root, 'src/components/journal/AddJournalEntryDialog.tsx'), 'utf8');
     expect(addDialog).toContain('tax_code_id: taxCode.id || line.tax_code_id || null');
   });
+
+  it('loads GST/HST journal fallback for comparison periods, not only the current period', () => {
+    const hook = readFileSync(join(root, 'src/hooks/useGstHstPeriodReport.ts'), 'utf8');
+    expect(hook).toContain('fetchPeriodMovements');
+    expect(hook).toContain('gstHstJournalFallbackFromEntries');
+    expect(hook).toContain('coalesceGstHstJournal');
+    expect(hook).toContain('journal: data.journal');
+    expect(hook).toContain('journal: journal ?? query.data.journal');
+
+    const preview = readFileSync(join(root, 'src/components/tax/TaxReportPreview.tsx'), 'utf8');
+    expect(preview).toContain("useGstHstComparisonReports");
+    expect(preview).toContain("posted banking, and GST/HST journal activity");
+
+    const taxReturn = readFileSync(join(root, 'src/hooks/useTaxReturnPreview.ts'), 'utf8');
+    expect(taxReturn).toContain('journal: docs.journal');
+  });
 });

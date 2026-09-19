@@ -197,6 +197,21 @@ describe('resolveComparisonRanges', () => {
     expect(toISODate(ranges[1].end)).toBe('2026-03-31');
     expect(ranges[1].label).toBe('Q1 2026');
   });
+
+  it('builds three previous quarters crossing the year boundary', () => {
+    const current = resolveTaxDateRange('this_quarter', new Date(2026, 8, 18));
+    const ranges = resolveComparisonRanges('previous_period', 3, current, 'this_quarter', true);
+    expect(ranges.map((range) => range.label)).toEqual(['Q2 2026', 'Q1 2026', 'Q4 2025']);
+    expect(toISODate(ranges[2].start)).toBe('2025-10-01');
+    expect(toISODate(ranges[2].end)).toBe('2025-12-31');
+  });
+
+  it('shifts the same date range back one year for year comparison', () => {
+    const current = resolveTaxDateRange('this_quarter', new Date(2026, 8, 18));
+    const ranges = resolveComparisonRanges('previous_year', 1, current, 'this_quarter', true);
+    expect(toISODate(ranges[0].start)).toBe('2025-07-01');
+    expect(toISODate(ranges[0].end)).toBe('2025-09-30');
+  });
 });
 
 describe('period switching changes amounts', () => {

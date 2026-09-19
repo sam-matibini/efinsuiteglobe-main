@@ -3,8 +3,10 @@ import { useQuery, useQueries } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import {
   bankDocumentHasGstTax,
+  coalesceGstHstJournal,
   emptyGstHstSnapshot,
   gstHstDocumentsFromJournalEntries,
+  gstHstJournalFallbackFromEntries,
   isBankCollectedSide,
   summarizeGstHstDocuments,
   taxesFromBankingPosting,
@@ -16,7 +18,8 @@ import {
   type GstHstPurchaseDocument,
   type GstHstTaxCodeFlag,
 } from '@/lib/gstHstPeriodEngine';
-import { classifyTaxAccountName, toISODate, type TaxComparisonRange } from '@/lib/taxPeriodReport';
+import { classifyTaxAccountName, summarizeTaxMovements, toISODate, type TaxComparisonRange, type TaxMovementRow } from '@/lib/taxPeriodReport';
+import { fetchPeriodMovements } from '@/hooks/useTaxPeriodActivity';
 
 const PAGE_SIZE = 1000;
 const MAX_PAGES = 20;
@@ -132,7 +135,7 @@ export async function fetchStandaloneGstHstJournalDocuments(
   periodEnd: string,
   taxCodes: GstHstTaxCodeFlag[],
   countedLinkedSources: Iterable<string> = [],
-): Promise<GstHstBankDocument[]> {
+): Promise<{ documents: GstHstBankDocument[]; journal: GstHstJournalFallback }> {
   const mappedGlIds = [
     ...new Set(
       taxCodes.flatMap((code) => [code.gl_collected_account_id, code.gl_paid_account_id]).filter((id): id is string => Boolean(id)),
@@ -223,11 +226,17 @@ export async function fetchStandaloneGstHstJournalDocuments(
     };
   });
 
-  return gstHstDocumentsFromJournalEntries(entries, taxCodes, {
-    collectedAccountIds: extraCollected,
-    paidAccountIds: extraPaid,
-    countedLinkedSources,
-  });
+  return {
+    documents: gstHstDocumentsFromJournalEntries(entries, taxCodes, {
+      collectedAccountIds: extraCollected,
+      paidAccountIds: extraPaid,
+      countedLinkedSources,
+    }),
+    journal: gstHstJournalFallbackFromEntries(entries, taxCodes, {
+      collectedAccountIds: extraCollected,
+      paidAccountIds: extraPaid,
+    }),
+  };
 }
 
 export async function fetchGstHstPeriodDocuments(
@@ -239,8 +248,9 @@ export async function fetchGstHstPeriodDocuments(
   purchases: GstHstPurchaseDocument[];
   bankDocuments: GstHstBankDocument[];
   taxCodes: GstHstTaxCodeFlag[];
+  journal: GstHstJournalFallback;
 }> {
-  const [invoiceRows, billRows, expenseRows, taxCodeRows, bankRows, cardRows] = await Promise.all([
+  const [invoiceRows, billRows, expenseRows, taxCodeRows, bankRows, cardRows, movements] = await Promise.all([
     pageQuery<Record<string, unknown>>((from, to) =>
       supabase
         .from('invoices')
@@ -298,6 +308,13 @@ export async function fetchGstHstPeriodDocuments(
         .lte('transaction_date', periodEnd)
         .range(from, to),
     ),
+    (async () => {
+      try {
+        return await fetchPeriodMovements(organizationId, periodStart, periodEnd);
+      } catch {
+        return { movements: [] as TaxMovementRow[], revenue: 0 };
+      }
+    })(),
   ]);
 
   const invoiceIds = invoiceRows.map((row) => String(row.id));
@@ -475,18 +492,26 @@ export async function fetchGstHstPeriodDocuments(
   const countedLinkedSources = bankingDocuments
     .filter(bankDocumentHasGstTax)
     .map((doc) => `${doc.source === 'credit_card' ? 'credit_card_transaction' : 'bank_transaction'}:${doc.id}`);
+  const standalone = await fetchStandaloneGstHstJournalDocuments(
+    organizationId,
+    periodStart,
+    periodEnd,
+    taxCodes,
+    countedLinkedSources,
+  );
   const bankDocuments: GstHstBankDocument[] = [
     ...bankingDocuments,
-    ...(await fetchStandaloneGstHstJournalDocuments(
-      organizationId,
-      periodStart,
-      periodEnd,
-      taxCodes,
-      countedLinkedSources,
-    )),
+    ...standalone.documents,
   ];
+  const movementSummary = summarizeTaxMovements(movements.movements, 'gst', movements.revenue);
+  const journal = coalesceGstHstJournal(standalone.journal, {
+    taxCollected: movementSummary.taxCollected,
+    itcClaimed: movementSummary.itcClaimed,
+    taxableSales: movementSummary.taxableSales || movements.revenue,
+    rows: movementSummary.rows,
+  });
 
-  return { invoices, purchases, bankDocuments, taxCodes };
+  return { invoices, purchases, bankDocuments, taxCodes, journal };
 }
 
 export function useGstHstPeriodReport({
@@ -529,7 +554,7 @@ export function useGstHstPeriodReport({
       purchases: query.data.purchases,
       bankDocuments: query.data.bankDocuments,
       taxCodes: query.data.taxCodes,
-      journal,
+      journal: journal ?? query.data.journal,
       authority,
     });
   }, [query.data, periodStart, periodEnd, journal, authority]);
@@ -580,6 +605,7 @@ export function useGstHstComparisonReports({
             purchases: data.purchases,
             bankDocuments: data.bankDocuments,
             taxCodes: data.taxCodes,
+            journal: data.journal,
             authority,
           })
         : emptyGstHstSnapshot(start, end, authority),

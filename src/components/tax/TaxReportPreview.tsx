@@ -750,7 +750,7 @@ export function TaxReportPreview({
                 </div>
                 <p className="text-xs text-muted-foreground mt-2">
                   Change is current period vs {(useGstEngine ? gstComparisons : movementComparisons)[0]?.label || 'the previous period'}.
-                  Empty periods show $0.00 from that period's invoices, bills, and expenses.
+                  Each comparison column uses that period's invoices, bills, expenses, posted banking, and GST/HST journal activity.
                 </p>
               </div>
             )}

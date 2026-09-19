@@ -150,6 +150,23 @@ export interface GstHstJournalFallback {
   rows?: PeriodTaxRow[];
 }
 
+export function emptyGstHstJournalFallback(): GstHstJournalFallback {
+  return { taxCollected: 0, itcClaimed: 0, taxableSales: 0, rows: [] };
+}
+
+/** Prefer caller/GL amounts when present; otherwise use fetched period movements. */
+export function coalesceGstHstJournal(
+  preferred?: GstHstJournalFallback,
+  fallback?: GstHstJournalFallback,
+): GstHstJournalFallback {
+  return {
+    taxCollected: preferred?.taxCollected || fallback?.taxCollected || 0,
+    itcClaimed: preferred?.itcClaimed || fallback?.itcClaimed || 0,
+    taxableSales: preferred?.taxableSales || fallback?.taxableSales || 0,
+    rows: preferred?.rows?.length ? preferred.rows : fallback?.rows,
+  };
+}
+
 const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 
 function addSupport(
@@ -438,6 +455,7 @@ export function gstHstDocumentsFromJournalEntries(
     collectedAccountIds?: Iterable<string>;
     paidAccountIds?: Iterable<string>;
     countedLinkedSources?: Iterable<string>;
+    includeLinkedSourceDocuments?: boolean;
   },
 ): GstHstBankDocument[] {
   const collectedAccountIds = new Set<string>(extraAccounts?.collectedAccountIds);
@@ -466,7 +484,10 @@ export function gstHstDocumentsFromJournalEntries(
   for (const entry of entries) {
     if (entry.status && String(entry.status).toLowerCase() !== 'posted') continue;
     if (isYearEndClosingJournal(entry.reference)) continue;
-    if (gstHstJournalEntryIsDuplicateDocument(entry.lines, countedLinkedSources)) continue;
+    if (
+      !extraAccounts?.includeLinkedSourceDocuments
+      && gstHstJournalEntryIsDuplicateDocument(entry.lines, countedLinkedSources)
+    ) continue;
     if (isTaxAuthoritySettlementJournal(entry.lines.map((line) => line.accountType))) continue;
 
     const partyName = entry.lines.map((line) => line.partyName).find((name) => name && name.trim()) || '';
@@ -504,6 +525,48 @@ export function gstHstDocumentsFromJournalEntries(
   }
 
   return documents;
+}
+
+/** Period GST/HST journal totals, including invoice/bill-linked JEs that documents skip to avoid double-counting. */
+export function gstHstJournalFallbackFromEntries(
+  entries: GstHstJournalEntrySource[],
+  taxCodes: GstHstTaxCodeFlag[] = [],
+  extraAccounts?: {
+    collectedAccountIds?: Iterable<string>;
+    paidAccountIds?: Iterable<string>;
+  },
+): GstHstJournalFallback {
+  const docs = gstHstDocumentsFromJournalEntries(entries, taxCodes, {
+    ...extraAccounts,
+    includeLinkedSourceDocuments: true,
+  });
+  let taxCollected = 0;
+  let itcClaimed = 0;
+  let taxableSales = 0;
+  const rows: PeriodTaxRow[] = [];
+
+  for (const doc of docs) {
+    for (const tax of doc.taxes ?? []) {
+      if (!isGstHstTax(tax)) continue;
+      const taxAmount = Number(tax.tax_amount ?? 0);
+      const taxable = Number(tax.taxable_amount ?? 0);
+      if (doc.direction === 'collected') {
+        taxCollected += taxAmount;
+        taxableSales += taxable;
+        rows.push(toPeriodRow('invoice', tax, lookupFlag(flagMap(taxCodes), tax.tax_code), 'taxable'));
+      } else if (tax.is_recoverable !== false) {
+        itcClaimed += taxAmount;
+        rows.push(toPeriodRow('bill', tax, lookupFlag(flagMap(taxCodes), tax.tax_code), 'taxable'));
+      }
+    }
+  }
+
+  return {
+    taxCollected: round2(taxCollected),
+    itcClaimed: round2(itcClaimed),
+    taxableSales: round2(taxableSales),
+    rows,
+  };
 }
 
 function flagMap(flags: GstHstTaxCodeFlag[]): Map<string, GstHstTaxCodeFlag> {
