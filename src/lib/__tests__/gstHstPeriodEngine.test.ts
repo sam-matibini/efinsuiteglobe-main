@@ -209,6 +209,43 @@ describe('summarizeGstHstDocuments', () => {
     expect(snapshot.usedDocumentCollected).toBe(false);
   });
 
+  it('fills GST collected and taxable sales from period journals when only purchase ITCs exist', () => {
+    const snapshot = summarizeGstHstDocuments({
+      periodStart: '2026-07-01',
+      periodEnd: '2026-09-30',
+      invoices: [],
+      purchases: [{
+        source: 'bill',
+        id: 'bill-itc',
+        date: '2026-08-03',
+        number: 'BILL-22',
+        status: 'paid',
+        subtotal: 3544.46,
+        tax_amount: 460.78,
+        taxes: [{ tax_code: 'HST-ON', tax_type: 'hst', rate: 13, taxable_amount: 3544.46, tax_amount: 460.78, is_recoverable: true }],
+      }],
+      journal: { taxCollected: 1250.13, itcClaimed: 68265.98, taxableSales: 9616.38 },
+      taxCodes,
+    });
+    expect(snapshot.itc).toBe(460.78);
+    expect(snapshot.gstHstCollected).toBe(1250.13);
+    expect(snapshot.taxableSales).toBe(9616.38);
+    expect(snapshot.line101).toBe(9616.38);
+    expect(snapshot.itc).not.toBe(68265.98);
+  });
+
+  it('uses invoice tax_amount as collected when gst_hst_amount and tax rows are missing', () => {
+    const snapshot = summarizeGstHstDocuments({
+      periodStart: '2026-07-01',
+      periodEnd: '2026-09-30',
+      invoices: [taxableInvoice({ gst_hst_amount: 0, tax_amount: 130, taxes: [], lines: [] })],
+      purchases: [],
+      taxCodes,
+    });
+    expect(snapshot.gstHstCollected).toBe(130);
+    expect(snapshot.taxableSales).toBe(1000);
+  });
+
   it('does not let a lifetime journal ITC overwrite document-period ITCs', () => {
     const snapshot = summarizeGstHstDocuments({
       periodStart: '2026-07-01',
@@ -578,5 +615,29 @@ describe('gstHstDocumentsFromJournalEntries', () => {
     });
     expect(journalDocs).toHaveLength(0);
     expect(snapshot.gstHstCollected).toBe(130);
+  });
+
+  it('includes POS/bank tax JEs when the bank deposit itself has no GST amount', () => {
+    const posJe = {
+      id: 'je-pos',
+      date: '2026-08-04',
+      reference: 'DEP-88',
+      status: 'posted' as const,
+      journalType: 'bank',
+      lines: [
+        { id: 'l1', accountId: bank, accountType: 'asset', debit: 565, credit: 0, sourceDocumentType: 'bank_transaction', sourceDocumentId: 'dep-88' },
+        { id: 'l2', accountId: revenue, accountType: 'income', debit: 0, credit: 500, sourceDocumentType: 'bank_transaction', sourceDocumentId: 'dep-88' },
+        { id: 'l3', accountId: payable, accountType: 'liability', accountName: 'GST/HST Payable', debit: 0, credit: 65, taxCodeId: 'tc-hst', sourceDocumentType: 'bank_transaction', sourceDocumentId: 'dep-88' },
+      ],
+    };
+    const included = gstHstDocumentsFromJournalEntries([posJe], journalTaxCodes);
+    expect(included).toHaveLength(1);
+    expect(included[0].direction).toBe('collected');
+    expect(included[0].taxes?.[0].tax_amount).toBe(65);
+
+    const skipped = gstHstDocumentsFromJournalEntries([posJe], journalTaxCodes, {
+      countedLinkedSources: ['bank_transaction:dep-88'],
+    });
+    expect(skipped).toHaveLength(0);
   });
 });

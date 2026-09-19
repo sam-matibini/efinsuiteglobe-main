@@ -28,6 +28,7 @@ import { SalesTaxFilings, type SalesTaxFilingRow } from '@/components/tax/SalesT
 import { GstHstSummaryReport } from '@/components/tax/GstHstSummaryReport';
 import { GstHstDetailReport } from '@/components/tax/GstHstDetailReport';
 import { useGstHstPeriodReport } from '@/hooks/useGstHstPeriodReport';
+import { useTaxPeriodActivity } from '@/hooks/useTaxPeriodActivity';
 import { resolveTaxDateRange, toISODate, type TaxDatePreset } from '@/lib/taxPeriodReport';
 import { format } from 'date-fns';
 import { parseLocalDate } from '@/lib/utils';
@@ -186,10 +187,26 @@ export default function SalesTax() {
   const periodEndStr = toISODate(dateRange.end);
   const todayIso = toISODate(new Date());
 
+  const { periodSummary } = useTaxPeriodActivity({
+    organizationId: organization?.id,
+    countryCode,
+    periodStart: periodStartStr,
+    periodEnd: periodEndStr,
+    category: countryCode === 'CA' ? 'gst' : 'all',
+    authorityLabel: taxTerminology.authorityLabel,
+  });
+  const gstJournal = useMemo(() => ({
+    taxCollected: periodSummary.taxCollected,
+    itcClaimed: periodSummary.itcClaimed,
+    taxableSales: periodSummary.taxableSales,
+    rows: periodSummary.rows,
+  }), [periodSummary]);
+
   const { snapshot, isLoading: gstLoading, isFetching: gstFetching, refetch: refetchGst } = useGstHstPeriodReport({
     organizationId: organization?.id,
     periodStart: periodStartStr,
     periodEnd: periodEndStr,
+    journal: gstJournal,
     authority: taxTerminology.authorityLabel,
     enabled: !!organization?.id,
   });

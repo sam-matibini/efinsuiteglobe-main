@@ -186,9 +186,9 @@ export function isGstHstTax(row: {
   tax_code?: string | null;
   authority?: string | null;
 }): boolean {
-  if (/^(gst|hst)$/i.test(String(row.tax_type ?? ''))) return true;
+  if (/(gst|hst)/i.test(String(row.tax_type ?? ''))) return true;
   const code = String(row.tax_code ?? '').toUpperCase();
-  if (code.startsWith('GST') || code.startsWith('HST')) return true;
+  if (code.includes('GST') || code.includes('HST')) return true;
   const auth = String(row.authority ?? '').toUpperCase();
   return auth.includes('GST') || auth.includes('HST');
 }
@@ -256,14 +256,23 @@ export function isBankCollectedSide(transactionType?: string | null): boolean {
   return /^(deposit|credit|refund|interest)$/i.test(String(transactionType ?? ''));
 }
 
-/** Source documents already counted from invoices/bills/expenses/banking. */
-export const LINKED_GST_HST_JE_SOURCES = new Set([
+/** Source documents already counted from invoices/bills/expenses. */
+export const DOCUMENT_LINKED_GST_HST_JE_SOURCES = new Set([
   'invoice',
   'bill',
   'expense',
   'expense_claim',
+]);
+
+/** Banking JEs are counted only when the bank/CC document already has GST/HST tax. */
+export const BANKING_LINKED_GST_HST_JE_SOURCES = new Set([
   'bank_transaction',
   'credit_card_transaction',
+]);
+
+export const LINKED_GST_HST_JE_SOURCES = new Set([
+  ...DOCUMENT_LINKED_GST_HST_JE_SOURCES,
+  ...BANKING_LINKED_GST_HST_JE_SOURCES,
 ]);
 
 export function isLinkedGstHstJournalSource(sourceType?: string | null): boolean {
@@ -279,6 +288,26 @@ export function isTaxAuthoritySettlementJournal(accountTypes: Array<string | nul
   const known = accountTypes.map((type) => String(type ?? '').toLowerCase()).filter(Boolean);
   if (known.length === 0) return false;
   return !known.some((type) => type === 'income' || type === 'expense');
+}
+
+export function bankDocumentHasGstTax(doc: Pick<GstHstBankDocument, 'taxes'>): boolean {
+  return (doc.taxes ?? []).some((tax) => isGstHstTax(tax) && (Number(tax.tax_amount ?? 0) !== 0 || Number(tax.taxable_amount ?? 0) !== 0));
+}
+
+export function gstHstJournalEntryIsDuplicateDocument(
+  lines: GstHstJournalLineSource[],
+  countedLinkedSources?: Iterable<string>,
+): boolean {
+  const counted = new Set(countedLinkedSources);
+  for (const line of lines) {
+    const type = String(line.sourceDocumentType ?? '').toLowerCase();
+    if (DOCUMENT_LINKED_GST_HST_JE_SOURCES.has(type)) return true;
+    if (BANKING_LINKED_GST_HST_JE_SOURCES.has(type)) {
+      const id = String(line.sourceDocumentId ?? '');
+      if (id && counted.has(`${type}:${id}`)) return true;
+    }
+  }
+  return false;
 }
 
 export function looksLikeTaxGlAccount(accountName?: string | null, accountType?: string | null): boolean {
@@ -299,6 +328,7 @@ export interface GstHstJournalLineSource {
   description?: string | null;
   taxCodeId?: string | null;
   sourceDocumentType?: string | null;
+  sourceDocumentId?: string | null;
   partyName?: string | null;
 }
 
@@ -400,17 +430,19 @@ function resolveJournalTaxCode(
   return byCollectedAccount.get(line.accountId) || byPaidAccount.get(line.accountId);
 }
 
-/** Convert posted standalone tax JEs into RST documents. Skips invoice/bill/bank-linked and remittance JEs. */
+/** Convert posted tax JEs into RST documents. Skips invoice/bill JEs, remittances, and bank JEs already counted. */
 export function gstHstDocumentsFromJournalEntries(
   entries: GstHstJournalEntrySource[],
   taxCodes: GstHstTaxCodeFlag[] = [],
   extraAccounts?: {
     collectedAccountIds?: Iterable<string>;
     paidAccountIds?: Iterable<string>;
+    countedLinkedSources?: Iterable<string>;
   },
 ): GstHstBankDocument[] {
   const collectedAccountIds = new Set<string>(extraAccounts?.collectedAccountIds);
   const paidAccountIds = new Set<string>(extraAccounts?.paidAccountIds);
+  const countedLinkedSources = extraAccounts?.countedLinkedSources;
   const byId = new Map<string, GstHstTaxCodeFlag>();
   const byCode = new Map<string, GstHstTaxCodeFlag>();
   const byCollectedAccount = new Map<string, GstHstTaxCodeFlag>();
@@ -434,8 +466,7 @@ export function gstHstDocumentsFromJournalEntries(
   for (const entry of entries) {
     if (entry.status && String(entry.status).toLowerCase() !== 'posted') continue;
     if (isYearEndClosingJournal(entry.reference)) continue;
-    if (String(entry.journalType ?? '').toLowerCase() === 'bank') continue;
-    if (entry.lines.some((line) => isLinkedGstHstJournalSource(line.sourceDocumentType))) continue;
+    if (gstHstJournalEntryIsDuplicateDocument(entry.lines, countedLinkedSources)) continue;
     if (isTaxAuthoritySettlementJournal(entry.lines.map((line) => line.accountType))) continue;
 
     const partyName = entry.lines.map((line) => line.partyName).find((name) => name && name.trim()) || '';
@@ -569,7 +600,7 @@ export function summarizeGstHstDocuments(input: {
     const gstRows = (inv.taxes ?? []).filter((tax) => isGstHstTax(tax));
     const pstRows = (inv.taxes ?? []).filter((tax) => isProvincialSalesTax(tax));
     const subtotal = Number(inv.subtotal ?? 0);
-    const headerGst = Number(inv.gst_hst_amount ?? 0);
+    const headerGst = Number(inv.gst_hst_amount ?? 0) || Number(inv.tax_amount ?? 0);
     const description = inv.description || inv.number || 'Invoice';
     const partyName = inv.partyName || '';
 
@@ -943,25 +974,26 @@ export function summarizeGstHstDocuments(input: {
   const journal = input.journal;
   const usedDocumentCollected = invoiceGstTaxPosted !== 0 || gstHstCollected !== 0;
   const usedDocumentItc = purchaseGstTaxPosted !== 0 || itc !== 0;
-  const usedDocumentSales = invoices.length > 0 || bankDocuments.some((d) => d.direction === 'collected');
   const hasSourceDocuments = invoices.length > 0 || purchases.length > 0 || bankDocuments.length > 0;
 
-  if (journal && !hasSourceDocuments) {
+  if (journal) {
     if (!usedDocumentCollected) {
       gstHstCollected = journal.taxCollected;
       gstHstCollectedGross = journal.taxCollected >= 0 ? journal.taxCollected : 0;
       gstHstCollectedException = journal.taxCollected < 0 ? journal.taxCollected : 0;
       bumpRstAgency(agencyMap, { tax_type: 'hst', tax_code: 'GST/HST', authority: 'CRA' }, 'collected', journal.taxCollected);
-      if (!usedDocumentSales && journal.taxableSales) taxableSales = journal.taxableSales;
+      if (taxableSales === 0 && journal.taxableSales) taxableSales = journal.taxableSales;
     }
-    if (!usedDocumentItc) {
+    if (!usedDocumentItc && !hasSourceDocuments) {
       itc = journal.itcClaimed;
       itcGross = journal.itcClaimed >= 0 ? journal.itcClaimed : 0;
       itcException = journal.itcClaimed < 0 ? journal.itcClaimed : 0;
       bumpRstAgency(agencyMap, { tax_type: 'hst', tax_code: 'GST/HST', authority: 'CRA' }, 'paid', journal.itcClaimed);
     }
-    if (journal.rows?.length) {
+    if (journal.rows?.length && (!usedDocumentCollected || (!usedDocumentItc && !hasSourceDocuments))) {
       for (const row of journal.rows) {
+        if (usedDocumentCollected && row.source === 'invoice') continue;
+        if (usedDocumentItc && row.source !== 'invoice') continue;
         if (!rows.some((existing) => existing.tax_code === row.tax_code && existing.source === row.source && existing.tax_amount === row.tax_amount)) {
           rows.push(row);
         }

@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useQuery, useQueries } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import {
+  bankDocumentHasGstTax,
   emptyGstHstSnapshot,
   gstHstDocumentsFromJournalEntries,
   isBankCollectedSide,
@@ -120,6 +121,7 @@ function toJournalLineSource(row: Record<string, unknown>): GstHstJournalEntrySo
     description: row.description ? String(row.description) : null,
     taxCodeId: row.tax_code_id ? String(row.tax_code_id) : null,
     sourceDocumentType: row.source_document_type ? String(row.source_document_type) : null,
+    sourceDocumentId: row.source_document_id ? String(row.source_document_id) : null,
     partyName: journalPartyName(row),
   };
 }
@@ -129,6 +131,7 @@ export async function fetchStandaloneGstHstJournalDocuments(
   periodStart: string,
   periodEnd: string,
   taxCodes: GstHstTaxCodeFlag[],
+  countedLinkedSources: Iterable<string> = [],
 ): Promise<GstHstBankDocument[]> {
   const mappedGlIds = [
     ...new Set(
@@ -193,7 +196,7 @@ export async function fetchStandaloneGstHstJournalDocuments(
       .from('journal_entry_lines')
       .select(`
         id, journal_entry_id, account_id, debit, credit, description, tax_code_id,
-        source_document_type, customer_id, vendor_id,
+        source_document_type, source_document_id, customer_id, vendor_id,
         account:accounts(id, name, account_type),
         customers(name), vendors(name)
       `)
@@ -223,6 +226,7 @@ export async function fetchStandaloneGstHstJournalDocuments(
   return gstHstDocumentsFromJournalEntries(entries, taxCodes, {
     collectedAccountIds: extraCollected,
     paidAccountIds: extraPaid,
+    countedLinkedSources,
   });
 }
 
@@ -464,10 +468,22 @@ export async function fetchGstHstPeriodDocuments(
     };
   };
 
-  const bankDocuments: GstHstBankDocument[] = [
+  const bankingDocuments: GstHstBankDocument[] = [
     ...bankRows.map((row) => toBankDoc(row, 'bank')),
     ...cardRows.map((row) => toBankDoc(row, 'credit_card')),
-    ...(await fetchStandaloneGstHstJournalDocuments(organizationId, periodStart, periodEnd, taxCodes)),
+  ];
+  const countedLinkedSources = bankingDocuments
+    .filter(bankDocumentHasGstTax)
+    .map((doc) => `${doc.source === 'credit_card' ? 'credit_card_transaction' : 'bank_transaction'}:${doc.id}`);
+  const bankDocuments: GstHstBankDocument[] = [
+    ...bankingDocuments,
+    ...(await fetchStandaloneGstHstJournalDocuments(
+      organizationId,
+      periodStart,
+      periodEnd,
+      taxCodes,
+      countedLinkedSources,
+    )),
   ];
 
   return { invoices, purchases, bankDocuments, taxCodes };

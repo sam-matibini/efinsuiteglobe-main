@@ -51,13 +51,18 @@ describe('tax report preview wiring', () => {
     expect(hook).toContain('gstHstDocumentsFromJournalEntries');
     expect(hook).toContain('journal_entry_lines');
     expect(hook).toContain('tax_code_id');
-    expect(hook).toContain('fetchStandaloneGstHstJournalDocuments(organizationId, periodStart, periodEnd, taxCodes)');
+    expect(hook).toContain('countedLinkedSources');
 
     const engine = readFileSync(join(root, 'src/lib/gstHstPeriodEngine.ts'), 'utf8');
     expect(engine).toContain("source: 'bank' | 'credit_card' | 'journal'");
     expect(engine).toContain("type: 'Invoice' | 'Bill' | 'Expense' | 'Bank' | 'Credit card' | 'Journal'");
     expect(engine).toContain('gstHstDocumentsFromJournalEntries');
     expect(engine).toContain("doc.source === 'journal' ? 'Journal'");
+    expect(engine).toContain('if (!usedDocumentCollected)');
+
+    const salesTax = readFileSync(join(root, 'src/pages/SalesTax.tsx'), 'utf8');
+    expect(salesTax).toContain('useTaxPeriodActivity');
+    expect(salesTax).toContain('journal: gstJournal');
 
     const journals = readFileSync(join(root, 'src/hooks/useJournalEntries.ts'), 'utf8');
     expect(journals).toContain('tax_code_id: line.tax_code_id || null');
