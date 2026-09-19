@@ -130,6 +130,27 @@ export const API_GROUPS: ApiGroup[] = [
         description: "Multiplies ownership down the chain, flags owners at or above 25%, and applies the OFAC 50 percent rule.",
         response: { data: { owners: [{ name: "Jane Doe", effectivePct: 42, isUbo: true }], rule: { blocked: false } } },
       },
+      {
+        method: "GET",
+        path: "/cases/{case_id}/registry",
+        summary: "Read The KYB registry profiles",
+        description:
+          "Official-registry companies attached to the case through The KYB, including AML match status. Complements bank-confirmed identity from Plaid.",
+      },
+      {
+        method: "POST",
+        path: "/cases/{case_id}/registry",
+        summary: "Search, attach or AML-screen via The KYB",
+        description:
+          "action=search looks up a legal name or number in official registries. action=attach imports the chosen company, officers and UBOs. action=aml screens the entity on The KYB lists.",
+        request: { action: "search", name: "Acme Payments Inc", country: "CA" },
+        response: {
+          data: {
+            kyb_request_id: "…",
+            hits: [{ kyb_response_id: "…", name: "ACME PAYMENTS INC", registration_number: "1001234567", status: "active" }],
+          },
+        },
+      },
     ],
   },
   {
@@ -248,7 +269,7 @@ export const SANDBOX_TEST_VALUES: { value: string; effect: string }[] = [
   { value: "test-pep", effect: "Screening returns a politically exposed person match and a medium risk score." },
   { value: "test-review", effect: "Bank-confirmed identity comes back as a close, not exact, match." },
   { value: "test-fail", effect: "Bank-confirmed identity comes back as different." },
-  { value: "any other name", effect: "Clean result, no matches." },
+  { value: "any other name", effect: "Clean result, no matches. Registry search returns a verified sandbox company." },
 ];
 
 

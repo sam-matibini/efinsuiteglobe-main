@@ -96,6 +96,26 @@ function IntegrationsPage() {
                     {row.category}
                     {row.last_checked_at ? ` · last used ${new Date(row.last_checked_at).toLocaleString()}` : ""}
                   </div>
+                  {row.provider === "thekyb" ? (
+                    <div className="mt-1 max-w-sm text-xs text-muted-foreground">
+                      Official registry KYB and AML — complements Plaid bank identity. Create the API
+                      secret under API integration at{" "}
+                      <a
+                        href="https://backoffice.thekyb.com/settings"
+                        className="underline underline-offset-4"
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        backoffice.thekyb.com/settings
+                      </a>{" "}
+                      and store it as THEKYB_API_TOKEN.
+                    </div>
+                  ) : null}
+                  {row.provider === "plaid" ? (
+                    <div className="mt-1 max-w-sm text-xs text-muted-foreground">
+                      Bank-confirmed identity and imported transactions. Does not replace registry KYB.
+                    </div>
+                  ) : null}
                   {row.last_error ? (
                     <div className="mt-1 text-xs text-[var(--signal)]">{row.last_error}</div>
                   ) : null}

@@ -68,6 +68,7 @@ import { Route as ApiPublicV1CasesCaseIdDocumentsRouteImport } from './routes/ap
 import { Route as ApiPublicV1CasesCaseIdHitsRouteImport } from './routes/api/public/v1/cases.$caseId.hits'
 import { Route as ApiPublicV1CasesCaseIdOwnersRouteImport } from './routes/api/public/v1/cases.$caseId.owners'
 import { Route as ApiPublicV1CasesCaseIdOwnershipRouteImport } from './routes/api/public/v1/cases.$caseId.ownership'
+import { Route as ApiPublicV1CasesCaseIdRegistryRouteImport } from './routes/api/public/v1/cases.$caseId.registry'
 import { Route as ApiPublicV1CasesCaseIdRiskRouteImport } from './routes/api/public/v1/cases.$caseId.risk'
 import { Route as ApiPublicV1CasesCaseIdScreenRouteImport } from './routes/api/public/v1/cases.$caseId.screen'
 import { Route as ApiPublicV1CasesCaseIdSelfiesRouteImport } from './routes/api/public/v1/cases.$caseId.selfies'
@@ -396,6 +397,12 @@ const ApiPublicV1CasesCaseIdOwnershipRoute =
     path: '/ownership',
     getParentRoute: () => ApiPublicV1CasesCaseIdRoute,
   } as any)
+const ApiPublicV1CasesCaseIdRegistryRoute =
+  ApiPublicV1CasesCaseIdRegistryRouteImport.update({
+    id: '/registry',
+    path: '/registry',
+    getParentRoute: () => ApiPublicV1CasesCaseIdRoute,
+  } as any)
 const ApiPublicV1CasesCaseIdRiskRoute =
   ApiPublicV1CasesCaseIdRiskRouteImport.update({
     id: '/risk',
@@ -480,6 +487,7 @@ export interface FileRoutesByFullPath {
   '/api/public/v1/cases/$caseId/hits': typeof ApiPublicV1CasesCaseIdHitsRoute
   '/api/public/v1/cases/$caseId/owners': typeof ApiPublicV1CasesCaseIdOwnersRoute
   '/api/public/v1/cases/$caseId/ownership': typeof ApiPublicV1CasesCaseIdOwnershipRoute
+  '/api/public/v1/cases/$caseId/registry': typeof ApiPublicV1CasesCaseIdRegistryRoute
   '/api/public/v1/cases/$caseId/risk': typeof ApiPublicV1CasesCaseIdRiskRoute
   '/api/public/v1/cases/$caseId/screen': typeof ApiPublicV1CasesCaseIdScreenRoute
   '/api/public/v1/cases/$caseId/selfies': typeof ApiPublicV1CasesCaseIdSelfiesRoute
@@ -544,6 +552,7 @@ export interface FileRoutesByTo {
   '/api/public/v1/cases/$caseId/hits': typeof ApiPublicV1CasesCaseIdHitsRoute
   '/api/public/v1/cases/$caseId/owners': typeof ApiPublicV1CasesCaseIdOwnersRoute
   '/api/public/v1/cases/$caseId/ownership': typeof ApiPublicV1CasesCaseIdOwnershipRoute
+  '/api/public/v1/cases/$caseId/registry': typeof ApiPublicV1CasesCaseIdRegistryRoute
   '/api/public/v1/cases/$caseId/risk': typeof ApiPublicV1CasesCaseIdRiskRoute
   '/api/public/v1/cases/$caseId/screen': typeof ApiPublicV1CasesCaseIdScreenRoute
   '/api/public/v1/cases/$caseId/selfies': typeof ApiPublicV1CasesCaseIdSelfiesRoute
@@ -610,6 +619,7 @@ export interface FileRoutesById {
   '/api/public/v1/cases/$caseId/hits': typeof ApiPublicV1CasesCaseIdHitsRoute
   '/api/public/v1/cases/$caseId/owners': typeof ApiPublicV1CasesCaseIdOwnersRoute
   '/api/public/v1/cases/$caseId/ownership': typeof ApiPublicV1CasesCaseIdOwnershipRoute
+  '/api/public/v1/cases/$caseId/registry': typeof ApiPublicV1CasesCaseIdRegistryRoute
   '/api/public/v1/cases/$caseId/risk': typeof ApiPublicV1CasesCaseIdRiskRoute
   '/api/public/v1/cases/$caseId/screen': typeof ApiPublicV1CasesCaseIdScreenRoute
   '/api/public/v1/cases/$caseId/selfies': typeof ApiPublicV1CasesCaseIdSelfiesRoute
@@ -676,6 +686,7 @@ export interface FileRouteTypes {
     | '/api/public/v1/cases/$caseId/hits'
     | '/api/public/v1/cases/$caseId/owners'
     | '/api/public/v1/cases/$caseId/ownership'
+    | '/api/public/v1/cases/$caseId/registry'
     | '/api/public/v1/cases/$caseId/risk'
     | '/api/public/v1/cases/$caseId/screen'
     | '/api/public/v1/cases/$caseId/selfies'
@@ -740,6 +751,7 @@ export interface FileRouteTypes {
     | '/api/public/v1/cases/$caseId/hits'
     | '/api/public/v1/cases/$caseId/owners'
     | '/api/public/v1/cases/$caseId/ownership'
+    | '/api/public/v1/cases/$caseId/registry'
     | '/api/public/v1/cases/$caseId/risk'
     | '/api/public/v1/cases/$caseId/screen'
     | '/api/public/v1/cases/$caseId/selfies'
@@ -805,6 +817,7 @@ export interface FileRouteTypes {
     | '/api/public/v1/cases/$caseId/hits'
     | '/api/public/v1/cases/$caseId/owners'
     | '/api/public/v1/cases/$caseId/ownership'
+    | '/api/public/v1/cases/$caseId/registry'
     | '/api/public/v1/cases/$caseId/risk'
     | '/api/public/v1/cases/$caseId/screen'
     | '/api/public/v1/cases/$caseId/selfies'
@@ -1258,6 +1271,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicV1CasesCaseIdOwnershipRouteImport
       parentRoute: typeof ApiPublicV1CasesCaseIdRoute
     }
+    '/api/public/v1/cases/$caseId/registry': {
+      id: '/api/public/v1/cases/$caseId/registry'
+      path: '/registry'
+      fullPath: '/api/public/v1/cases/$caseId/registry'
+      preLoaderRoute: typeof ApiPublicV1CasesCaseIdRegistryRouteImport
+      parentRoute: typeof ApiPublicV1CasesCaseIdRoute
+    }
     '/api/public/v1/cases/$caseId/risk': {
       id: '/api/public/v1/cases/$caseId/risk'
       path: '/risk'
@@ -1358,6 +1378,7 @@ interface ApiPublicV1CasesCaseIdRouteChildren {
   ApiPublicV1CasesCaseIdHitsRoute: typeof ApiPublicV1CasesCaseIdHitsRoute
   ApiPublicV1CasesCaseIdOwnersRoute: typeof ApiPublicV1CasesCaseIdOwnersRoute
   ApiPublicV1CasesCaseIdOwnershipRoute: typeof ApiPublicV1CasesCaseIdOwnershipRoute
+  ApiPublicV1CasesCaseIdRegistryRoute: typeof ApiPublicV1CasesCaseIdRegistryRoute
   ApiPublicV1CasesCaseIdRiskRoute: typeof ApiPublicV1CasesCaseIdRiskRoute
   ApiPublicV1CasesCaseIdScreenRoute: typeof ApiPublicV1CasesCaseIdScreenRoute
   ApiPublicV1CasesCaseIdSelfiesRoute: typeof ApiPublicV1CasesCaseIdSelfiesRoute
@@ -1373,6 +1394,7 @@ const ApiPublicV1CasesCaseIdRouteChildren: ApiPublicV1CasesCaseIdRouteChildren =
     ApiPublicV1CasesCaseIdHitsRoute: ApiPublicV1CasesCaseIdHitsRoute,
     ApiPublicV1CasesCaseIdOwnersRoute: ApiPublicV1CasesCaseIdOwnersRoute,
     ApiPublicV1CasesCaseIdOwnershipRoute: ApiPublicV1CasesCaseIdOwnershipRoute,
+    ApiPublicV1CasesCaseIdRegistryRoute: ApiPublicV1CasesCaseIdRegistryRoute,
     ApiPublicV1CasesCaseIdRiskRoute: ApiPublicV1CasesCaseIdRiskRoute,
     ApiPublicV1CasesCaseIdScreenRoute: ApiPublicV1CasesCaseIdScreenRoute,
     ApiPublicV1CasesCaseIdSelfiesRoute: ApiPublicV1CasesCaseIdSelfiesRoute,

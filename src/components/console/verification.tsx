@@ -12,6 +12,7 @@ import {
   submitSelfie,
 } from "@/lib/verification.functions";
 import { BankPanel } from "@/components/console/bank";
+import { TheKybPanel } from "@/components/console/thekyb";
 
 type DocCheckRow = { name: string; ok: boolean; severity: string; detail?: string };
 
@@ -32,7 +33,19 @@ async function fetchVerification(caseId: string) {
   };
 }
 
-export function VerificationPanels({ caseId, canWrite }: { caseId: string; canWrite: boolean }) {
+export function VerificationPanels({
+  caseId,
+  canWrite,
+  subjectName,
+  country,
+  caseType,
+}: {
+  caseId: string;
+  canWrite: boolean;
+  subjectName?: string;
+  country?: string | null;
+  caseType?: string;
+}) {
   const queryClient = useQueryClient();
   const submitDoc = useServerFn(submitDocument);
   const submitFace = useServerFn(submitSelfie);
@@ -350,6 +363,14 @@ export function VerificationPanels({ caseId, canWrite }: { caseId: string; canWr
       </Panel>
 
       <BankPanel caseId={caseId} canWrite={canWrite} claimedEmail={email} claimedPhone={phone} />
+
+      <TheKybPanel
+        caseId={caseId}
+        canWrite={canWrite}
+        {...(subjectName ? { defaultName: subjectName } : {})}
+        {...(country !== undefined ? { defaultCountry: country } : {})}
+        {...(caseType ? { caseType } : {})}
+      />
     </>
   );
 }

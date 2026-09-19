@@ -1918,6 +1918,90 @@ export type Database = {
           },
         ]
       }
+      thekyb_profiles: {
+        Row: {
+          aml_hits: Json
+          aml_match_status: string | null
+          aml_request_id: string | null
+          case_id: string
+          company_name: string
+          company_status: string | null
+          company_type: string | null
+          country_code: string | null
+          created_at: string
+          created_by: string | null
+          fetch_status: string | null
+          id: string
+          kyb_request_id: string | null
+          kyb_response_id: string | null
+          org_id: string
+          profile: Json
+          registration_number: string | null
+          risk_level: string | null
+          updated_at: string
+          verification_status: string | null
+        }
+        Insert: {
+          aml_hits?: Json
+          aml_match_status?: string | null
+          aml_request_id?: string | null
+          case_id: string
+          company_name: string
+          company_status?: string | null
+          company_type?: string | null
+          country_code?: string | null
+          created_at?: string
+          created_by?: string | null
+          fetch_status?: string | null
+          id?: string
+          kyb_request_id?: string | null
+          kyb_response_id?: string | null
+          org_id?: string
+          profile?: Json
+          registration_number?: string | null
+          risk_level?: string | null
+          updated_at?: string
+          verification_status?: string | null
+        }
+        Update: {
+          aml_hits?: Json
+          aml_match_status?: string | null
+          aml_request_id?: string | null
+          case_id?: string
+          company_name?: string
+          company_status?: string | null
+          company_type?: string | null
+          country_code?: string | null
+          created_at?: string
+          created_by?: string | null
+          fetch_status?: string | null
+          id?: string
+          kyb_request_id?: string | null
+          kyb_response_id?: string | null
+          org_id?: string
+          profile?: Json
+          registration_number?: string | null
+          risk_level?: string | null
+          updated_at?: string
+          verification_status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "thekyb_profiles_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "thekyb_profiles_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       transaction_alerts: {
         Row: {
           case_id: string

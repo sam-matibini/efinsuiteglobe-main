@@ -56,7 +56,7 @@ function BusinessVerification() {
           </figure>
           <CheckList
             items={[
-              "Federal and provincial registry confirmation",
+              "Official registry confirmation through The KYB across 225+ countries and states",
               "Legal name, operating names and registration number",
               "Incorporation date and jurisdiction",
               "Operating status, dissolution and strike-off flags",
@@ -64,7 +64,9 @@ function BusinessVerification() {
               "Business type and industry classification",
               "Tax and business numbers where available",
               "Filing history and annual return currency",
-              "International registry coverage",
+              "Directors, officers and beneficial owners imported onto the case",
+              "The KYB AML on the entity and its people, alongside eterfaceID watchlists",
+              "Bank-confirmed identity via Plaid for the people those owners become",
               "Document upload fallback for unregistered entities",
             ]}
           />

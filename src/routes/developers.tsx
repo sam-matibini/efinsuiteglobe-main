@@ -134,8 +134,9 @@ function Developers() {
             <h3 className="text-sm font-semibold">Sandbox — eid_test_…</h3>
             <p className="mt-2 text-sm text-muted-foreground">
               Available the moment you create an account, unlimited and never billed. Sandbox keys never
-              query the real sanctions and watchlists and never open a real bank connection: results are
-              simulated so you can test every branch of your code. Use these names to drive the outcome:
+              query the real sanctions and watchlists, never open a real bank connection and never call
+              The KYB: results are simulated so you can test every branch of your code. Use these names
+              to drive the outcome:
             </p>
             <ul className="mt-3 space-y-1 text-sm">
               {SANDBOX_TEST_VALUES.map((v) => (
@@ -149,7 +150,8 @@ function Developers() {
           <div className="rounded-lg border border-border bg-card p-5">
             <h3 className="text-sm font-semibold">Live — eid_live_…</h3>
             <p className="mt-2 text-sm text-muted-foreground">
-              Live keys reach the real lists, real bank connections and your billable usage. Before they can
+              Live keys reach the real lists, real bank connections, official registries through The KYB
+              and your billable usage. Before they can
               be created, an administrator completes <strong>Go live</strong> in the console: business
               details and beneficial owners are submitted and verified, the commercial agreement is signed,
               and an eterfaceID reviewer confirms.

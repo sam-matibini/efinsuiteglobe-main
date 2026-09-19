@@ -298,7 +298,13 @@ function CaseDetail() {
             </div>
           </Panel>
 
-          <VerificationPanels caseId={caseId} canWrite={canWrite} />
+          <VerificationPanels
+            caseId={caseId}
+            canWrite={canWrite}
+            subjectName={record.subject_name}
+            country={record.country}
+            caseType={record.case_type}
+          />
 
           <AddressPanel caseId={caseId} canWrite={canWrite} />
         </div>
