@@ -28,6 +28,7 @@ import {
 export type GstHstSupplyClass = 'taxable' | 'zero_rated' | 'exempt';
 
 export interface GstHstTaxCodeFlag {
+  id?: string | null;
   code: string;
   name?: string | null;
   tax_type?: string | null;
@@ -35,6 +36,8 @@ export interface GstHstTaxCodeFlag {
   is_zero_rated?: boolean | null;
   is_exempt?: boolean | null;
   is_recoverable?: boolean | null;
+  gl_collected_account_id?: string | null;
+  gl_paid_account_id?: string | null;
 }
 
 export interface GstHstDocumentTax {
@@ -83,7 +86,7 @@ export interface GstHstPurchaseDocument {
 }
 
 export interface GstHstBankDocument {
-  source: 'bank' | 'credit_card';
+  source: 'bank' | 'credit_card' | 'journal';
   direction: 'collected' | 'paid';
   id: string;
   date: string;
@@ -99,7 +102,7 @@ export interface GstHstBankDocument {
 
 export interface GstHstSupportRow {
   date: string;
-  type: 'Invoice' | 'Bill' | 'Expense' | 'Bank' | 'Credit card';
+  type: 'Invoice' | 'Bill' | 'Expense' | 'Bank' | 'Credit card' | 'Journal';
   number: string;
   description: string;
   name: string;
@@ -251,6 +254,225 @@ export function taxesFromBankingPosting(input: {
 
 export function isBankCollectedSide(transactionType?: string | null): boolean {
   return /^(deposit|credit|refund|interest)$/i.test(String(transactionType ?? ''));
+}
+
+/** Source documents already counted from invoices/bills/expenses/banking. */
+export const LINKED_GST_HST_JE_SOURCES = new Set([
+  'invoice',
+  'bill',
+  'expense',
+  'expense_claim',
+  'bank_transaction',
+  'credit_card_transaction',
+]);
+
+export function isLinkedGstHstJournalSource(sourceType?: string | null): boolean {
+  return LINKED_GST_HST_JE_SOURCES.has(String(sourceType ?? '').toLowerCase());
+}
+
+export function isYearEndClosingJournal(reference?: string | null): boolean {
+  return String(reference ?? '').toUpperCase().startsWith('CLOSE-');
+}
+
+/** CRA remittances / refunds: JE only touches tax + bank/cash, no income or expense. */
+export function isTaxAuthoritySettlementJournal(accountTypes: Array<string | null | undefined>): boolean {
+  const known = accountTypes.map((type) => String(type ?? '').toLowerCase()).filter(Boolean);
+  if (known.length === 0) return false;
+  return !known.some((type) => type === 'income' || type === 'expense');
+}
+
+export function looksLikeTaxGlAccount(accountName?: string | null, accountType?: string | null): boolean {
+  const type = String(accountType ?? '').toLowerCase();
+  if (type === 'income' || type === 'expense' || type === 'equity') return false;
+  return /gst|hst|pst|qst|vat|sales tax|input tax|tax payable|tax recoverable|tax paid|tax collected/i.test(
+    String(accountName ?? ''),
+  );
+}
+
+export interface GstHstJournalLineSource {
+  id: string;
+  accountId: string;
+  accountType?: string | null;
+  accountName?: string | null;
+  debit: number;
+  credit: number;
+  description?: string | null;
+  taxCodeId?: string | null;
+  sourceDocumentType?: string | null;
+  partyName?: string | null;
+}
+
+export interface GstHstJournalEntrySource {
+  id: string;
+  date: string;
+  reference: string;
+  description?: string | null;
+  status?: string | null;
+  journalType?: string | null;
+  lines: GstHstJournalLineSource[];
+}
+
+export function journalTaxDirection(
+  accountId: string,
+  debit: number,
+  credit: number,
+  collectedAccountIds: Set<string>,
+  paidAccountIds: Set<string>,
+): 'collected' | 'paid' {
+  if (paidAccountIds.has(accountId) && !collectedAccountIds.has(accountId)) return 'paid';
+  if (collectedAccountIds.has(accountId)) return 'collected';
+  return credit >= debit ? 'collected' : 'paid';
+}
+
+export function gstHstDocumentFromJournalTaxLine(input: {
+  id: string;
+  date: string;
+  number: string;
+  description?: string | null;
+  partyName?: string | null;
+  debit: number;
+  credit: number;
+  accountId: string;
+  taxCode?: GstHstTaxCodeFlag | null;
+  collectedAccountIds: Set<string>;
+  paidAccountIds: Set<string>;
+}): GstHstBankDocument {
+  const direction = journalTaxDirection(
+    input.accountId,
+    input.debit,
+    input.credit,
+    input.collectedAccountIds,
+    input.paidAccountIds,
+  );
+  const taxAmount = direction === 'collected'
+    ? round2(input.credit - input.debit)
+    : round2(input.debit - input.credit);
+  const rate = Number(input.taxCode?.rate ?? 0);
+  const taxableAmount = rate > 0 ? round2(taxAmount / (rate / 100)) : 0;
+  return {
+    source: 'journal',
+    direction,
+    id: input.id,
+    date: input.date,
+    number: input.number,
+    description: input.description ?? input.number,
+    partyName: input.partyName ?? '',
+    amount: taxAmount,
+    subtotal: taxableAmount,
+    taxes: [{
+      tax_code: input.taxCode?.code ?? null,
+      tax_type: input.taxCode?.tax_type ?? null,
+      rate,
+      taxable_amount: taxableAmount,
+      tax_amount: taxAmount,
+      is_recoverable: input.taxCode?.is_recoverable !== false,
+      authority: null,
+    }],
+  };
+}
+
+function inferTaxTypeFromAccountName(name?: string | null): string {
+  if (isProvincialSalesTax({ tax_code: name })) return 'pst';
+  return 'hst';
+}
+
+function inferCodeFromAccountName(name?: string | null): string {
+  const n = String(name ?? '').toUpperCase();
+  if (n.includes('QST')) return 'QST';
+  if (n.includes('PST')) return 'PST';
+  if (n.includes('GST')) return 'GST';
+  if (n.includes('HST')) return 'HST';
+  return 'GST/HST';
+}
+
+function resolveJournalTaxCode(
+  line: GstHstJournalLineSource,
+  byId: Map<string, GstHstTaxCodeFlag>,
+  byCode: Map<string, GstHstTaxCodeFlag>,
+  byCollectedAccount: Map<string, GstHstTaxCodeFlag>,
+  byPaidAccount: Map<string, GstHstTaxCodeFlag>,
+): GstHstTaxCodeFlag | undefined {
+  if (line.taxCodeId && byId.has(line.taxCodeId)) return byId.get(line.taxCodeId);
+  const hay = `${line.description ?? ''}`.toUpperCase();
+  for (const [code, flag] of byCode) {
+    if (code && hay.includes(code)) return flag;
+  }
+  return byCollectedAccount.get(line.accountId) || byPaidAccount.get(line.accountId);
+}
+
+/** Convert posted standalone tax JEs into RST documents. Skips invoice/bill/bank-linked and remittance JEs. */
+export function gstHstDocumentsFromJournalEntries(
+  entries: GstHstJournalEntrySource[],
+  taxCodes: GstHstTaxCodeFlag[] = [],
+  extraAccounts?: {
+    collectedAccountIds?: Iterable<string>;
+    paidAccountIds?: Iterable<string>;
+  },
+): GstHstBankDocument[] {
+  const collectedAccountIds = new Set<string>(extraAccounts?.collectedAccountIds);
+  const paidAccountIds = new Set<string>(extraAccounts?.paidAccountIds);
+  const byId = new Map<string, GstHstTaxCodeFlag>();
+  const byCode = new Map<string, GstHstTaxCodeFlag>();
+  const byCollectedAccount = new Map<string, GstHstTaxCodeFlag>();
+  const byPaidAccount = new Map<string, GstHstTaxCodeFlag>();
+
+  for (const code of taxCodes) {
+    if (code.id) byId.set(code.id, code);
+    if (code.code) byCode.set(code.code.toUpperCase(), code);
+    if (code.gl_collected_account_id) {
+      collectedAccountIds.add(code.gl_collected_account_id);
+      byCollectedAccount.set(code.gl_collected_account_id, code);
+    }
+    if (code.gl_paid_account_id) {
+      paidAccountIds.add(code.gl_paid_account_id);
+      byPaidAccount.set(code.gl_paid_account_id, code);
+    }
+  }
+
+  const documents: GstHstBankDocument[] = [];
+
+  for (const entry of entries) {
+    if (entry.status && String(entry.status).toLowerCase() !== 'posted') continue;
+    if (isYearEndClosingJournal(entry.reference)) continue;
+    if (String(entry.journalType ?? '').toLowerCase() === 'bank') continue;
+    if (entry.lines.some((line) => isLinkedGstHstJournalSource(line.sourceDocumentType))) continue;
+    if (isTaxAuthoritySettlementJournal(entry.lines.map((line) => line.accountType))) continue;
+
+    const partyName = entry.lines.map((line) => line.partyName).find((name) => name && name.trim()) || '';
+
+    for (const line of entry.lines) {
+      const debit = Number(line.debit || 0);
+      const credit = Number(line.credit || 0);
+      if (debit === 0 && credit === 0) continue;
+
+      const mapped = collectedAccountIds.has(line.accountId) || paidAccountIds.has(line.accountId);
+      const taggedTaxGl = Boolean(line.taxCodeId) && looksLikeTaxGlAccount(line.accountName, line.accountType);
+      if (!mapped && !taggedTaxGl) continue;
+
+      const taxCode = resolveJournalTaxCode(line, byId, byCode, byCollectedAccount, byPaidAccount);
+      if (taxCode && !isGstHstTax(taxCode) && !isProvincialSalesTax(taxCode)) continue;
+
+      documents.push(gstHstDocumentFromJournalTaxLine({
+        id: line.id,
+        date: entry.date,
+        number: entry.reference,
+        description: line.description || entry.description || entry.reference,
+        partyName,
+        debit,
+        credit,
+        accountId: line.accountId,
+        taxCode: taxCode ?? {
+          code: inferCodeFromAccountName(line.accountName),
+          tax_type: inferTaxTypeFromAccountName(line.accountName),
+          rate: 0,
+        },
+        collectedAccountIds,
+        paidAccountIds,
+      }));
+    }
+  }
+
+  return documents;
 }
 
 function flagMap(flags: GstHstTaxCodeFlag[]): Map<string, GstHstTaxCodeFlag> {
@@ -643,7 +865,7 @@ export function summarizeGstHstDocuments(input: {
   for (const doc of bankDocuments) {
     const gstRows = (doc.taxes ?? []).filter((tax) => isGstHstTax(tax));
     const pstRows = (doc.taxes ?? []).filter((tax) => isProvincialSalesTax(tax));
-    const type = doc.source === 'credit_card' ? 'Credit card' : 'Bank';
+    const type = doc.source === 'journal' ? 'Journal' : doc.source === 'credit_card' ? 'Credit card' : 'Bank';
     const description = doc.description || doc.number || type;
     const partyName = doc.partyName || doc.description || '';
     const source = doc.direction === 'collected' ? 'invoice' : 'bill';

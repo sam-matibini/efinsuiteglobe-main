@@ -3,8 +3,10 @@ import { buildGstHstReturn } from '../filings/canadaGstHst';
 import {
   classifyGstHstSupply,
   emptyGstHstSnapshot,
+  gstHstDocumentsFromJournalEntries,
   groupGstHstSupportByLine,
   isGstHstTax,
+  journalTaxDirection,
   summarizeGstHstDocuments,
   type GstHstInvoiceDocument,
   type GstHstPurchaseDocument,
@@ -327,6 +329,61 @@ describe('summarizeGstHstDocuments', () => {
     expect(snapshot.supportRows.some((row) => row.number === 'DEP-2')).toBe(false);
   });
 
+  it('includes standalone journal tax lines alongside invoices without mixing lifetime journal fallback', () => {
+    const snapshot = summarizeGstHstDocuments({
+      periodStart: '2026-07-01',
+      periodEnd: '2026-09-30',
+      invoices: [taxableInvoice()],
+      purchases: [],
+      bankDocuments: [{
+        source: 'journal',
+        direction: 'collected',
+        id: 'jel-sales-adj',
+        date: '2026-08-18',
+        number: 'JE-0401',
+        description: 'HST on year-end sales accrual',
+        taxes: [{ tax_code: 'HST-ON', tax_type: 'hst', rate: 13, taxable_amount: 500, tax_amount: 65 }],
+      }, {
+        source: 'journal',
+        direction: 'paid',
+        id: 'jel-itc-adj',
+        date: '2026-08-19',
+        number: 'JE-0402',
+        description: 'HST on prepaid insurance',
+        taxes: [{ tax_code: 'HST-ON', tax_type: 'hst', rate: 13, taxable_amount: 100, tax_amount: 13, is_recoverable: true }],
+      }],
+      journal: { taxCollected: 45134.93, itcClaimed: 68265.98, taxableSales: 347191 },
+      taxCodes,
+    });
+    expect(snapshot.taxableSales).toBe(1500);
+    expect(snapshot.gstHstCollected).toBe(195);
+    expect(snapshot.itc).toBe(13);
+    expect(snapshot.supportRows.some((row) => row.type === 'Journal' && row.number === 'JE-0401')).toBe(true);
+    expect(snapshot.supportRows.some((row) => row.type === 'Journal' && row.craLine === '106')).toBe(true);
+  });
+
+  it('treats a debit on GST payable as a collected exception, not an ITC', () => {
+    const snapshot = summarizeGstHstDocuments({
+      periodStart: '2026-07-01',
+      periodEnd: '2026-09-30',
+      invoices: [],
+      purchases: [],
+      bankDocuments: [{
+        source: 'journal',
+        direction: 'collected',
+        id: 'jel-cn',
+        date: '2026-08-21',
+        number: 'JE-0403',
+        description: 'Credit note HST',
+        taxes: [{ tax_code: 'HST-ON', tax_type: 'hst', rate: 13, taxable_amount: -200, tax_amount: -26 }],
+      }],
+      taxCodes,
+    });
+    expect(snapshot.gstHstCollected).toBe(-26);
+    expect(snapshot.gstHstCollectedException).toBe(-26);
+    expect(snapshot.itc).toBe(0);
+  });
+
   it('builds a detailed support listing grouped by CRA line', () => {
     const snapshot = summarizeGstHstDocuments({
       periodStart: '2026-07-01',
@@ -403,5 +460,123 @@ describe('buildGstHstReturn CRA working copy', () => {
     expect(line('101')).toBe(1650);
     expect(line('103')).toBe(130);
     expect(line('106')).toBe(26);
+  });
+});
+
+const payable = 'acct-gst-payable';
+const recoverable = 'acct-gst-itc';
+const revenue = 'acct-revenue';
+const expense = 'acct-expense';
+const bank = 'acct-bank';
+const journalTaxCodes = [
+  {
+    id: 'tc-hst',
+    code: 'HST-ON',
+    name: 'HST Ontario',
+    tax_type: 'hst',
+    rate: 13,
+    is_recoverable: true,
+    gl_collected_account_id: payable,
+    gl_paid_account_id: recoverable,
+  },
+];
+
+describe('gstHstDocumentsFromJournalEntries', () => {
+  it('maps a debit on GST payable to collected, not paid', () => {
+    expect(journalTaxDirection(payable, 26, 0, new Set([payable]), new Set([recoverable]))).toBe('collected');
+    expect(journalTaxDirection(recoverable, 13, 0, new Set([payable]), new Set([recoverable]))).toBe('paid');
+  });
+
+  it('includes standalone tax JEs and skips invoice-linked, CLOSE, and remittance JEs', () => {
+    const docs = gstHstDocumentsFromJournalEntries([
+      {
+        id: 'je-sales',
+        date: '2026-08-18',
+        reference: 'JE-0401',
+        status: 'posted',
+        journalType: 'manual',
+        lines: [
+          { id: 'l1', accountId: revenue, accountType: 'income', debit: 0, credit: 500, description: 'Sales accrual' },
+          { id: 'l2', accountId: payable, accountType: 'liability', accountName: 'GST/HST Payable', debit: 0, credit: 65, taxCodeId: 'tc-hst', description: 'HST-ON on sales' },
+        ],
+      },
+      {
+        id: 'je-invoice',
+        date: '2026-08-19',
+        reference: 'INV-100',
+        status: 'posted',
+        journalType: 'sales',
+        lines: [
+          { id: 'l3', accountId: payable, accountType: 'liability', accountName: 'GST/HST Payable', debit: 0, credit: 130, taxCodeId: 'tc-hst', sourceDocumentType: 'invoice' },
+          { id: 'l4', accountId: revenue, accountType: 'income', debit: 0, credit: 1000, sourceDocumentType: 'invoice' },
+        ],
+      },
+      {
+        id: 'je-close',
+        date: '2026-09-30',
+        reference: 'CLOSE-2026',
+        status: 'posted',
+        lines: [
+          { id: 'l5', accountId: payable, accountType: 'liability', accountName: 'GST/HST Payable', debit: 65, credit: 0 },
+          { id: 'l6', accountId: revenue, accountType: 'income', debit: 500, credit: 0 },
+        ],
+      },
+      {
+        id: 'je-remit',
+        date: '2026-08-20',
+        reference: 'JE-0409',
+        status: 'posted',
+        journalType: 'manual',
+        lines: [
+          { id: 'l7', accountId: payable, accountType: 'liability', accountName: 'GST/HST Payable', debit: 195, credit: 0, taxCodeId: 'tc-hst' },
+          { id: 'l8', accountId: bank, accountType: 'asset', debit: 0, credit: 195 },
+        ],
+      },
+      {
+        id: 'je-itc',
+        date: '2026-08-21',
+        reference: 'JE-0410',
+        status: 'posted',
+        journalType: 'adjustment',
+        lines: [
+          { id: 'l9', accountId: expense, accountType: 'expense', debit: 100, credit: 0 },
+          { id: 'l10', accountId: recoverable, accountType: 'asset', accountName: 'GST/HST Recoverable', debit: 13, credit: 0, taxCodeId: 'tc-hst' },
+          { id: 'l11', accountId: bank, accountType: 'asset', debit: 0, credit: 113 },
+        ],
+      },
+    ], journalTaxCodes);
+
+    expect(docs.map((doc) => doc.number).sort()).toEqual(['JE-0401', 'JE-0410']);
+    const collected = docs.find((doc) => doc.number === 'JE-0401')!;
+    const paid = docs.find((doc) => doc.number === 'JE-0410')!;
+    expect(collected.direction).toBe('collected');
+    expect(collected.taxes?.[0].tax_amount).toBe(65);
+    expect(collected.source).toBe('journal');
+    expect(paid.direction).toBe('paid');
+    expect(paid.taxes?.[0].tax_amount).toBe(13);
+  });
+
+  it('does not double-count an invoice JE when invoices are already in the snapshot', () => {
+    const journalDocs = gstHstDocumentsFromJournalEntries([{
+      id: 'je-inv',
+      date: '2026-08-15',
+      reference: 'INV-100',
+      status: 'posted',
+      journalType: 'sales',
+      lines: [
+        { id: 'l1', accountId: payable, accountType: 'liability', accountName: 'GST/HST Payable', debit: 0, credit: 130, taxCodeId: 'tc-hst', sourceDocumentType: 'invoice' },
+        { id: 'l2', accountId: revenue, accountType: 'income', debit: 0, credit: 1000, sourceDocumentType: 'invoice' },
+      ],
+    }], journalTaxCodes);
+    const snapshot = summarizeGstHstDocuments({
+      periodStart: '2026-07-01',
+      periodEnd: '2026-09-30',
+      invoices: [taxableInvoice()],
+      purchases: [],
+      bankDocuments: journalDocs,
+      taxCodes,
+    });
+    expect(journalDocs).toHaveLength(0);
+    expect(snapshot.gstHstCollected).toBe(130);
   });
 });

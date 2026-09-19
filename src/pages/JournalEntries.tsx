@@ -896,6 +896,7 @@ export default function JournalEntries() {
                     description: l.description,
                     debit: Number(l.debit),
                     credit: Number(l.credit),
+                    tax_code_id: l.tax_code_id ?? null,
                   })),
                 },
                 organizationId: organization.id,

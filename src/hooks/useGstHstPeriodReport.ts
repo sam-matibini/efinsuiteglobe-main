@@ -3,17 +3,19 @@ import { useQuery, useQueries } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import {
   emptyGstHstSnapshot,
+  gstHstDocumentsFromJournalEntries,
   isBankCollectedSide,
   summarizeGstHstDocuments,
   taxesFromBankingPosting,
   type GstHstBankDocument,
   type GstHstDocumentTax,
   type GstHstInvoiceDocument,
+  type GstHstJournalEntrySource,
   type GstHstJournalFallback,
   type GstHstPurchaseDocument,
   type GstHstTaxCodeFlag,
 } from '@/lib/gstHstPeriodEngine';
-import { toISODate, type TaxComparisonRange } from '@/lib/taxPeriodReport';
+import { classifyTaxAccountName, toISODate, type TaxComparisonRange } from '@/lib/taxPeriodReport';
 
 const PAGE_SIZE = 1000;
 const MAX_PAGES = 20;
@@ -82,6 +84,13 @@ function nestedName(value: unknown): string {
   return '';
 }
 
+function nestedRecord(value: unknown): Record<string, unknown> | null {
+  if (!value) return null;
+  if (Array.isArray(value)) return (value[0] as Record<string, unknown> | undefined) ?? null;
+  if (typeof value === 'object') return value as Record<string, unknown>;
+  return null;
+}
+
 function toTax(row: Record<string, unknown>, parentKey: string): StoredTaxRow {
   return {
     parentId: String(row[parentKey] ?? ''),
@@ -93,6 +102,128 @@ function toTax(row: Record<string, unknown>, parentKey: string): StoredTaxRow {
     is_recoverable: (row.is_recoverable as boolean | null) ?? null,
     authority: (row.authority as string | null) ?? null,
   };
+}
+
+function journalPartyName(row: Record<string, unknown>): string {
+  return nestedName(row.customers) || nestedName(row.vendors) || '';
+}
+
+function toJournalLineSource(row: Record<string, unknown>): GstHstJournalEntrySource['lines'][number] {
+  const account = nestedRecord(row.account) ?? nestedRecord(row.accounts);
+  return {
+    id: String(row.id),
+    accountId: String(row.account_id ?? ''),
+    accountType: account?.account_type ? String(account.account_type) : null,
+    accountName: account?.name ? String(account.name) : null,
+    debit: Number(row.debit ?? 0),
+    credit: Number(row.credit ?? 0),
+    description: row.description ? String(row.description) : null,
+    taxCodeId: row.tax_code_id ? String(row.tax_code_id) : null,
+    sourceDocumentType: row.source_document_type ? String(row.source_document_type) : null,
+    partyName: journalPartyName(row),
+  };
+}
+
+export async function fetchStandaloneGstHstJournalDocuments(
+  organizationId: string,
+  periodStart: string,
+  periodEnd: string,
+  taxCodes: GstHstTaxCodeFlag[],
+): Promise<GstHstBankDocument[]> {
+  const mappedGlIds = [
+    ...new Set(
+      taxCodes.flatMap((code) => [code.gl_collected_account_id, code.gl_paid_account_id]).filter((id): id is string => Boolean(id)),
+    ),
+  ];
+
+  const { data: namedAccounts, error: namedError } = await supabase
+    .from('accounts')
+    .select('id, name, account_type')
+    .eq('organization_id', organizationId)
+    .or('name.ilike.%gst%,name.ilike.%hst%,name.ilike.%pst%,name.ilike.%qst%,name.ilike.%vat%,name.ilike.%sales tax%,name.ilike.%input tax%');
+  if (namedError) throw namedError;
+
+  const extraCollected: string[] = [];
+  const extraPaid: string[] = [];
+  for (const account of namedAccounts ?? []) {
+    const id = String(account.id);
+    const side = classifyTaxAccountName(String(account.name ?? ''))
+      || (/(input|itc|recover|paid)/i.test(String(account.name ?? '')) && !/payable/i.test(String(account.name ?? ''))
+        ? 'paid'
+        : 'collected');
+    if (side === 'paid') extraPaid.push(id);
+    else extraCollected.push(id);
+  }
+
+  const taxGlIds = [...new Set([...mappedGlIds, ...extraCollected, ...extraPaid])];
+
+  const candidateRows = await pageQuery<Record<string, unknown>>((from, to) => {
+    let query = supabase
+      .from('journal_entry_lines')
+      .select(`
+        id,
+        journal_entry_id,
+        journal_entries!inner(id, organization_id, entry_date, reference, description, status, journal_type)
+      `)
+      .eq('journal_entries.organization_id', organizationId)
+      .eq('journal_entries.status', 'posted')
+      .gte('journal_entries.entry_date', periodStart)
+      .lte('journal_entries.entry_date', periodEnd)
+      .range(from, to);
+    if (taxGlIds.length > 0) {
+      query = query.or(`tax_code_id.not.is.null,account_id.in.(${taxGlIds.join(',')})`);
+    } else {
+      query = query.not('tax_code_id', 'is', null);
+    }
+    return query;
+  });
+
+  const entryIds = [...new Set(candidateRows.map((row) => String(row.journal_entry_id ?? '')).filter(Boolean))];
+  if (entryIds.length === 0) return [];
+
+  const headerById = new Map<string, Record<string, unknown>>();
+  for (const row of candidateRows) {
+    const id = String(row.journal_entry_id ?? '');
+    const header = nestedRecord(row.journal_entries);
+    if (id && header && !headerById.has(id)) headerById.set(id, header);
+  }
+
+  const allLines = await fetchByIds<Record<string, unknown>>(entryIds, (chunk) =>
+    supabase
+      .from('journal_entry_lines')
+      .select(`
+        id, journal_entry_id, account_id, debit, credit, description, tax_code_id,
+        source_document_type, customer_id, vendor_id,
+        account:accounts(id, name, account_type),
+        customers(name), vendors(name)
+      `)
+      .in('journal_entry_id', chunk),
+  );
+
+  const linesByEntry = new Map<string, Record<string, unknown>[]>();
+  for (const row of allLines) {
+    const id = String(row.journal_entry_id ?? '');
+    if (!linesByEntry.has(id)) linesByEntry.set(id, []);
+    linesByEntry.get(id)!.push(row);
+  }
+
+  const entries: GstHstJournalEntrySource[] = entryIds.map((id) => {
+    const header = headerById.get(id) ?? {};
+    return {
+      id,
+      date: String(header.entry_date ?? ''),
+      reference: String(header.reference ?? id),
+      description: header.description ? String(header.description) : null,
+      status: header.status ? String(header.status) : 'posted',
+      journalType: header.journal_type ? String(header.journal_type) : null,
+      lines: (linesByEntry.get(id) ?? []).map(toJournalLineSource),
+    };
+  });
+
+  return gstHstDocumentsFromJournalEntries(entries, taxCodes, {
+    collectedAccountIds: extraCollected,
+    paidAccountIds: extraPaid,
+  });
 }
 
 export async function fetchGstHstPeriodDocuments(
@@ -138,7 +269,7 @@ export async function fetchGstHstPeriodDocuments(
     (async () => {
       const { data, error } = await supabase
         .from('tax_codes')
-        .select('id, code, name, tax_type, rate, is_zero_rated, is_exempt, is_recoverable')
+        .select('id, code, name, tax_type, rate, is_zero_rated, is_exempt, is_recoverable, gl_collected_account_id, gl_paid_account_id')
         .eq('organization_id', organizationId);
       if (error) throw error;
       return data ?? [];
@@ -212,6 +343,7 @@ export async function fetchGstHstPeriodDocuments(
   }
 
   const taxCodes: GstHstTaxCodeFlag[] = taxCodeRows.map((row) => ({
+    id: row.id,
     code: row.code,
     name: row.name,
     tax_type: row.tax_type,
@@ -219,6 +351,8 @@ export async function fetchGstHstPeriodDocuments(
     is_zero_rated: row.is_zero_rated,
     is_exempt: row.is_exempt,
     is_recoverable: row.is_recoverable,
+    gl_collected_account_id: (row as { gl_collected_account_id?: string | null }).gl_collected_account_id ?? null,
+    gl_paid_account_id: (row as { gl_paid_account_id?: string | null }).gl_paid_account_id ?? null,
   }));
   const taxCodeById = new Map(taxCodeRows.map((row) => [String((row as { id?: string }).id ?? ''), row]));
 
@@ -333,6 +467,7 @@ export async function fetchGstHstPeriodDocuments(
   const bankDocuments: GstHstBankDocument[] = [
     ...bankRows.map((row) => toBankDoc(row, 'bank')),
     ...cardRows.map((row) => toBankDoc(row, 'credit_card')),
+    ...(await fetchStandaloneGstHstJournalDocuments(organizationId, periodStart, periodEnd, taxCodes)),
   ];
 
   return { invoices, purchases, bankDocuments, taxCodes };

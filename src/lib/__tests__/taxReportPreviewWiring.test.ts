@@ -44,4 +44,26 @@ describe('tax report preview wiring', () => {
     expect(salesTax).not.toContain('summaryPeriod');
     expect(salesTax).not.toContain('glTaxSummary');
   });
+
+  it('pulls posted standalone journal tax lines into the GST/HST period engine', () => {
+    const hook = readFileSync(join(root, 'src/hooks/useGstHstPeriodReport.ts'), 'utf8');
+    expect(hook).toContain('fetchStandaloneGstHstJournalDocuments');
+    expect(hook).toContain('gstHstDocumentsFromJournalEntries');
+    expect(hook).toContain('journal_entry_lines');
+    expect(hook).toContain('tax_code_id');
+    expect(hook).toContain("source: 'journal'");
+
+    const engine = readFileSync(join(root, 'src/lib/gstHstPeriodEngine.ts'), 'utf8');
+    expect(engine).toContain("source: 'bank' | 'credit_card' | 'journal'");
+    expect(engine).toContain("type: 'Invoice' | 'Bill' | 'Expense' | 'Bank' | 'Credit card' | 'Journal'");
+    expect(engine).toContain('gstHstDocumentsFromJournalEntries');
+    expect(engine).toContain("doc.source === 'journal' ? 'Journal'");
+
+    const journals = readFileSync(join(root, 'src/hooks/useJournalEntries.ts'), 'utf8');
+    expect(journals).toContain('tax_code_id: line.tax_code_id || null');
+    expect(journals).toContain("queryKey: ['gst-hst-period-documents']");
+
+    const addDialog = readFileSync(join(root, 'src/components/journal/AddJournalEntryDialog.tsx'), 'utf8');
+    expect(addDialog).toContain('tax_code_id: taxCode.id || line.tax_code_id || null');
+  });
 });

@@ -11,6 +11,7 @@ export interface JournalEntryLineDimensions {
   exchange_rate?: number;
   vendor_id?: string;
   customer_id?: string;
+  tax_code_id?: string;
   source_document_type?: string;
   source_document_id?: string;
 }
@@ -147,6 +148,7 @@ export async function createJournalEntry(params: CreateJournalEntryParams): Prom
           // Entity references
           vendor_id: line.vendor_id || null,
           customer_id: line.customer_id || null,
+          tax_code_id: line.tax_code_id || null,
           // Source document tracking
           source_document_type: line.source_document_type || null,
           source_document_id: line.source_document_id || null,
