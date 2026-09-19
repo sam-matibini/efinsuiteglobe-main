@@ -93,6 +93,9 @@ describe('tax report preview wiring', () => {
     expect(preview).toContain('ReportActions');
     expect(preview).toContain('buildRstPeriodShareData');
     expect(preview).toContain('rstReportData');
+    expect(preview).toContain('buildRstSalesTaxDetailShareData');
+    expect(preview).toContain('rstDetailReportData');
+    expect(preview).toContain('Sales tax detail');
 
     const summary = readFileSync(join(root, 'src/components/tax/GstHstSummaryReport.tsx'), 'utf8');
     expect(summary).toContain('ReportActions');

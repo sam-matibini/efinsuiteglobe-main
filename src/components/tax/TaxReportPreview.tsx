@@ -25,7 +25,7 @@ import { GstHstSupportReport } from '@/components/tax/GstHstSupportReport';
 import { ReportActions } from '@/components/reports/ReportActions';
 import { useTaxPeriodActivity, useTaxPeriodComparisonSummaries } from '@/hooks/useTaxPeriodActivity';
 import { useGstHstComparisonReports, useGstHstPeriodReport } from '@/hooks/useGstHstPeriodReport';
-import { buildRstPeriodShareData } from '@/lib/rstReportShare';
+import { buildRstPeriodShareData, buildRstSalesTaxDetailShareData } from '@/lib/rstReportShare';
 import {
   resolveTaxDateRange,
   resolveComparisonRanges,
@@ -242,6 +242,13 @@ export function TaxReportPreview({
     isCanada,
     taxTerminology.title,
   ]);
+
+  const rstDetailReportData = useMemo(() => buildRstSalesTaxDetailShareData({
+    organizationName,
+    dateRange: periodLabel,
+    formatCurrency,
+    groups: detailGroups,
+  }), [organizationName, periodLabel, formatCurrency, detailGroups]);
 
   const hasActiveFilters = selectedTaxCodes.length > 0 || accountTypeFilter !== 'all' || reportType !== 'detailed';
 
@@ -983,12 +990,19 @@ export function TaxReportPreview({
 
                 {reportType !== 'summary' && (
                 <div className="mb-6">
-                  <h4 className="text-sm font-medium text-foreground mb-1">
-                    {isBurundi ? 'Détail des transactions' : 'Sales tax detail'}
-                  </h4>
-                  <p className="text-xs text-muted-foreground mb-3">
-                    QuickBooks-style tax liability detail grouped by tax code for {periodLabel}. Changing Date Range, From, or To reloads these amounts.
-                  </p>
+                  <div className="flex flex-col gap-2 mb-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <h4 className="text-sm font-medium text-foreground mb-1">
+                        {isBurundi ? 'Détail des transactions' : 'Sales tax detail'}
+                      </h4>
+                      <p className="text-xs text-muted-foreground">
+                        QuickBooks-style tax liability detail grouped by tax code for {periodLabel}. Changing Date Range, From, or To reloads these amounts.
+                      </p>
+                    </div>
+                    <div className="print:hidden shrink-0">
+                      <ReportActions reportData={rstDetailReportData} variant="compact" />
+                    </div>
+                  </div>
                   <div className="border rounded-lg overflow-hidden max-h-[32rem] overflow-y-auto">
                     <Table>
                       <TableHeader>

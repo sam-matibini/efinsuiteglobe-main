@@ -1,5 +1,6 @@
 import type { ReportData } from '@/components/reports/ReportActions';
 import type { GstHstPeriodSnapshot } from '@/lib/gstHstPeriodEngine';
+import type { TaxDetailGroup } from '@/lib/taxPeriodReport';
 import { buildGstHstQbDetail, buildGstHstQbSummary, formatQbPeriodHeading } from '@/lib/gstHstStatement';
 
 function blank(count: number): string[] {
@@ -75,6 +76,76 @@ export function buildGstHstDetailShareData(input: {
       { label: 'Input tax credits (line 106)', value: formatCurrency(snapshot.itc) },
       { label: 'Net tax (line 109)', value: formatCurrency(snapshot.netTax) },
     ],
+  };
+}
+
+function formatDetailDate(iso: string): string {
+  if (!iso) return '';
+  const [year, month, day] = iso.split('-').map(Number);
+  if (!year || !month || !day) return iso;
+  return new Date(year, month - 1, day).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+/** QuickBooks-style Sales tax detail: transactions grouped by tax code. */
+export function buildRstSalesTaxDetailShareData(input: {
+  organizationName?: string | null;
+  dateRange: string;
+  formatCurrency: (value: number) => string;
+  groups: TaxDetailGroup[];
+}): ReportData {
+  const { formatCurrency, groups } = input;
+  const rows: (string | number)[][] = [];
+  let taxableTotal = 0;
+  let taxTotal = 0;
+  const totals: { label: string; value: string | number }[] = [];
+
+  for (const group of groups) {
+    const countLabel = `${group.rows.length} ${group.rows.length === 1 ? 'transaction' : 'transactions'}`;
+    rows.push([
+      `${group.taxCode} (${countLabel})`,
+      '',
+      '',
+      '',
+      '',
+      '',
+      formatCurrency(group.taxableAmount),
+      formatCurrency(group.taxAmount),
+    ]);
+    totals.push({
+      label: `${group.taxCode} tax amount (${countLabel})`,
+      value: formatCurrency(group.taxAmount),
+    });
+    taxableTotal += group.taxableAmount;
+    taxTotal += group.taxAmount;
+    for (const row of group.rows) {
+      rows.push([
+        formatDetailDate(row.date),
+        row.type,
+        row.number || '',
+        row.description,
+        `${row.accountCode} ${row.accountName}`.trim(),
+        row.taxCode,
+        row.taxableAmount ? formatCurrency(row.taxableAmount) : '',
+        formatCurrency(row.taxAmount),
+      ]);
+    }
+  }
+
+  totals.push({ label: 'Total taxable', value: formatCurrency(taxableTotal) });
+  totals.push({ label: 'Total tax amount', value: formatCurrency(taxTotal) });
+
+  return {
+    title: 'Sales tax detail',
+    subtitle: `QuickBooks-style tax liability detail grouped by tax code for ${input.dateRange}.`,
+    organizationName: input.organizationName || undefined,
+    dateRange: input.dateRange,
+    headers: ['Date', 'Type', 'Number', 'Description', 'Account', 'Tax code', 'Taxable', 'Tax amount'],
+    rows,
+    totals,
   };
 }
 

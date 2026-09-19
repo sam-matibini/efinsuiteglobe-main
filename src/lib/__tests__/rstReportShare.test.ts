@@ -4,6 +4,7 @@ import {
   buildGstHstDetailShareData,
   buildGstHstSummaryShareData,
   buildRstPeriodShareData,
+  buildRstSalesTaxDetailShareData,
 } from '../rstReportShare';
 
 const money = (value: number) =>
@@ -92,5 +93,55 @@ describe('RST share and export payloads', () => {
     expect(collected?.[2]).toBe(money(800.8));
     expect(collected?.[3]).toBe(money(400.4));
     expect(data.totals?.find((row) => row.label === 'Net tax')?.value).toBe(money(4660.54));
+  });
+
+  it('packs Sales tax detail rows grouped by tax code for share and export', () => {
+    const data = buildRstSalesTaxDetailShareData({
+      organizationName: 'VIP Dutts',
+      dateRange: 'Jul 1, 2026 - Sep 30, 2026',
+      formatCurrency: money,
+      groups: [{
+        taxCode: 'GST',
+        taxableAmount: 21990.6,
+        taxAmount: 1099.53,
+        rows: [
+          {
+            date: '2026-07-18',
+            type: 'Bill',
+            number: 'CC-389A6875-E98D-4B15-AFE8-90E022A44420',
+            description: 'GST paid (ITC)',
+            accountCode: '2-01-102-0002',
+            accountName: 'GST/HST Paid (Input Tax Credit)',
+            taxCode: 'GST',
+            side: 'paid',
+            taxableAmount: 1928.6,
+            taxAmount: 96.43,
+          },
+          {
+            date: '2026-07-27',
+            type: 'Bill',
+            number: 'CC-70F08F26-E767-4180-BE90-BFEFFF1780F5',
+            description: 'GST paid (ITC)',
+            accountCode: '2-01-102-0002',
+            accountName: 'GST/HST Paid (Input Tax Credit)',
+            taxCode: 'GST',
+            side: 'paid',
+            taxableAmount: 2625.4,
+            taxAmount: 131.27,
+          },
+        ],
+      }],
+    });
+    expect(data.title).toBe('Sales tax detail');
+    expect(data.headers).toEqual(['Date', 'Type', 'Number', 'Description', 'Account', 'Tax code', 'Taxable', 'Tax amount']);
+    expect(data.rows[0][0]).toBe('GST (2 transactions)');
+    expect(data.rows[0][6]).toBe(money(21990.6));
+    expect(data.rows[0][7]).toBe(money(1099.53));
+    expect(data.rows[1][0]).toBe('Jul 18, 2026');
+    expect(data.rows[1][1]).toBe('Bill');
+    expect(data.rows[1][3]).toBe('GST paid (ITC)');
+    expect(data.rows[1][4]).toContain('2-01-102-0002');
+    expect(data.totals?.some((row) => String(row.label).includes('GST tax amount'))).toBe(true);
+    expect(data.totals?.find((row) => row.label === 'Total tax amount')?.value).toBe(money(1099.53));
   });
 });
