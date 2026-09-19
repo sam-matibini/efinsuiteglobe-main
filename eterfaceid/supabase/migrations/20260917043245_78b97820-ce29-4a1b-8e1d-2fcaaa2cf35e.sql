@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.bump_rate(uuid, text) FROM authenticated;
