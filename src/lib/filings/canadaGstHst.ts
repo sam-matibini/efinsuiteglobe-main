@@ -20,56 +20,98 @@ export function buildGstHstReturn(
 
   const gstHstRows = rows.filter(isGstHst);
 
-  // Line 101 = Total sales and other revenue (taxable + zero-rated + exempt),
-  // sourced from the General Ledger income accounts so deposits posted without
-  // a tax code are still reflected, per CRA GST34 instructions.
-  const taxCodedSales = sumWhere(gstHstRows, (r) => r.source === 'invoice', 'taxable_amount');
-  const totalSales = Math.round((totals.totalSales || taxCodedSales) * 100) / 100;
+  const taxableFromRows = sumWhere(
+    gstHstRows,
+    (r) => r.source === 'invoice' && r.is_zero_rated !== true && r.is_exempt !== true,
+    'taxable_amount',
+  );
+  const zeroRatedSales = Math.round(
+    ((totals.zeroRatedSales ?? sumWhere(
+      gstHstRows,
+      (r) => r.source === 'invoice' && r.is_zero_rated === true,
+      'taxable_amount',
+    )) + Number.EPSILON) * 100,
+  ) / 100;
+  const exemptSales = Math.round(
+    ((totals.exemptSales ?? sumWhere(
+      gstHstRows,
+      (r) => r.source === 'invoice' && r.is_exempt === true,
+      'taxable_amount',
+    )) + Number.EPSILON) * 100,
+  ) / 100;
+  const taxableSales = Math.round(
+    ((totals.taxableSales ?? taxableFromRows) + Number.EPSILON) * 100,
+  ) / 100;
 
-  // Tax collected lives on a liability account (credit-normal). The RPC returns
-  // collected as credit−debit, so it is already positive when sales tax was
-  // collected during the period.
-  const taxCollected = sumWhere(gstHstRows, (r) => r.source === 'invoice');
-  const adjustmentsCollected = 0; // reserved for credit notes when wired
+  // CRA electronic line 90: taxable sales including zero-rated supplies
+  // (other than zero-rated exports) made in Canada.
+  const line90 = Math.round((taxableSales + zeroRatedSales + Number.EPSILON) * 100) / 100;
+  // CRA electronic line 91: exempt supplies, zero-rated exports, and other revenue.
+  const line91 = exemptSales;
+  const taxCodedSales = sumWhere(gstHstRows, (r) => r.source === 'invoice', 'taxable_amount');
+  const totalSales = Math.round(
+    ((totals.totalSales || line90 + line91 || taxCodedSales) + Number.EPSILON) * 100,
+  ) / 100;
+
+  // Gross collected vs credit-note exceptions (negative invoice tax).
+  const taxCollectedGross = sumWhere(
+    gstHstRows,
+    (r) => r.source === 'invoice' && Number(r.tax_amount ?? 0) >= 0,
+  );
+  const collectedException = sumWhere(
+    gstHstRows,
+    (r) => r.source === 'invoice' && Number(r.tax_amount ?? 0) < 0,
+  );
+  const taxCollected = Math.round((taxCollectedGross + collectedException) * 100) / 100;
+  const adjustmentsCollected = 0;
   const totalTaxCollected = Math.round((taxCollected + adjustmentsCollected) * 100) / 100;
 
-  // ITCs sit on an asset account (debit-normal). The RPC returns paid as
-  // debit−credit, so a positive value represents ITCs accumulated.
-  const itc = sumWhere(
+  const itcGross = sumWhere(
     gstHstRows,
-    (r) => r.source !== 'invoice' && r.is_recoverable,
+    (r) => r.source !== 'invoice' && r.is_recoverable && Number(r.tax_amount ?? 0) >= 0,
   );
+  const itcException = sumWhere(
+    gstHstRows,
+    (r) => r.source !== 'invoice' && r.is_recoverable && Number(r.tax_amount ?? 0) < 0,
+  );
+  const itc = Math.round((itcGross + itcException) * 100) / 100;
   const adjustmentsItc = 0;
   const totalItc = Math.round((itc + adjustmentsItc) * 100) / 100;
 
   const netTax = Math.round((totalTaxCollected - totalItc) * 100) / 100;
   const instalmentsPaid = 0;
-  const netPayable = Math.round((netTax - instalmentsPaid) * 100) / 100;
+  const rebates = 0;
+  const realProperty = 0;
+  const selfAssessed = 0;
+  const otherCredits = Math.round((instalmentsPaid + rebates) * 100) / 100;
+  const otherDebits = Math.round((realProperty + selfAssessed) * 100) / 100;
+  const netPayable = Math.round((netTax - otherCredits + otherDebits) * 100) / 100;
 
-  const zeroRatedSales = sumWhere(
-    gstHstRows,
-    (r) => r.source === 'invoice' && r.is_zero_rated === true,
-    'taxable_amount',
-  );
-  const exemptSales = sumWhere(
-    gstHstRows,
-    (r) => r.source === 'invoice' && r.is_exempt === true,
-    'taxable_amount',
-  );
+  const zeroRatedSalesForLines = zeroRatedSales;
+  const exemptSalesForLines = exemptSales;
 
   const lines: FilingFormLine[] = [
-    { code: '90', label: 'Sales of zero-rated goods and services (e.g. exports — CRA Sch. VI)', amount: zeroRatedSales, category: 'memo' },
-    { code: '91', label: 'Exempt sales', amount: exemptSales, category: 'memo' },
-    { code: '101', label: 'Sales and other revenue', amount: totalSales, category: 'sales' },
-    { code: '103', label: 'GST/HST collected on sales', amount: taxCollected, category: 'tax_collected' },
-    { code: '104', label: 'Adjustments to GST/HST collected', amount: adjustmentsCollected, category: 'adjustment' },
-    { code: '105', label: 'Total GST/HST and adjustments', amount: totalTaxCollected, category: 'tax_collected', formula: '103 + 104' },
-    { code: '106', label: 'Input tax credits (ITCs)', amount: totalItc, category: 'itc' },
-    { code: '107', label: 'Adjustments to ITCs', amount: adjustmentsItc, category: 'adjustment' },
-    { code: '108', label: 'Total ITCs and adjustments', amount: totalItc, category: 'itc', formula: '106 + 107' },
-    { code: '109', label: 'Net tax', amount: netTax, category: 'net', formula: '105 - 108' },
-    { code: '110', label: 'Instalment and other annual filer payments', amount: instalmentsPaid, category: 'instalment' },
-    { code: '113A', label: 'Balance (refund if negative)', amount: netPayable, category: 'net', formula: '109 - 110' },
+    { code: '90', label: 'Taxable sales including zero-rated supplies (except zero-rated exports)', amount: line90, category: 'sales', formula: 'Taxable + zero-rated' },
+    { code: '90A', label: 'Taxable sales (GST/HST charged)', amount: taxableSales, category: 'sales' },
+    { code: '90B', label: 'Zero-rated sales (GST/HST at 0%)', amount: zeroRatedSalesForLines, category: 'memo' },
+    { code: '91', label: 'Exempt sales, zero-rated exports, and other revenue', amount: line91, category: 'memo' },
+    { code: '101', label: 'Sales and other revenue', amount: totalSales, category: 'sales', formula: '90 + 91' },
+    { code: '103', label: 'GST/HST collected or collectible', amount: taxCollectedGross, exceptionAmount: collectedException, totalLineAmount: taxCollected, category: 'tax_collected' },
+    { code: '104', label: 'Adjustments (Sales)', amount: adjustmentsCollected, exceptionAmount: 0, totalLineAmount: adjustmentsCollected, category: 'adjustment' },
+    { code: '105', label: 'Total GST/HST and adjustments for period', amount: totalTaxCollected, totalLineAmount: totalTaxCollected, isBalance: true, category: 'tax_collected', formula: '103 + 104' },
+    { code: '106', label: 'Input tax credits (ITCs)', amount: itcGross, exceptionAmount: itcException, totalLineAmount: itc, category: 'itc' },
+    { code: '107', label: 'Adjustments (Purchases)', amount: adjustmentsItc, exceptionAmount: 0, totalLineAmount: adjustmentsItc, category: 'adjustment' },
+    { code: '108', label: 'Total ITCs and adjustments', amount: totalItc, totalLineAmount: totalItc, isBalance: true, category: 'itc', formula: '106 + 107' },
+    { code: '109', label: 'Net Tax', amount: netTax, isBalance: true, category: 'net', formula: '105 - 108' },
+    { code: '110', label: 'Instalments and other annual filer payments', amount: instalmentsPaid, exceptionAmount: 0, totalLineAmount: instalmentsPaid, category: 'instalment' },
+    { code: '111', label: 'Rebates', amount: rebates, exceptionAmount: 0, totalLineAmount: rebates, category: 'rebate' },
+    { code: '112', label: 'Total other credits', amount: otherCredits, totalLineAmount: otherCredits, isBalance: true, category: 'rebate', formula: '110 + 111' },
+    { code: '113', label: 'Balance', amount: Math.round((netTax - otherCredits) * 100) / 100, isBalance: true, category: 'net' },
+    { code: '205', label: 'GST/HST due on acquisition of taxable real property', amount: realProperty, exceptionAmount: 0, totalLineAmount: realProperty, category: 'self_assess' },
+    { code: '405', label: 'Other GST/HST to be self-assessed', amount: selfAssessed, exceptionAmount: 0, totalLineAmount: selfAssessed, category: 'self_assess' },
+    { code: '113B', label: 'Total other debits', amount: otherDebits, totalLineAmount: otherDebits, isBalance: true, category: 'self_assess' },
+    { code: '113A', label: 'Balance', amount: netPayable, isBalance: true, category: 'net', formula: '109 - 110 - 111 + 205 + 405' },
+    { code: '114', label: 'Transfer Amount (Liability -> Suspense)', amount: netPayable, isBalance: true, category: 'net' },
   ];
 
   return {

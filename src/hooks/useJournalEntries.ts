@@ -1,6 +1,14 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, QueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+
+function invalidateJournalTaxQueries(queryClient: QueryClient, organizationId: string) {
+  queryClient.invalidateQueries({ queryKey: ['journal-entries', organizationId] });
+  queryClient.invalidateQueries({ queryKey: ['accounts'] });
+  queryClient.invalidateQueries({ queryKey: ['gst-hst-period-documents'] });
+  queryClient.invalidateQueries({ queryKey: ['tax-period-movements'] });
+  queryClient.invalidateQueries({ queryKey: ['tax-report-journal'] });
+}
 
 export type JournalEntryStatus = 'draft' | 'posted' | 'reversed';
 export type JournalType = 'manual' | 'sales' | 'purchase' | 'payroll' | 'bank' | 'adjustment' | 'depreciation';
@@ -33,6 +41,7 @@ export interface DbJournalEntryLine {
   credit: number;
   line_order: number;
   created_at: string;
+  tax_code_id?: string | null;
   // Joined fields
   account?: {
     code: string;
@@ -56,6 +65,7 @@ export interface JournalLineInput {
   line_order?: number;
   customer_id?: string | null;
   vendor_id?: string | null;
+  tax_code_id?: string | null;
   // Multi-currency (optional). When omitted, line is treated as base currency.
   currency?: string | null;
   exchange_rate?: number | null;
@@ -294,6 +304,7 @@ export function useCreateJournalEntry() {
           line_order: line.line_order ?? index,
           customer_id: line.customer_id || null,
           vendor_id: line.vendor_id || null,
+          tax_code_id: line.tax_code_id || null,
           department_id: (line as any).department_id || entry.department_id || null,
           currency: line.currency || null,
           exchange_rate: line.exchange_rate ?? null,
@@ -311,7 +322,7 @@ export function useCreateJournalEntry() {
       return journalEntry;
     },
     onSuccess: (_, { organizationId }) => {
-      queryClient.invalidateQueries({ queryKey: ['journal-entries', organizationId] });
+      invalidateJournalTaxQueries(queryClient, organizationId);
       queryClient.invalidateQueries({ queryKey: ['next-journal-reference', organizationId] });
       toast.success('Journal entry created successfully');
     },
@@ -437,8 +448,7 @@ export function usePostJournalEntry() {
       return data;
     },
     onSuccess: (_, { organizationId }) => {
-      queryClient.invalidateQueries({ queryKey: ['journal-entries', organizationId] });
-      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      invalidateJournalTaxQueries(queryClient, organizationId);
       toast.success('Journal entry posted successfully');
     },
     onError: (error: Error) => {
@@ -467,6 +477,7 @@ export function useReverseJournalEntry() {
           description: string | null;
           debit: number;
           credit: number;
+          tax_code_id?: string | null;
           // Multi-currency fields — preserved on reversal so FX reports net to zero
           currency?: string | null;
           exchange_rate?: number | null;
@@ -511,6 +522,7 @@ export function useReverseJournalEntry() {
         debit: Number(line.credit) || 0,
         credit: Number(line.debit) || 0,
         line_order: index,
+        tax_code_id: line.tax_code_id ?? null,
         currency: line.currency ?? null,
         exchange_rate: line.exchange_rate ?? null,
         base_currency_debit:
@@ -545,8 +557,7 @@ export function useReverseJournalEntry() {
       return reversalEntry;
     },
     onSuccess: (_, { organizationId }) => {
-      queryClient.invalidateQueries({ queryKey: ['journal-entries', organizationId] });
-      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      invalidateJournalTaxQueries(queryClient, organizationId);
       toast.success('Journal entry reversed successfully');
     },
     onError: (error: Error) => {
@@ -669,6 +680,7 @@ export function useUpdateJournalEntry() {
           line_order: line.line_order ?? index,
           customer_id: line.customer_id || null,
           vendor_id: line.vendor_id || null,
+          tax_code_id: line.tax_code_id || null,
           currency: line.currency || null,
           exchange_rate: line.exchange_rate ?? null,
           base_currency_debit: baseDr,
@@ -685,7 +697,7 @@ export function useUpdateJournalEntry() {
       return journalEntry;
     },
     onSuccess: (_, { organizationId }) => {
-      queryClient.invalidateQueries({ queryKey: ['journal-entries', organizationId] });
+      invalidateJournalTaxQueries(queryClient, organizationId);
       toast.success('Journal entry updated successfully');
     },
     onError: (error: Error) => {
@@ -708,7 +720,7 @@ export function useDeleteJournalEntry() {
       if (error) throw error;
     },
     onSuccess: (_, { organizationId }) => {
-      queryClient.invalidateQueries({ queryKey: ['journal-entries', organizationId] });
+      invalidateJournalTaxQueries(queryClient, organizationId);
       toast.success('Journal entry deleted successfully');
     },
     onError: (error: Error) => {

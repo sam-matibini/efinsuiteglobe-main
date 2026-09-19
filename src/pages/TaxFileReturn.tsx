@@ -45,6 +45,8 @@ const CATEGORY_BADGE: Record<string, string> = {
   instalment: 'bg-muted text-foreground',
   adjustment: 'bg-muted text-muted-foreground',
   memo: 'bg-muted text-muted-foreground',
+  rebate: 'bg-emerald-500/15 text-emerald-600',
+  self_assess: 'bg-amber-500/15 text-amber-700',
 };
 
 function formatCurrency(value: number, currency: string) {

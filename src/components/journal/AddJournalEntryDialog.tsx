@@ -506,6 +506,7 @@ export function AddJournalEntryDialog({
       line_order: number;
       customer_id?: string | null;
       vendor_id?: string | null;
+      tax_code_id?: string | null;
       currency?: string | null;
       exchange_rate?: number | null;
       base_currency_debit?: number;
@@ -548,6 +549,7 @@ export function AddJournalEntryDialog({
         line_order: journalLines.length,
         customer_id: line.customer_id || null,
         vendor_id: line.vendor_id || null,
+        tax_code_id: line.tax_code_id || null,
       });
 
       // Add tax line(s) if applicable
@@ -590,6 +592,7 @@ export function AddJournalEntryDialog({
               debit: (line.debit || 0) > 0 ? comp.amount : 0,
               credit: (line.credit || 0) > 0 ? comp.amount : 0,
               line_order: journalLines.length,
+              tax_code_id: orgCode?.id || line.tax_code_id || null,
             });
           }
         } else {
@@ -608,6 +611,7 @@ export function AddJournalEntryDialog({
             debit: line.debit > 0 ? line.tax_amount : 0,
             credit: line.credit > 0 ? line.tax_amount : 0,
             line_order: journalLines.length,
+            tax_code_id: taxCode.id || line.tax_code_id || null,
           });
         }
       }

@@ -22,14 +22,26 @@ export interface PeriodTotals {
   totalSales: number;          // sum of invoice subtotals
   totalPurchases: number;      // sum of bill + expense subtotals
   rows: PeriodTaxRow[];
+  /** GST/HST charged supplies (excluding tax). */
+  taxableSales?: number;
+  /** 0% GST/HST supplies (CRA Schedule VI). */
+  zeroRatedSales?: number;
+  /** Exempt supplies (no GST/HST, generally no ITC). */
+  exemptSales?: number;
 }
 
 export interface FilingFormLine {
   code: string;        // e.g. "101", "Box 1"
   label: string;
   amount: number;
-  category: 'sales' | 'tax_collected' | 'itc' | 'net' | 'instalment' | 'adjustment' | 'memo';
+  category: 'sales' | 'tax_collected' | 'itc' | 'net' | 'instalment' | 'adjustment' | 'memo' | 'rebate' | 'self_assess';
   formula?: string;
+  /** Credit notes / exception-flagged tax (signed). */
+  exceptionAmount?: number;
+  /** amount + exceptionAmount when both are tracked. */
+  totalLineAmount?: number;
+  /** Section or running balance row (QB GST/HST Summary). */
+  isBalance?: boolean;
 }
 
 export interface FilingFormResult {
