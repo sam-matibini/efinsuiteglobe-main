@@ -14,7 +14,9 @@ const PIPELINE: PaymentStatus[] = ['draft', 'authorized', 'submitted', 'processi
 export default function CraRemittances() {
   const cra = useCraTaxCentre();
   const [payOpen, setPayOpen] = useState(false);
-  const [selected, setSelected] = useState<string | null>(cra.ledger.payments[0]?.id ?? null);
+  const [selected, setSelected] = useState<string | null>(
+    cra.ledger.payments.find((item) => item.status === 'draft')?.id ?? cra.ledger.payments[0]?.id ?? null,
+  );
   const [confirmation, setConfirmation] = useState('CRA-');
   const payment = cra.ledger.payments.find((item) => item.id === selected) ?? cra.ledger.payments[0];
 
