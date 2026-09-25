@@ -26,7 +26,7 @@ export const ROLE_MODULE_ACCESS: Record<OrgRole, ModuleCode[]> = {
     'general_ledger', 'accounts_payable', 'accounts_receivable',
     'payroll', 'banking', 'fixed_assets', 'leases', 'budgeting',
     'practice_management', 'donations', 'inventory',
-    'reporting', 'docsign', 'communication', 'accountant_dashboard', 'treasury',
+    'reporting', 'docsign', 'communication', 'accountant_dashboard', 'treasury', 'cra_tax',
   ],
 
   // Full access to all modules
@@ -34,33 +34,33 @@ export const ROLE_MODULE_ACCESS: Record<OrgRole, ModuleCode[]> = {
     'general_ledger', 'accounts_payable', 'accounts_receivable',
     'payroll', 'banking', 'fixed_assets', 'leases', 'budgeting',
     'practice_management', 'donations', 'inventory',
-    'reporting', 'docsign', 'communication', 'accountant_dashboard', 'treasury',
+    'reporting', 'docsign', 'communication', 'accountant_dashboard', 'treasury', 'cra_tax',
   ],
 
   // Full financial access including Treasury
   finance_manager: [
     'general_ledger', 'accounts_payable', 'accounts_receivable',
     'payroll', 'banking', 'fixed_assets', 'leases', 'budgeting',
-    'donations', 'inventory', 'reporting', 'docsign', 'communication', 'treasury',
+    'donations', 'inventory', 'reporting', 'docsign', 'communication', 'treasury', 'cra_tax',
   ],
 
   // Core accounting — can view and initiate Treasury payments
   accountant: [
     'general_ledger', 'accounts_payable', 'accounts_receivable',
     'banking', 'fixed_assets', 'leases', 'budgeting',
-    'reporting', 'docsign', 'communication', 'accountant_dashboard', 'treasury',
+    'reporting', 'docsign', 'communication', 'accountant_dashboard', 'treasury', 'cra_tax',
   ],
 
   // Payroll-focused — Treasury access for source-deduction remittances only
   payroll_officer: [
-    'payroll', 'reporting', 'communication', 'treasury',
+    'payroll', 'reporting', 'communication', 'treasury', 'cra_tax',
   ],
 
   // Read-only across all modules for audit purposes (incl. Treasury)
   auditor: [
     'general_ledger', 'accounts_payable', 'accounts_receivable',
     'payroll', 'banking', 'fixed_assets', 'leases', 'budgeting',
-    'donations', 'inventory', 'reporting', 'accountant_dashboard', 'treasury',
+    'donations', 'inventory', 'reporting', 'accountant_dashboard', 'treasury', 'cra_tax',
   ],
 
   // Basic member — limited to communication and document signing
@@ -117,4 +117,5 @@ export const MODULE_DISPLAY_NAMES: Record<ModuleCode, string> = {
   communication: 'Communication',
   accountant_dashboard: 'Accountant Dashboard',
   treasury: 'Treasury Management',
+  cra_tax: 'CRA Tax & Remittance',
 };

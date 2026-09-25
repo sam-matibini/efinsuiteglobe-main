@@ -36,6 +36,9 @@ const ROUTE_MODULE_MAP: Array<{ prefix: string; module: ModuleCode }> = [
   { prefix: '/finance/revaluation', module: 'general_ledger' },
   { prefix: '/divisions', module: 'general_ledger' },
 
+  // CRA Tax & Remittance is its own module. Keep this prefix ahead of /tax.
+  { prefix: '/tax-cra', module: 'cra_tax' },
+
   // Sales tax lives under GL access
   { prefix: '/tax', module: 'general_ledger' },
   { prefix: '/intl/uk-vat', module: 'general_ledger' },

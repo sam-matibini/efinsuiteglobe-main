@@ -3,7 +3,7 @@
  * Lists submissions, allows building a packet for a filing period and submitting/exporting.
  */
 import { useMemo, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { format, parseISO } from 'date-fns';
 import {
   ArrowLeft,
@@ -162,7 +162,7 @@ export default function TaxEFile() {
           <Send className="w-7 h-7 text-primary" /> E-File Returns
         </h1>
         <p className="text-muted-foreground mt-1">
-          Submit tax returns directly to authorities (HMRC) or generate portal-ready packets (CRA, US states).
+          Submit tax returns directly to authorities (HMRC) or generate portal-ready packets (CRA, US states). Canadian T2, GST/HST, and PD7A filings also run through the <Link to="/tax-cra/efile" className="text-primary underline-offset-4 hover:underline">EFILE gateway</Link>.
         </p>
       </div>
 

@@ -26,7 +26,8 @@ export type ModuleCode =
   | 'communication'
   | 'accountant_dashboard'
   | 'treasury'
-  | 'leases';
+  | 'leases'
+  | 'cra_tax';
 
 export function useEnabledModules() {
   const { currentOrganization } = useOrganizationContext();
@@ -81,6 +82,17 @@ export function useEnabledModules() {
     // Role-based module access check (always enforced)
     if (!roleHasModuleAccess(effectiveRole, code)) {
       return false;
+    }
+
+    // CRA Tax & Remittance follows GL, payroll, or treasury. It does not need its own module row.
+    if (code === 'cra_tax') {
+      if (!orgModules || orgModules.length === 0) return true;
+      return (
+        enabledModules.has('cra_tax') ||
+        enabledModules.has('general_ledger') ||
+        enabledModules.has('payroll') ||
+        enabledModules.has('treasury')
+      );
     }
 
     // If no module configuration exists yet for this org, show core modules only by default

@@ -69,6 +69,8 @@ interface NavItem {
   requiredModules?: ModuleCode[];
   /** Hide this nav item when user is in read-only (auditor) mode */
   hideForReadOnly?: boolean;
+  /** Canadian CRA services */
+  hideForNonCA?: boolean;
   /** Restrict this nav item to specific roles only */
   allowedRoles?: string[];
 }
@@ -240,6 +242,23 @@ const getNavigation = (payrollLabels: { taxSlips: string; separationDoc: string;
       { label: 'Reports', href: '/payroll/reports', icon: FileSpreadsheet },
     ]
   },
+  {
+    label: 'Tax & CRA',
+    icon: Landmark,
+    requiredModules: ['cra_tax'],
+    hideForNonCA: true,
+    children: [
+      { label: 'CRA Dashboard', href: '/tax-cra', icon: LayoutDashboard },
+      { label: 'GST/HST', href: '/tax-cra/gst-hst', icon: Receipt },
+      { label: 'Payroll', href: '/tax-cra/payroll', icon: Users },
+      { label: 'Corporate Income Tax', href: '/tax-cra/corporate', icon: Landmark },
+      { label: 'EFILE Gateway', href: '/tax-cra/efile', icon: Send },
+      { label: 'Tax Remittances', href: '/tax-cra/remittances', icon: Wallet },
+      { label: 'CRA Authorizations', href: '/tax-cra/authorizations', icon: ShieldCheck },
+      { label: 'CRA Notices', href: '/tax-cra/notices', icon: AlertTriangle },
+      { label: 'CRA Activity', href: '/tax-cra/activity', icon: History },
+    ],
+  },
   { 
     label: 'Donations', 
     icon: Heart, 
@@ -301,6 +320,7 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
     const filtered = baseNavigation
       .map(item => {
         if (item.allowedRoles && !item.allowedRoles.includes(userRole)) return null;
+        if (item.hideForNonCA && countryCode !== 'CA') return null;
         if (isReadOnly && item.hideForReadOnly) return null;
         if (modulesLoading) return { ...item, locked: false as boolean };
         if (!item.requiredModules || item.requiredModules.length === 0) {

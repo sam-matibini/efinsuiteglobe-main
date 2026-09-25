@@ -12,24 +12,24 @@ export const PLAN_MODULE_ACCESS: Record<PlanTier, ModuleCode[]> = {
     'banking', 'reporting', 'payroll', 'treasury',
     'fixed_assets', 'budgeting', 'inventory', 'docsign',
     'communication', 'leases', 'practice_management',
-    'donations', 'accountant_dashboard',
+    'donations', 'accountant_dashboard', 'cra_tax',
   ],
   starter: [
     'general_ledger', 'accounts_payable', 'accounts_receivable',
-    'banking', 'reporting', 'payroll', 'treasury',
+    'banking', 'reporting', 'payroll', 'treasury', 'cra_tax',
   ],
   professional: [
     'general_ledger', 'accounts_payable', 'accounts_receivable',
     'banking', 'reporting', 'payroll', 'treasury',
     'fixed_assets', 'budgeting', 'inventory', 'docsign',
-    'communication', 'leases',
+    'communication', 'leases', 'cra_tax',
   ],
   enterprise: [
     'general_ledger', 'accounts_payable', 'accounts_receivable',
     'banking', 'reporting', 'payroll', 'treasury',
     'fixed_assets', 'budgeting', 'inventory', 'docsign',
     'communication', 'leases', 'practice_management',
-    'donations', 'accountant_dashboard',
+    'donations', 'accountant_dashboard', 'cra_tax',
   ],
 };
 

@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { Calendar, Download, Check, Clock, AlertTriangle, Plus, MoreHorizontal, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -223,7 +224,7 @@ export default function Remittances() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">{remitConfig.title}</h1>
-          <p className="text-muted-foreground">{remitConfig.description}</p>
+          <p className="text-muted-foreground">{remitConfig.description} CRA payroll remittances are paid from <Link to="/tax-cra/payroll" className="text-primary underline-offset-4 hover:underline">Tax & CRA</Link>.</p>
         </div>
         <Button 
           className="bg-accent hover:bg-accent/90 text-accent-foreground"

@@ -127,6 +127,7 @@ const reports: ReportItem[] = [
   
   // Tax Reports
   { id: 'gst-hst', name: 'GST/HST Report', description: 'Tax collected, ITCs & net payable', category: 'Tax', module: 'Tax', icon: <BadgePercent className="w-5 h-5" />, href: '/tax', isFavorite: true },
+  { id: 'cra-reconciliation', name: 'CRA Reconciliation', description: 'Payments initiated, submitted, settled, CRA-confirmed, failed, and unreconciled', category: 'Tax', module: 'Tax', icon: <Shield className="w-5 h-5" />, href: '/tax-cra/reconciliation', isNew: true },
   { id: 'tax-summary', name: 'Tax Summary', description: 'All tax transactions by code', category: 'Tax', module: 'Tax', icon: <Receipt className="w-5 h-5" />, href: '/tax' },
   { id: 'qst-report', name: 'QST Report', description: 'Quebec Sales Tax report', category: 'Tax', module: 'Tax', icon: <Calculator className="w-5 h-5" />, href: '/tax' },
   { id: 'pst-report', name: 'PST Report', description: 'Provincial Sales Tax report', category: 'Tax', module: 'Tax', icon: <Calculator className="w-5 h-5" />, href: '/tax' },

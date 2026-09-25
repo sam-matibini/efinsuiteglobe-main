@@ -123,6 +123,16 @@ const TaxAuditTrail = lazy(() => import("./pages/TaxAuditTrail"));
 const TaxSetupWizard = lazy(() => import("./pages/TaxSetupWizard"));
 const TaxReportsAdvanced = lazy(() => import("./pages/TaxReportsAdvanced"));
 const TaxEFile = lazy(() => import("./pages/TaxEFile"));
+const CraDashboard = lazy(() => import("./pages/cra/CraDashboard"));
+const CraGstHst = lazy(() => import("./pages/cra/CraGstHst"));
+const CraPayrollTax = lazy(() => import("./pages/cra/CraPayrollTax"));
+const CraCorporateTax = lazy(() => import("./pages/cra/CraCorporateTax"));
+const CraEfile = lazy(() => import("./pages/cra/CraEfile"));
+const CraRemittances = lazy(() => import("./pages/cra/CraRemittances"));
+const CraAuthorizations = lazy(() => import("./pages/cra/CraAuthorizations"));
+const CraNotices = lazy(() => import("./pages/cra/CraNotices"));
+const CraActivity = lazy(() => import("./pages/cra/CraActivity"));
+const CraReconciliationReport = lazy(() => import("./pages/cra/CraReconciliationReport"));
 const AddressTax = lazy(() => import("./pages/AddressTax"));
 const EuVat = lazy(() => import("./pages/EuVat"));
 const TaxProvision = lazy(() => import("./pages/TaxProvision"));
@@ -417,6 +427,16 @@ const AppRoutes = () => {
     <Route path="/banking/reconciliation" element={<ProtectedRoute><PageWrapper><Reconciliation /></PageWrapper></ProtectedRoute>} />
     <Route path="/banking/reconciliation-history" element={<ProtectedRoute><PageWrapper><ReconciliationHistory /></PageWrapper></ProtectedRoute>} />
     <Route path="/banking/tax-audit" element={<ProtectedRoute><PageWrapper><SalesTaxAudit /></PageWrapper></ProtectedRoute>} />
+    <Route path="/tax-cra" element={<ProtectedRoute><PageWrapper><CraDashboard /></PageWrapper></ProtectedRoute>} />
+    <Route path="/tax-cra/gst-hst" element={<ProtectedRoute><PageWrapper><CraGstHst /></PageWrapper></ProtectedRoute>} />
+    <Route path="/tax-cra/payroll" element={<ProtectedRoute><PageWrapper><CraPayrollTax /></PageWrapper></ProtectedRoute>} />
+    <Route path="/tax-cra/corporate" element={<ProtectedRoute><PageWrapper><CraCorporateTax /></PageWrapper></ProtectedRoute>} />
+    <Route path="/tax-cra/efile" element={<ProtectedRoute><PageWrapper><CraEfile /></PageWrapper></ProtectedRoute>} />
+    <Route path="/tax-cra/remittances" element={<ProtectedRoute><PageWrapper><CraRemittances /></PageWrapper></ProtectedRoute>} />
+    <Route path="/tax-cra/authorizations" element={<ProtectedRoute><PageWrapper><CraAuthorizations /></PageWrapper></ProtectedRoute>} />
+    <Route path="/tax-cra/notices" element={<ProtectedRoute><PageWrapper><CraNotices /></PageWrapper></ProtectedRoute>} />
+    <Route path="/tax-cra/activity" element={<ProtectedRoute><PageWrapper><CraActivity /></PageWrapper></ProtectedRoute>} />
+    <Route path="/tax-cra/reconciliation" element={<ProtectedRoute><PageWrapper><CraReconciliationReport /></PageWrapper></ProtectedRoute>} />
     <Route path="/tax" element={<ProtectedRoute><PageWrapper><SalesTax /></PageWrapper></ProtectedRoute>} />
     <Route path="/tax/setup" element={<ProtectedRoute><PageWrapper><TaxSetupWizard /></PageWrapper></ProtectedRoute>} />
     <Route path="/tax/filing-periods" element={<ProtectedRoute><PageWrapper><TaxFilingPeriods /></PageWrapper></ProtectedRoute>} />
