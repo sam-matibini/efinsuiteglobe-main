@@ -1,0 +1,2053 @@
+// Country-specific localization data for addresses, currencies, and taxes
+// Supports all 67 countries in the database
+
+export interface JurisdictionOption {
+  code: string;
+  name: string;
+}
+
+export type TaxAppliesTo = 'sales' | 'purchases' | 'both';
+export type TaxDirection = 'collected' | 'paid';
+
+export interface TaxTypeConfig {
+  code: string;
+  name: string;
+  description: string;
+  defaultRate: number;
+  registrationLabel: string;
+  registrationPlaceholder: string;
+  /** Whether this retail tax applies on sales, purchases, or both. Defaults to both. */
+  appliesTo?: TaxAppliesTo;
+  /** Localized label for tax paid on purchases (ITC / Input VAT / PST Paid). */
+  paidName?: string;
+  paidDescription?: string;
+  /** Recoverable on purchases (GST/HST ITC, Input VAT). PST and US sales/use tax are typically not. */
+  isRecoverable?: boolean;
+}
+
+export interface ResolvedTaxTypeConfig extends TaxTypeConfig {
+  appliesTo: TaxAppliesTo;
+  paidName: string;
+  paidDescription: string;
+  isRecoverable: boolean;
+}
+
+export interface CountryLocalization {
+  code: string;
+  name: string;
+  currency: string;
+  currencyName: string;
+  currencySymbol: string;
+  phoneCode: string;
+  postalCodeLabel: string;
+  postalCodePlaceholder: string;
+  jurisdictionLabel: string;
+  jurisdictions: JurisdictionOption[];
+  taxRegimes: string[];
+  taxTypes: TaxTypeConfig[];
+  flag: string;
+  region: string;
+}
+
+export const COUNTRY_LOCALIZATIONS: Record<string, CountryLocalization> = {
+  // ================== NORTH AMERICA ==================
+  CA: {
+    code: 'CA',
+    name: 'Canada',
+    currency: 'CAD',
+    currencyName: 'Canadian Dollar',
+    currencySymbol: '$',
+    phoneCode: '+1',
+    postalCodeLabel: 'Postal Code',
+    postalCodePlaceholder: 'M5V 1A1',
+    jurisdictionLabel: 'Province/Territory',
+    jurisdictions: [
+      { code: 'AB', name: 'Alberta' },
+      { code: 'BC', name: 'British Columbia' },
+      { code: 'MB', name: 'Manitoba' },
+      { code: 'NB', name: 'New Brunswick' },
+      { code: 'NL', name: 'Newfoundland and Labrador' },
+      { code: 'NS', name: 'Nova Scotia' },
+      { code: 'NT', name: 'Northwest Territories' },
+      { code: 'NU', name: 'Nunavut' },
+      { code: 'ON', name: 'Ontario' },
+      { code: 'PE', name: 'Prince Edward Island' },
+      { code: 'QC', name: 'Quebec' },
+      { code: 'SK', name: 'Saskatchewan' },
+      { code: 'YT', name: 'Yukon' },
+    ],
+    taxRegimes: ['GST/HST', 'GST+QST', 'GST+PST'],
+    taxTypes: [
+      { code: 'HST', name: 'Collect HST', description: 'Harmonized Sales Tax (ON, NB, NL, NS, PE)', defaultRate: 13, registrationLabel: 'HST Number', registrationPlaceholder: '123456789RT0001', appliesTo: 'both', paidName: 'HST Paid (ITC)', paidDescription: 'Input Tax Credit for Harmonized Sales Tax paid on purchases', isRecoverable: true },
+      { code: 'GST', name: 'Collect GST', description: 'Goods and Services Tax (Federal)', defaultRate: 5, registrationLabel: 'GST Number', registrationPlaceholder: '123456789RT0001', appliesTo: 'both', paidName: 'GST Paid (ITC)', paidDescription: 'Input Tax Credit for Goods and Services Tax paid on purchases', isRecoverable: true },
+      { code: 'PST', name: 'Collect PST/QST', description: 'Provincial Sales Tax (BC, MB, SK) / Quebec Sales Tax', defaultRate: 7, registrationLabel: 'PST Number', registrationPlaceholder: 'PST-1234-5678', appliesTo: 'both', paidName: 'PST Paid', paidDescription: 'Provincial sales tax paid on purchases. QST ITR is recoverable in Quebec; other PST is generally not recoverable', isRecoverable: false },
+    ],
+    flag: '🇨🇦',
+    region: 'North America',
+  },
+  US: {
+    code: 'US',
+    name: 'United States',
+    currency: 'USD',
+    currencyName: 'US Dollar',
+    currencySymbol: '$',
+    phoneCode: '+1',
+    postalCodeLabel: 'ZIP Code',
+    postalCodePlaceholder: '10001',
+    jurisdictionLabel: 'State',
+    jurisdictions: [
+      { code: 'AL', name: 'Alabama' },
+      { code: 'AK', name: 'Alaska' },
+      { code: 'AZ', name: 'Arizona' },
+      { code: 'AR', name: 'Arkansas' },
+      { code: 'CA', name: 'California' },
+      { code: 'CO', name: 'Colorado' },
+      { code: 'CT', name: 'Connecticut' },
+      { code: 'DE', name: 'Delaware' },
+      { code: 'DC', name: 'District of Columbia' },
+      { code: 'FL', name: 'Florida' },
+      { code: 'GA', name: 'Georgia' },
+      { code: 'HI', name: 'Hawaii' },
+      { code: 'ID', name: 'Idaho' },
+      { code: 'IL', name: 'Illinois' },
+      { code: 'IN', name: 'Indiana' },
+      { code: 'IA', name: 'Iowa' },
+      { code: 'KS', name: 'Kansas' },
+      { code: 'KY', name: 'Kentucky' },
+      { code: 'LA', name: 'Louisiana' },
+      { code: 'ME', name: 'Maine' },
+      { code: 'MD', name: 'Maryland' },
+      { code: 'MA', name: 'Massachusetts' },
+      { code: 'MI', name: 'Michigan' },
+      { code: 'MN', name: 'Minnesota' },
+      { code: 'MS', name: 'Mississippi' },
+      { code: 'MO', name: 'Missouri' },
+      { code: 'MT', name: 'Montana' },
+      { code: 'NE', name: 'Nebraska' },
+      { code: 'NV', name: 'Nevada' },
+      { code: 'NH', name: 'New Hampshire' },
+      { code: 'NJ', name: 'New Jersey' },
+      { code: 'NM', name: 'New Mexico' },
+      { code: 'NY', name: 'New York' },
+      { code: 'NC', name: 'North Carolina' },
+      { code: 'ND', name: 'North Dakota' },
+      { code: 'OH', name: 'Ohio' },
+      { code: 'OK', name: 'Oklahoma' },
+      { code: 'OR', name: 'Oregon' },
+      { code: 'PA', name: 'Pennsylvania' },
+      { code: 'RI', name: 'Rhode Island' },
+      { code: 'SC', name: 'South Carolina' },
+      { code: 'SD', name: 'South Dakota' },
+      { code: 'TN', name: 'Tennessee' },
+      { code: 'TX', name: 'Texas' },
+      { code: 'UT', name: 'Utah' },
+      { code: 'VT', name: 'Vermont' },
+      { code: 'VA', name: 'Virginia' },
+      { code: 'WA', name: 'Washington' },
+      { code: 'WV', name: 'West Virginia' },
+      { code: 'WI', name: 'Wisconsin' },
+      { code: 'WY', name: 'Wyoming' },
+    ],
+    taxRegimes: ['State Sales Tax', 'No Sales Tax'],
+    taxTypes: [
+      { code: 'SALES_TAX', name: 'Collect Sales Tax', description: 'State and Local Sales Tax', defaultRate: 0, registrationLabel: 'Sales Tax Permit Number', registrationPlaceholder: '12-3456789', appliesTo: 'both', paidName: 'Sales Tax Paid / Use Tax', paidDescription: 'Use tax and sales tax paid on purchases (generally not recoverable)', isRecoverable: false },
+    ],
+    flag: '🇺🇸',
+    region: 'North America',
+  },
+  MX: {
+    code: 'MX',
+    name: 'Mexico',
+    currency: 'MXN',
+    currencyName: 'Mexican Peso',
+    currencySymbol: '$',
+    phoneCode: '+52',
+    postalCodeLabel: 'Código Postal',
+    postalCodePlaceholder: '06600',
+    jurisdictionLabel: 'State',
+    jurisdictions: [
+      { code: 'CDMX', name: 'Ciudad de México' },
+      { code: 'JAL', name: 'Jalisco' },
+      { code: 'NL', name: 'Nuevo León' },
+      { code: 'MEX', name: 'Estado de México' },
+      { code: 'PUE', name: 'Puebla' },
+      { code: 'GTO', name: 'Guanajuato' },
+      { code: 'QRO', name: 'Querétaro' },
+      { code: 'YUC', name: 'Yucatán' },
+    ],
+    taxRegimes: ['IVA (16%)'],
+    taxTypes: [
+      { code: 'IVA', name: 'Collect IVA', description: 'Impuesto al Valor Agregado', defaultRate: 16, registrationLabel: 'RFC', registrationPlaceholder: 'XAXX010101000', appliesTo: 'both', paidName: 'IVA Paid (Input IVA)', paidDescription: 'Input IVA recoverable on purchases', isRecoverable: true },
+    ],
+    flag: '🇲🇽',
+    region: 'North America',
+  },
+
+  // ================== SOUTH AMERICA ==================
+  AR: {
+    code: 'AR',
+    name: 'Argentina',
+    currency: 'ARS',
+    currencyName: 'Argentine Peso',
+    currencySymbol: '$',
+    phoneCode: '+54',
+    postalCodeLabel: 'Código Postal',
+    postalCodePlaceholder: 'C1000',
+    jurisdictionLabel: 'Province',
+    jurisdictions: [
+      { code: 'CABA', name: 'Ciudad de Buenos Aires' },
+      { code: 'BA', name: 'Buenos Aires' },
+      { code: 'COR', name: 'Córdoba' },
+      { code: 'SF', name: 'Santa Fe' },
+      { code: 'MZA', name: 'Mendoza' },
+    ],
+    taxRegimes: ['IVA (21%)'],
+    taxTypes: [
+      { code: 'IVA', name: 'Collect IVA', description: 'Impuesto al Valor Agregado', defaultRate: 21, registrationLabel: 'CUIT', registrationPlaceholder: '20-12345678-9', appliesTo: 'both', paidName: 'IVA Paid (Input IVA)', paidDescription: 'Input IVA recoverable on purchases', isRecoverable: true },
+    ],
+    flag: '🇦🇷',
+    region: 'South America',
+  },
+  BR: {
+    code: 'BR',
+    name: 'Brazil',
+    currency: 'BRL',
+    currencyName: 'Brazilian Real',
+    currencySymbol: 'R$',
+    phoneCode: '+55',
+    postalCodeLabel: 'CEP',
+    postalCodePlaceholder: '01310-100',
+    jurisdictionLabel: 'State',
+    jurisdictions: [
+      { code: 'SP', name: 'São Paulo' },
+      { code: 'RJ', name: 'Rio de Janeiro' },
+      { code: 'MG', name: 'Minas Gerais' },
+      { code: 'BA', name: 'Bahia' },
+      { code: 'RS', name: 'Rio Grande do Sul' },
+      { code: 'PR', name: 'Paraná' },
+      { code: 'PE', name: 'Pernambuco' },
+      { code: 'CE', name: 'Ceará' },
+    ],
+    taxRegimes: ['ICMS', 'ISS', 'IPI'],
+    taxTypes: [
+      { code: 'ICMS', name: 'Collect ICMS', description: 'State VAT on Goods', defaultRate: 18, registrationLabel: 'CNPJ', registrationPlaceholder: '12.345.678/0001-90', appliesTo: 'both', paidName: 'ICMS Paid (Input ICMS)', paidDescription: 'ICMS paid on purchases (recoverable when registered)', isRecoverable: true },
+    ],
+    flag: '🇧🇷',
+    region: 'South America',
+  },
+  CL: {
+    code: 'CL',
+    name: 'Chile',
+    currency: 'CLP',
+    currencyName: 'Chilean Peso',
+    currencySymbol: '$',
+    phoneCode: '+56',
+    postalCodeLabel: 'Código Postal',
+    postalCodePlaceholder: '8320000',
+    jurisdictionLabel: 'Region',
+    jurisdictions: [
+      { code: 'RM', name: 'Región Metropolitana' },
+      { code: 'VAL', name: 'Valparaíso' },
+      { code: 'BIO', name: 'Biobío' },
+      { code: 'ARA', name: 'Araucanía' },
+    ],
+    taxRegimes: ['IVA (19%)'],
+    taxTypes: [
+      { code: 'IVA', name: 'Collect IVA', description: 'Impuesto al Valor Agregado', defaultRate: 19, registrationLabel: 'RUT', registrationPlaceholder: '12.345.678-9', appliesTo: 'both', paidName: 'IVA Paid (Input IVA)', paidDescription: 'Input IVA recoverable on purchases', isRecoverable: true },
+    ],
+    flag: '🇨🇱',
+    region: 'South America',
+  },
+  CO: {
+    code: 'CO',
+    name: 'Colombia',
+    currency: 'COP',
+    currencyName: 'Colombian Peso',
+    currencySymbol: '$',
+    phoneCode: '+57',
+    postalCodeLabel: 'Código Postal',
+    postalCodePlaceholder: '110111',
+    jurisdictionLabel: 'Department',
+    jurisdictions: [
+      { code: 'DC', name: 'Bogotá D.C.' },
+      { code: 'ANT', name: 'Antioquia' },
+      { code: 'VAL', name: 'Valle del Cauca' },
+      { code: 'ATL', name: 'Atlántico' },
+    ],
+    taxRegimes: ['IVA (19%)'],
+    taxTypes: [
+      { code: 'IVA', name: 'Collect IVA', description: 'Impuesto al Valor Agregado', defaultRate: 19, registrationLabel: 'NIT', registrationPlaceholder: '900.123.456-7', appliesTo: 'both', paidName: 'IVA Paid (Input IVA)', paidDescription: 'Input IVA recoverable on purchases', isRecoverable: true },
+    ],
+    flag: '🇨🇴',
+    region: 'South America',
+  },
+  PE: {
+    code: 'PE',
+    name: 'Peru',
+    currency: 'PEN',
+    currencyName: 'Peruvian Sol',
+    currencySymbol: 'S/',
+    phoneCode: '+51',
+    postalCodeLabel: 'Código Postal',
+    postalCodePlaceholder: '15001',
+    jurisdictionLabel: 'Department',
+    jurisdictions: [
+      { code: 'LIM', name: 'Lima' },
+      { code: 'AQP', name: 'Arequipa' },
+      { code: 'CUS', name: 'Cusco' },
+      { code: 'LAL', name: 'La Libertad' },
+    ],
+    taxRegimes: ['IGV (18%)'],
+    taxTypes: [
+      { code: 'IGV', name: 'Collect IGV', description: 'Impuesto General a las Ventas', defaultRate: 18, registrationLabel: 'RUC', registrationPlaceholder: '20123456789', appliesTo: 'both', paidName: 'IGV Paid (Input IGV)', paidDescription: 'Input IGV recoverable on purchases', isRecoverable: true },
+    ],
+    flag: '🇵🇪',
+    region: 'South America',
+  },
+
+  // ================== EUROPE ==================
+  GB: {
+    code: 'GB',
+    name: 'United Kingdom',
+    currency: 'GBP',
+    currencyName: 'British Pound',
+    currencySymbol: '£',
+    phoneCode: '+44',
+    postalCodeLabel: 'Postcode',
+    postalCodePlaceholder: 'SW1A 1AA',
+    jurisdictionLabel: 'Country',
+    jurisdictions: [
+      { code: 'ENG', name: 'England' },
+      { code: 'SCT', name: 'Scotland' },
+      { code: 'WLS', name: 'Wales' },
+      { code: 'NIR', name: 'Northern Ireland' },
+    ],
+    taxRegimes: ['VAT (20%)'],
+    taxTypes: [
+      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 20, registrationLabel: 'VAT Number', registrationPlaceholder: 'GB123456789', appliesTo: 'both', paidName: 'VAT Paid (Input VAT)', paidDescription: 'Input VAT recoverable on purchases', isRecoverable: true },
+    ],
+    flag: '🇬🇧',
+    region: 'Europe',
+  },
+  DE: {
+    code: 'DE',
+    name: 'Germany',
+    currency: 'EUR',
+    currencyName: 'Euro',
+    currencySymbol: '€',
+    phoneCode: '+49',
+    postalCodeLabel: 'Postleitzahl',
+    postalCodePlaceholder: '10115',
+    jurisdictionLabel: 'Bundesland',
+    jurisdictions: [
+      { code: 'BW', name: 'Baden-Württemberg' },
+      { code: 'BY', name: 'Bayern' },
+      { code: 'BE', name: 'Berlin' },
+      { code: 'BB', name: 'Brandenburg' },
+      { code: 'HB', name: 'Bremen' },
+      { code: 'HH', name: 'Hamburg' },
+      { code: 'HE', name: 'Hessen' },
+      { code: 'MV', name: 'Mecklenburg-Vorpommern' },
+      { code: 'NI', name: 'Niedersachsen' },
+      { code: 'NW', name: 'Nordrhein-Westfalen' },
+      { code: 'RP', name: 'Rheinland-Pfalz' },
+      { code: 'SL', name: 'Saarland' },
+      { code: 'SN', name: 'Sachsen' },
+      { code: 'ST', name: 'Sachsen-Anhalt' },
+      { code: 'SH', name: 'Schleswig-Holstein' },
+      { code: 'TH', name: 'Thüringen' },
+    ],
+    taxRegimes: ['USt (19%)'],
+    taxTypes: [
+      { code: 'UST', name: 'Collect USt', description: 'Umsatzsteuer (VAT)', defaultRate: 19, registrationLabel: 'USt-IdNr.', registrationPlaceholder: 'DE123456789', appliesTo: 'both', paidName: 'USt Paid (Vorsteuer)', paidDescription: 'Input VAT (Vorsteuer) recoverable on purchases', isRecoverable: true },
+    ],
+    flag: '🇩🇪',
+    region: 'Europe',
+  },
+  FR: {
+    code: 'FR',
+    name: 'France',
+    currency: 'EUR',
+    currencyName: 'Euro',
+    currencySymbol: '€',
+    phoneCode: '+33',
+    postalCodeLabel: 'Code Postal',
+    postalCodePlaceholder: '75001',
+    jurisdictionLabel: 'Région',
+    jurisdictions: [
+      { code: 'IDF', name: 'Île-de-France' },
+      { code: 'ARA', name: 'Auvergne-Rhône-Alpes' },
+      { code: 'NAQ', name: 'Nouvelle-Aquitaine' },
+      { code: 'OCC', name: 'Occitanie' },
+      { code: 'PAC', name: "Provence-Alpes-Côte d'Azur" },
+      { code: 'PDL', name: 'Pays de la Loire' },
+      { code: 'BFC', name: 'Bourgogne-Franche-Comté' },
+      { code: 'BRE', name: 'Bretagne' },
+      { code: 'CVL', name: 'Centre-Val de Loire' },
+      { code: 'COR', name: 'Corse' },
+      { code: 'GES', name: 'Grand Est' },
+      { code: 'HDF', name: 'Hauts-de-France' },
+      { code: 'NOR', name: 'Normandie' },
+    ],
+    taxRegimes: ['TVA (20%)'],
+    taxTypes: [
+      { code: 'TVA', name: 'Collect TVA', description: 'Taxe sur la Valeur Ajoutée', defaultRate: 20, registrationLabel: 'Numéro TVA', registrationPlaceholder: 'FR12345678901', appliesTo: 'both', paidName: 'TVA Paid (Input TVA)', paidDescription: 'TVA deductible / input TVA recoverable on purchases', isRecoverable: true },
+    ],
+    flag: '🇫🇷',
+    region: 'Europe',
+  },
+  IT: {
+    code: 'IT',
+    name: 'Italy',
+    currency: 'EUR',
+    currencyName: 'Euro',
+    currencySymbol: '€',
+    phoneCode: '+39',
+    postalCodeLabel: 'CAP',
+    postalCodePlaceholder: '00100',
+    jurisdictionLabel: 'Region',
+    jurisdictions: [
+      { code: 'LAZ', name: 'Lazio' },
+      { code: 'LOM', name: 'Lombardia' },
+      { code: 'CAM', name: 'Campania' },
+      { code: 'VEN', name: 'Veneto' },
+      { code: 'EMR', name: 'Emilia-Romagna' },
+      { code: 'PIE', name: 'Piemonte' },
+      { code: 'TOS', name: 'Toscana' },
+    ],
+    taxRegimes: ['IVA (22%)'],
+    taxTypes: [
+      { code: 'IVA', name: 'Collect IVA', description: 'Imposta sul Valore Aggiunto', defaultRate: 22, registrationLabel: 'Partita IVA', registrationPlaceholder: 'IT12345678901', appliesTo: 'both', paidName: 'IVA Paid (Input IVA)', paidDescription: 'Input IVA recoverable on purchases', isRecoverable: true },
+    ],
+    flag: '🇮🇹',
+    region: 'Europe',
+  },
+  ES: {
+    code: 'ES',
+    name: 'Spain',
+    currency: 'EUR',
+    currencyName: 'Euro',
+    currencySymbol: '€',
+    phoneCode: '+34',
+    postalCodeLabel: 'Código Postal',
+    postalCodePlaceholder: '28001',
+    jurisdictionLabel: 'Autonomous Community',
+    jurisdictions: [
+      { code: 'MAD', name: 'Comunidad de Madrid' },
+      { code: 'CAT', name: 'Cataluña' },
+      { code: 'AND', name: 'Andalucía' },
+      { code: 'VAL', name: 'Comunitat Valenciana' },
+      { code: 'GAL', name: 'Galicia' },
+      { code: 'PV', name: 'País Vasco' },
+    ],
+    taxRegimes: ['IVA (21%)'],
+    taxTypes: [
+      { code: 'IVA', name: 'Collect IVA', description: 'Impuesto sobre el Valor Añadido', defaultRate: 21, registrationLabel: 'NIF-IVA', registrationPlaceholder: 'ES12345678A', appliesTo: 'both', paidName: 'IVA Paid (Input IVA)', paidDescription: 'Input IVA recoverable on purchases', isRecoverable: true },
+    ],
+    flag: '🇪🇸',
+    region: 'Europe',
+  },
+  PT: {
+    code: 'PT',
+    name: 'Portugal',
+    currency: 'EUR',
+    currencyName: 'Euro',
+    currencySymbol: '€',
+    phoneCode: '+351',
+    postalCodeLabel: 'Código Postal',
+    postalCodePlaceholder: '1000-001',
+    jurisdictionLabel: 'District',
+    jurisdictions: [
+      { code: 'LIS', name: 'Lisboa' },
+      { code: 'PRT', name: 'Porto' },
+      { code: 'FAR', name: 'Faro' },
+      { code: 'COI', name: 'Coimbra' },
+    ],
+    taxRegimes: ['IVA (23%)'],
+    taxTypes: [
+      { code: 'IVA', name: 'Collect IVA', description: 'Imposto sobre o Valor Acrescentado', defaultRate: 23, registrationLabel: 'NIF', registrationPlaceholder: 'PT123456789', appliesTo: 'both', paidName: 'IVA Paid (Input IVA)', paidDescription: 'Input IVA recoverable on purchases', isRecoverable: true },
+    ],
+    flag: '🇵🇹',
+    region: 'Europe',
+  },
+  NL: {
+    code: 'NL',
+    name: 'Netherlands',
+    currency: 'EUR',
+    currencyName: 'Euro',
+    currencySymbol: '€',
+    phoneCode: '+31',
+    postalCodeLabel: 'Postcode',
+    postalCodePlaceholder: '1012 AB',
+    jurisdictionLabel: 'Province',
+    jurisdictions: [
+      { code: 'NH', name: 'Noord-Holland' },
+      { code: 'ZH', name: 'Zuid-Holland' },
+      { code: 'NB', name: 'Noord-Brabant' },
+      { code: 'GE', name: 'Gelderland' },
+      { code: 'UT', name: 'Utrecht' },
+    ],
+    taxRegimes: ['BTW (21%)'],
+    taxTypes: [
+      { code: 'BTW', name: 'Collect BTW', description: 'Belasting over de Toegevoegde Waarde', defaultRate: 21, registrationLabel: 'BTW-nummer', registrationPlaceholder: 'NL123456789B01', appliesTo: 'both', paidName: 'BTW Paid (Voorbelasting)', paidDescription: 'Input BTW recoverable on purchases', isRecoverable: true },
+    ],
+    flag: '🇳🇱',
+    region: 'Europe',
+  },
+  BE: {
+    code: 'BE',
+    name: 'Belgium',
+    currency: 'EUR',
+    currencyName: 'Euro',
+    currencySymbol: '€',
+    phoneCode: '+32',
+    postalCodeLabel: 'Postal Code',
+    postalCodePlaceholder: '1000',
+    jurisdictionLabel: 'Region',
+    jurisdictions: [
+      { code: 'BRU', name: 'Brussels-Capital' },
+      { code: 'VLG', name: 'Flanders' },
+      { code: 'WAL', name: 'Wallonia' },
+    ],
+    taxRegimes: ['TVA/BTW (21%)'],
+    taxTypes: [
+      { code: 'TVA', name: 'Collect TVA/BTW', description: 'Value Added Tax', defaultRate: 21, registrationLabel: 'VAT Number', registrationPlaceholder: 'BE0123456789', appliesTo: 'both', paidName: 'TVA Paid (Input TVA)', paidDescription: 'TVA deductible / input TVA recoverable on purchases', isRecoverable: true },
+    ],
+    flag: '🇧🇪',
+    region: 'Europe',
+  },
+  AT: {
+    code: 'AT',
+    name: 'Austria',
+    currency: 'EUR',
+    currencyName: 'Euro',
+    currencySymbol: '€',
+    phoneCode: '+43',
+    postalCodeLabel: 'Postleitzahl',
+    postalCodePlaceholder: '1010',
+    jurisdictionLabel: 'Bundesland',
+    jurisdictions: [
+      { code: 'VIE', name: 'Wien' },
+      { code: 'NOE', name: 'Niederösterreich' },
+      { code: 'OOE', name: 'Oberösterreich' },
+      { code: 'SBG', name: 'Salzburg' },
+      { code: 'TIR', name: 'Tirol' },
+    ],
+    taxRegimes: ['USt (20%)'],
+    taxTypes: [
+      { code: 'UST', name: 'Collect USt', description: 'Umsatzsteuer', defaultRate: 20, registrationLabel: 'UID-Nummer', registrationPlaceholder: 'ATU12345678', appliesTo: 'both', paidName: 'USt Paid (Vorsteuer)', paidDescription: 'Input VAT (Vorsteuer) recoverable on purchases', isRecoverable: true },
+    ],
+    flag: '🇦🇹',
+    region: 'Europe',
+  },
+  CH: {
+    code: 'CH',
+    name: 'Switzerland',
+    currency: 'CHF',
+    currencyName: 'Swiss Franc',
+    currencySymbol: 'CHF',
+    phoneCode: '+41',
+    postalCodeLabel: 'PLZ',
+    postalCodePlaceholder: '8001',
+    jurisdictionLabel: 'Canton',
+    jurisdictions: [
+      { code: 'ZH', name: 'Zürich' },
+      { code: 'BE', name: 'Bern' },
+      { code: 'GE', name: 'Genève' },
+      { code: 'VD', name: 'Vaud' },
+      { code: 'BS', name: 'Basel-Stadt' },
+    ],
+    taxRegimes: ['MWST (8.1%)'],
+    taxTypes: [
+      { code: 'MWST', name: 'Collect MWST', description: 'Mehrwertsteuer', defaultRate: 8.1, registrationLabel: 'MWST-Nr.', registrationPlaceholder: 'CHE-123.456.789 MWST', appliesTo: 'both', paidName: 'MWST Paid (Vorsteuer)', paidDescription: 'Input MWST recoverable on purchases', isRecoverable: true },
+    ],
+    flag: '🇨🇭',
+    region: 'Europe',
+  },
+  IE: {
+    code: 'IE',
+    name: 'Ireland',
+    currency: 'EUR',
+    currencyName: 'Euro',
+    currencySymbol: '€',
+    phoneCode: '+353',
+    postalCodeLabel: 'Eircode',
+    postalCodePlaceholder: 'D02 X285',
+    jurisdictionLabel: 'County',
+    jurisdictions: [
+      { code: 'D', name: 'Dublin' },
+      { code: 'C', name: 'Cork' },
+      { code: 'G', name: 'Galway' },
+      { code: 'L', name: 'Limerick' },
+    ],
+    taxRegimes: ['VAT (23%)'],
+    taxTypes: [
+      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 23, registrationLabel: 'VAT Number', registrationPlaceholder: 'IE1234567T', appliesTo: 'both', paidName: 'VAT Paid (Input VAT)', paidDescription: 'Input VAT recoverable on purchases', isRecoverable: true },
+    ],
+    flag: '🇮🇪',
+    region: 'Europe',
+  },
+  PL: {
+    code: 'PL',
+    name: 'Poland',
+    currency: 'PLN',
+    currencyName: 'Polish Złoty',
+    currencySymbol: 'zł',
+    phoneCode: '+48',
+    postalCodeLabel: 'Kod pocztowy',
+    postalCodePlaceholder: '00-001',
+    jurisdictionLabel: 'Voivodeship',
+    jurisdictions: [
+      { code: 'MZ', name: 'Mazowieckie' },
+      { code: 'SL', name: 'Śląskie' },
+      { code: 'WP', name: 'Wielkopolskie' },
+      { code: 'MP', name: 'Małopolskie' },
+    ],
+    taxRegimes: ['VAT (23%)'],
+    taxTypes: [
+      { code: 'VAT', name: 'Collect VAT', description: 'Podatek od towarów i usług', defaultRate: 23, registrationLabel: 'NIP', registrationPlaceholder: 'PL1234567890', appliesTo: 'both', paidName: 'VAT Paid (Input VAT)', paidDescription: 'Input VAT recoverable on purchases', isRecoverable: true },
+    ],
+    flag: '🇵🇱',
+    region: 'Europe',
+  },
+  CZ: {
+    code: 'CZ',
+    name: 'Czech Republic',
+    currency: 'CZK',
+    currencyName: 'Czech Koruna',
+    currencySymbol: 'Kč',
+    phoneCode: '+420',
+    postalCodeLabel: 'PSČ',
+    postalCodePlaceholder: '110 00',
+    jurisdictionLabel: 'Region',
+    jurisdictions: [
+      { code: 'PHA', name: 'Praha' },
+      { code: 'JHM', name: 'Jihomoravský' },
+      { code: 'MSK', name: 'Moravskoslezský' },
+    ],
+    taxRegimes: ['DPH (21%)'],
+    taxTypes: [
+      { code: 'DPH', name: 'Collect DPH', description: 'Daň z přidané hodnoty', defaultRate: 21, registrationLabel: 'DIČ', registrationPlaceholder: 'CZ12345678', appliesTo: 'both', paidName: 'DPH Paid (Input VAT)', paidDescription: 'Input DPH recoverable on purchases', isRecoverable: true },
+    ],
+    flag: '🇨🇿',
+    region: 'Europe',
+  },
+  SE: {
+    code: 'SE',
+    name: 'Sweden',
+    currency: 'SEK',
+    currencyName: 'Swedish Krona',
+    currencySymbol: 'kr',
+    phoneCode: '+46',
+    postalCodeLabel: 'Postnummer',
+    postalCodePlaceholder: '111 22',
+    jurisdictionLabel: 'County',
+    jurisdictions: [
+      { code: 'AB', name: 'Stockholm' },
+      { code: 'O', name: 'Västra Götaland' },
+      { code: 'M', name: 'Skåne' },
+    ],
+    taxRegimes: ['Moms (25%)'],
+    taxTypes: [
+      { code: 'MOMS', name: 'Collect Moms', description: 'Mervärdesskatt', defaultRate: 25, registrationLabel: 'Momsreg.nr', registrationPlaceholder: 'SE123456789001', appliesTo: 'both', paidName: 'Moms Paid (Input VAT)', paidDescription: 'Input Moms recoverable on purchases', isRecoverable: true },
+    ],
+    flag: '🇸🇪',
+    region: 'Europe',
+  },
+  NO: {
+    code: 'NO',
+    name: 'Norway',
+    currency: 'NOK',
+    currencyName: 'Norwegian Krone',
+    currencySymbol: 'kr',
+    phoneCode: '+47',
+    postalCodeLabel: 'Postnummer',
+    postalCodePlaceholder: '0101',
+    jurisdictionLabel: 'County',
+    jurisdictions: [
+      { code: 'OSL', name: 'Oslo' },
+      { code: 'VIK', name: 'Vestland' },
+      { code: 'TRO', name: 'Troms og Finnmark' },
+    ],
+    taxRegimes: ['MVA (25%)'],
+    taxTypes: [
+      { code: 'MVA', name: 'Collect MVA', description: 'Merverdiavgift', defaultRate: 25, registrationLabel: 'Org.nr', registrationPlaceholder: 'NO123456789MVA', appliesTo: 'both', paidName: 'MVA Paid (Input VAT)', paidDescription: 'Input MVA recoverable on purchases', isRecoverable: true },
+    ],
+    flag: '🇳🇴',
+    region: 'Europe',
+  },
+  DK: {
+    code: 'DK',
+    name: 'Denmark',
+    currency: 'DKK',
+    currencyName: 'Danish Krone',
+    currencySymbol: 'kr',
+    phoneCode: '+45',
+    postalCodeLabel: 'Postnummer',
+    postalCodePlaceholder: '1000',
+    jurisdictionLabel: 'Region',
+    jurisdictions: [
+      { code: 'CPH', name: 'Hovedstaden' },
+      { code: 'MID', name: 'Midtjylland' },
+      { code: 'SDN', name: 'Syddanmark' },
+    ],
+    taxRegimes: ['Moms (25%)'],
+    taxTypes: [
+      { code: 'MOMS', name: 'Collect Moms', description: 'Merværdiafgift', defaultRate: 25, registrationLabel: 'CVR-nr', registrationPlaceholder: 'DK12345678', appliesTo: 'both', paidName: 'Moms Paid (Input VAT)', paidDescription: 'Input Moms recoverable on purchases', isRecoverable: true },
+    ],
+    flag: '🇩🇰',
+    region: 'Europe',
+  },
+  FI: {
+    code: 'FI',
+    name: 'Finland',
+    currency: 'EUR',
+    currencyName: 'Euro',
+    currencySymbol: '€',
+    phoneCode: '+358',
+    postalCodeLabel: 'Postinumero',
+    postalCodePlaceholder: '00100',
+    jurisdictionLabel: 'Region',
+    jurisdictions: [
+      { code: 'HEL', name: 'Uusimaa' },
+      { code: 'TMP', name: 'Pirkanmaa' },
+      { code: 'VAR', name: 'Varsinais-Suomi' },
+    ],
+    taxRegimes: ['ALV (24%)'],
+    taxTypes: [
+      { code: 'ALV', name: 'Collect ALV', description: 'Arvonlisävero', defaultRate: 24, registrationLabel: 'Y-tunnus', registrationPlaceholder: 'FI12345678', appliesTo: 'both', paidName: 'ALV Paid (Input VAT)', paidDescription: 'Input ALV recoverable on purchases', isRecoverable: true },
+    ],
+    flag: '🇫🇮',
+    region: 'Europe',
+  },
+
+  // ================== ASIA-PACIFIC ==================
+  AU: {
+    code: 'AU',
+    name: 'Australia',
+    currency: 'AUD',
+    currencyName: 'Australian Dollar',
+    currencySymbol: '$',
+    phoneCode: '+61',
+    postalCodeLabel: 'Postcode',
+    postalCodePlaceholder: '2000',
+    jurisdictionLabel: 'State/Territory',
+    jurisdictions: [
+      { code: 'NSW', name: 'New South Wales' },
+      { code: 'VIC', name: 'Victoria' },
+      { code: 'QLD', name: 'Queensland' },
+      { code: 'WA', name: 'Western Australia' },
+      { code: 'SA', name: 'South Australia' },
+      { code: 'TAS', name: 'Tasmania' },
+      { code: 'ACT', name: 'Australian Capital Territory' },
+      { code: 'NT', name: 'Northern Territory' },
+    ],
+    taxRegimes: ['GST (10%)'],
+    taxTypes: [
+      { code: 'GST', name: 'Collect GST', description: 'Goods and Services Tax', defaultRate: 10, registrationLabel: 'ABN', registrationPlaceholder: '12 345 678 901', appliesTo: 'both', paidName: 'GST Paid (ITC)', paidDescription: 'Input Tax Credit for Goods and Services Tax paid on purchases', isRecoverable: true },
+    ],
+    flag: '🇦🇺',
+    region: 'Asia-Pacific',
+  },
+  NZ: {
+    code: 'NZ',
+    name: 'New Zealand',
+    currency: 'NZD',
+    currencyName: 'New Zealand Dollar',
+    currencySymbol: '$',
+    phoneCode: '+64',
+    postalCodeLabel: 'Postcode',
+    postalCodePlaceholder: '6011',
+    jurisdictionLabel: 'Region',
+    jurisdictions: [
+      { code: 'AUK', name: 'Auckland' },
+      { code: 'WGN', name: 'Wellington' },
+      { code: 'CAN', name: 'Canterbury' },
+      { code: 'WKO', name: 'Waikato' },
+    ],
+    taxRegimes: ['GST (15%)'],
+    taxTypes: [
+      { code: 'GST', name: 'Collect GST', description: 'Goods and Services Tax', defaultRate: 15, registrationLabel: 'GST Number', registrationPlaceholder: '123-456-789', appliesTo: 'both', paidName: 'GST Paid (ITC)', paidDescription: 'Input Tax Credit for Goods and Services Tax paid on purchases', isRecoverable: true },
+    ],
+    flag: '🇳🇿',
+    region: 'Asia-Pacific',
+  },
+  JP: {
+    code: 'JP',
+    name: 'Japan',
+    currency: 'JPY',
+    currencyName: 'Japanese Yen',
+    currencySymbol: '¥',
+    phoneCode: '+81',
+    postalCodeLabel: 'Postal Code',
+    postalCodePlaceholder: '100-0001',
+    jurisdictionLabel: 'Prefecture',
+    jurisdictions: [
+      { code: 'TKY', name: 'Tokyo' },
+      { code: 'OSK', name: 'Osaka' },
+      { code: 'KNG', name: 'Kanagawa' },
+      { code: 'AIC', name: 'Aichi' },
+      { code: 'FKO', name: 'Fukuoka' },
+    ],
+    taxRegimes: ['Consumption Tax (10%)'],
+    taxTypes: [
+      { code: 'JCT', name: 'Collect JCT', description: 'Japanese Consumption Tax', defaultRate: 10, registrationLabel: 'Corporate Number', registrationPlaceholder: '1234567890123', appliesTo: 'both', paidName: 'JCT Paid (Input Consumption Tax)', paidDescription: 'Japanese consumption tax paid on purchases', isRecoverable: true },
+    ],
+    flag: '🇯🇵',
+    region: 'Asia-Pacific',
+  },
+  KR: {
+    code: 'KR',
+    name: 'South Korea',
+    currency: 'KRW',
+    currencyName: 'South Korean Won',
+    currencySymbol: '₩',
+    phoneCode: '+82',
+    postalCodeLabel: 'Postal Code',
+    postalCodePlaceholder: '03000',
+    jurisdictionLabel: 'Province',
+    jurisdictions: [
+      { code: 'SEL', name: 'Seoul' },
+      { code: 'BUS', name: 'Busan' },
+      { code: 'GGI', name: 'Gyeonggi' },
+      { code: 'ICN', name: 'Incheon' },
+    ],
+    taxRegimes: ['VAT (10%)'],
+    taxTypes: [
+      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 10, registrationLabel: 'Business Number', registrationPlaceholder: '123-45-67890', appliesTo: 'both', paidName: 'VAT Paid (Input VAT)', paidDescription: 'Input VAT recoverable on purchases', isRecoverable: true },
+    ],
+    flag: '🇰🇷',
+    region: 'Asia-Pacific',
+  },
+  CN: {
+    code: 'CN',
+    name: 'China',
+    currency: 'CNY',
+    currencyName: 'Chinese Yuan',
+    currencySymbol: '¥',
+    phoneCode: '+86',
+    postalCodeLabel: 'Postal Code',
+    postalCodePlaceholder: '100000',
+    jurisdictionLabel: 'Province',
+    jurisdictions: [
+      { code: 'BJ', name: 'Beijing' },
+      { code: 'SH', name: 'Shanghai' },
+      { code: 'GD', name: 'Guangdong' },
+      { code: 'ZJ', name: 'Zhejiang' },
+      { code: 'JS', name: 'Jiangsu' },
+    ],
+    taxRegimes: ['VAT (13%)'],
+    taxTypes: [
+      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 13, registrationLabel: 'Tax ID', registrationPlaceholder: '91110000123456789X', appliesTo: 'both', paidName: 'VAT Paid (Input VAT)', paidDescription: 'Input VAT recoverable on purchases', isRecoverable: true },
+    ],
+    flag: '🇨🇳',
+    region: 'Asia-Pacific',
+  },
+  HK: {
+    code: 'HK',
+    name: 'Hong Kong',
+    currency: 'HKD',
+    currencyName: 'Hong Kong Dollar',
+    currencySymbol: 'HK$',
+    phoneCode: '+852',
+    postalCodeLabel: 'District',
+    postalCodePlaceholder: '',
+    jurisdictionLabel: 'Territory',
+    jurisdictions: [
+      { code: 'HK', name: 'Hong Kong Island' },
+      { code: 'KLN', name: 'Kowloon' },
+      { code: 'NT', name: 'New Territories' },
+    ],
+    taxRegimes: ['No VAT'],
+    taxTypes: [
+      { code: 'PROFITS', name: 'Profits Tax', description: 'Corporate Profits Tax', defaultRate: 16.5, registrationLabel: 'BR Number', registrationPlaceholder: '12345678', appliesTo: 'sales', paidName: 'No retail sales tax paid', paidDescription: 'Hong Kong Profits Tax is not a retail sales tax and has no input credit', isRecoverable: false },
+    ],
+    flag: '🇭🇰',
+    region: 'Asia-Pacific',
+  },
+  SG: {
+    code: 'SG',
+    name: 'Singapore',
+    currency: 'SGD',
+    currencyName: 'Singapore Dollar',
+    currencySymbol: 'S$',
+    phoneCode: '+65',
+    postalCodeLabel: 'Postal Code',
+    postalCodePlaceholder: '018960',
+    jurisdictionLabel: 'Region',
+    jurisdictions: [
+      { code: 'CEN', name: 'Central' },
+      { code: 'EAST', name: 'East' },
+      { code: 'NORTH', name: 'North' },
+      { code: 'WEST', name: 'West' },
+    ],
+    taxRegimes: ['GST (9%)'],
+    taxTypes: [
+      { code: 'GST', name: 'Collect GST', description: 'Goods and Services Tax', defaultRate: 9, registrationLabel: 'GST Reg. No.', registrationPlaceholder: 'M12345678A', appliesTo: 'both', paidName: 'GST Paid (ITC)', paidDescription: 'Input Tax Credit for Goods and Services Tax paid on purchases', isRecoverable: true },
+    ],
+    flag: '🇸🇬',
+    region: 'Asia-Pacific',
+  },
+  MY: {
+    code: 'MY',
+    name: 'Malaysia',
+    currency: 'MYR',
+    currencyName: 'Malaysian Ringgit',
+    currencySymbol: 'RM',
+    phoneCode: '+60',
+    postalCodeLabel: 'Postcode',
+    postalCodePlaceholder: '50000',
+    jurisdictionLabel: 'State',
+    jurisdictions: [
+      { code: 'KUL', name: 'Kuala Lumpur' },
+      { code: 'SEL', name: 'Selangor' },
+      { code: 'PNG', name: 'Penang' },
+      { code: 'JHR', name: 'Johor' },
+    ],
+    taxRegimes: ['Sales Tax (10%)'],
+    taxTypes: [
+      { code: 'SST', name: 'Collect SST', description: 'Sales and Service Tax', defaultRate: 10, registrationLabel: 'SST No.', registrationPlaceholder: 'W10-1234-56789000', appliesTo: 'both', paidName: 'SST Paid', paidDescription: 'Sales and Service Tax paid on purchases (generally not recoverable)', isRecoverable: false },
+    ],
+    flag: '🇲🇾',
+    region: 'Asia-Pacific',
+  },
+  TH: {
+    code: 'TH',
+    name: 'Thailand',
+    currency: 'THB',
+    currencyName: 'Thai Baht',
+    currencySymbol: '฿',
+    phoneCode: '+66',
+    postalCodeLabel: 'Postal Code',
+    postalCodePlaceholder: '10100',
+    jurisdictionLabel: 'Province',
+    jurisdictions: [
+      { code: 'BKK', name: 'Bangkok' },
+      { code: 'CMI', name: 'Chiang Mai' },
+      { code: 'PKT', name: 'Phuket' },
+      { code: 'CBI', name: 'Chonburi' },
+    ],
+    taxRegimes: ['VAT (7%)'],
+    taxTypes: [
+      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 7, registrationLabel: 'Tax ID', registrationPlaceholder: '0123456789012', appliesTo: 'both', paidName: 'VAT Paid (Input VAT)', paidDescription: 'Input VAT recoverable on purchases', isRecoverable: true },
+    ],
+    flag: '🇹🇭',
+    region: 'Asia-Pacific',
+  },
+  ID: {
+    code: 'ID',
+    name: 'Indonesia',
+    currency: 'IDR',
+    currencyName: 'Indonesian Rupiah',
+    currencySymbol: 'Rp',
+    phoneCode: '+62',
+    postalCodeLabel: 'Kode Pos',
+    postalCodePlaceholder: '10110',
+    jurisdictionLabel: 'Province',
+    jurisdictions: [
+      { code: 'JKT', name: 'Jakarta' },
+      { code: 'JBR', name: 'Jawa Barat' },
+      { code: 'JTM', name: 'Jawa Timur' },
+      { code: 'BLI', name: 'Bali' },
+    ],
+    taxRegimes: ['PPN (11%)'],
+    taxTypes: [
+      { code: 'PPN', name: 'Collect PPN', description: 'Pajak Pertambahan Nilai', defaultRate: 11, registrationLabel: 'NPWP', registrationPlaceholder: '01.234.567.8-012.000', appliesTo: 'both', paidName: 'PPN Paid (Input PPN)', paidDescription: 'Input PPN recoverable on purchases', isRecoverable: true },
+    ],
+    flag: '🇮🇩',
+    region: 'Asia-Pacific',
+  },
+  PH: {
+    code: 'PH',
+    name: 'Philippines',
+    currency: 'PHP',
+    currencyName: 'Philippine Peso',
+    currencySymbol: '₱',
+    phoneCode: '+63',
+    postalCodeLabel: 'ZIP Code',
+    postalCodePlaceholder: '1000',
+    jurisdictionLabel: 'Region',
+    jurisdictions: [
+      { code: 'NCR', name: 'National Capital Region' },
+      { code: 'CAL', name: 'Calabarzon' },
+      { code: 'CVI', name: 'Central Visayas' },
+      { code: 'DAV', name: 'Davao Region' },
+    ],
+    taxRegimes: ['VAT (12%)'],
+    taxTypes: [
+      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 12, registrationLabel: 'TIN', registrationPlaceholder: '123-456-789-000', appliesTo: 'both', paidName: 'VAT Paid (Input VAT)', paidDescription: 'Input VAT recoverable on purchases', isRecoverable: true },
+    ],
+    flag: '🇵🇭',
+    region: 'Asia-Pacific',
+  },
+  VN: {
+    code: 'VN',
+    name: 'Vietnam',
+    currency: 'VND',
+    currencyName: 'Vietnamese Đồng',
+    currencySymbol: '₫',
+    phoneCode: '+84',
+    postalCodeLabel: 'Postal Code',
+    postalCodePlaceholder: '100000',
+    jurisdictionLabel: 'Province',
+    jurisdictions: [
+      { code: 'HN', name: 'Hanoi' },
+      { code: 'SG', name: 'Ho Chi Minh City' },
+      { code: 'DN', name: 'Da Nang' },
+      { code: 'HP', name: 'Hai Phong' },
+    ],
+    taxRegimes: ['VAT (10%)'],
+    taxTypes: [
+      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 10, registrationLabel: 'Tax Code', registrationPlaceholder: '0123456789', appliesTo: 'both', paidName: 'VAT Paid (Input VAT)', paidDescription: 'Input VAT recoverable on purchases', isRecoverable: true },
+    ],
+    flag: '🇻🇳',
+    region: 'Asia-Pacific',
+  },
+  IN: {
+    code: 'IN',
+    name: 'India',
+    currency: 'INR',
+    currencyName: 'Indian Rupee',
+    currencySymbol: '₹',
+    phoneCode: '+91',
+    postalCodeLabel: 'PIN Code',
+    postalCodePlaceholder: '110001',
+    jurisdictionLabel: 'State/UT',
+    jurisdictions: [
+      { code: 'DL', name: 'Delhi' },
+      { code: 'MH', name: 'Maharashtra' },
+      { code: 'KA', name: 'Karnataka' },
+      { code: 'TN', name: 'Tamil Nadu' },
+      { code: 'GJ', name: 'Gujarat' },
+      { code: 'UP', name: 'Uttar Pradesh' },
+      { code: 'WB', name: 'West Bengal' },
+      { code: 'TG', name: 'Telangana' },
+      { code: 'RJ', name: 'Rajasthan' },
+      { code: 'AP', name: 'Andhra Pradesh' },
+      { code: 'KL', name: 'Kerala' },
+      { code: 'PB', name: 'Punjab' },
+    ],
+    taxRegimes: ['GST (18%)'],
+    taxTypes: [
+      { code: 'GST', name: 'Collect GST', description: 'Goods and Services Tax', defaultRate: 18, registrationLabel: 'GSTIN', registrationPlaceholder: '22AAAAA0000A1Z5', appliesTo: 'both', paidName: 'GST Paid (ITC)', paidDescription: 'Input Tax Credit for Goods and Services Tax paid on purchases', isRecoverable: true },
+    ],
+    flag: '🇮🇳',
+    region: 'South Asia',
+  },
+
+  // ================== MIDDLE EAST ==================
+  AE: {
+    code: 'AE',
+    name: 'United Arab Emirates',
+    currency: 'AED',
+    currencyName: 'UAE Dirham',
+    currencySymbol: 'د.إ',
+    phoneCode: '+971',
+    postalCodeLabel: 'P.O. Box',
+    postalCodePlaceholder: '12345',
+    jurisdictionLabel: 'Emirate',
+    jurisdictions: [
+      { code: 'DXB', name: 'Dubai' },
+      { code: 'AUH', name: 'Abu Dhabi' },
+      { code: 'SHJ', name: 'Sharjah' },
+      { code: 'AJM', name: 'Ajman' },
+      { code: 'RAK', name: 'Ras Al Khaimah' },
+      { code: 'FUJ', name: 'Fujairah' },
+      { code: 'UAQ', name: 'Umm Al Quwain' },
+    ],
+    taxRegimes: ['VAT (5%)'],
+    taxTypes: [
+      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 5, registrationLabel: 'TRN', registrationPlaceholder: '100234567890003', appliesTo: 'both', paidName: 'VAT Paid (Input VAT)', paidDescription: 'Input VAT recoverable on purchases', isRecoverable: true },
+    ],
+    flag: '🇦🇪',
+    region: 'Middle East',
+  },
+  SA: {
+    code: 'SA',
+    name: 'Saudi Arabia',
+    currency: 'SAR',
+    currencyName: 'Saudi Riyal',
+    currencySymbol: 'ر.س',
+    phoneCode: '+966',
+    postalCodeLabel: 'Postal Code',
+    postalCodePlaceholder: '12345',
+    jurisdictionLabel: 'Region',
+    jurisdictions: [
+      { code: 'RYD', name: 'Riyadh' },
+      { code: 'MKH', name: 'Makkah' },
+      { code: 'EST', name: 'Eastern Province' },
+      { code: 'MED', name: 'Madinah' },
+      { code: 'ASR', name: 'Asir' },
+    ],
+    taxRegimes: ['VAT (15%)'],
+    taxTypes: [
+      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 15, registrationLabel: 'VAT Number', registrationPlaceholder: '300012345678901', appliesTo: 'both', paidName: 'VAT Paid (Input VAT)', paidDescription: 'Input VAT recoverable on purchases', isRecoverable: true },
+    ],
+    flag: '🇸🇦',
+    region: 'Middle East',
+  },
+  QA: {
+    code: 'QA',
+    name: 'Qatar',
+    currency: 'QAR',
+    currencyName: 'Qatari Riyal',
+    currencySymbol: 'ر.ق',
+    phoneCode: '+974',
+    postalCodeLabel: 'Postal Code',
+    postalCodePlaceholder: '',
+    jurisdictionLabel: 'Municipality',
+    jurisdictions: [
+      { code: 'DOH', name: 'Doha' },
+      { code: 'RAY', name: 'Al Rayyan' },
+      { code: 'WAK', name: 'Al Wakrah' },
+    ],
+    taxRegimes: ['No VAT'],
+    taxTypes: [
+      { code: 'NONE', name: 'No retail sales tax', description: 'No VAT or retail sales tax currently levied', defaultRate: 0, registrationLabel: 'Tax Registration', registrationPlaceholder: '', appliesTo: 'sales', paidName: 'No input tax', paidDescription: 'No retail sales tax is currently levied on purchases', isRecoverable: false },
+    ],
+    flag: '🇶🇦',
+    region: 'Middle East',
+  },
+  KW: {
+    code: 'KW',
+    name: 'Kuwait',
+    currency: 'KWD',
+    currencyName: 'Kuwaiti Dinar',
+    currencySymbol: 'د.ك',
+    phoneCode: '+965',
+    postalCodeLabel: 'Postal Code',
+    postalCodePlaceholder: '12345',
+    jurisdictionLabel: 'Governorate',
+    jurisdictions: [
+      { code: 'KU', name: 'Kuwait City' },
+      { code: 'HW', name: 'Hawalli' },
+      { code: 'FA', name: 'Farwaniya' },
+    ],
+    taxRegimes: ['No VAT'],
+    taxTypes: [
+      { code: 'NONE', name: 'No retail sales tax', description: 'No VAT or retail sales tax currently levied', defaultRate: 0, registrationLabel: 'Tax Registration', registrationPlaceholder: '', appliesTo: 'sales', paidName: 'No input tax', paidDescription: 'No retail sales tax is currently levied on purchases', isRecoverable: false },
+    ],
+    flag: '🇰🇼',
+    region: 'Middle East',
+  },
+  OM: {
+    code: 'OM',
+    name: 'Oman',
+    currency: 'OMR',
+    currencyName: 'Omani Rial',
+    currencySymbol: 'ر.ع',
+    phoneCode: '+968',
+    postalCodeLabel: 'Postal Code',
+    postalCodePlaceholder: '100',
+    jurisdictionLabel: 'Governorate',
+    jurisdictions: [
+      { code: 'MUS', name: 'Muscat' },
+      { code: 'DFL', name: 'Dhofar' },
+      { code: 'BTN', name: 'Al Batinah' },
+    ],
+    taxRegimes: ['VAT (5%)'],
+    taxTypes: [
+      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 5, registrationLabel: 'VAT Number', registrationPlaceholder: 'OM1234567890', appliesTo: 'both', paidName: 'VAT Paid (Input VAT)', paidDescription: 'Input VAT recoverable on purchases', isRecoverable: true },
+    ],
+    flag: '🇴🇲',
+    region: 'Middle East',
+  },
+  BH: {
+    code: 'BH',
+    name: 'Bahrain',
+    currency: 'BHD',
+    currencyName: 'Bahraini Dinar',
+    currencySymbol: 'د.ب',
+    phoneCode: '+973',
+    postalCodeLabel: 'Block/Road',
+    postalCodePlaceholder: '1234',
+    jurisdictionLabel: 'Governorate',
+    jurisdictions: [
+      { code: 'CAP', name: 'Capital' },
+      { code: 'MUH', name: 'Muharraq' },
+      { code: 'NOR', name: 'Northern' },
+      { code: 'SOU', name: 'Southern' },
+    ],
+    taxRegimes: ['VAT (10%)'],
+    taxTypes: [
+      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 10, registrationLabel: 'VAT Number', registrationPlaceholder: '100012345678901', appliesTo: 'both', paidName: 'VAT Paid (Input VAT)', paidDescription: 'Input VAT recoverable on purchases', isRecoverable: true },
+    ],
+    flag: '🇧🇭',
+    region: 'Middle East',
+  },
+  IL: {
+    code: 'IL',
+    name: 'Israel',
+    currency: 'ILS',
+    currencyName: 'Israeli Shekel',
+    currencySymbol: '₪',
+    phoneCode: '+972',
+    postalCodeLabel: 'Postal Code',
+    postalCodePlaceholder: '1234567',
+    jurisdictionLabel: 'District',
+    jurisdictions: [
+      { code: 'TLV', name: 'Tel Aviv' },
+      { code: 'JER', name: 'Jerusalem' },
+      { code: 'HIF', name: 'Haifa' },
+      { code: 'CEN', name: 'Central' },
+    ],
+    taxRegimes: ['VAT (17%)'],
+    taxTypes: [
+      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 17, registrationLabel: 'VAT Number', registrationPlaceholder: '123456789', appliesTo: 'both', paidName: 'VAT Paid (Input VAT)', paidDescription: 'Input VAT recoverable on purchases', isRecoverable: true },
+    ],
+    flag: '🇮🇱',
+    region: 'Middle East',
+  },
+
+  // ================== AFRICA ==================
+  ZA: {
+    code: 'ZA',
+    name: 'South Africa',
+    currency: 'ZAR',
+    currencyName: 'South African Rand',
+    currencySymbol: 'R',
+    phoneCode: '+27',
+    postalCodeLabel: 'Postal Code',
+    postalCodePlaceholder: '2001',
+    jurisdictionLabel: 'Province',
+    jurisdictions: [
+      { code: 'GP', name: 'Gauteng' },
+      { code: 'WC', name: 'Western Cape' },
+      { code: 'KZN', name: 'KwaZulu-Natal' },
+      { code: 'EC', name: 'Eastern Cape' },
+      { code: 'FS', name: 'Free State' },
+      { code: 'LP', name: 'Limpopo' },
+      { code: 'MP', name: 'Mpumalanga' },
+      { code: 'NC', name: 'Northern Cape' },
+      { code: 'NW', name: 'North West' },
+    ],
+    taxRegimes: ['VAT (15%)'],
+    taxTypes: [
+      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 15, registrationLabel: 'VAT Number', registrationPlaceholder: '4123456789', appliesTo: 'both', paidName: 'VAT Paid (Input VAT)', paidDescription: 'Input VAT recoverable on purchases', isRecoverable: true },
+    ],
+    flag: '🇿🇦',
+    region: 'Africa',
+  },
+  NG: {
+    code: 'NG',
+    name: 'Nigeria',
+    currency: 'NGN',
+    currencyName: 'Nigerian Naira',
+    currencySymbol: '₦',
+    phoneCode: '+234',
+    postalCodeLabel: 'Postal Code',
+    postalCodePlaceholder: '100001',
+    jurisdictionLabel: 'State',
+    jurisdictions: [
+      { code: 'AB', name: 'Abia' },
+      { code: 'FC', name: 'Abuja (FCT)' },
+      { code: 'AD', name: 'Adamawa' },
+      { code: 'AK', name: 'Akwa Ibom' },
+      { code: 'AN', name: 'Anambra' },
+      { code: 'BA', name: 'Bauchi' },
+      { code: 'BY', name: 'Bayelsa' },
+      { code: 'BE', name: 'Benue' },
+      { code: 'BO', name: 'Borno' },
+      { code: 'CR', name: 'Cross River' },
+      { code: 'DT', name: 'Delta' },
+      { code: 'EB', name: 'Ebonyi' },
+      { code: 'ED', name: 'Edo' },
+      { code: 'EK', name: 'Ekiti' },
+      { code: 'EN', name: 'Enugu' },
+      { code: 'GO', name: 'Gombe' },
+      { code: 'IM', name: 'Imo' },
+      { code: 'JI', name: 'Jigawa' },
+      { code: 'KD', name: 'Kaduna' },
+      { code: 'KN', name: 'Kano' },
+      { code: 'KT', name: 'Katsina' },
+      { code: 'KE', name: 'Kebbi' },
+      { code: 'KO', name: 'Kogi' },
+      { code: 'KW', name: 'Kwara' },
+      { code: 'LA', name: 'Lagos' },
+      { code: 'NA', name: 'Nasarawa' },
+      { code: 'NI', name: 'Niger' },
+      { code: 'OG', name: 'Ogun' },
+      { code: 'ON', name: 'Ondo' },
+      { code: 'OS', name: 'Osun' },
+      { code: 'OY', name: 'Oyo' },
+      { code: 'PL', name: 'Plateau' },
+      { code: 'RV', name: 'Rivers' },
+      { code: 'SO', name: 'Sokoto' },
+      { code: 'TA', name: 'Taraba' },
+      { code: 'YO', name: 'Yobe' },
+      { code: 'ZA', name: 'Zamfara' },
+    ],
+
+    taxRegimes: ['VAT (7.5%)'],
+    taxTypes: [
+      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 7.5, registrationLabel: 'TIN', registrationPlaceholder: '12345678-0001', appliesTo: 'both', paidName: 'VAT Paid (Input VAT)', paidDescription: 'Input VAT recoverable on purchases', isRecoverable: true },
+    ],
+    flag: '🇳🇬',
+    region: 'Africa',
+  },
+  EG: {
+    code: 'EG',
+    name: 'Egypt',
+    currency: 'EGP',
+    currencyName: 'Egyptian Pound',
+    currencySymbol: 'E£',
+    phoneCode: '+20',
+    postalCodeLabel: 'Postal Code',
+    postalCodePlaceholder: '11511',
+    jurisdictionLabel: 'Governorate',
+    jurisdictions: [
+      { code: 'CAI', name: 'Cairo' },
+      { code: 'ALX', name: 'Alexandria' },
+      { code: 'GIZ', name: 'Giza' },
+      { code: 'LXR', name: 'Luxor' },
+    ],
+    taxRegimes: ['VAT (14%)'],
+    taxTypes: [
+      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 14, registrationLabel: 'Tax Card Number', registrationPlaceholder: '123-456-789', appliesTo: 'both', paidName: 'VAT Paid (Input VAT)', paidDescription: 'Input VAT recoverable on purchases', isRecoverable: true },
+    ],
+    flag: '🇪🇬',
+    region: 'Africa',
+  },
+  MA: {
+    code: 'MA',
+    name: 'Morocco',
+    currency: 'MAD',
+    currencyName: 'Moroccan Dirham',
+    currencySymbol: 'د.م.',
+    phoneCode: '+212',
+    postalCodeLabel: 'Code Postal',
+    postalCodePlaceholder: '10000',
+    jurisdictionLabel: 'Region',
+    jurisdictions: [
+      { code: 'CAS', name: 'Casablanca-Settat' },
+      { code: 'RAB', name: 'Rabat-Salé-Kénitra' },
+      { code: 'MAR', name: 'Marrakech-Safi' },
+      { code: 'TNG', name: 'Tanger-Tétouan-Al Hoceïma' },
+    ],
+    taxRegimes: ['TVA (20%)'],
+    taxTypes: [
+      { code: 'TVA', name: 'Collect TVA', description: 'Taxe sur la Valeur Ajoutée', defaultRate: 20, registrationLabel: 'ICE', registrationPlaceholder: '000000000000000', appliesTo: 'both', paidName: 'TVA Paid (Input TVA)', paidDescription: 'TVA deductible / input TVA recoverable on purchases', isRecoverable: true },
+    ],
+    flag: '🇲🇦',
+    region: 'Africa',
+  },
+  GH: {
+    code: 'GH',
+    name: 'Ghana',
+    currency: 'GHS',
+    currencyName: 'Ghanaian Cedi',
+    currencySymbol: '₵',
+    phoneCode: '+233',
+    postalCodeLabel: 'Postal Code',
+    postalCodePlaceholder: 'GA123',
+    jurisdictionLabel: 'Region',
+    jurisdictions: [
+      { code: 'AA', name: 'Greater Accra' },
+      { code: 'AH', name: 'Ashanti' },
+      { code: 'WE', name: 'Western' },
+      { code: 'CE', name: 'Central' },
+      { code: 'EA', name: 'Eastern' },
+      { code: 'VO', name: 'Volta' },
+      { code: 'NO', name: 'Northern' },
+    ],
+    taxRegimes: ['VAT (15%)'],
+    taxTypes: [
+      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 15, registrationLabel: 'TIN', registrationPlaceholder: 'C0012345678', appliesTo: 'both', paidName: 'VAT Paid (Input VAT)', paidDescription: 'Input VAT recoverable on purchases', isRecoverable: true },
+    ],
+    flag: '🇬🇭',
+    region: 'Africa',
+  },
+  KE: {
+    code: 'KE',
+    name: 'Kenya',
+    currency: 'KES',
+    currencyName: 'Kenyan Shilling',
+    currencySymbol: 'KSh',
+    phoneCode: '+254',
+    postalCodeLabel: 'Postal Code',
+    postalCodePlaceholder: '00100',
+    jurisdictionLabel: 'County',
+    jurisdictions: [
+      { code: 'NAI', name: 'Nairobi' },
+      { code: 'MOM', name: 'Mombasa' },
+      { code: 'KSM', name: 'Kisumu' },
+      { code: 'NAK', name: 'Nakuru' },
+      { code: 'KIA', name: 'Kiambu' },
+      { code: 'MAC', name: 'Machakos' },
+      { code: 'KAK', name: 'Kakamega' },
+    ],
+    taxRegimes: ['VAT (16%)'],
+    taxTypes: [
+      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax (Standard Rate)', defaultRate: 16, registrationLabel: 'KRA PIN', registrationPlaceholder: 'P051234567A', appliesTo: 'both', paidName: 'VAT Paid (Input VAT)', paidDescription: 'Input VAT recoverable on purchases', isRecoverable: true },
+    ],
+    flag: '🇰🇪',
+    region: 'Africa',
+  },
+  TZ: {
+    code: 'TZ',
+    name: 'Tanzania',
+    currency: 'TZS',
+    currencyName: 'Tanzanian Shilling',
+    currencySymbol: 'TSh',
+    phoneCode: '+255',
+    postalCodeLabel: 'Postal Code',
+    postalCodePlaceholder: '',
+    jurisdictionLabel: 'Region',
+    jurisdictions: [
+      { code: 'DAR', name: 'Dar es Salaam' },
+      { code: 'ZNZ', name: 'Zanzibar' },
+      { code: 'ARU', name: 'Arusha' },
+      { code: 'MWZ', name: 'Mwanza' },
+    ],
+    taxRegimes: ['VAT (18%)'],
+    taxTypes: [
+      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 18, registrationLabel: 'TIN', registrationPlaceholder: '123-456-789', appliesTo: 'both', paidName: 'VAT Paid (Input VAT)', paidDescription: 'Input VAT recoverable on purchases', isRecoverable: true },
+    ],
+    flag: '🇹🇿',
+    region: 'Africa',
+  },
+  UG: {
+    code: 'UG',
+    name: 'Uganda',
+    currency: 'UGX',
+    currencyName: 'Ugandan Shilling',
+    currencySymbol: 'USh',
+    phoneCode: '+256',
+    postalCodeLabel: 'Postal Code',
+    postalCodePlaceholder: '',
+    jurisdictionLabel: 'District',
+    jurisdictions: [
+      { code: 'KLA', name: 'Kampala' },
+      { code: 'WAK', name: 'Wakiso' },
+      { code: 'MUK', name: 'Mukono' },
+      { code: 'JIN', name: 'Jinja' },
+      { code: 'MBL', name: 'Mbale' },
+      { code: 'GUL', name: 'Gulu' },
+      { code: 'MBR', name: 'Mbarara' },
+      { code: 'ENT', name: 'Entebbe' },
+      { code: 'FTP', name: 'Fort Portal' },
+      { code: 'ARU', name: 'Arua' },
+    ],
+    taxRegimes: ['VAT (18%)'],
+    taxTypes: [
+      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax (Standard Rate)', defaultRate: 18, registrationLabel: 'TIN', registrationPlaceholder: '1000012345', appliesTo: 'both', paidName: 'VAT Paid (Input VAT)', paidDescription: 'Input VAT recoverable on purchases', isRecoverable: true },
+    ],
+    flag: '🇺🇬',
+    region: 'Africa',
+  },
+  RW: {
+    code: 'RW',
+    name: 'Rwanda',
+    currency: 'RWF',
+    currencyName: 'Rwandan Franc',
+    currencySymbol: 'FRw',
+    phoneCode: '+250',
+    postalCodeLabel: 'Postal Code',
+    postalCodePlaceholder: '',
+    jurisdictionLabel: 'Province',
+    jurisdictions: [
+      { code: 'KIG', name: 'Kigali' },
+      { code: 'EST', name: 'Eastern' },
+      { code: 'NOR', name: 'Northern' },
+      { code: 'SOU', name: 'Southern' },
+      { code: 'WES', name: 'Western' },
+    ],
+    taxRegimes: ['VAT (18%)'],
+    taxTypes: [
+      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 18, registrationLabel: 'TIN', registrationPlaceholder: '123456789', appliesTo: 'both', paidName: 'VAT Paid (Input VAT)', paidDescription: 'Input VAT recoverable on purchases', isRecoverable: true },
+    ],
+    flag: '🇷🇼',
+    region: 'Africa',
+  },
+  ET: {
+    code: 'ET',
+    name: 'Ethiopia',
+    currency: 'ETB',
+    currencyName: 'Ethiopian Birr',
+    currencySymbol: 'Br',
+    phoneCode: '+251',
+    postalCodeLabel: 'Postal Code',
+    postalCodePlaceholder: '1000',
+    jurisdictionLabel: 'Region',
+    jurisdictions: [
+      { code: 'ADD', name: 'Addis Ababa' },
+      { code: 'ORM', name: 'Oromia' },
+      { code: 'AMH', name: 'Amhara' },
+      { code: 'TIG', name: 'Tigray' },
+    ],
+    taxRegimes: ['VAT (15%)'],
+    taxTypes: [
+      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 15, registrationLabel: 'TIN', registrationPlaceholder: '0012345678', appliesTo: 'both', paidName: 'VAT Paid (Input VAT)', paidDescription: 'Input VAT recoverable on purchases', isRecoverable: true },
+    ],
+    flag: '🇪🇹',
+    region: 'Africa',
+  },
+  ZM: {
+    code: 'ZM',
+    name: 'Zambia',
+    currency: 'ZMW',
+    currencyName: 'Zambian Kwacha',
+    currencySymbol: 'K',
+    phoneCode: '+260',
+    postalCodeLabel: 'Postal Code',
+    postalCodePlaceholder: '10101',
+    jurisdictionLabel: 'Province',
+    jurisdictions: [
+      { code: 'CE', name: 'Central' },
+      { code: 'CB', name: 'Copperbelt' },
+      { code: 'EA', name: 'Eastern' },
+      { code: 'LP', name: 'Luapula' },
+      { code: 'LK', name: 'Lusaka' },
+      { code: 'MC', name: 'Muchinga' },
+      { code: 'NW', name: 'North-Western' },
+      { code: 'NO', name: 'Northern' },
+      { code: 'SO', name: 'Southern' },
+      { code: 'WE', name: 'Western' },
+    ],
+    taxRegimes: ['VAT (16%)'],
+    taxTypes: [
+      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax (Standard Rate)', defaultRate: 16, registrationLabel: 'TPIN', registrationPlaceholder: '1234567890', appliesTo: 'both', paidName: 'VAT Paid (Input VAT)', paidDescription: 'Input VAT recoverable on purchases', isRecoverable: true },
+    ],
+    flag: '🇿🇲',
+    region: 'Africa',
+  },
+  BI: {
+    code: 'BI',
+    name: 'Burundi',
+    currency: 'BIF',
+    currencyName: 'Burundian Franc',
+    currencySymbol: 'FBu',
+    phoneCode: '+257',
+    postalCodeLabel: 'Postal Code',
+    postalCodePlaceholder: '',
+    jurisdictionLabel: 'Province',
+    jurisdictions: [
+      { code: 'BB', name: 'Bubanza' },
+      { code: 'BM', name: 'Bujumbura Mairie' },
+      { code: 'BR', name: 'Bujumbura Rural' },
+      { code: 'BU', name: 'Bururi' },
+      { code: 'CA', name: 'Cankuzo' },
+      { code: 'CI', name: 'Cibitoke' },
+      { code: 'GI', name: 'Gitega' },
+      { code: 'KR', name: 'Karuzi' },
+      { code: 'KY', name: 'Kayanza' },
+      { code: 'KI', name: 'Kirundo' },
+      { code: 'MA', name: 'Makamba' },
+      { code: 'MU', name: 'Muramvya' },
+      { code: 'MW', name: 'Mwaro' },
+      { code: 'MY', name: 'Muyinga' },
+      { code: 'NG', name: 'Ngozi' },
+      { code: 'RT', name: 'Rumonge' },
+      { code: 'RU', name: 'Rutana' },
+      { code: 'RY', name: 'Ruyigi' },
+    ],
+    taxRegimes: ['VAT (18%)'],
+    taxTypes: [
+      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax (Standard Rate)', defaultRate: 18, registrationLabel: 'NIF', registrationPlaceholder: '4000012345', appliesTo: 'both', paidName: 'VAT Paid (Input VAT)', paidDescription: 'Input VAT recoverable on purchases', isRecoverable: true },
+    ],
+    flag: '🇧🇮',
+    region: 'Africa',
+  },
+  // ================== ADDITIONAL EUROPE ==================
+  TR: {
+    code: 'TR',
+    name: 'Turkey',
+    currency: 'TRY',
+    currencyName: 'Turkish Lira',
+    currencySymbol: '₺',
+    phoneCode: '+90',
+    postalCodeLabel: 'Posta Kodu',
+    postalCodePlaceholder: '34000',
+    jurisdictionLabel: 'Province',
+    jurisdictions: [
+      { code: 'IST', name: 'İstanbul' },
+      { code: 'ANK', name: 'Ankara' },
+      { code: 'IZM', name: 'İzmir' },
+      { code: 'ANT', name: 'Antalya' },
+      { code: 'BUR', name: 'Bursa' },
+    ],
+    taxRegimes: ['KDV (20%)'],
+    taxTypes: [
+      { code: 'KDV', name: 'Collect KDV', description: 'Katma Değer Vergisi', defaultRate: 20, registrationLabel: 'Vergi Kimlik No', registrationPlaceholder: '1234567890', appliesTo: 'both', paidName: 'KDV Paid (Indirilecek KDV)', paidDescription: 'Input KDV recoverable on purchases', isRecoverable: true },
+    ],
+    flag: '🇹🇷',
+    region: 'Europe',
+  },
+  RO: {
+    code: 'RO',
+    name: 'Romania',
+    currency: 'RON',
+    currencyName: 'Romanian Leu',
+    currencySymbol: 'lei',
+    phoneCode: '+40',
+    postalCodeLabel: 'Cod Poștal',
+    postalCodePlaceholder: '010001',
+    jurisdictionLabel: 'County',
+    jurisdictions: [
+      { code: 'B', name: 'București' },
+      { code: 'CJ', name: 'Cluj' },
+      { code: 'TM', name: 'Timiș' },
+      { code: 'IS', name: 'Iași' },
+      { code: 'CT', name: 'Constanța' },
+    ],
+    taxRegimes: ['TVA (19%)'],
+    taxTypes: [
+      { code: 'TVA', name: 'Collect TVA', description: 'Taxa pe Valoarea Adăugată', defaultRate: 19, registrationLabel: 'CUI', registrationPlaceholder: 'RO12345678', appliesTo: 'both', paidName: 'TVA Paid (Input TVA)', paidDescription: 'TVA deductible / input TVA recoverable on purchases', isRecoverable: true },
+    ],
+    flag: '🇷🇴',
+    region: 'Europe',
+  },
+  HU: {
+    code: 'HU',
+    name: 'Hungary',
+    currency: 'HUF',
+    currencyName: 'Hungarian Forint',
+    currencySymbol: 'Ft',
+    phoneCode: '+36',
+    postalCodeLabel: 'Irányítószám',
+    postalCodePlaceholder: '1011',
+    jurisdictionLabel: 'County',
+    jurisdictions: [
+      { code: 'BUD', name: 'Budapest' },
+      { code: 'PE', name: 'Pest' },
+      { code: 'BAZ', name: 'Borsod-Abaúj-Zemplén' },
+      { code: 'HB', name: 'Hajdú-Bihar' },
+    ],
+    taxRegimes: ['ÁFA (27%)'],
+    taxTypes: [
+      { code: 'AFA', name: 'Collect ÁFA', description: 'Általános forgalmi adó', defaultRate: 27, registrationLabel: 'Adószám', registrationPlaceholder: 'HU12345678', appliesTo: 'both', paidName: 'AFA Paid (Input AFA)', paidDescription: 'Input AFA recoverable on purchases', isRecoverable: true },
+    ],
+    flag: '🇭🇺',
+    region: 'Europe',
+  },
+  GR: {
+    code: 'GR',
+    name: 'Greece',
+    currency: 'EUR',
+    currencyName: 'Euro',
+    currencySymbol: '€',
+    phoneCode: '+30',
+    postalCodeLabel: 'Ταχυδρομικός Κώδικας',
+    postalCodePlaceholder: '10431',
+    jurisdictionLabel: 'Region',
+    jurisdictions: [
+      { code: 'ATT', name: 'Attica' },
+      { code: 'MAC', name: 'Central Macedonia' },
+      { code: 'THE', name: 'Thessaly' },
+      { code: 'CRE', name: 'Crete' },
+    ],
+    taxRegimes: ['ΦΠΑ (24%)'],
+    taxTypes: [
+      { code: 'FPA', name: 'Collect ΦΠΑ', description: 'Φόρος Προστιθέμενης Αξίας', defaultRate: 24, registrationLabel: 'ΑΦΜ', registrationPlaceholder: 'EL123456789', appliesTo: 'both', paidName: 'FPA Paid (Input VAT)', paidDescription: 'Input FPA recoverable on purchases', isRecoverable: true },
+    ],
+    flag: '🇬🇷',
+    region: 'Europe',
+  },
+  HR: {
+    code: 'HR',
+    name: 'Croatia',
+    currency: 'EUR',
+    currencyName: 'Euro',
+    currencySymbol: '€',
+    phoneCode: '+385',
+    postalCodeLabel: 'Poštanski broj',
+    postalCodePlaceholder: '10000',
+    jurisdictionLabel: 'County',
+    jurisdictions: [
+      { code: 'ZG', name: 'Zagreb' },
+      { code: 'ST', name: 'Split-Dalmatia' },
+      { code: 'PG', name: 'Primorje-Gorski Kotar' },
+      { code: 'IS', name: 'Istria' },
+    ],
+    taxRegimes: ['PDV (25%)'],
+    taxTypes: [
+      { code: 'PDV', name: 'Collect PDV', description: 'Porez na dodanu vrijednost', defaultRate: 25, registrationLabel: 'OIB', registrationPlaceholder: 'HR12345678901', appliesTo: 'both', paidName: 'PDV Paid (Input VAT)', paidDescription: 'Input PDV recoverable on purchases', isRecoverable: true },
+    ],
+    flag: '🇭🇷',
+    region: 'Europe',
+  },
+  UA: {
+    code: 'UA',
+    name: 'Ukraine',
+    currency: 'UAH',
+    currencyName: 'Ukrainian Hryvnia',
+    currencySymbol: '₴',
+    phoneCode: '+380',
+    postalCodeLabel: 'Поштовий індекс',
+    postalCodePlaceholder: '01001',
+    jurisdictionLabel: 'Oblast',
+    jurisdictions: [
+      { code: 'KYV', name: 'Kyiv' },
+      { code: 'KHR', name: 'Kharkiv' },
+      { code: 'ODS', name: 'Odesa' },
+      { code: 'DNP', name: 'Dnipropetrovsk' },
+      { code: 'LVV', name: 'Lviv' },
+    ],
+    taxRegimes: ['ПДВ (20%)'],
+    taxTypes: [
+      { code: 'PDV', name: 'Collect ПДВ', description: 'Податок на додану вартість', defaultRate: 20, registrationLabel: 'ЄДРПОУ', registrationPlaceholder: '12345678', appliesTo: 'both', paidName: 'PDV Paid (Input VAT)', paidDescription: 'Input PDV recoverable on purchases', isRecoverable: true },
+    ],
+    flag: '🇺🇦',
+    region: 'Europe',
+  },
+
+  // ================== SOUTH ASIA (Additional) ==================
+  PK: {
+    code: 'PK',
+    name: 'Pakistan',
+    currency: 'PKR',
+    currencyName: 'Pakistani Rupee',
+    currencySymbol: '₨',
+    phoneCode: '+92',
+    postalCodeLabel: 'Postal Code',
+    postalCodePlaceholder: '44000',
+    jurisdictionLabel: 'Province',
+    jurisdictions: [
+      { code: 'PB', name: 'Punjab' },
+      { code: 'SD', name: 'Sindh' },
+      { code: 'KP', name: 'Khyber Pakhtunkhwa' },
+      { code: 'BL', name: 'Balochistan' },
+      { code: 'IS', name: 'Islamabad Capital Territory' },
+    ],
+    taxRegimes: ['Sales Tax (18%)'],
+    taxTypes: [
+      { code: 'ST', name: 'Collect Sales Tax', description: 'Federal Sales Tax', defaultRate: 18, registrationLabel: 'NTN', registrationPlaceholder: '1234567-8', appliesTo: 'both', paidName: 'Sales Tax Paid (Input Tax)', paidDescription: 'Federal sales tax paid on purchases (recoverable input tax)', isRecoverable: true },
+    ],
+    flag: '🇵🇰',
+    region: 'South Asia',
+  },
+  BD: {
+    code: 'BD',
+    name: 'Bangladesh',
+    currency: 'BDT',
+    currencyName: 'Bangladeshi Taka',
+    currencySymbol: '৳',
+    phoneCode: '+880',
+    postalCodeLabel: 'Postal Code',
+    postalCodePlaceholder: '1000',
+    jurisdictionLabel: 'Division',
+    jurisdictions: [
+      { code: 'DHK', name: 'Dhaka' },
+      { code: 'CTG', name: 'Chattogram' },
+      { code: 'KHL', name: 'Khulna' },
+      { code: 'RAJ', name: 'Rajshahi' },
+      { code: 'SYL', name: 'Sylhet' },
+    ],
+    taxRegimes: ['VAT (15%)'],
+    taxTypes: [
+      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 15, registrationLabel: 'BIN', registrationPlaceholder: '000000000000', appliesTo: 'both', paidName: 'VAT Paid (Input VAT)', paidDescription: 'Input VAT recoverable on purchases', isRecoverable: true },
+    ],
+    flag: '🇧🇩',
+    region: 'South Asia',
+  },
+  LK: {
+    code: 'LK',
+    name: 'Sri Lanka',
+    currency: 'LKR',
+    currencyName: 'Sri Lankan Rupee',
+    currencySymbol: 'Rs',
+    phoneCode: '+94',
+    postalCodeLabel: 'Postal Code',
+    postalCodePlaceholder: '00100',
+    jurisdictionLabel: 'Province',
+    jurisdictions: [
+      { code: 'WP', name: 'Western' },
+      { code: 'CP', name: 'Central' },
+      { code: 'SP', name: 'Southern' },
+      { code: 'NP', name: 'Northern' },
+    ],
+    taxRegimes: ['VAT (18%)'],
+    taxTypes: [
+      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 18, registrationLabel: 'TIN', registrationPlaceholder: '123456789', appliesTo: 'both', paidName: 'VAT Paid (Input VAT)', paidDescription: 'Input VAT recoverable on purchases', isRecoverable: true },
+    ],
+    flag: '🇱🇰',
+    region: 'South Asia',
+  },
+  NP: {
+    code: 'NP',
+    name: 'Nepal',
+    currency: 'NPR',
+    currencyName: 'Nepalese Rupee',
+    currencySymbol: 'रू',
+    phoneCode: '+977',
+    postalCodeLabel: 'Postal Code',
+    postalCodePlaceholder: '44600',
+    jurisdictionLabel: 'Province',
+    jurisdictions: [
+      { code: 'P3', name: 'Bagmati (Kathmandu)' },
+      { code: 'P1', name: 'Koshi' },
+      { code: 'P2', name: 'Madhesh' },
+      { code: 'P4', name: 'Gandaki' },
+      { code: 'P5', name: 'Lumbini' },
+    ],
+    taxRegimes: ['VAT (13%)'],
+    taxTypes: [
+      { code: 'VAT', name: 'Collect VAT', description: 'Value Added Tax', defaultRate: 13, registrationLabel: 'PAN', registrationPlaceholder: '123456789', appliesTo: 'both', paidName: 'VAT Paid (Input VAT)', paidDescription: 'Input VAT recoverable on purchases', isRecoverable: true },
+    ],
+    flag: '🇳🇵',
+    region: 'South Asia',
+  },
+};
+
+/**
+ * Resolve an organization country value (ISO code or display name) to a
+ * supported ISO country code. Falls back to CA when unknown.
+ */
+export function resolveCountryCode(country?: string | null): string {
+  if (!country) return 'CA';
+  const trimmed = country.trim();
+  if (!trimmed) return 'CA';
+  const upper = trimmed.toUpperCase();
+  if (COUNTRY_LOCALIZATIONS[upper]) return upper;
+  const byName = Object.values(COUNTRY_LOCALIZATIONS).find(
+    (c) => c.name.toLowerCase() === trimmed.toLowerCase(),
+  );
+  return byName?.code ?? 'CA';
+}
+
+// Get localization for a country code, fallback to generic if not found
+export function getCountryLocalization(countryCode: string): CountryLocalization {
+  return COUNTRY_LOCALIZATIONS[countryCode] || {
+    code: countryCode,
+    name: countryCode,
+    currency: 'USD',
+    currencyName: 'US Dollar',
+    currencySymbol: '$',
+    phoneCode: '',
+    postalCodeLabel: 'Postal/ZIP Code',
+    postalCodePlaceholder: '',
+    jurisdictionLabel: 'Province/State',
+    jurisdictions: [],
+    taxRegimes: [],
+    taxTypes: [],
+    flag: '🏳️',
+    region: 'Other',
+  };
+}
+
+// Get locale string for a country code (for Intl formatting)
+export function getLocaleForCountry(countryCode: string): string {
+  const localeMap: Record<string, string> = {
+    // North America
+    CA: 'en-CA',
+    US: 'en-US',
+    MX: 'es-MX',
+    // South America
+    AR: 'es-AR',
+    BR: 'pt-BR',
+    CL: 'es-CL',
+    CO: 'es-CO',
+    PE: 'es-PE',
+    // Europe
+    GB: 'en-GB',
+    DE: 'de-DE',
+    FR: 'fr-FR',
+    IT: 'it-IT',
+    ES: 'es-ES',
+    PT: 'pt-PT',
+    NL: 'nl-NL',
+    BE: 'nl-BE',
+    AT: 'de-AT',
+    CH: 'de-CH',
+    IE: 'en-IE',
+    PL: 'pl-PL',
+    CZ: 'cs-CZ',
+    SE: 'sv-SE',
+    NO: 'nb-NO',
+    DK: 'da-DK',
+    FI: 'fi-FI',
+    // Asia-Pacific
+    AU: 'en-AU',
+    NZ: 'en-NZ',
+    JP: 'ja-JP',
+    KR: 'ko-KR',
+    CN: 'zh-CN',
+    HK: 'zh-HK',
+    SG: 'en-SG',
+    MY: 'ms-MY',
+    TH: 'th-TH',
+    ID: 'id-ID',
+    PH: 'en-PH',
+    VN: 'vi-VN',
+    IN: 'en-IN',
+    // Middle East
+    AE: 'en-AE',
+    SA: 'ar-SA',
+    QA: 'ar-QA',
+    KW: 'ar-KW',
+    OM: 'ar-OM',
+    BH: 'ar-BH',
+    IL: 'he-IL',
+    // Africa
+    ZA: 'en-ZA',
+    NG: 'en-NG',
+    EG: 'ar-EG',
+    MA: 'fr-MA',
+    GH: 'en-GH',
+    KE: 'en-KE',
+    TZ: 'sw-TZ',
+    UG: 'en-UG',
+    RW: 'rw-RW',
+    ET: 'am-ET',
+    ZM: 'en-ZM',
+    BI: 'fr-BI',
+    // Additional Europe
+    TR: 'tr-TR',
+    RO: 'ro-RO',
+    HU: 'hu-HU',
+    GR: 'el-GR',
+    HR: 'hr-HR',
+    UA: 'uk-UA',
+    // Additional South Asia
+    PK: 'ur-PK',
+    BD: 'bn-BD',
+    LK: 'si-LK',
+    NP: 'ne-NP',
+  };
+  return localeMap[countryCode] || 'en-US';
+}
+
+// Get available currencies based on supported countries
+export function getAvailableCurrencies(): Array<{ code: string; name: string; symbol: string }> {
+  const currencies = Object.values(COUNTRY_LOCALIZATIONS).map(loc => ({
+    code: loc.currency,
+    name: loc.currencyName,
+    symbol: loc.currencySymbol,
+  }));
+  
+  // Deduplicate by code and sort alphabetically
+  const uniqueCurrencies = currencies.filter((c, i, arr) => arr.findIndex(x => x.code === c.code) === i);
+  return uniqueCurrencies.sort((a, b) => a.code.localeCompare(b.code));
+}
+
+// Get all countries grouped by region
+export function getCountriesByRegion(): Record<string, CountryLocalization[]> {
+  const byRegion: Record<string, CountryLocalization[]> = {};
+  
+  Object.values(COUNTRY_LOCALIZATIONS).forEach(country => {
+    if (!byRegion[country.region]) {
+      byRegion[country.region] = [];
+    }
+    byRegion[country.region].push(country);
+  });
+  
+  // Sort countries within each region alphabetically
+  Object.keys(byRegion).forEach(region => {
+    byRegion[region].sort((a, b) => a.name.localeCompare(b.name));
+  });
+  
+  return byRegion;
+}
+
+// Get all supported country codes
+export function getSupportedCountryCodes(): string[] {
+  return Object.keys(COUNTRY_LOCALIZATIONS);
+}
+
+const NON_RETAIL_TAX_CODES = new Set(['PROFITS', 'NONE', 'EXEMPT']);
+const NON_RECOVERABLE_TAX_CODES = new Set(['PST', 'SALES_TAX', 'SST', 'PROFITS', 'NONE', 'USE_TAX']);
+
+function defaultPaidName(tax: TaxTypeConfig): string {
+  if (tax.code === 'PROFITS' || tax.code === 'NONE') return 'No retail sales tax paid';
+  if (tax.code === 'PST') return 'PST Paid';
+  if (tax.code === 'HST') return 'HST Paid (ITC)';
+  if (tax.code === 'GST') return 'GST Paid (ITC)';
+  if (tax.code === 'SALES_TAX') return 'Sales Tax Paid / Use Tax';
+  const collect = tax.name.replace(/^Collect\s+/i, '');
+  return `${collect} Paid (Input ${collect})`;
+}
+
+function defaultPaidDescription(tax: TaxTypeConfig): string {
+  if (tax.code === 'PROFITS' || tax.code === 'NONE') {
+    return 'No retail sales tax is levied on purchases';
+  }
+  if (NON_RECOVERABLE_TAX_CODES.has(tax.code)) {
+    return `${tax.description} paid on purchases (generally not recoverable)`;
+  }
+  return `Input ${tax.name.replace(/^Collect\s+/i, '')} recoverable on purchases`;
+}
+
+/** Fill paid/ITC defaults so older tax type objects still resolve. */
+export function resolveRetailTaxType(tax: TaxTypeConfig): ResolvedTaxTypeConfig {
+  const appliesTo: TaxAppliesTo =
+    tax.appliesTo ?? (NON_RETAIL_TAX_CODES.has(tax.code) ? 'sales' : 'both');
+  return {
+    ...tax,
+    appliesTo,
+    paidName: tax.paidName ?? defaultPaidName(tax),
+    paidDescription: tax.paidDescription ?? defaultPaidDescription(tax),
+    isRecoverable: tax.isRecoverable ?? !NON_RECOVERABLE_TAX_CODES.has(tax.code),
+  };
+}
+
+export function taxTypeAppliesToTransaction(
+  tax: TaxTypeConfig,
+  transactionType: 'sale' | 'purchase',
+): boolean {
+  const resolved = resolveRetailTaxType(tax);
+  if (resolved.appliesTo === 'both') return true;
+  return transactionType === 'sale'
+    ? resolved.appliesTo === 'sales'
+    : resolved.appliesTo === 'purchases';
+}
+
+/** Retail sales taxes (GST/HST/VAT/PST/etc.) for a country and posting direction. */
+export function getRetailTaxTypes(
+  countryCode: string,
+  direction: TaxDirection = 'collected',
+): ResolvedTaxTypeConfig[] {
+  return getCountryLocalization(countryCode)
+    .taxTypes
+    .map(resolveRetailTaxType)
+    .filter((tax) => {
+      if (NON_RETAIL_TAX_CODES.has(tax.code)) return false;
+      if (direction === 'collected') return tax.appliesTo !== 'purchases';
+      return tax.appliesTo !== 'sales';
+    });
+}
+
+/** Primary retail tax (VAT/GST/IVA/…) used for generic country defaults. */
+export function getPrimaryRetailTaxType(countryCode: string): ResolvedTaxTypeConfig | null {
+  const types = getRetailTaxTypes(countryCode, 'collected');
+  return types[0] ?? null;
+}
+
+/**
+ * Recoverability of a tax paid on purchases.
+ * Canadian PST is recoverable only as QST ITR in Quebec.
+ */
+export function isRecoverableRetailTax(
+  code: string,
+  countryCode?: string,
+  jurisdictionCode?: string,
+): boolean {
+  const upper = (code || '').toUpperCase();
+  if (upper === 'QST' || upper.startsWith('QST')) return true;
+  if (countryCode === 'CA' && (upper === 'PST' || upper.startsWith('PST'))) {
+    return jurisdictionCode === 'QC';
+  }
+  if (countryCode) {
+    const match = getCountryLocalization(countryCode).taxTypes.find(
+      (t) => t.code === upper || upper.startsWith(t.code),
+    );
+    if (match) return resolveRetailTaxType(match).isRecoverable;
+  }
+  return !NON_RECOVERABLE_TAX_CODES.has(upper);
+}
+
+/** Family used to pick collected vs paid GL accounts. */
+export function classifyRetailTaxFamily(
+  code: string,
+): 'gst' | 'hst' | 'pst' | 'vat' | 'sales_tax' | 'other' {
+  const upper = (code || '').toUpperCase();
+  if (upper === 'HST' || upper.startsWith('HST')) return 'hst';
+  if (upper === 'GST' || upper.startsWith('GST') || upper === 'CGST' || upper === 'SGST' || upper === 'IGST') {
+    return 'gst';
+  }
+  if (upper === 'PST' || upper === 'QST' || upper.startsWith('PST') || upper.startsWith('QST')) {
+    return 'pst';
+  }
+  if (upper === 'SALES_TAX' || upper === 'USE_TAX' || upper === 'SST') return 'sales_tax';
+  if (NON_RETAIL_TAX_CODES.has(upper)) return 'other';
+  return 'vat';
+}

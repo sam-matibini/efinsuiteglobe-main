@@ -1,0 +1,1 @@
+ALTER FUNCTION public.populate_equity_movements(uuid, integer) SECURITY DEFINER;

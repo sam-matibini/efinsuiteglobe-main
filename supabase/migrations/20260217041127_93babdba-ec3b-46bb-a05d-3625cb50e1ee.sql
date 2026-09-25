@@ -1,0 +1,2 @@
+ALTER TABLE public.donation_receipts ADD COLUMN IF NOT EXISTS country VARCHAR(3) DEFAULT NULL;
+ALTER TABLE public.donation_receipts ADD COLUMN IF NOT EXISTS locale VARCHAR(10) DEFAULT NULL;

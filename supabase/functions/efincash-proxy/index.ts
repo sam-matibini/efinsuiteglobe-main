@@ -1,0 +1,198 @@
+import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
+import { createClient } from 'npm:@supabase/supabase-js@2';
+import { z } from 'npm:zod@3';
+import { unwrap, mapAccountFields } from '../_shared/efincash.ts';
+
+
+
+const EFINCASH_URL = 'https://efincash.lenhub.net';
+
+const CreateSchema = z.object({
+  organization_id: z.string().uuid(),
+  currency: z.string().min(1).max(10),
+  email: z.string().email(),
+  first_name: z.string().min(1).max(100).nullable().optional(),
+  last_name: z.string().min(1).max(100).nullable().optional(),
+  bvn_or_nin: z.string().max(50).nullable().optional(),
+});
+
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+
+  try {
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const apiKey = Deno.env.get('EFINCASH_API_KEY');
+    if (!apiKey) {
+      return new Response(JSON.stringify({ error: 'EFINCASH_API_KEY not configured' }), {
+        status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const userClient = createClient(supabaseUrl, anonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const token = authHeader.replace('Bearer ', '');
+    const { data: claims, error: claimsErr } = await userClient.auth.getClaims(token);
+    if (claimsErr || !claims?.claims?.sub) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    const userId = claims.claims.sub as string;
+
+    const body = await req.json();
+    const parsed = CreateSchema.safeParse(body);
+    if (!parsed.success) {
+      return new Response(
+        JSON.stringify({ error: parsed.error.flatten().fieldErrors }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+    const input = parsed.data;
+
+    const admin = createClient(supabaseUrl, serviceKey);
+
+    // Verify user is org admin/owner
+    const { data: isAdmin, error: roleErr } = await admin.rpc('is_org_admin_or_owner', {
+      p_user_id: userId, p_org_id: input.organization_id,
+    });
+    if (roleErr || !isAdmin) {
+      return new Response(JSON.stringify({ error: 'Forbidden: org admin required' }), {
+        status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Prevent duplicates per (org, currency)
+    const { data: existing } = await admin
+      .from('virtual_accounts')
+      .select('id, status')
+      .eq('organization_id', input.organization_id)
+      .eq('currency', input.currency)
+      .maybeSingle();
+    if (existing) {
+      return new Response(
+        JSON.stringify({ error: `A ${input.currency} virtual account already exists for this organization.` }),
+        { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
+    // Insert pending row
+    const { data: row, error: insertErr } = await admin
+      .from('virtual_accounts')
+      .insert({
+        organization_id: input.organization_id,
+        created_by: userId,
+        provider: 'efincash',
+        currency: input.currency,
+        email: input.email,
+        first_name: input.first_name ?? null,
+        last_name: input.last_name ?? null,
+        bvn_or_nin: input.bvn_or_nin ?? null,
+        status: 'pending',
+      })
+      .select()
+      .single();
+    if (insertErr || !row) {
+      return new Response(JSON.stringify({ error: insertErr?.message ?? 'Insert failed' }), {
+        status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Call eFinCash
+    const payload = {
+      currency: input.currency,
+      email: input.email,
+      bvn_or_nin: input.bvn_or_nin ?? null,
+      first_name: input.first_name ?? null,
+      last_name: input.last_name ?? null,
+    };
+
+    let providerJson: any = null;
+    let providerStatus = 0;
+    let accessToken = '';
+    try {
+      const resp = await fetch(`${EFINCASH_URL}/v1/flutterwave/auth/user_api/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ user_key: apiKey }),
+      });
+      providerStatus = resp.status;
+      const text = await resp.text();
+      try {
+        const data = JSON.parse(text);
+        accessToken = data?.key ?? '';
+      } catch {
+        return new Response(JSON.stringify({ error: `[ERROR] Failed to parse access token response: ${text}` }), {
+          status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      if (!accessToken) {
+        return new Response(JSON.stringify({ error: 'eFinCash auth did not return an access key' }), {
+          status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    } catch (e) {
+      return new Response(JSON.stringify({ error: `[ERROR] ${ (e as Error).message }` }), {
+        status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    try {
+      const resp = await fetch(`${EFINCASH_URL}/v1/flutterwave/flutter/permant/virtual/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...payload, user_key: accessToken }),
+      });
+      providerStatus = resp.status;
+      const text = await resp.text();
+      try { providerJson = JSON.parse(text); } catch { providerJson = { raw: text }; }
+    } catch (e) {
+      providerJson = { error: (e as Error).message };
+    }
+
+    const httpOk = providerStatus >= 200 && providerStatus < 300;
+    const { d, outerOk } = unwrap(providerJson);
+    const fields = mapAccountFields(d, {
+      first_name: input.first_name,
+      last_name: input.last_name,
+    });
+    const success = httpOk && outerOk && !!fields.account_number;
+    const status = success
+      ? (fields.status_raw === 'active' ? 'active' : 'active')
+      : (httpOk && outerOk ? 'pending' : 'failed');
+
+    const { data: updated } = await admin
+      .from('virtual_accounts')
+      .update({
+        status,
+        account_number: fields.account_number,
+        bank_name: fields.bank_name,
+        account_name: fields.account_name,
+        provider_account_id: fields.provider_account_id,
+        currency: fields.currency ?? input.currency,
+        raw_response: providerJson,
+      })
+      .eq('id', row.id)
+      .select()
+      .single();
+
+    return new Response(
+      JSON.stringify({ success, virtual_account: updated ?? row, provider_status: providerStatus, provider_response: providerJson }),
+      { status: success ? 200 : 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+    );
+  } catch (e) {
+    return new Response(JSON.stringify({ error: (e as Error).message }), {
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+});

@@ -1,0 +1,1 @@
+ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS efinconnect_preferences jsonb NOT NULL DEFAULT '{}'::jsonb;

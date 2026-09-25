@@ -1,0 +1,1 @@
+ALTER TABLE public.job_sites ADD COLUMN IF NOT EXISTS state_province text;

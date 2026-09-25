@@ -1,0 +1,5 @@
+<!--
+  Placeholder: drop the CRA 2027 T5 schema (.xsd) here with the exact filename
+  `T5.xsd` to enable schema validation for T5 filings.
+  See ../README.md and src/lib/efile/craSchemaVersion.ts.
+-->

@@ -1,0 +1,2 @@
+ALTER TABLE public.purchase_attachments DROP CONSTRAINT IF EXISTS purchase_attachments_entity_type_check;
+ALTER TABLE public.purchase_attachments ADD CONSTRAINT purchase_attachments_entity_type_check CHECK (entity_type IN ('expense_claim','expense','bill','purchase_order','vendor','recurring_bill','vendor_credit'));

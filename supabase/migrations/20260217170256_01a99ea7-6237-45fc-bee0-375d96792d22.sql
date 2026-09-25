@@ -1,0 +1,2 @@
+ALTER TABLE public.compilation_reports DROP CONSTRAINT compilation_reports_accounting_framework_check;
+ALTER TABLE public.compilation_reports ADD CONSTRAINT compilation_reports_accounting_framework_check CHECK (accounting_framework = ANY (ARRAY['ASPE'::text, 'IFRS'::text, 'ASNPO'::text]));

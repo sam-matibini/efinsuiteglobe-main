@@ -1,0 +1,1 @@
+ALTER TABLE public.invoices ADD COLUMN attention_of text;

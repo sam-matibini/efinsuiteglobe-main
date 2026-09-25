@@ -1,0 +1,101 @@
+name: Mirror commits between Repo A and Repo B
+
+on:
+  push:
+    branches:
+      - '**'
+
+jobs:
+  # ---------- Runs only in Repo A ----------
+  mirror-a-to-b:
+    if: github.repository == 'sam-matibini/efinsuiteglobe-main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check if target branch in Repo B already matches HEAD
+        id: check
+        env:
+          TOKEN: ${{ secrets.REPO_B_TOKEN }}
+        run: |
+          SHA=$(git rev-parse HEAD)
+          REMOTE_SHA=$(curl -s \
+            -H "Authorization: token ${TOKEN}" \
+            "https://api.github.com/repos/kamzysert3/efinsuite-globe-raymond-branch/branches/${{ github.ref_name }}" \
+            | jq -r '.commit.sha // empty')
+          echo "Local SHA: $SHA / Remote branch SHA: $REMOTE_SHA"
+          if [ "$SHA" == "$REMOTE_SHA" ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Force-push to Repo B (A always wins)
+        if: steps.check.outputs.exists == 'false'
+        env:
+          TOKEN: ${{ secrets.REPO_B_TOKEN }}
+        run: |
+          git remote add repo-b https://x-access-token:${TOKEN}@github.com/kamzysert3/efinsuite-globe-raymond-branch.git
+          git push repo-b HEAD:refs/heads/${{ github.ref_name }} --force
+
+  # ---------- Runs only in Repo B ----------
+  mirror-b-to-a:
+    if: github.repository == 'kamzysert3/efinsuite-globe-raymond-branch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check if target branch in Repo A already matches HEAD
+        id: check
+        env:
+          TOKEN: ${{ secrets.REPO_A_TOKEN }}
+        run: |
+          SHA=$(git rev-parse HEAD)
+          REMOTE_SHA=$(curl -s \
+            -H "Authorization: token ${TOKEN}" \
+            "https://api.github.com/repos/sam-matibini/efinsuiteglobe-main/branches/${{ github.ref_name }}" \
+            | jq -r '.commit.sha // empty')
+          echo "Local SHA: $SHA / Remote branch SHA: $REMOTE_SHA"
+          if [ "$SHA" == "$REMOTE_SHA" ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Direct-mirror non-main branches
+        if: steps.check.outputs.exists == 'false' && github.ref_name != 'main'
+        env:
+          TOKEN: ${{ secrets.REPO_A_TOKEN }}
+        run: |
+          git remote add repo-a https://x-access-token:${TOKEN}@github.com/sam-matibini/efinsuiteglobe-main.git
+          git push repo-a HEAD:refs/heads/${{ github.ref_name }}
+
+      - name: Push main to staging branch in Repo A
+        if: steps.check.outputs.exists == 'false' && github.ref_name == 'main'
+        env:
+          TOKEN: ${{ secrets.REPO_A_TOKEN }}
+        run: |
+          git remote add repo-a https://x-access-token:${TOKEN}@github.com/sam-matibini/efinsuiteglobe-main.git
+          git push repo-a HEAD:refs/heads/from-b/main --force
+
+      - name: Open PR against Repo A's main
+        if: steps.check.outputs.exists == 'false' && github.ref_name == 'main'
+        env:
+          GH_TOKEN: ${{ secrets.REPO_A_TOKEN }}
+        run: |
+          if gh pr view from-b/main --repo sam-matibini/efinsuiteglobe-main >/dev/null 2>&1; then
+            echo "PR already exists, skipping"
+          else
+            gh pr create \
+              --repo sam-matibini/efinsuiteglobe-main \
+              --head from-b/main \
+              --base main \
+              --title "Sync from Repo B: main" \
+              --body "Auto-generated from Repo B's main branch. Review before merging."
+          fi
