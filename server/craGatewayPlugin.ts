@@ -1,3 +1,6 @@
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import type { Plugin } from 'vite';
 import { loadEnv } from 'vite';
 import { createClient } from '@supabase/supabase-js';
@@ -70,9 +73,29 @@ async function serve(
     json(res, 403, { ok: false, action, error: allowed.error });
     return;
   }
-  const result = await handleCraGateway(action, payload, craEnvFrom((key) => env[key]), fetch);
+  const result = await handleCraGateway(action, payload, craEnvFrom((key) => readCraSetting(env, key)), fetch);
   const finalized = await finalizeCraGateway(supabase as unknown as CraDb, payload, result);
   json(res, 200, finalized);
+}
+
+function readCraSetting(env: Record<string, string>, key: string): string | undefined {
+  if (key === 'CRA_REPRESENTATIVE_ID') {
+    const fromDesktop = readDesktopRepresentativeId();
+    if (fromDesktop) return fromDesktop;
+  }
+  return env[key];
+}
+
+/** The desktop notepad is the local place to type the firm representative ID. */
+function readDesktopRepresentativeId(): string {
+  try {
+    const file = path.join(os.homedir(), 'Desktop', 'CRA Representative ID.txt');
+    const text = fs.readFileSync(file, 'utf8');
+    const match = text.match(/^CRA_REPRESENTATIVE_ID=(.*)$/m);
+    return (match?.[1] ?? '').trim();
+  } catch {
+    return '';
+  }
 }
 
 function readBody(req: { on(event: string, listener: (chunk?: Buffer) => void): void }): Promise<string> {
