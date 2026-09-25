@@ -101,6 +101,10 @@ CREATE TABLE IF NOT EXISTS public.cra_tax_centre_payments (
 
 CREATE INDEX IF NOT EXISTS idx_cra_tax_centre_payments_org ON public.cra_tax_centre_payments (organization_id, created_at DESC);
 
+ALTER TABLE public.cra_tax_centre_payments
+  ADD COLUMN IF NOT EXISTS rail_reference text,
+  ADD COLUMN IF NOT EXISTS journal_entry_id text;
+
 CREATE TABLE IF NOT EXISTS public.cra_tax_notices (
   id text PRIMARY KEY,
   organization_id uuid NOT NULL,

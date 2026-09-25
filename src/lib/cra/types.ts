@@ -77,6 +77,8 @@ export interface CraAuthorization {
   confirmedAt?: string;
   reference?: string;
   instructionsSentAt?: string;
+  /** True only after Client Data Enquiry says this representative can see the business. */
+  verifiedByCra?: boolean;
 }
 
 export interface GstPosition {
@@ -160,6 +162,9 @@ export interface CraPayment {
   glAccrual: JournalLine[];
   glSettlement: JournalLine[];
   failureReason?: string;
+  railReference?: string;
+  journalEntryId?: string;
+  glError?: string;
   createdAt: string;
 }
 
@@ -222,4 +227,4 @@ export interface CraActor {
 
 export type ActionResult =
   | { ok: true; message: string; id?: string }
-  | { ok: false; error: string };
+  | { ok: false; error: string; id?: string };

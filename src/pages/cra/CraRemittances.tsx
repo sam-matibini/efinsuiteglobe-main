@@ -77,6 +77,15 @@ function PaymentDetail({
   setConfirmation: (value: string) => void;
 }) {
   const index = PIPELINE.indexOf(payment.status);
+  const [busy, setBusy] = useState(false);
+  const run = async (action: () => Promise<unknown>) => {
+    setBusy(true);
+    try {
+      await action();
+    } finally {
+      setBusy(false);
+    }
+  };
   return (
     <Card>
       <CardHeader>
@@ -96,6 +105,9 @@ function PaymentDetail({
         <div>Payment date {formatDay(payment.paymentDate)} · Due {formatDay(payment.dueDate)}</div>
         <div>Wallet {payment.walletDeduction ? formatCad(-payment.walletDeduction) : '—'} · Bank {payment.bankSettlement ? formatCad(-payment.bankSettlement) : '—'}</div>
         <div>CRA confirmation {payment.craConfirmation ?? '—'} · {isReconciled(payment) ? '✓ Reconciled' : 'Not reconciled'}</div>
+        <div>Paysafe reference {payment.railReference ?? '—'}</div>
+        {payment.journalEntryId ? <div>Journal {payment.journalEntryId}</div> : null}
+        {payment.glError ? <div className="text-destructive">{payment.glError}</div> : null}
         {payment.failureReason ? <div className="text-destructive">{payment.failureReason}</div> : null}
         <Journal title="Before settlement" lines={payment.glAccrual} />
         <Journal title="After settlement" lines={payment.glSettlement} />
@@ -106,12 +118,12 @@ function PaymentDetail({
             </Button>
           ) : null}
           {payment.status === 'authorized' ? (
-            <Button size="sm" onClick={() => cra.releasePayment(payment.id)} disabled={!cra.can('approve_payment')}>
+            <Button size="sm" onClick={() => run(() => cra.releasePayment(payment.id))} disabled={!cra.can('approve_payment') || busy}>
               Release
             </Button>
           ) : null}
           {['submitted', 'processing', 'accepted'].includes(payment.status) ? (
-            <Button size="sm" variant="outline" onClick={() => cra.pollPayment(payment.id)}>
+            <Button size="sm" variant="outline" onClick={() => run(() => cra.pollPayment(payment.id))} disabled={busy}>
               Poll status
             </Button>
           ) : null}

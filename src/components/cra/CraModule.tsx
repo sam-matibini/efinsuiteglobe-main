@@ -4,17 +4,25 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { formatWhen } from '@/lib/cra/engine';
+import type { CraConnectionInfo } from '@/lib/cra/gatewayClient';
 import { CRA_REPRESENTATIVE } from '@/lib/cra/representative';
 import type { CraLedger } from '@/lib/cra/types';
 import { useCraTaxCentre } from '@/hooks/useCraTaxCentre';
 
-export function CraSandboxNote() {
+export function CraSandboxNote({ connection }: { connection?: CraConnectionInfo }) {
+  const representativeId = connection?.representativeId || 'not configured';
+  const gaps = [
+    connection?.loaded && !connection.efileConfigured ? 'EFILE transmit is not configured, so a return cannot be marked accepted.' : '',
+    connection?.loaded && !connection.cdeConfigured ? 'Client Data Enquiry is not configured, so Refresh cannot replace these balances.' : '',
+    connection?.loaded && !connection.paysafeConfigured ? 'Paysafe is not configured, so a payment stays authorized.' : '',
+  ].filter(Boolean);
   return (
     <div className="rounded-lg border bg-muted/50 px-4 py-3 text-sm text-muted-foreground">
-      eFinsuite does not store CRA passwords. Access uses Represent a Client for{' '}
-      <span className="text-foreground">{CRA_REPRESENTATIVE.shortName}</span> ({CRA_REPRESENTATIVE.representativeId}).
-      Filings go through the EFILE gateway and remittances through the CRA payment engine. Figures are this
-      organization's tax ledger; production transmission uses certified CRA web services.
+      eFinsuite does not store CRA passwords. Represent a Client uses{' '}
+      <span className="text-foreground">{CRA_REPRESENTATIVE.shortName}</span>, representative ID{' '}
+      <span className="text-foreground">{representativeId}</span>. A return is accepted only when the configured CRA
+      EFILE service returns a confirmation. A remittance leaves authorized only when Paysafe accepts it.
+      {gaps.length ? ` ${gaps.join(' ')}` : ''}
     </div>
   );
 }
@@ -66,7 +74,7 @@ export function CraModule({
 
   return (
     <div className="space-y-6">
-      <CraSandboxNote />
+      <CraSandboxNote connection={cra.connection} />
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">CRA Tax & Remittance</p>
@@ -103,6 +111,9 @@ export function ConnectionSummary({ ledger }: { ledger: CraLedger }) {
             <Badge variant="outline">{connected ? (ledger.authorization.level === 'level_2' ? 'Level 2' : 'Level 1') : 'Not authorized'}</Badge>
           </div>
           <div className="text-sm text-muted-foreground">Last synchronized {formatWhen(ledger.syncedAt)}</div>
+          <div className="text-sm text-muted-foreground">
+            {ledger.authorization.verifiedByCra ? 'Verified with CRA Client Data Enquiry.' : 'Stored record. Refresh asks CRA before this status is treated as live.'}
+          </div>
         </div>
         <div className="space-y-2 text-sm">
           <div className="font-medium">Programs</div>

@@ -40,13 +40,26 @@ export function FileReturnDialog({
 
   const submission = cra.ledger.submissions.find((item) => item.id === submissionId);
 
-  const submit = () => {
-    const result = cra.submitEfile({ returnType, obligationId, taxYear, account });
-    if (result.ok && result.id) setSubmissionId(result.id);
+  const [busy, setBusy] = useState(false);
+
+  const submit = async () => {
+    setBusy(true);
+    try {
+      const result = await cra.submitEfile({ returnType, obligationId, taxYear, account });
+      if (result.id) setSubmissionId(result.id);
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const acknowledge = () => {
-    if (submissionId) cra.acknowledgeEfile(submissionId);
+  const acknowledge = async () => {
+    if (!submissionId) return;
+    setBusy(true);
+    try {
+      await cra.acknowledgeEfile(submissionId);
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -88,12 +101,12 @@ export function FileReturnDialog({
           </Button>
           <div className="flex gap-2">
             {!submission ? (
-              <Button onClick={submit} disabled={!cra.can('file_return')}>
+              <Button onClick={submit} disabled={!cra.can('file_return') || busy}>
                 Submit to EFILE
               </Button>
             ) : null}
             {submission?.status === 'submitted' ? (
-              <Button onClick={acknowledge}>Retrieve CRA acknowledgement</Button>
+              <Button onClick={acknowledge} disabled={busy}>Retrieve CRA acknowledgement</Button>
             ) : null}
             {submission?.status === 'accepted' ? <Button onClick={() => onOpenChange(false)}>Close</Button> : null}
           </div>

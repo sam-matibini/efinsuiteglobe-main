@@ -1,0 +1,104 @@
+import type { Plugin } from 'vite';
+import { loadEnv } from 'vite';
+import { createClient } from '@supabase/supabase-js';
+import {
+  callerMayUseGateway,
+  craEnvFrom,
+  finalizeCraGateway,
+  handleCraGateway,
+  type CraDb,
+} from '../supabase/functions/_shared/cra-connection.ts';
+
+/**
+ * Dev-server route POST /api/cra-gateway.
+ * Verifies the signed-in Supabase user, then calls the shared CRA handler.
+ */
+export function craGatewayPlugin(): Plugin {
+  return {
+    name: 'cra-gateway',
+    configureServer(server) {
+      const env = loadEnv(server.config.mode, server.config.root, '');
+      server.middlewares.use('/api/cra-gateway', (req, res, next) => {
+        if (req.method !== 'POST') {
+          next();
+          return;
+        }
+        void serve(req, res, env).catch((error: unknown) => {
+          const message = error instanceof Error ? error.message : 'CRA gateway failed.';
+          json(res, 500, { ok: false, action: 'error', error: message });
+        });
+      });
+    },
+  };
+}
+
+async function serve(
+  req: { headers: { authorization?: string }; on(event: string, listener: (chunk?: Buffer) => void): void },
+  res: { statusCode: number; setHeader(name: string, value: string): void; end(body: string): void },
+  env: Record<string, string>,
+) {
+  const header = req.headers.authorization ?? '';
+  if (!header.startsWith('Bearer ')) {
+    json(res, 401, { ok: false, action: 'unauthorized', error: 'Sign in before using the CRA gateway.' });
+    return;
+  }
+  const supabaseUrl = env.VITE_SUPABASE_URL || env.SUPABASE_URL;
+  const anonKey = env.VITE_SUPABASE_PUBLISHABLE_KEY || env.SUPABASE_ANON_KEY;
+  if (!supabaseUrl || !anonKey) {
+    json(res, 500, { ok: false, action: 'unauthorized', error: 'Supabase is not configured for the CRA gateway.' });
+    return;
+  }
+  const supabase = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: header } } });
+  const { data, error } = await supabase.auth.getUser();
+  if (error || !data.user) {
+    json(res, 401, { ok: false, action: 'unauthorized', error: 'Sign in before using the CRA gateway.' });
+    return;
+  }
+  const raw = await readBody(req);
+  let payload: Record<string, unknown>;
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('invalid');
+    payload = parsed as Record<string, unknown>;
+  } catch {
+    json(res, 400, { ok: false, action: 'invalid', error: 'CRA gateway expected a JSON object.' });
+    return;
+  }
+  const action = typeof payload.action === 'string' ? payload.action : '';
+  const allowed = await callerMayUseGateway(supabase as unknown as CraDb, data.user.id, action, payload.organizationId);
+  if (!allowed.ok) {
+    json(res, 403, { ok: false, action, error: allowed.error });
+    return;
+  }
+  const result = await handleCraGateway(action, payload, craEnvFrom((key) => env[key]), fetch);
+  const finalized = await finalizeCraGateway(supabase as unknown as CraDb, payload, result);
+  json(res, 200, finalized);
+}
+
+function readBody(req: { on(event: string, listener: (chunk?: Buffer) => void): void }): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    let size = 0;
+    req.on('data', (chunk) => {
+      const buffer = Buffer.from(chunk ?? []);
+      size += buffer.length;
+      if (size > 1_000_000) {
+        reject(new Error('CRA gateway request is too large.'));
+        return;
+      }
+      chunks.push(buffer);
+    });
+    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+    req.on('error', () => reject(new Error('CRA gateway request could not be read.')));
+  });
+}
+
+function json(
+  res: { statusCode: number; setHeader(name: string, value: string): void; end(body: string): void },
+  status: number,
+  body: unknown,
+) {
+  res.statusCode = status;
+  res.setHeader('Content-Type', 'application/json');
+  res.end(JSON.stringify(body));
+}

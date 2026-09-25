@@ -60,7 +60,7 @@ export default function CraAuthorizations() {
         <CardContent className="space-y-3 text-sm">
           <p>eFinsuite is an authorized CRA representative.</p>
           <p>Representative: {CRA_REPRESENTATIVE.legalName}</p>
-          <p>CRA representative ID: {CRA_REPRESENTATIVE.representativeId}</p>
+          <p>CRA representative ID: {cra.connection?.representativeId || 'Not configured'}</p>
           <p className="text-muted-foreground">
             Status: {auth.status === 'pending_client_confirmation' ? 'Pending client confirmation' : auth.status.replaceAll('_', ' ')}
             {auth.level && auth.status === 'connected' ? ` · ${auth.level === 'level_2' ? 'Level 2' : 'Level 1'}` : ''}
@@ -87,7 +87,7 @@ export default function CraAuthorizations() {
             <ol className="list-decimal space-y-1 pl-5 text-muted-foreground">
               <li>Sign in to CRA My Business Account as a director or owner of {profile.legalName}.</li>
               <li>Open Manage authorized representatives.</li>
-              <li>Confirm {CRA_REPRESENTATIVE.shortName}, representative ID {CRA_REPRESENTATIVE.representativeId}.</li>
+              <li>Confirm {CRA_REPRESENTATIVE.shortName}, representative ID {cra.connection?.representativeId || 'not configured'}.</li>
               <li>Return here and check status. eFinsuite never asks for the CRA password.</li>
             </ol>
           ) : null}
@@ -223,15 +223,17 @@ export default function CraAuthorizations() {
           <DialogHeader>
             <DialogTitle>Check CRA authorization</DialogTitle>
             <DialogDescription>
-              Confirm only after the director has approved {CRA_REPRESENTATIVE.shortName} in My Business Account. Do not enter a CRA password.
+              eFinsuite asks CRA Client Data Enquiry whether {CRA_REPRESENTATIVE.shortName} can see this business number. Do not enter a CRA password. A button in this app does not mark the authorization connected.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => { cra.noteStillPending(); setCheckOpen(false); }}>
-              Still pending
-            </Button>
-            <Button onClick={() => { cra.recordClientConfirmation(); setCheckOpen(false); }} disabled={!cra.can('manage_authorization')}>
-              Client confirmed
+            <Button
+              onClick={async () => {
+                await cra.refresh();
+                setCheckOpen(false);
+              }}
+            >
+              Check with CRA
             </Button>
           </DialogFooter>
         </DialogContent>

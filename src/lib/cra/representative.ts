@@ -1,6 +1,7 @@
 /**
  * Firm representative identity for Represent a Client.
- * This is eFinsuite's own representative identifier, not a client CRA password.
+ * representativeId here is a stand-in label only. The live identifier is CRA_REPRESENTATIVE_ID
+ * on the server and is never replaced by a client CRA password.
  */
 export const CRA_REPRESENTATIVE = {
   legalName: 'eFinsuite / eFinTax Advisors Ltd.',

@@ -392,24 +392,15 @@ export function sendInstructions(orgId: string, orgName: string | undefined, act
 }
 
 export function recordClientConfirmation(orgId: string, orgName: string | undefined, actor: CraActor): ActionResult {
-  const ledger = getLedger(orgId, orgName);
-  if (!effectiveCapabilities(actor.role, ledger.accessCeiling).includes('manage_authorization')) {
-    return fail(orgId, orgName, actor, 'Record client confirmation', 'Your role cannot manage CRA authorization.');
-  }
-  if (ledger.authorization.status !== 'pending_client_confirmation') {
-    return { ok: false, error: 'There is no authorization waiting for client confirmation.' };
-  }
   update(orgId, orgName, (draft) => {
-    draft.authorization.status = 'connected';
-    draft.authorization.level = 'level_2';
-    draft.authorization.confirmedAt = new Date().toISOString();
-    draft.syncedAt = new Date().toISOString();
-    audit(draft, actor, 'Client confirmed eFinsuite in CRA My Business Account', {
-      confirmation: draft.authorization.reference,
-      craResponse: 'Connected',
+    audit(draft, actor, 'Client confirmation in eFinsuite was not sent to CRA', {
+      craResponse: 'Not a CRA response',
     });
   });
-  return { ok: true, message: 'CRA connection is active at Level 2 for the enrolled program accounts.' };
+  return {
+    ok: false,
+    error: 'A confirmation in eFinsuite does not connect CRA. Check status through Client Data Enquiry. Do not enter a CRA password.',
+  };
 }
 
 export function noteStillPending(orgId: string, orgName: string | undefined, actor: CraActor): ActionResult {
@@ -547,30 +538,53 @@ export function submitEfile(
   return { ok: true, message: `${input.returnType} submitted to the EFILE gateway. Retrieve the CRA acknowledgement before treating it as accepted.`, id };
 }
 
-export function acknowledgeEfile(orgId: string, orgName: string | undefined, actor: CraActor, submissionId: string): ActionResult {
+export interface EfileApplyInput {
+  httpStatus: number;
+  body?: string;
+  confirmationNumber?: string | null;
+  error?: string;
+}
+
+/** Apply a real CRA HTTP result. A confirmation is stored only when CRA returned one on HTTP 2xx. */
+export function applyEfileResult(
+  orgId: string,
+  orgName: string | undefined,
+  actor: CraActor,
+  submissionId: string,
+  result: EfileApplyInput,
+): ActionResult {
   const ledger = getLedger(orgId, orgName);
   const submission = ledger.submissions.find((item) => item.id === submissionId);
-  if (!submission) return { ok: false, error: 'EFILE submission was not found.' };
+  if (!submission) return { ok: false, error: 'EFILE submission was not found.', id: submissionId };
   if (submission.status === 'accepted') return { ok: true, message: 'CRA has already accepted this submission.', id: submissionId };
-  if (submission.status !== 'submitted') return { ok: false, error: 'Only a submitted return can receive an acknowledgement.' };
-  if (ledger.authorization.status !== 'connected') {
+  if (submission.status !== 'submitted' && submission.status !== 'error') {
+    return { ok: false, error: 'Only a submitted return can receive an acknowledgement.', id: submissionId };
+  }
+  const confirmation = (result.confirmationNumber ?? '').trim();
+  const accepted = result.httpStatus >= 200 && result.httpStatus < 300 && /^[A-Za-z0-9][A-Za-z0-9-]{5,}$/.test(confirmation);
+  if (!accepted) {
+    const message = result.error || (result.httpStatus >= 200 && result.httpStatus < 300
+      ? 'CRA did not return a confirmation number. The return was not accepted.'
+      : result.httpStatus
+        ? `CRA returned HTTP ${result.httpStatus}. The return was not accepted.`
+        : 'CRA did not accept this return.');
     update(orgId, orgName, (draft) => {
-      const row = draft.submissions.find((item) => item.id === submissionId)!;
-      row.status = 'error';
-      row.errors = ['Representative authorization is not connected.'];
-      row.craResponse = 'Error';
-      audit(draft, actor, 'EFILE acknowledgement failed', {
+      const row = draft.submissions.find((item) => item.id === submissionId);
+      if (!row) return;
+      row.confirmationNumber = undefined;
+      row.errors = [message];
+      row.craResponse = message;
+      if (result.httpStatus >= 400) row.status = 'error';
+      audit(draft, actor, `${row.returnType} was not accepted by CRA`, {
         efileSubmission: submissionId,
-        craResponse: row.errors[0],
+        craResponse: message,
       });
     });
-    return { ok: false, error: 'Representative authorization is not connected.' };
+    return { ok: false, error: message, id: submissionId };
   }
-  let confirmation = '';
   update(orgId, orgName, (draft) => {
-    draft.seq.confirmation += 1;
-    confirmation = `CRA-${String(draft.seq.confirmation).padStart(9, '0')}`;
-    const row = draft.submissions.find((item) => item.id === submissionId)!;
+    const row = draft.submissions.find((item) => item.id === submissionId);
+    if (!row) return;
     row.status = 'accepted';
     row.confirmationNumber = confirmation;
     row.craResponse = 'Accepted';
@@ -593,7 +607,58 @@ export function acknowledgeEfile(orgId: string, orgName: string | undefined, act
       confirmation,
     });
   });
-  return { ok: true, message: `CRA accepted the return. Confirmation ${confirmation}.`, id: confirmation };
+  return { ok: true, message: `CRA accepted the return. Confirmation ${confirmation}.`, id: submissionId };
+}
+
+export interface CdeApplyInput {
+  ok: boolean;
+  error?: string;
+  connected?: boolean;
+  balances?: { gst_hst?: number; payroll?: number; corporate_tax?: number } | null;
+}
+
+/** Update balances or connection only from a Client Data Enquiry payload. */
+export function applyCdeResult(orgId: string, orgName: string | undefined, actor: CraActor, result: CdeApplyInput): ActionResult {
+  const ledger = getLedger(orgId, orgName);
+  if (!capsOf(ledger, actor).includes('view')) {
+    return fail(orgId, orgName, actor, 'Refresh CRA information', 'Your role cannot view CRA information.');
+  }
+  const balances = result.balances;
+  const hasBalances = Boolean(
+    balances && [balances.gst_hst, balances.payroll, balances.corporate_tax].some((value) => typeof value === 'number' && Number.isFinite(value)),
+  );
+  if (!result.ok || (!hasBalances && result.connected !== true)) {
+    const message = result.error || 'CRA did not return account data.';
+    update(orgId, orgName, (draft) => {
+      audit(draft, actor, 'CRA Client Data Enquiry did not update this organization', { craResponse: message });
+    });
+    return { ok: false, error: message };
+  }
+  update(orgId, orgName, (draft) => {
+    if (balances) {
+      if (typeof balances.gst_hst === 'number' && Number.isFinite(balances.gst_hst)) draft.balances.gst_hst = roundMoney(balances.gst_hst);
+      if (typeof balances.payroll === 'number' && Number.isFinite(balances.payroll)) draft.balances.payroll = roundMoney(balances.payroll);
+      if (typeof balances.corporate_tax === 'number' && Number.isFinite(balances.corporate_tax)) {
+        draft.balances.corporate_tax = roundMoney(balances.corporate_tax);
+      }
+    }
+    if (result.connected === true) {
+      draft.authorization.status = 'connected';
+      draft.authorization.level = 'level_2';
+      draft.authorization.confirmedAt = new Date().toISOString();
+      draft.authorization.verifiedByCra = true;
+    }
+    draft.syncedAt = new Date().toISOString();
+    audit(draft, actor, result.connected ? 'CRA confirmed the representative authorization' : 'CRA balances refreshed', {
+      craResponse: result.connected ? 'Connected' : 'Balances updated',
+    });
+  });
+  return {
+    ok: true,
+    message: result.connected
+      ? 'CRA confirmed the representative authorization and returned account data.'
+      : 'CRA returned account balances. The representative authorization was not confirmed.',
+  };
 }
 
 export function createPayment(
@@ -663,22 +728,24 @@ export function approvePayment(orgId: string, orgName: string | undefined, actor
   return { ok: true, message: `Payment ${paymentId} is authorized. Release it through the CRA payment engine.` };
 }
 
-export function releasePayment(orgId: string, orgName: string | undefined, actor: CraActor, paymentId: string): ActionResult {
+export function paymentReleaseBlock(orgId: string, orgName: string | undefined, actor: CraActor, paymentId: string): string | null {
   const ledger = getLedger(orgId, orgName);
   const payment = ledger.payments.find((item) => item.id === paymentId);
-  if (!payment) return { ok: false, error: 'Payment was not found.' };
-  if (!capsOf(ledger, actor).includes('approve_payment')) {
-    return fail(orgId, orgName, actor, 'Release CRA payment', 'Your role cannot release CRA payments.');
-  }
+  if (!payment) return 'Payment was not found.';
+  if (!capsOf(ledger, actor).includes('approve_payment')) return 'Your role cannot release CRA payments.';
   if (payment.preparedBy.toLowerCase() === actor.email.toLowerCase()) {
-    return fail(orgId, orgName, actor, 'Release CRA payment', 'Four-eyes control: the preparer cannot release the same CRA payment.');
+    return 'Four-eyes control: the preparer cannot release the same CRA payment.';
   }
-  if (payment.status !== 'authorized') {
-    return { ok: false, error: 'Release is available after a different approver has authorized the payment.' };
-  }
+  if (payment.status !== 'authorized') return 'Release is available after a different approver has authorized the payment.';
   const failures = complianceFailures(ledger, payment);
-  if (failures.length) {
-    return fail(orgId, orgName, actor, 'Release CRA payment', failures.join(' '));
+  return failures.length ? failures.join(' ') : null;
+}
+
+export function releasePayment(orgId: string, orgName: string | undefined, actor: CraActor, paymentId: string): ActionResult {
+  const reason = paymentReleaseBlock(orgId, orgName, actor, paymentId);
+  if (reason) {
+    if (reason === 'Payment was not found.' || reason.startsWith('Release is available')) return { ok: false, error: reason };
+    return fail(orgId, orgName, actor, 'Release CRA payment', reason);
   }
   update(orgId, orgName, (draft) => {
     const row = draft.payments.find((item) => item.id === paymentId)!;
@@ -732,6 +799,104 @@ export function pollPayment(orgId: string, orgName: string | undefined, actor: C
     });
   });
   return { ok: true, message: `Payment ${paymentId} is ${next}. A CRA confirmation is still required before it is reconciled.` };
+}
+
+const RAIL_RANK: Partial<Record<PaymentStatus, number>> = {
+  authorized: 0,
+  submitted: 1,
+  processing: 2,
+  accepted: 3,
+  settled: 4,
+  confirmed: 5,
+};
+
+export interface RailApplyInput {
+  ok: boolean;
+  error?: string;
+  railStatus?: PaymentStatus | null;
+  railReference?: string | null;
+  journalEntryId?: string | null;
+  glError?: string | null;
+}
+
+/** Apply a Paysafe status. Missing or unknown statuses leave the payment where it is. */
+export function applyRailResult(
+  orgId: string,
+  orgName: string | undefined,
+  actor: CraActor,
+  paymentId: string,
+  result: RailApplyInput,
+): ActionResult {
+  const ledger = getLedger(orgId, orgName);
+  const payment = ledger.payments.find((item) => item.id === paymentId);
+  if (!payment) return { ok: false, error: 'Payment was not found.' };
+  if (!result.ok || !result.railStatus) {
+    const message = result.error || 'The payment rail did not return a status.';
+    update(orgId, orgName, (draft) => {
+      audit(draft, actor, 'CRA payment rail did not change status', {
+        craAccount: payment.account,
+        confirmation: payment.id,
+        craResponse: message,
+      });
+    });
+    return { ok: false, error: message };
+  }
+  const railStatus = result.railStatus;
+  if (payment.status === 'confirmed') return { ok: true, message: `Payment ${paymentId} is already confirmed.`, id: paymentId };
+  if (payment.status === railStatus) {
+    return { ok: true, message: `Payment ${paymentId} is still ${railStatus}.`, id: paymentId };
+  }
+  const currentRank = RAIL_RANK[payment.status];
+  const nextRank = RAIL_RANK[railStatus];
+  if (currentRank !== undefined && nextRank !== undefined && nextRank < currentRank) {
+    return { ok: true, message: `Payment ${paymentId} stays ${payment.status}.`, id: paymentId };
+  }
+  if (!['authorized', 'submitted', 'processing', 'accepted', 'settled'].includes(payment.status)) {
+    return { ok: false, error: 'This payment is not waiting on the payment rail.' };
+  }
+  if (railStatus === 'failed' || railStatus === 'rejected') {
+    update(orgId, orgName, (draft) => {
+      const row = draft.payments.find((item) => item.id === paymentId)!;
+      row.status = railStatus;
+      row.failureReason = result.error || railStatus;
+      if (result.railReference) row.railReference = result.railReference;
+      audit(draft, actor, `CRA payment ${railStatus} by the payment rail`, {
+        craAccount: row.account,
+        confirmation: row.id,
+        craResponse: row.failureReason,
+      });
+    });
+    return { ok: false, error: result.error || `Payment ${paymentId} is ${railStatus}.`, id: paymentId };
+  }
+  if (!['submitted', 'processing', 'accepted', 'settled'].includes(railStatus)) {
+    return { ok: false, error: 'The payment rail returned a status this ledger does not apply.' };
+  }
+  update(orgId, orgName, (draft) => {
+    const row = draft.payments.find((item) => item.id === paymentId)!;
+    row.status = railStatus;
+    if (!row.releasedAt) row.releasedAt = new Date().toISOString();
+    if (!row.glAccrual.length) row.glAccrual = accrualEntry(row);
+    if (result.railReference) row.railReference = result.railReference;
+    if (result.journalEntryId) row.journalEntryId = result.journalEntryId;
+    if (result.glError) row.glError = result.glError;
+    if (railStatus === 'settled' && row.walletDeduction === undefined) {
+      row.glSettlement = settlementEntry(row);
+      if (draft.walletBalance >= row.amount + row.fee) {
+        row.walletDeduction = row.amount;
+        row.bankSettlement = row.amount;
+        draft.walletBalance = roundMoney(draft.walletBalance - row.amount - row.fee);
+      } else {
+        row.glError = 'The CAD wallet ledger does not cover this settled payment.';
+      }
+    }
+    audit(draft, actor, `CRA payment rail status ${railStatus}`, {
+      craAccount: row.account,
+      confirmation: row.railReference || row.id,
+      craResponse: railStatus,
+    });
+  });
+  const glNote = result.glError ? ` General ledger: ${result.glError}` : '';
+  return { ok: true, message: `Payment ${paymentId} is ${railStatus}.${glNote}`, id: paymentId };
 }
 
 export function recordConfirmation(

@@ -4,6 +4,7 @@ import path from "path";
 import fs from "fs";
 import { componentTagger } from "lovable-tagger";
 import { VitePWA } from "vite-plugin-pwa";
+import { craGatewayPlugin } from "./server/craGatewayPlugin";
 
 const buildTimestamp = Date.now().toString();
 
@@ -34,6 +35,7 @@ export default defineConfig(({ mode }) => ({
     port: 8080,
   },
   plugins: [
+    craGatewayPlugin(),
     react(),
     mode === "development" && componentTagger(),
     VitePWA({

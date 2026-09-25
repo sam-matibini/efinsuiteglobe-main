@@ -50,6 +50,33 @@ npm run dev
 - Click on "New codespace" to launch a new Codespace environment.
 - Edit files directly within the Codespace and commit and push your changes once you're done.
 
+## CRA Tax & Remittance connection
+
+The Tax & CRA screens keep an organization ledger in the browser. Filing, balance refresh, and payment release go through `POST /api/cra-gateway` in development and the `cra-gateway` Supabase function in production. Both call the same handler.
+
+Nothing is marked accepted or paid unless the external service says so:
+
+- EFILE transmit posts GST34, PD7A, or T2 XML to `CRA_EFILE_TRANSMIT_URL` with the firm's EFILE software number and password. HTTP 200 without a confirmation number stays unaccepted.
+- Status checks use `CRA_EFILE_STATUS_URL` and do not post the return again.
+- Refresh calls `CRA_CDE_URL` (Client Data Enquiry). Balances and the connected flag change only when that response includes them.
+- Release calls Paysafe Payment Hub. If Paysafe is not configured, or it rejects the call, the payment stays authorized.
+
+Set these on the server. Do not put a client's CRA password in any of them.
+
+```
+CRA_REPRESENTATIVE_ID=
+CRA_EFILE_NUMBER=
+CRA_EFILE_PASSWORD=
+CRA_EFILE_TRANSMIT_URL=
+CRA_EFILE_STATUS_URL=
+CRA_CDE_URL=
+PAYSAFE_API_KEY=
+PAYSAFE_ACCOUNT_ID_EFT=
+PAYSAFE_ENVIRONMENT=test
+```
+
+CRA does not publish a public transmit URL for uncertified software. Leave the CRA URLs empty until the firm's certification kit provides them. The app then fails closed and says what is missing.
+
 ## What technologies are used for this project?
 
 This project is built with:

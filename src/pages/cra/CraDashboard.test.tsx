@@ -70,7 +70,8 @@ describe('CRA Tax & Remittance screens', () => {
     renderAt(<CraAuthorizations />);
     expect(screen.getByRole('heading', { name: 'CRA authorizations' })).toBeInTheDocument();
     expect(screen.getAllByText(/eFinTax Advisors Ltd\./).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/R7EFS184/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/not configured/i).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/R7EFS184/)).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/password/i)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Request CRA authorization' })).toBeInTheDocument();
   });

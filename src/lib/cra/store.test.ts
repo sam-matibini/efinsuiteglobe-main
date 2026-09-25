@@ -1,13 +1,17 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { effectiveCapabilities, isReconciled, outstandingBalance, upcomingAssessed } from './engine';
 import {
-  acknowledgeEfile,
+  applyCdeResult,
+  applyEfileResult,
+  applyRailResult,
   approvePayment,
   createPayment,
   getLedger,
   pollPayment,
+  recordClientConfirmation,
   recordConfirmation,
   releasePayment,
+  requestAuthorization,
   resetCraStoreForTests,
   reviewGst,
   revokeAuthorization,
@@ -46,10 +50,19 @@ describe('CRA tax centre', () => {
     expect(filed.ok).toBe(true);
     expect(getLedger(org, name).payments).toHaveLength(before);
     expect(getLedger(org, name).gst.filingStatus).toBe('reviewed');
-    acknowledgeEfile(org, name, cfo, filed.id!);
+    expect(getLedger(org, name).submissions[0].status).toBe('submitted');
+    const empty = applyEfileResult(org, name, cfo, filed.id!, { httpStatus: 200, body: '', confirmationNumber: null });
+    expect(empty.ok).toBe(false);
+    expect(getLedger(org, name).gst.filingStatus).toBe('reviewed');
+    expect(getLedger(org, name).submissions[0].status).toBe('submitted');
+    const rejected = applyEfileResult(org, name, cfo, filed.id!, { httpStatus: 500, body: '<ConfirmationNumber>CRA-999999</ConfirmationNumber>' });
+    expect(rejected.ok).toBe(false);
+    expect(getLedger(org, name).submissions[0].status).toBe('error');
+    const accepted = applyEfileResult(org, name, cfo, filed.id!, { httpStatus: 200, confirmationNumber: 'CRA-123456' });
+    expect(accepted.ok).toBe(true);
     expect(getLedger(org, name).gst.filingStatus).toBe('filed');
     expect(getLedger(org, name).submissions[0].status).toBe('accepted');
-    expect(getLedger(org, name).submissions[0].confirmationNumber).toMatch(/^CRA-/);
+    expect(getLedger(org, name).submissions[0].confirmationNumber).toBe('CRA-123456');
   });
 
   it('blocks an accountant from filing or approving', () => {
@@ -99,6 +112,40 @@ describe('CRA tax centre', () => {
     const row = getLedger(org, name).payments.find((payment) => payment.id === 'EFS-CRA-00001246')!;
     expect(row.status).toBe('confirmed');
     expect(isReconciled(row)).toBe(true);
+  });
+
+  it('does not connect CRA from a button and does not advance a payment without a rail status', () => {
+    expect(revokeAuthorization(org, name, cfo).ok).toBe(true);
+    expect(requestAuthorization(org, name, cfo).ok).toBe(true);
+    expect(recordClientConfirmation(org, name, cfo).ok).toBe(false);
+    expect(getLedger(org, name).authorization.status).toBe('pending_client_confirmation');
+    expect(getLedger(org, name).authorization.verifiedByCra).toBeUndefined();
+
+    const checked = applyCdeResult(org, name, cfo, {
+      ok: true,
+      connected: true,
+      balances: { gst_hst: 10, payroll: 20, corporate_tax: 30 },
+    });
+    expect(checked.ok).toBe(true);
+    expect(getLedger(org, name).authorization.verifiedByCra).toBe(true);
+    expect(getLedger(org, name).balances.gst_hst).toBe(10);
+
+    expect(approvePayment(org, name, cfo, 'EFS-CRA-00001246').ok).toBe(true);
+    const held = applyRailResult(org, name, cfo, 'EFS-CRA-00001246', { ok: false, error: 'Paysafe is not configured. The payment stays authorized.' });
+    expect(held.ok).toBe(false);
+    expect(getLedger(org, name).payments.find((payment) => payment.id === 'EFS-CRA-00001246')!.status).toBe('authorized');
+    const settled = applyRailResult(org, name, cfo, 'EFS-CRA-00001246', {
+      ok: true,
+      railStatus: 'settled',
+      railReference: 'ps-1',
+      journalEntryId: 'je-1',
+    });
+    expect(settled.ok).toBe(true);
+    const row = getLedger(org, name).payments.find((payment) => payment.id === 'EFS-CRA-00001246')!;
+    expect(row.status).toBe('settled');
+    expect(row.railReference).toBe('ps-1');
+    expect(row.journalEntryId).toBe('je-1');
+    expect(row.walletDeduction).toBe(14000);
   });
 
   it('refuses EFILE after authorization is revoked', () => {

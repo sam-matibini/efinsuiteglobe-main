@@ -9,12 +9,12 @@ import {
 } from '@/components/ui/dialog';
 import { CraModule } from '@/components/cra/CraModule';
 import { formatWhen, statusTone } from '@/lib/cra/engine';
-import type { EfileSubmission } from '@/lib/cra/types';
 import { useCraTaxCentre } from '@/hooks/useCraTaxCentre';
 
 export default function CraEfile() {
   const cra = useCraTaxCentre();
-  const [selected, setSelected] = useState<EfileSubmission | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selected = cra.ledger.submissions.find((item) => item.id === selectedId) ?? null;
 
   return (
     <CraModule
@@ -59,7 +59,7 @@ export default function CraEfile() {
                   <td className="px-3 py-2"><span className={`rounded px-2 py-0.5 text-xs ${statusTone(submission.status)}`}>{submission.status}</span></td>
                   <td className="px-3 py-2">{submission.confirmationNumber ?? '—'}</td>
                   <td className="px-3 py-2">
-                    <Button variant="link" className="h-auto p-0" onClick={() => setSelected(submission)}>View submission</Button>
+                    <Button variant="link" className="h-auto p-0" onClick={() => setSelectedId(submission.id)}>View submission</Button>
                   </td>
                 </tr>
               ))}
@@ -67,7 +67,7 @@ export default function CraEfile() {
           </table>
         </div>
       )}
-      <Dialog open={Boolean(selected)} onOpenChange={(next) => !next && setSelected(null)}>
+      <Dialog open={Boolean(selected)} onOpenChange={(next) => !next && setSelectedId(null)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{selected?.returnType} · {selected?.id}</DialogTitle>
