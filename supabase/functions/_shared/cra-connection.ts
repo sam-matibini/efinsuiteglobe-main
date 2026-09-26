@@ -103,6 +103,13 @@ const BLOCKED_KEYS = new Set([
   'cardpin',
 ]);
 
+/**
+ * Internet File Transfer application published for the CRA IFT reference guide.
+ * https://www.canada.ca/en/revenue-agency/services/e-services/filing-information-returns-electronically-t4-t5-other-types-returns-overview/ift-referenceguide.html
+ * The previous upload address on /ebci/uisp/ returns 404. This NJFS disclaimer is the live entry point.
+ */
+export const CRA_INTERNET_FILE_TRANSFER_URL = 'https://apps.cra-arc.gc.ca/ebci/njfs/ext/disclaimer';
+
 export function craEnvFrom(read: (key: string) => string | undefined): CraGatewayEnv {
   return {
     representativeId: (read('CRA_REPRESENTATIVE_ID') ?? '').trim(),
@@ -110,7 +117,7 @@ export function craEnvFrom(read: (key: string) => string | undefined): CraGatewa
     efilePassword: read('CRA_EFILE_PASSWORD') ?? '',
     efileTransmitUrl: (read('CRA_EFILE_TRANSMIT_URL') ?? '').trim(),
     efileStatusUrl: (read('CRA_EFILE_STATUS_URL') ?? '').trim(),
-    cdeUrl: (read('CRA_CDE_URL') ?? '').trim(),
+    cdeUrl: (read('CRA_CDE_URL') ?? '').trim() || CRA_INTERNET_FILE_TRANSFER_URL,
     nombaClientId: (read('NOMBA_CLIENT_ID') ?? '').trim(),
     nombaClientSecret: read('NOMBA_CLIENT_SECRET') ?? '',
     nombaAccountId: (read('NOMBA_ACCOUNT_ID') ?? '').trim(),
@@ -450,7 +457,18 @@ async function refreshCde(payload: Record<string, unknown>, env: CraGatewayEnv, 
     }
     const parsed = parseCdeBody(body);
     if (!parsed.balances && !parsed.connected) {
-      return { ok: false, action, httpStatus: response.status, body: clip(body), connected: false, balances: null, error: 'CRA did not return account data.' };
+      const ift = env.cdeUrl.startsWith(CRA_INTERNET_FILE_TRANSFER_URL);
+      return {
+        ok: false,
+        action,
+        httpStatus: response.status,
+        body: clip(body),
+        connected: false,
+        balances: null,
+        error: ift
+          ? 'CRA Internet File Transfer did not return account balances. The amounts on this page were not changed.'
+          : 'CRA did not return account data.',
+      };
     }
     return {
       ok: true,

@@ -58,7 +58,7 @@ Nothing is marked accepted or paid unless the external service says so:
 
 - EFILE transmit posts GST34, PD7A, or T2 XML to `CRA_EFILE_TRANSMIT_URL` with the firm's EFILE software number and password. The address must be https on `gc.ca` or `canada.ca`. HTTP 200 without a confirmation number stays unaccepted.
 - Status checks use `CRA_EFILE_STATUS_URL` and do not post the return again.
-- Refresh calls `CRA_CDE_URL` (Client Data Enquiry) with the same EFILE number and password. Balances and the connected flag change only when that response includes them.
+- Refresh calls `CRA_CDE_URL` with the same EFILE number and password. When that setting is empty, the gateway uses the CRA Internet File Transfer application at `https://apps.cra-arc.gc.ca/ebci/njfs/ext/disclaimer`. Balances and the connected flag change only when that response includes account data.
 - Release opens a Nomba Checkout limited to cards. The payment stays authorized until Nomba confirms a Visa or Mastercard charge. Creating the checkout link does not mark it paid.
 
 A platform admin can save the firm representative ID, EFILE number, and EFILE password in Admin → Tax & CRA. Those saved values are used for filing, Client Data Enquiry, and remittances. Leave a field blank there to keep using the server value below. Do not put a client's CRA password in any of them.

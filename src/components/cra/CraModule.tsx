@@ -18,7 +18,7 @@ export function CraSandboxNote({ connection }: { connection?: CraConnectionInfo 
         : 'Save the firm EFILE number and password in Admin → Tax & CRA. A return is not accepted until CRA confirms it.'
       : '',
     connection?.loaded && !connection.cdeConfigured
-      ? 'Client Data Enquiry is not configured. Refresh does not change balances until the certification-kit enquiry address is saved.'
+      ? 'Client Data Enquiry still needs the firm representative ID and EFILE software credentials. Refresh does not change balances unless CRA returns account data.'
       : '',
     connection?.loaded && !connection.nombaConfigured ? 'Nomba card checkout is not configured, so a payment stays authorized.' : '',
   ].filter(Boolean);

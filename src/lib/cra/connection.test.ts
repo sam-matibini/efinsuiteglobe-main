@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  CRA_INTERNET_FILE_TRANSFER_URL,
   applyCraFirmSettings,
   buildEfileXml,
+  craEnvFrom,
   finalizeCraGateway,
   handleCraGateway,
   parseCdeBody,
@@ -109,6 +111,13 @@ describe('CRA gateway', () => {
     expect(result.ok).toBe(false);
     expect(result.error).toMatch(/password/i);
     expect((fetchImpl as ReturnType<typeof vi.fn>)).not.toHaveBeenCalled();
+  });
+
+  it('uses the CRA Internet File Transfer address when CRA_CDE_URL is empty', () => {
+    expect(craEnvFrom(() => undefined).cdeUrl).toBe(CRA_INTERNET_FILE_TRANSFER_URL);
+    expect(craEnvFrom((key) => (key === 'CRA_CDE_URL' ? 'https://apps.cra-arc.gc.ca/efile-test/enquiry' : undefined)).cdeUrl).toBe(
+      'https://apps.cra-arc.gc.ca/efile-test/enquiry',
+    );
   });
 
   it('does not pretend a missing Client Data Enquiry endpoint refreshed CRA', async () => {

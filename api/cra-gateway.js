@@ -36,6 +36,7 @@ var BLOCKED_KEYS = /* @__PURE__ */ new Set([
   "cardcvv",
   "cardpin"
 ]);
+var CRA_INTERNET_FILE_TRANSFER_URL = "https://apps.cra-arc.gc.ca/ebci/njfs/ext/disclaimer";
 function craEnvFrom(read) {
   return {
     representativeId: (read("CRA_REPRESENTATIVE_ID") ?? "").trim(),
@@ -43,7 +44,7 @@ function craEnvFrom(read) {
     efilePassword: read("CRA_EFILE_PASSWORD") ?? "",
     efileTransmitUrl: (read("CRA_EFILE_TRANSMIT_URL") ?? "").trim(),
     efileStatusUrl: (read("CRA_EFILE_STATUS_URL") ?? "").trim(),
-    cdeUrl: (read("CRA_CDE_URL") ?? "").trim(),
+    cdeUrl: (read("CRA_CDE_URL") ?? "").trim() || CRA_INTERNET_FILE_TRANSFER_URL,
     nombaClientId: (read("NOMBA_CLIENT_ID") ?? "").trim(),
     nombaClientSecret: read("NOMBA_CLIENT_SECRET") ?? "",
     nombaAccountId: (read("NOMBA_ACCOUNT_ID") ?? "").trim(),
@@ -328,7 +329,16 @@ async function refreshCde(payload, env, fetchImpl) {
     }
     const parsed = parseCdeBody(body);
     if (!parsed.balances && !parsed.connected) {
-      return { ok: false, action, httpStatus: response.status, body: clip(body), connected: false, balances: null, error: "CRA did not return account data." };
+      const ift = env.cdeUrl.startsWith(CRA_INTERNET_FILE_TRANSFER_URL);
+      return {
+        ok: false,
+        action,
+        httpStatus: response.status,
+        body: clip(body),
+        connected: false,
+        balances: null,
+        error: ift ? "CRA Internet File Transfer did not return account balances. The amounts on this page were not changed." : "CRA did not return account data."
+      };
     }
     return {
       ok: true,
