@@ -21,7 +21,7 @@ import {
 } from '@/components/ui/select';
 import { CraModule } from '@/components/cra/CraModule';
 import { CAPABILITY_COLUMNS, ROLE_MATRIX, effectiveCapabilities, formatWhen } from '@/lib/cra/engine';
-import { CRA_REPRESENTATIVE, PROGRAM_LABEL } from '@/lib/cra/representative';
+import { PROGRAM_LABEL } from '@/lib/cra/representative';
 import type { AccessCeiling, CraProfile, CraProgramCode } from '@/lib/cra/types';
 import { useCraTaxCentre } from '@/hooks/useCraTaxCentre';
 
@@ -35,6 +35,8 @@ export default function CraAuthorizations() {
   const [ceiling, setCeiling] = useState<AccessCeiling>(cra.ledger.accessCeiling);
   const [checkOpen, setCheckOpen] = useState(false);
   const auth = cra.ledger.authorization;
+  const representativeName = cra.connection?.representativeName || 'Not configured';
+  const efileName = cra.connection?.efileName || 'Not configured';
 
   useEffect(() => {
     setProfile(cra.ledger.profile);
@@ -59,15 +61,16 @@ export default function CraAuthorizations() {
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
           <p>eFinsuite is an authorized CRA representative.</p>
-          <p>Representative: {CRA_REPRESENTATIVE.legalName}</p>
+          <p>Representative: {representativeName}</p>
           <p>CRA representative ID: {cra.connection?.representativeId || 'Not configured'}</p>
+          <p>EFILE name: {efileName}</p>
           <p className="text-muted-foreground">
             Status: {auth.status === 'pending_client_confirmation' ? 'Pending client confirmation' : auth.status.replaceAll('_', ' ')}
             {auth.level && auth.status === 'connected' ? ` · ${auth.level === 'level_2' ? 'Level 2' : 'Level 1'}` : ''}
             {auth.reference ? ` · ${auth.reference}` : ''}
           </p>
           {auth.status === 'pending_client_confirmation' ? (
-            <p>The business owner or director must confirm {CRA_REPRESENTATIVE.shortName} as an authorized representative through CRA My Business Account.</p>
+            <p>The business owner or director must confirm {representativeName} as an authorized representative through CRA My Business Account.</p>
           ) : null}
           <div className="flex flex-wrap gap-2">
             <Button onClick={() => cra.requestAuthorization()} disabled={!cra.can('manage_authorization') || auth.status === 'connected' || auth.status === 'pending_client_confirmation'}>
@@ -87,7 +90,7 @@ export default function CraAuthorizations() {
             <ol className="list-decimal space-y-1 pl-5 text-muted-foreground">
               <li>Sign in to CRA My Business Account as a director or owner of {profile.legalName}.</li>
               <li>Open Manage authorized representatives.</li>
-              <li>Confirm {CRA_REPRESENTATIVE.shortName}, representative ID {cra.connection?.representativeId || 'not configured'}.</li>
+              <li>Confirm {representativeName}, representative ID {cra.connection?.representativeId || 'not configured'}.</li>
               <li>Return here and check status. eFinsuite never asks for the CRA password.</li>
             </ol>
           ) : null}
@@ -223,7 +226,7 @@ export default function CraAuthorizations() {
           <DialogHeader>
             <DialogTitle>Check CRA authorization</DialogTitle>
             <DialogDescription>
-              eFinsuite asks CRA Client Data Enquiry whether {CRA_REPRESENTATIVE.shortName} can see this business number. Do not enter a CRA password. A button in this app does not mark the authorization connected.
+              eFinsuite asks CRA Client Data Enquiry whether {representativeName} can see this business number. Do not enter a CRA password. A button in this app does not mark the authorization connected.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

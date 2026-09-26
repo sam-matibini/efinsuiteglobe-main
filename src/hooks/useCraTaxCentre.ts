@@ -92,7 +92,9 @@ export function useCraTaxCentre() {
     callCraGateway({ action: 'capabilities', organizationId: orgId }).then((result) => {
       if (cancelled) return;
       setConnection({
+        representativeName: result.representativeName ?? null,
         representativeId: result.representativeId ?? null,
+        efileName: result.efileName ?? null,
         efileConfigured: result.efileConfigured === true,
         efileNumberConfigured: result.efileNumberConfigured === true,
         cdeConfigured: result.cdeConfigured === true,

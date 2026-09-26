@@ -17,7 +17,9 @@ import {
 } from '../../../supabase/functions/_shared/cra-connection.ts';
 
 const env: CraGatewayEnv = {
+  representativeName: 'eFinTax Advisors Ltd.',
   representativeId: 'R9999999',
+  efileName: 'eFinTax EFILE',
   efileNumber: 'AB1234',
   efilePassword: 'secret-efile',
   efileTransmitUrl: 'https://apps.cra-arc.gc.ca/efile-test/transmit',
@@ -32,7 +34,9 @@ const env: CraGatewayEnv = {
 };
 
 const blankEnv: CraGatewayEnv = {
+  representativeName: '',
   representativeId: '',
+  efileName: '',
   efileNumber: '',
   efilePassword: '',
   efileTransmitUrl: '',
@@ -83,6 +87,8 @@ describe('CRA gateway', () => {
     const [url, init] = (fetchImpl as ReturnType<typeof vi.fn>).mock.calls[0];
     expect(url).toBe('https://apps.cra-arc.gc.ca/efile-test/transmit');
     expect(String(init.body)).toContain('<Return type="GST34">');
+    expect(String(init.body)).toContain('<trnmtr_nm>eFinTax EFILE</trnmtr_nm>');
+    expect(String(init.body)).toContain('<RepresentativeName>eFinTax Advisors Ltd.</RepresentativeName>');
     expect(String(init.body)).not.toContain('secret-efile');
     expect(String(init.headers.Authorization)).toMatch(/^Basic /);
   });
@@ -159,6 +165,8 @@ describe('CRA gateway', () => {
     expect(refreshed.balances).toEqual({ gst_hst: 12 });
     const okInit = (okFetch as ReturnType<typeof vi.fn>).mock.calls[0][1];
     expect(String(okInit.headers.Authorization)).toMatch(/^Basic /);
+    expect(String(okInit.body)).toContain('"representativeName":"eFinTax Advisors Ltd."');
+    expect(String(okInit.body)).toContain('"efileName":"eFinTax EFILE"');
 
     const denied = respond(401, 'Unauthorized', false);
     const result = await handleCraGateway('cde_refresh', { businessNumber: '711450965', programs: ['RT'] }, env, denied);
@@ -243,11 +251,15 @@ describe('CRA gateway', () => {
       taxYear: '2026',
       returnType: 'PD7A',
       account: 'RP0001',
+      representativeName: 'eFinTax Advisors Ltd.',
       representativeId: 'R9999999',
+      efileName: 'eFinTax EFILE',
       efileNumber: 'AB1234',
       amounts: { cpp: 10, ei: 2, incomeTax: 8, net: 20 },
     });
     expect(xml).toContain('T619');
+    expect(xml).toContain('<trnmtr_nm>eFinTax EFILE</trnmtr_nm>');
+    expect(xml).toContain('<RepresentativeName>eFinTax Advisors Ltd.</RepresentativeName>');
     expect(xml).toContain('A &amp; B &lt;Ltd&gt;');
     expect(xml).not.toContain('secret');
   });
@@ -255,20 +267,28 @@ describe('CRA gateway', () => {
   it('uses firm settings from the admin portal for filing and keeps a blank field on the server', async () => {
     const merged = applyCraFirmSettings(
       { ...blankEnv, efileTransmitUrl: env.efileTransmitUrl },
-      { representativeId: 'REP1234', efileNumber: 'EF12345', efilePassword: 'portal-secret' },
+      { representativeName: 'Saved Rep', representativeId: 'REP1234', efileName: 'Saved EFILE', efileNumber: 'EF12345', efilePassword: 'portal-secret' },
     );
     const fetchImpl = respond(200, '{"ConfirmationNumber":"CRA-123456"}');
     const result = await handleCraGateway('efile_submit', payload(), merged, fetchImpl);
     expect(result.accepted).toBe(true);
     const init = (fetchImpl as ReturnType<typeof vi.fn>).mock.calls[0][1];
+    expect(String(init.body)).toContain('Saved Rep');
     expect(String(init.body)).toContain('REP1234');
+    expect(String(init.body)).toContain('Saved EFILE');
     expect(String(init.body)).toContain('EF12345');
     expect(String(init.body)).not.toContain('portal-secret');
     expect(Buffer.from(String(init.headers.Authorization).replace('Basic ', ''), 'base64').toString()).toBe('EF12345:portal-secret');
-    const kept = applyCraFirmSettings(env, { representativeId: '', efileNumber: '', efilePassword: '' });
+    const kept = applyCraFirmSettings(env, { representativeName: '', representativeId: '', efileName: '', efileNumber: '', efilePassword: '' });
+    expect(kept.representativeName).toBe(env.representativeName);
     expect(kept.representativeId).toBe(env.representativeId);
+    expect(kept.efileName).toBe(env.efileName);
     expect(kept.efilePassword).toBe(env.efilePassword);
-    expect(parseCraFirmSettings([{ representative_id: 'REP1234', efile_number: '', efile_password: '' }])?.representativeId).toBe('REP1234');
+    expect(parseCraFirmSettings([{ representative_name: 'Saved Rep', representative_id: 'REP1234', efile_name: 'Saved EFILE', efile_number: '', efile_password: '' }])).toMatchObject({
+      representativeName: 'Saved Rep',
+      representativeId: 'REP1234',
+      efileName: 'Saved EFILE',
+    });
   });
 
   it('reads admin portal credentials and does not replace them from platform settings when the gateway function is installed', async () => {
@@ -276,7 +296,13 @@ describe('CRA gateway', () => {
       { data: [{ representative_id: 'REP1234', efile_number: 'EF12345', efile_password: 'from-db' }], error: null },
       { representative_id: 'OTHER1', efile_number: 'OTHER2', efile_password: 'from-platform' },
     ));
-    expect(fromGateway).toEqual({ representativeId: 'REP1234', efileNumber: 'EF12345', efilePassword: 'from-db' });
+    expect(fromGateway).toEqual({
+      representativeName: '',
+      representativeId: 'REP1234',
+      efileName: '',
+      efileNumber: 'EF12345',
+      efilePassword: 'from-db',
+    });
     const fromPlatform = await readCraFirmSettings(settingsDb(
       { data: null, error: { message: 'function gateway_cra_firm_settings does not exist' } },
       { representative_id: 'REP9999', efile_number: 'EF99999', efile_password: 'from-platform' },

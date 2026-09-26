@@ -50,7 +50,9 @@ function isInternetFileTransferUrl(url) {
 }
 function craEnvFrom(read) {
   return {
+    representativeName: cleanFirmName(read("CRA_REPRESENTATIVE_NAME")),
     representativeId: (read("CRA_REPRESENTATIVE_ID") ?? "").trim(),
+    efileName: cleanFirmName(read("CRA_EFILE_NAME")),
     efileNumber: (read("CRA_EFILE_NUMBER") ?? "").trim(),
     efilePassword: read("CRA_EFILE_PASSWORD") ?? "",
     efileTransmitUrl: (read("CRA_EFILE_TRANSMIT_URL") ?? "").trim(),
@@ -68,7 +70,9 @@ function applyCraFirmSettings(env, firm) {
   if (!firm) return env;
   return {
     ...env,
+    representativeName: firm.representativeName.trim() || env.representativeName,
     representativeId: firm.representativeId.trim() || env.representativeId,
+    efileName: firm.efileName.trim() || env.efileName,
     efileNumber: firm.efileNumber.trim() || env.efileNumber,
     efilePassword: firm.efilePassword || env.efilePassword
   };
@@ -77,11 +81,16 @@ function parseCraFirmSettings(data) {
   const row = Array.isArray(data) ? data[0] : data;
   if (!row || typeof row !== "object") return null;
   const record = row;
+  const representativeName = typeof record.representative_name === "string" ? cleanFirmName(record.representative_name) : "";
   const representativeId = typeof record.representative_id === "string" ? record.representative_id.trim() : "";
+  const efileName = typeof record.efile_name === "string" ? cleanFirmName(record.efile_name) : "";
   const efileNumber = typeof record.efile_number === "string" ? record.efile_number.trim() : "";
   const efilePassword = typeof record.efile_password === "string" ? record.efile_password : "";
-  if (!representativeId && !efileNumber && !efilePassword) return null;
-  return { representativeId, efileNumber, efilePassword };
+  if (!representativeName && !representativeId && !efileName && !efileNumber && !efilePassword) return null;
+  return { representativeName, representativeId, efileName, efileNumber, efilePassword };
+}
+function cleanFirmName(value) {
+  return (value ?? "").trim().replace(/\s+/g, " ");
 }
 async function readCraFirmSettings(db) {
   try {
@@ -182,16 +191,19 @@ function buildEfileXml(input) {
   <T619 version="${xmlEscape(t619Version(schemaYear))}">
     <sbmt_ref_id>${xmlEscape(input.submissionId)}</sbmt_ref_id>
     <rpt_tcd>O</rpt_tcd>
+    <trnmtr_nm>${xmlEscape(input.efileName)}</trnmtr_nm>
     <trnmtr_nbr>${xmlEscape(input.efileNumber)}</trnmtr_nbr>
     <trnmtr_tcd>3</trnmtr_tcd>
     <summ_cnt>1</summ_cnt>
     <lang_cd>E</lang_cd>
-    <TransmitterName>${xmlEscape(input.legalName)}</TransmitterName>
+    <TransmitterName>${xmlEscape(input.efileName)}</TransmitterName>
     <TransmitterBN>${xmlEscape(input.businessNumber)}</TransmitterBN>
+    <RepresentativeName>${xmlEscape(input.representativeName)}</RepresentativeName>
     <RepresentativeId>${xmlEscape(input.representativeId)}</RepresentativeId>
   </T619>
   <Return type="${xmlEscape(input.returnType)}">
     <BusinessNumber>${xmlEscape(input.businessNumber)}</BusinessNumber>
+    <LegalName>${xmlEscape(input.legalName)}</LegalName>
     <ProgramAccount>${xmlEscape(input.account)}</ProgramAccount>
     <TaxYear>${xmlEscape(input.taxYear)}</TaxYear>
     ${lines}
@@ -205,6 +217,8 @@ function capabilities(env) {
     ok: true,
     action: "capabilities",
     representativeId: env.representativeId || null,
+    representativeName: env.representativeName || null,
+    efileName: env.efileName || null,
     efileNumberConfigured: Boolean(env.efileNumber),
     efileConfigured: Boolean(signedIn && env.efileTransmitUrl),
     cdeConfigured: Boolean(signedIn && env.cdeUrl && env.representativeId),
@@ -228,7 +242,9 @@ async function transmitEfile(payload, env, fetchImpl) {
     taxYear: text(payload.taxYear),
     returnType: text(payload.returnType) || "GST34",
     account: text(payload.account),
+    representativeName: env.representativeName,
     representativeId: env.representativeId,
+    efileName: env.efileName,
     efileNumber: env.efileNumber,
     amounts: numberMap(payload.amounts)
   });
@@ -244,7 +260,10 @@ async function efileStatus(payload, env, fetchImpl) {
     submissionId: text(payload.submissionId),
     businessNumber: text(payload.businessNumber),
     returnType: text(payload.returnType),
-    representativeId: env.representativeId
+    representativeName: env.representativeName,
+    representativeId: env.representativeId,
+    efileName: env.efileName,
+    efileNumber: env.efileNumber
   });
   return postForConfirmation(action, env.efileStatusUrl, body, "application/json", env, fetchImpl);
 }
@@ -331,7 +350,9 @@ async function refreshCde(payload, env, fetchImpl) {
       body: JSON.stringify({
         businessNumber: text(payload.businessNumber),
         programs: Array.isArray(payload.programs) ? payload.programs : [],
+        representativeName: env.representativeName,
         representativeId: env.representativeId,
+        efileName: env.efileName,
         legalName: text(payload.legalName)
       })
     });

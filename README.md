@@ -58,13 +58,16 @@ Nothing is marked accepted or paid unless the external service says so:
 
 - EFILE transmit posts GST34, PD7A, or T2 XML to `CRA_EFILE_TRANSMIT_URL` with the firm's EFILE software number and password. The address must be https on `gc.ca` or `canada.ca`. HTTP 200 without a confirmation number stays unaccepted.
 - Status checks use `CRA_EFILE_STATUS_URL` and do not post the return again.
-- Refresh calls `CRA_CDE_URL`. When that setting is empty, the gateway uses the CRA Internet File Transfer application at `https://apps.cra-arc.gc.ca/ebci/njfs/ext/disclaimer`. That application returns HTTP 401 for HTTP Basic authentication, so the gateway does not send the EFILE password to it. A certification-kit enquiry address still uses the firm EFILE number and password. Balances and the connected flag change only when the response includes account data. An Internet File Transfer page without account data leaves the amounts unchanged.
+- Refresh calls `CRA_CDE_URL` and includes the saved representative name, representative ID, and EFILE name. When that setting is empty, the gateway uses the CRA Internet File Transfer application at `https://apps.cra-arc.gc.ca/ebci/njfs/ext/disclaimer`. That application returns HTTP 401 for HTTP Basic authentication, so the gateway does not send the EFILE password to it. A certification-kit enquiry address still uses the firm EFILE number and password. Balances and the connected flag change only when the response includes account data. An Internet File Transfer page without account data leaves the amounts unchanged.
+- EFILE transmit puts the EFILE name in the transmitter name and the representative name with the representative ID.
 - Release opens a Nomba Checkout limited to cards. The payment stays authorized until Nomba confirms a Visa or Mastercard charge. Creating the checkout link does not mark it paid.
 
-A platform admin can save the firm representative ID, EFILE number, and EFILE password in Admin → Tax & CRA. Those saved values are used for filing, Client Data Enquiry, and remittances. Leave a field blank there to keep using the server value below. Do not put a client's CRA password in any of them.
+A platform admin can save the firm representative name, representative ID, EFILE name, EFILE number, and EFILE password in Admin → Tax & CRA. Those saved values are used for filing, Client Data Enquiry, and remittances. The representative name is the name on the CRA Rep ID. The EFILE name is the name registered with the EFILE number. Leave a field blank there to keep using the server value below. Do not put a client's CRA password in any of them.
 
 ```
+CRA_REPRESENTATIVE_NAME=
 CRA_REPRESENTATIVE_ID=
+CRA_EFILE_NAME=
 CRA_EFILE_NUMBER=
 CRA_EFILE_PASSWORD=
 CRA_EFILE_TRANSMIT_URL=

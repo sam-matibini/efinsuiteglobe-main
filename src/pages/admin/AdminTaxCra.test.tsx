@@ -8,7 +8,9 @@ vi.mock('@/integrations/supabase/client', () => ({
       if (name === 'admin_get_cra_firm_settings') {
         return {
           data: [{
+            representative_name: 'eFinTax Advisors Ltd.',
             representative_id: 'REP1234',
+            efile_name: 'eFinTax EFILE',
             efile_number: 'EF12345',
             password_configured: true,
             updated_at: '2026-09-26T12:00:00.000Z',
@@ -25,7 +27,9 @@ vi.mock('@/integrations/supabase/client', () => ({
 describe('Admin Tax & CRA settings', () => {
   it('shows the saved representative ID and EFILE number without the password', async () => {
     render(<AdminTaxCra />);
-    expect(await screen.findByLabelText('CRA representative ID')).toHaveValue('REP1234');
+    expect(await screen.findByLabelText('CRA representative name')).toHaveValue('eFinTax Advisors Ltd.');
+    expect(screen.getByLabelText('CRA representative ID')).toHaveValue('REP1234');
+    expect(screen.getByLabelText('EFILE name')).toHaveValue('eFinTax EFILE');
     expect(screen.getByLabelText('EFILE number')).toHaveValue('EF12345');
     expect(screen.getByLabelText('EFILE password')).toHaveValue('');
     expect(screen.getByText('Password saved')).toBeInTheDocument();

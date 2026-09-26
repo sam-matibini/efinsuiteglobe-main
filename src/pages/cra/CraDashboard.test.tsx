@@ -21,6 +21,16 @@ vi.mock('@/hooks/useCraTaxCentre', () => ({
       isLoading: false,
       capabilities,
       can: (cap: string) => capabilities.includes(cap as never),
+      connection: {
+        representativeName: 'eFinTax Advisors Ltd.',
+        representativeId: null,
+        efileName: 'eFinTax EFILE',
+        efileConfigured: false,
+        efileNumberConfigured: false,
+        cdeConfigured: false,
+        nombaConfigured: false,
+        loaded: true,
+      },
       refresh: vi.fn(),
       saveProfile: vi.fn(),
       saveAccessCeiling: vi.fn(),
@@ -70,6 +80,7 @@ describe('CRA Tax & Remittance screens', () => {
     renderAt(<CraAuthorizations />);
     expect(screen.getByRole('heading', { name: 'CRA authorizations' })).toBeInTheDocument();
     expect(screen.getAllByText(/eFinTax Advisors Ltd\./).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/eFinTax EFILE/).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/not configured/i).length).toBeGreaterThan(0);
     expect(screen.queryByText(/R7EFS184/)).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/password/i)).not.toBeInTheDocument();

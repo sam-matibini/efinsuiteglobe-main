@@ -4,7 +4,9 @@ import type { CraGatewayResult } from '../../../supabase/functions/_shared/cra-c
 export type { CraGatewayResult };
 
 export interface CraConnectionInfo {
+  representativeName: string | null;
   representativeId: string | null;
+  efileName: string | null;
   efileConfigured: boolean;
   efileNumberConfigured: boolean;
   cdeConfigured: boolean;
@@ -13,7 +15,9 @@ export interface CraConnectionInfo {
 }
 
 export const UNCONFIGURED_CONNECTION: CraConnectionInfo = {
+  representativeName: null,
   representativeId: null,
+  efileName: null,
   efileConfigured: false,
   efileNumberConfigured: false,
   cdeConfigured: false,

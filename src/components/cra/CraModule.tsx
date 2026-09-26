@@ -5,12 +5,13 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { formatWhen } from '@/lib/cra/engine';
 import type { CraConnectionInfo } from '@/lib/cra/gatewayClient';
-import { CRA_REPRESENTATIVE } from '@/lib/cra/representative';
 import type { CraLedger } from '@/lib/cra/types';
 import { useCraTaxCentre } from '@/hooks/useCraTaxCentre';
 
 export function CraSandboxNote({ connection }: { connection?: CraConnectionInfo }) {
+  const representativeName = connection?.representativeName || 'not configured';
   const representativeId = connection?.representativeId || 'not configured';
+  const efileName = connection?.efileName || 'not configured';
   const gaps = [
     connection?.loaded && !connection.efileConfigured
       ? connection.efileNumberConfigured
@@ -25,8 +26,9 @@ export function CraSandboxNote({ connection }: { connection?: CraConnectionInfo 
   return (
     <div className="rounded-lg border bg-muted/50 px-4 py-3 text-sm text-muted-foreground">
       eFinsuite does not store CRA passwords. Firm representative and EFILE software credentials saved in Admin → Tax & CRA are used for filing, Client Data Enquiry, and remittances. Represent a Client uses{' '}
-      <span className="text-foreground">{CRA_REPRESENTATIVE.shortName}</span>, representative ID{' '}
-      <span className="text-foreground">{representativeId}</span>. A return is accepted only when the configured CRA
+      <span className="text-foreground">{representativeName}</span>, representative ID{' '}
+      <span className="text-foreground">{representativeId}</span>. EFILE transmissions use{' '}
+      <span className="text-foreground">{efileName}</span>. A return is accepted only when the configured CRA
       EFILE service returns a confirmation. A remittance is paid only after Nomba confirms a Visa or Mastercard charge. Card numbers stay on Nomba Checkout.
       {gaps.length ? ` ${gaps.join(' ')}` : ''}
     </div>

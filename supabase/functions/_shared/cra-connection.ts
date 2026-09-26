@@ -15,7 +15,9 @@ export type CraGatewayAction =
   | 'payment_status';
 
 export interface CraGatewayEnv {
+  representativeName: string;
   representativeId: string;
+  efileName: string;
   efileNumber: string;
   efilePassword: string;
   efileTransmitUrl: string;
@@ -40,6 +42,8 @@ export interface CraGatewayResult {
   action: string;
   error?: string;
   representativeId?: string | null;
+  representativeName?: string | null;
+  efileName?: string | null;
   efileConfigured?: boolean;
   efileNumberConfigured?: boolean;
   cdeConfigured?: boolean;
@@ -130,7 +134,9 @@ export function isInternetFileTransferUrl(url: string): boolean {
 
 export function craEnvFrom(read: (key: string) => string | undefined): CraGatewayEnv {
   return {
+    representativeName: cleanFirmName(read('CRA_REPRESENTATIVE_NAME')),
     representativeId: (read('CRA_REPRESENTATIVE_ID') ?? '').trim(),
+    efileName: cleanFirmName(read('CRA_EFILE_NAME')),
     efileNumber: (read('CRA_EFILE_NUMBER') ?? '').trim(),
     efilePassword: read('CRA_EFILE_PASSWORD') ?? '',
     efileTransmitUrl: (read('CRA_EFILE_TRANSMIT_URL') ?? '').trim(),
@@ -146,7 +152,9 @@ export function craEnvFrom(read: (key: string) => string | undefined): CraGatewa
 }
 
 export interface CraFirmSettings {
+  representativeName: string;
   representativeId: string;
+  efileName: string;
   efileNumber: string;
   efilePassword: string;
 }
@@ -156,7 +164,9 @@ export function applyCraFirmSettings(env: CraGatewayEnv, firm: CraFirmSettings |
   if (!firm) return env;
   return {
     ...env,
+    representativeName: firm.representativeName.trim() || env.representativeName,
     representativeId: firm.representativeId.trim() || env.representativeId,
+    efileName: firm.efileName.trim() || env.efileName,
     efileNumber: firm.efileNumber.trim() || env.efileNumber,
     efilePassword: firm.efilePassword || env.efilePassword,
   };
@@ -166,11 +176,17 @@ export function parseCraFirmSettings(data: unknown): CraFirmSettings | null {
   const row = Array.isArray(data) ? data[0] : data;
   if (!row || typeof row !== 'object') return null;
   const record = row as Record<string, unknown>;
+  const representativeName = typeof record.representative_name === 'string' ? cleanFirmName(record.representative_name) : '';
   const representativeId = typeof record.representative_id === 'string' ? record.representative_id.trim() : '';
+  const efileName = typeof record.efile_name === 'string' ? cleanFirmName(record.efile_name) : '';
   const efileNumber = typeof record.efile_number === 'string' ? record.efile_number.trim() : '';
   const efilePassword = typeof record.efile_password === 'string' ? record.efile_password : '';
-  if (!representativeId && !efileNumber && !efilePassword) return null;
-  return { representativeId, efileNumber, efilePassword };
+  if (!representativeName && !representativeId && !efileName && !efileNumber && !efilePassword) return null;
+  return { representativeName, representativeId, efileName, efileNumber, efilePassword };
+}
+
+function cleanFirmName(value: string | undefined): string {
+  return (value ?? '').trim().replace(/\s+/g, ' ');
 }
 
 /** Firm software credentials saved by a platform admin. Empty when the caller cannot read them. */
@@ -292,7 +308,9 @@ export function buildEfileXml(input: {
   taxYear: string;
   returnType: string;
   account: string;
+  representativeName: string;
   representativeId: string;
+  efileName: string;
   efileNumber: string;
   amounts: Record<string, number>;
 }): string {
@@ -305,16 +323,19 @@ export function buildEfileXml(input: {
   <T619 version="${xmlEscape(t619Version(schemaYear))}">
     <sbmt_ref_id>${xmlEscape(input.submissionId)}</sbmt_ref_id>
     <rpt_tcd>O</rpt_tcd>
+    <trnmtr_nm>${xmlEscape(input.efileName)}</trnmtr_nm>
     <trnmtr_nbr>${xmlEscape(input.efileNumber)}</trnmtr_nbr>
     <trnmtr_tcd>3</trnmtr_tcd>
     <summ_cnt>1</summ_cnt>
     <lang_cd>E</lang_cd>
-    <TransmitterName>${xmlEscape(input.legalName)}</TransmitterName>
+    <TransmitterName>${xmlEscape(input.efileName)}</TransmitterName>
     <TransmitterBN>${xmlEscape(input.businessNumber)}</TransmitterBN>
+    <RepresentativeName>${xmlEscape(input.representativeName)}</RepresentativeName>
     <RepresentativeId>${xmlEscape(input.representativeId)}</RepresentativeId>
   </T619>
   <Return type="${xmlEscape(input.returnType)}">
     <BusinessNumber>${xmlEscape(input.businessNumber)}</BusinessNumber>
+    <LegalName>${xmlEscape(input.legalName)}</LegalName>
     <ProgramAccount>${xmlEscape(input.account)}</ProgramAccount>
     <TaxYear>${xmlEscape(input.taxYear)}</TaxYear>
     ${lines}
@@ -329,6 +350,8 @@ function capabilities(env: CraGatewayEnv): CraGatewayResult {
     ok: true,
     action: 'capabilities',
     representativeId: env.representativeId || null,
+    representativeName: env.representativeName || null,
+    efileName: env.efileName || null,
     efileNumberConfigured: Boolean(env.efileNumber),
     efileConfigured: Boolean(signedIn && env.efileTransmitUrl),
     cdeConfigured: Boolean(signedIn && env.cdeUrl && env.representativeId),
@@ -353,7 +376,9 @@ async function transmitEfile(payload: Record<string, unknown>, env: CraGatewayEn
     taxYear: text(payload.taxYear),
     returnType: text(payload.returnType) || 'GST34',
     account: text(payload.account),
+    representativeName: env.representativeName,
     representativeId: env.representativeId,
+    efileName: env.efileName,
     efileNumber: env.efileNumber,
     amounts: numberMap(payload.amounts),
   });
@@ -370,7 +395,10 @@ async function efileStatus(payload: Record<string, unknown>, env: CraGatewayEnv,
     submissionId: text(payload.submissionId),
     businessNumber: text(payload.businessNumber),
     returnType: text(payload.returnType),
+    representativeName: env.representativeName,
     representativeId: env.representativeId,
+    efileName: env.efileName,
+    efileNumber: env.efileNumber,
   });
   return postForConfirmation(action, env.efileStatusUrl, body, 'application/json', env, fetchImpl);
 }
@@ -466,7 +494,9 @@ async function refreshCde(payload: Record<string, unknown>, env: CraGatewayEnv, 
       body: JSON.stringify({
         businessNumber: text(payload.businessNumber),
         programs: Array.isArray(payload.programs) ? payload.programs : [],
+        representativeName: env.representativeName,
         representativeId: env.representativeId,
+        efileName: env.efileName,
         legalName: text(payload.legalName),
       }),
     });
