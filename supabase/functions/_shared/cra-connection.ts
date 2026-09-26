@@ -120,6 +120,54 @@ export function craEnvFrom(read: (key: string) => string | undefined): CraGatewa
   };
 }
 
+export interface CraFirmSettings {
+  representativeId: string;
+  efileNumber: string;
+  efilePassword: string;
+}
+
+/** Admin-portal values replace server env when they are non-empty. */
+export function applyCraFirmSettings(env: CraGatewayEnv, firm: CraFirmSettings | null | undefined): CraGatewayEnv {
+  if (!firm) return env;
+  return {
+    ...env,
+    representativeId: firm.representativeId.trim() || env.representativeId,
+    efileNumber: firm.efileNumber.trim() || env.efileNumber,
+    efilePassword: firm.efilePassword || env.efilePassword,
+  };
+}
+
+export function parseCraFirmSettings(data: unknown): CraFirmSettings | null {
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row || typeof row !== 'object') return null;
+  const record = row as Record<string, unknown>;
+  const representativeId = typeof record.representative_id === 'string' ? record.representative_id.trim() : '';
+  const efileNumber = typeof record.efile_number === 'string' ? record.efile_number.trim() : '';
+  const efilePassword = typeof record.efile_password === 'string' ? record.efile_password : '';
+  if (!representativeId && !efileNumber && !efilePassword) return null;
+  return { representativeId, efileNumber, efilePassword };
+}
+
+/** Firm software credentials saved by a platform admin. Empty when the caller cannot read them. */
+export async function readCraFirmSettings(db: CraDb): Promise<CraFirmSettings | null> {
+  try {
+    const { data, error } = await db.rpc('gateway_cra_firm_settings', {});
+    if (!error) return parseCraFirmSettings(data);
+  } catch {
+    // The settings function is not installed yet. Try the admin settings row.
+  }
+  try {
+    const { data, error } = await db.from('platform_settings').select('setting_value').eq('setting_key', 'cra_firm_settings').limit(1);
+    if (error || !data) return null;
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row || typeof row !== 'object') return null;
+    const value = (row as { setting_value?: unknown }).setting_value;
+    return parseCraFirmSettings(value);
+  } catch {
+    return null;
+  }
+}
+
 export function parseCraConfirmation(body: string): string | null {
   const text = body ?? '';
   if (!text.trim()) return null;
@@ -186,6 +234,7 @@ export async function finalizeCraGateway(
   db: CraDb,
   payload: Record<string, unknown>,
   result: CraGatewayResult,
+  firm?: CraFirmSettings | null,
 ): Promise<CraGatewayResult> {
   const next: CraGatewayResult = { ...result, persisted: false, journalEntryId: result.journalEntryId ?? null, glError: result.glError ?? null };
   if (result.action === 'capabilities') return { ...next, persisted: false };
@@ -195,7 +244,7 @@ export async function finalizeCraGateway(
     if (result.action === 'efile_submit' || result.action === 'efile_status') {
       next.persisted = await persistSubmission(db, organizationId, payload, result);
     } else if (result.action === 'payment_release' || result.action === 'payment_status') {
-      next.persisted = await persistPayment(db, organizationId, payload, result);
+      next.persisted = await persistPayment(db, organizationId, payload, result, firm);
       if (result.railStatus && result.ok) {
         const posted = await postPaymentJournals(db, organizationId, payload, result);
         next.journalEntryId = posted.journalEntryId;
@@ -630,10 +679,16 @@ async function persistSubmission(db: CraDb, organizationId: string, payload: Rec
   return !error;
 }
 
-async function persistPayment(db: CraDb, organizationId: string, payload: Record<string, unknown>, result: CraGatewayResult): Promise<boolean> {
+async function persistPayment(
+  db: CraDb,
+  organizationId: string,
+  payload: Record<string, unknown>,
+  result: CraGatewayResult,
+  firm?: CraFirmSettings | null,
+): Promise<boolean> {
   const id = text(payload.paymentId);
   if (!id) return false;
-  const { error } = await db.from('cra_tax_centre_payments').upsert({
+  const row = {
     id,
     organization_id: organizationId,
     tax_type: text(payload.taxType) || 'gst_hst',
@@ -650,8 +705,17 @@ async function persistPayment(db: CraDb, organizationId: string, payload: Record
     rail_reference: result.railReference ?? null,
     journal_entry_id: null,
     failure_reason: result.ok ? null : result.error ?? null,
-  }, { onConflict: 'id' });
-  return !error;
+  };
+  const withFirm = {
+    ...row,
+    representative_id: firm?.representativeId || null,
+    efile_number: firm?.efileNumber || null,
+  };
+  const { error } = await db.from('cra_tax_centre_payments').upsert(withFirm, { onConflict: 'id' });
+  if (!error) return true;
+  if (!/representative_id|efile_number/i.test(error.message ?? '')) return false;
+  const again = await db.from('cra_tax_centre_payments').upsert(row, { onConflict: 'id' });
+  return !again.error;
 }
 
 async function persistAuthorization(db: CraDb, organizationId: string, representativeId: string): Promise<boolean> {

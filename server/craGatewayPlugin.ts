@@ -5,10 +5,12 @@ import type { Plugin } from 'vite';
 import { loadEnv } from 'vite';
 import { createClient } from '@supabase/supabase-js';
 import {
+  applyCraFirmSettings,
   callerMayUseGateway,
   craEnvFrom,
   finalizeCraGateway,
   handleCraGateway,
+  readCraFirmSettings,
   type CraDb,
 } from '../supabase/functions/_shared/cra-connection.ts';
 
@@ -73,8 +75,10 @@ async function serve(
     json(res, 403, { ok: false, action, error: allowed.error });
     return;
   }
-  const result = await handleCraGateway(action, payload, craEnvFrom((key) => readCraSetting(env, key)), fetch);
-  const finalized = await finalizeCraGateway(supabase as unknown as CraDb, payload, result);
+  const database = supabase as unknown as CraDb;
+  const firm = await readCraFirmSettings(database);
+  const result = await handleCraGateway(action, payload, applyCraFirmSettings(craEnvFrom((key) => readCraSetting(env, key)), firm), fetch);
+  const finalized = await finalizeCraGateway(database, payload, result, firm);
   json(res, 200, finalized);
 }
 

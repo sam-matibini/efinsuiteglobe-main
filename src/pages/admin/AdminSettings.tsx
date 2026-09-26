@@ -24,7 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Shield, DollarSign, Plus, Trash2, Edit, Plug, Palette, Globe, Loader2, RotateCcw, CreditCard } from 'lucide-react';
+import { Shield, DollarSign, Plus, Trash2, Edit, Plug, Palette, Globe, Loader2, RotateCcw, CreditCard, Landmark } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
 import {
@@ -38,6 +38,7 @@ import {
 import { AdminIntegrationsTab } from '@/components/admin/AdminIntegrationsTab';
 import { TroubleshootingTab } from '@/components/admin/TroubleshootingTab';
 import { AdminWiseReceivingAccountsCard } from '@/components/admin/AdminWiseReceivingAccountsCard';
+import { AdminCraSettingsForm } from '@/components/admin/AdminCraSettingsForm';
 
 interface PricingPlan {
   id: string;
@@ -121,7 +122,14 @@ export default function AdminSettings() {
         .select('*');
 
       if (error) throw error;
-      return data;
+      return data?.map((row) => {
+        if (row.setting_key !== 'cra_firm_settings' || !row.setting_value || typeof row.setting_value !== 'object' || Array.isArray(row.setting_value)) {
+          return row;
+        }
+        const settingValue = { ...(row.setting_value as Record<string, unknown>) };
+        delete settingValue.efile_password;
+        return { ...row, setting_value: settingValue };
+      });
     },
     enabled: isAdmin,
   });
@@ -318,6 +326,10 @@ export default function AdminSettings() {
             <Plug className="w-4 h-4" />
             <span className="hidden sm:inline">Integrations</span>
           </TabsTrigger>
+          <TabsTrigger value="tax-cra" className="gap-2">
+            <Landmark className="w-4 h-4" />
+            <span className="hidden sm:inline">Tax & CRA</span>
+          </TabsTrigger>
           <TabsTrigger value="pricing" className="gap-2">
             <DollarSign className="w-4 h-4" />
             <span className="hidden sm:inline">Pricing Plans</span>
@@ -347,6 +359,10 @@ export default function AdminSettings() {
         {/* Integrations Tab */}
         <TabsContent value="integrations">
           <AdminIntegrationsTab />
+        </TabsContent>
+
+        <TabsContent value="tax-cra">
+          <AdminCraSettingsForm />
         </TabsContent>
 
         {/* Pricing Plans Tab */}

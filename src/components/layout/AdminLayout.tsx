@@ -13,7 +13,8 @@ import {
   Menu,
   Bell,
   Search,
-  Phone
+  Phone,
+  Landmark
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -37,6 +38,7 @@ const adminNavigation = [
   { label: 'Organizations', icon: Building2, href: '/admin/organizations' },
   { label: 'Subscriptions', icon: CreditCard, href: '/admin/subscriptions' },
   { label: 'Communications', icon: Phone, href: '/admin/communications' },
+  { label: 'Tax & CRA', icon: Landmark, href: '/admin/tax-cra' },
   { label: 'Settings', icon: Settings, href: '/admin/settings' },
 ];
 

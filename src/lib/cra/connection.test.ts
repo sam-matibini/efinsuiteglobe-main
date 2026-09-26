@@ -1,10 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  applyCraFirmSettings,
   buildEfileXml,
   finalizeCraGateway,
   handleCraGateway,
   parseCdeBody,
   parseCraConfirmation,
+  parseCraFirmSettings,
+  readCraFirmSettings,
   type CraDb,
   type CraGatewayEnv,
   type FetchLike,
@@ -200,6 +203,38 @@ describe('CRA gateway', () => {
     expect(xml).not.toContain('secret');
   });
 
+  it('uses firm settings from the admin portal for filing and keeps a blank field on the server', async () => {
+    const merged = applyCraFirmSettings(
+      { ...blankEnv, efileTransmitUrl: env.efileTransmitUrl },
+      { representativeId: 'REP1234', efileNumber: 'EF12345', efilePassword: 'portal-secret' },
+    );
+    const fetchImpl = respond(200, '{"ConfirmationNumber":"CRA-123456"}');
+    const result = await handleCraGateway('efile_submit', payload(), merged, fetchImpl);
+    expect(result.accepted).toBe(true);
+    const init = (fetchImpl as ReturnType<typeof vi.fn>).mock.calls[0][1];
+    expect(String(init.body)).toContain('REP1234');
+    expect(String(init.body)).toContain('EF12345');
+    expect(String(init.body)).not.toContain('portal-secret');
+    expect(Buffer.from(String(init.headers.Authorization).replace('Basic ', ''), 'base64').toString()).toBe('EF12345:portal-secret');
+    const kept = applyCraFirmSettings(env, { representativeId: '', efileNumber: '', efilePassword: '' });
+    expect(kept.representativeId).toBe(env.representativeId);
+    expect(kept.efilePassword).toBe(env.efilePassword);
+    expect(parseCraFirmSettings([{ representative_id: 'REP1234', efile_number: '', efile_password: '' }])?.representativeId).toBe('REP1234');
+  });
+
+  it('reads admin portal credentials and does not replace them from platform settings when the gateway function is installed', async () => {
+    const fromGateway = await readCraFirmSettings(settingsDb(
+      { data: [{ representative_id: 'REP1234', efile_number: 'EF12345', efile_password: 'from-db' }], error: null },
+      { representative_id: 'OTHER1', efile_number: 'OTHER2', efile_password: 'from-platform' },
+    ));
+    expect(fromGateway).toEqual({ representativeId: 'REP1234', efileNumber: 'EF12345', efilePassword: 'from-db' });
+    const fromPlatform = await readCraFirmSettings(settingsDb(
+      { data: null, error: { message: 'function gateway_cra_firm_settings does not exist' } },
+      { representative_id: 'REP9999', efile_number: 'EF99999', efile_password: 'from-platform' },
+    ));
+    expect(fromPlatform?.efileNumber).toBe('EF99999');
+  });
+
   it('reports persistence and ledger failures without hiding a rail result', async () => {
     const db = failingDb();
     const finalized = await finalizeCraGateway(db as CraDb, { organizationId: '11111111-1111-1111-1111-111111111111', paymentId: 'EFS-CRA-1', amount: 10, taxType: 'gst_hst' }, {
@@ -234,6 +269,31 @@ function payload() {
     legalName: 'ABC Manufacturing Ltd.',
     amounts: { collected: 25000, itcs: 17500, net: 7500 },
   };
+}
+
+function settingsDb(
+  rpcResult: { data: unknown; error: { message?: string } | null },
+  platformValue: Record<string, string> | null,
+) {
+  const result = { data: platformValue ? [{ setting_value: platformValue }] : [], error: null };
+  const builder = {
+    select: () => builder,
+    insert: () => builder,
+    upsert: () => builder,
+    update: () => builder,
+    delete: () => builder,
+    eq: () => builder,
+    ilike: () => builder,
+    like: () => builder,
+    order: () => builder,
+    limit: () => builder,
+    single: () => Promise.resolve(result),
+    then: (resolve: (value: typeof result) => unknown, reject?: (reason: unknown) => unknown) => Promise.resolve(result).then(resolve, reject),
+  };
+  return {
+    from: () => builder,
+    rpc: () => Promise.resolve(rpcResult),
+  } as CraDb;
 }
 
 function failingDb() {

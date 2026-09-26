@@ -189,6 +189,7 @@ const AdminUsers = lazy(() => import("./pages/admin/AdminUsers"));
 const AdminOrganizations = lazy(() => import("./pages/admin/AdminOrganizations"));
 const AdminSubscriptions = lazy(() => import("./pages/admin/AdminSubscriptions"));
 const AdminSettings = lazy(() => import("./pages/admin/AdminSettings"));
+const AdminTaxCra = lazy(() => import("./pages/admin/AdminTaxCra"));
 const AdminCommunications = lazy(() => import("./pages/admin/AdminCommunications"));
 const OrganizationModulesPage = lazy(() => import("./pages/admin/OrganizationModulesPage"));
 const Install = lazy(() => import("./pages/Install"));
@@ -492,6 +493,7 @@ const AppRoutes = () => {
     <Route path="/admin/subscriptions" element={<AdminRoute><AdminSubscriptions /></AdminRoute>} />
     <Route path="/admin/communications" element={<AdminRoute><AdminCommunications /></AdminRoute>} />
     <Route path="/admin/settings" element={<AdminRoute><AdminSettings /></AdminRoute>} />
+    <Route path="/admin/tax-cra" element={<AdminRoute><AdminTaxCra /></AdminRoute>} />
     
     {/* Subscription routes */}
     <Route path="/subscription/checkout" element={<ProtectedRoute><PageWrapper><SubscriptionCheckout /></PageWrapper></ProtectedRoute>} />

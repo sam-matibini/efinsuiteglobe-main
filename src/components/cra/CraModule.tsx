@@ -15,7 +15,7 @@ export function CraSandboxNote({ connection }: { connection?: CraConnectionInfo 
     connection?.loaded && !connection.efileConfigured
       ? connection.efileNumberConfigured
         ? 'The EFILE number is saved. Transmit still needs the https address from the CRA certification kit, so a return is not accepted.'
-        : 'Save the firm EFILE number and password in the desktop CRA EFILE notepad. A return is not accepted until CRA confirms it.'
+        : 'Save the firm EFILE number and password in Admin → Tax & CRA. A return is not accepted until CRA confirms it.'
       : '',
     connection?.loaded && !connection.cdeConfigured
       ? 'Client Data Enquiry is not configured. Refresh does not change balances until the certification-kit enquiry address is saved.'
@@ -24,7 +24,7 @@ export function CraSandboxNote({ connection }: { connection?: CraConnectionInfo 
   ].filter(Boolean);
   return (
     <div className="rounded-lg border bg-muted/50 px-4 py-3 text-sm text-muted-foreground">
-      eFinsuite does not store CRA passwords. Represent a Client uses{' '}
+      eFinsuite does not store CRA passwords. Firm representative and EFILE software credentials saved in Admin → Tax & CRA are used for filing, Client Data Enquiry, and remittances. Represent a Client uses{' '}
       <span className="text-foreground">{CRA_REPRESENTATIVE.shortName}</span>, representative ID{' '}
       <span className="text-foreground">{representativeId}</span>. A return is accepted only when the configured CRA
       EFILE service returns a confirmation. A remittance is paid only after Nomba confirms a Visa or Mastercard charge. Card numbers stay on Nomba Checkout.

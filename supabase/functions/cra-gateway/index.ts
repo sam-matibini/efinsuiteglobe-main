@@ -4,10 +4,12 @@
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
 import {
+  applyCraFirmSettings,
   callerMayUseGateway,
   craEnvFrom,
   finalizeCraGateway,
   handleCraGateway,
+  readCraFirmSettings,
   type CraDb,
 } from '../_shared/cra-connection.ts';
 
@@ -50,8 +52,10 @@ Deno.serve(async (req) => {
   const allowed = await callerMayUseGateway(supabase as unknown as CraDb, data.user.id, action, payload.organizationId);
   if (!allowed.ok) return json(403, { ok: false, action, error: allowed.error });
 
-  const result = await handleCraGateway(action, payload, craEnvFrom((key) => Deno.env.get(key)), fetch);
-  const finalized = await finalizeCraGateway(supabase as unknown as CraDb, payload, result);
+  const database = supabase as unknown as CraDb;
+  const firm = await readCraFirmSettings(database);
+  const result = await handleCraGateway(action, payload, applyCraFirmSettings(craEnvFrom((key) => Deno.env.get(key)), firm), fetch);
+  const finalized = await finalizeCraGateway(database, payload, result, firm);
   return json(200, finalized);
 });
 

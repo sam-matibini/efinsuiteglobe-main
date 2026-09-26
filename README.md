@@ -61,7 +61,7 @@ Nothing is marked accepted or paid unless the external service says so:
 - Refresh calls `CRA_CDE_URL` (Client Data Enquiry) with the same EFILE number and password. Balances and the connected flag change only when that response includes them.
 - Release opens a Nomba Checkout limited to cards. The payment stays authorized until Nomba confirms a Visa or Mastercard charge. Creating the checkout link does not mark it paid.
 
-Set these on the server. Do not put a client's CRA password in any of them.
+A platform admin can save the firm representative ID, EFILE number, and EFILE password in Admin → Tax & CRA. Those saved values are used for filing, Client Data Enquiry, and remittances. Leave a field blank there to keep using the server value below. Do not put a client's CRA password in any of them.
 
 ```
 CRA_REPRESENTATIVE_ID=
