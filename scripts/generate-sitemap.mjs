@@ -1,20 +1,11 @@
-// Runs before `vite dev` and `vite build` (predev/prebuild hooks); writes public/sitemap.xml.
-
+// Runs before `vite dev` and `vite build`; writes public/sitemap.xml.
 import { writeFileSync } from "fs";
 import { resolve } from "path";
 
 const BASE_URL = "https://www.efinsuite.com";
-
-interface SitemapEntry {
-  path: string;
-  lastmod?: string;
-  changefreq?: "always" | "hourly" | "daily" | "weekly" | "monthly" | "yearly" | "never";
-  priority?: string;
-}
-
 const today = new Date().toISOString().split("T")[0];
 
-const entries: SitemapEntry[] = [
+const entries = [
   { path: "/", lastmod: today, changefreq: "weekly", priority: "1.0" },
   { path: "/landing", lastmod: today, changefreq: "weekly", priority: "1.0" },
   { path: "/security", lastmod: today, changefreq: "monthly", priority: "0.6" },
@@ -22,14 +13,14 @@ const entries: SitemapEntry[] = [
   { path: "/terms-of-service", lastmod: today, changefreq: "yearly", priority: "0.3" },
 ];
 
-function generateSitemap(entries: SitemapEntry[]) {
-  const urls = entries.map((e) =>
+function generateSitemap(items) {
+  const urls = items.map((entry) =>
     [
       `  <url>`,
-      `    <loc>${BASE_URL}${e.path}</loc>`,
-      e.lastmod ? `    <lastmod>${e.lastmod}</lastmod>` : null,
-      e.changefreq ? `    <changefreq>${e.changefreq}</changefreq>` : null,
-      e.priority ? `    <priority>${e.priority}</priority>` : null,
+      `    <loc>${BASE_URL}${entry.path}</loc>`,
+      entry.lastmod ? `    <lastmod>${entry.lastmod}</lastmod>` : null,
+      entry.changefreq ? `    <changefreq>${entry.changefreq}</changefreq>` : null,
+      entry.priority ? `    <priority>${entry.priority}</priority>` : null,
       `  </url>`,
     ]
       .filter(Boolean)
