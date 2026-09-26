@@ -24,6 +24,7 @@ import { addPdfBrandingFooter } from '@/lib/pdfBrandingFooter';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
+import { applyPeriodBalances, periodMovement, summarizePeriodAccounts, type TaxAccountKind } from '@/lib/taxReportPeriod';
 
 interface TaxReportPreviewProps {
   organizationId?: string;
@@ -58,6 +59,7 @@ interface JournalEntryLine {
   reference: string;
   debit: number;
   credit: number;
+  account_id: string;
   account_code: string;
   account_name: string;
   tax_code?: string;
@@ -168,6 +170,8 @@ export function TaxReportPreview({
   const periodLabel = useMemo(() => {
     return `${format(dateRange.start, 'MMM d, yyyy')} - ${format(dateRange.end, 'MMM d, yyyy')}`;
   }, [dateRange]);
+  const periodStart = format(dateRange.start, 'yyyy-MM-dd');
+  const periodEnd = format(dateRange.end, 'yyyy-MM-dd');
 
   // Fetch tax codes for filter
   const { data: taxCodes = [] } = useQuery({
@@ -244,44 +248,46 @@ export function TaxReportPreview({
   }, [taxAccounts, reportCategory, isCanada]);
 
   // Fetch journal entry details for the period with enhanced data
-  const { data: journalDetails = [], isLoading: journalLoading } = useQuery({
-    queryKey: ['tax-report-journal', organizationId, dateRange.start, dateRange.end, taxAccounts.length],
+  const { data: journalDetails = [], isLoading: journalLoading, isError: journalError } = useQuery({
+    queryKey: ['tax-report-journal', organizationId, periodStart, periodEnd, taxAccounts.map((account) => account.accountId).join(',')],
     queryFn: async () => {
       if (!organizationId || taxAccounts.length === 0) return [];
       
       const accountIds = taxAccounts.map(a => a.accountId);
-      const startDateStr = format(dateRange.start, 'yyyy-MM-dd');
-      const endDateStr = format(dateRange.end, 'yyyy-MM-dd');
       
-      // Fetch journal entries first to get IDs within date range
-      const { data: journalEntries, error: jeError } = await supabase
-        .from('journal_entries')
-        .select('id, entry_date, description, reference')
-        .eq('organization_id', organizationId)
-        .gte('entry_date', startDateStr)
-        .lte('entry_date', endDateStr);
+      const journalEntries: { id: string; entry_date: string; description: string | null; reference: string | null }[] = [];
+      const pageSize = 1000;
+      let offset = 0;
+      while (true) {
+        const { data, error: jeError } = await supabase
+          .from('journal_entries')
+          .select('id, entry_date, description, reference')
+          .eq('organization_id', organizationId)
+          .eq('status', 'posted')
+          .gte('entry_date', periodStart)
+          .lte('entry_date', periodEnd)
+          .order('id', { ascending: true })
+          .range(offset, offset + pageSize - 1);
+        if (jeError) throw jeError;
+        const rows = data ?? [];
+        journalEntries.push(...rows);
+        if (rows.length < pageSize) break;
+        offset += pageSize;
+      }
+      if (journalEntries.length === 0) return [];
       
-      if (jeError) throw jeError;
-      if (!journalEntries || journalEntries.length === 0) return [];
-      
-      const journalEntryIds = journalEntries.map(je => je.id);
       const journalEntriesMap = new Map(journalEntries.map(je => [je.id, je]));
-      
-      // Fetch journal entry lines for tax accounts
-      const { data: lines, error: linesError } = await supabase
-        .from('journal_entry_lines')
-        .select(`
-          id,
-          journal_entry_id,
-          account_id,
-          debit,
-          credit,
-          description
-        `)
-        .in('journal_entry_id', journalEntryIds)
-        .in('account_id', accountIds);
-      
-      if (linesError) throw linesError;
+      const lines: { id: string; journal_entry_id: string; account_id: string; debit: number | null; credit: number | null; description: string | null }[] = [];
+      for (let index = 0; index < journalEntries.length; index += 200) {
+        const ids = journalEntries.slice(index, index + 200).map((entry) => entry.id);
+        const { data, error: linesError } = await supabase
+          .from('journal_entry_lines')
+          .select('id, journal_entry_id, account_id, debit, credit, description')
+          .in('journal_entry_id', ids)
+          .in('account_id', accountIds);
+        if (linesError) throw linesError;
+        lines.push(...(data ?? []));
+      }
       
       // Fetch accounts for display
       const { data: accounts, error: accError } = await supabase
@@ -293,7 +299,7 @@ export function TaxReportPreview({
       
       const accountsMap = new Map(accounts?.map(a => [a.id, a]) || []);
       
-      return (lines || []).map((line: any) => {
+      return lines.map((line) => {
         const je = journalEntriesMap.get(line.journal_entry_id);
         const acc = accountsMap.get(line.account_id);
         
@@ -308,6 +314,7 @@ export function TaxReportPreview({
           reference: je?.reference,
           debit: Number(line.debit || 0),
           credit: Number(line.credit || 0),
+          account_id: line.account_id,
           account_code: acc?.code,
           account_name: acc?.name,
           tax_code: taxCode,
@@ -374,88 +381,56 @@ export function TaxReportPreview({
     });
   }, [allTaxCodes, reportCategory, isCanada]);
 
-  // Filter accounts based on selected filters
-  const filteredAccounts = useMemo(() => {
-    let accounts = [...categoryFilteredAccounts];
-    if (accountTypeFilter !== 'all') {
-      accounts = accounts.filter(a => a.type === accountTypeFilter);
-    }
-    return accounts;
-  }, [categoryFilteredAccounts, accountTypeFilter]);
-
-  // Filter journal entries based on selected tax codes
   const filteredJournalDetails = useMemo(() => {
     let details = categoryFilteredJournalDetails;
     if (selectedTaxCodes.length > 0) {
       details = details.filter((j: any) => j.tax_code && selectedTaxCodes.includes(j.tax_code));
     }
-    // Apply account type filter
-    if (accountTypeFilter === 'collected') {
-      details = details.filter((j: any) => j.account_name?.toLowerCase().includes('collected'));
-    } else if (accountTypeFilter === 'paid') {
-      details = details.filter((j: any) => 
-        j.account_name?.toLowerCase().includes('paid') || 
-        j.account_name?.toLowerCase().includes('input')
+    if (accountTypeFilter !== 'all') {
+      const ids = new Set(
+        categoryFilteredAccounts.filter((account) => account.type === accountTypeFilter).map((account) => account.accountId),
       );
+      details = details.filter((line) => ids.has(line.account_id));
     }
     return details;
-  }, [categoryFilteredJournalDetails, selectedTaxCodes, accountTypeFilter]);
+  }, [categoryFilteredJournalDetails, selectedTaxCodes, accountTypeFilter, categoryFilteredAccounts]);
 
-  // Calculate summary with filters applied
-  const summary = useMemo(() => {
-    const collected = filteredAccounts
-      .filter(a => a.type === 'collected')
-      .reduce((sum, a) => sum + a.balance, 0);
-    
-    const paid = filteredAccounts
-      .filter(a => a.type === 'paid')
-      .reduce((sum, a) => sum + a.balance, 0);
-    
-    const pst = filteredAccounts
-      .filter(a => a.type === 'pst')
-      .reduce((sum, a) => sum + a.balance, 0);
-    
-    const netPayable = collected - paid + pst;
-    
-    // Calculate period totals from filtered journal entries
-    const periodCollected = filteredJournalDetails
-      .filter(j => j.account_name.toLowerCase().includes('collected'))
-      .reduce((sum, j) => sum + j.credit - j.debit, 0);
-    
-    const periodPaid = filteredJournalDetails
-      .filter(j => j.account_name.toLowerCase().includes('paid') || j.account_name.toLowerCase().includes('input'))
-      .reduce((sum, j) => sum + j.debit - j.credit, 0);
-    
-    return {
-      collected,
-      paid,
-      pst,
-      netPayable,
-      periodCollected: Math.abs(periodCollected),
-      periodPaid: Math.abs(periodPaid),
-      periodNet: Math.abs(periodCollected) - Math.abs(periodPaid),
-    };
-  }, [filteredAccounts, filteredJournalDetails]);
+  // Replace each account's lifetime balance with activity posted inside the selected period.
+  const filteredAccounts = useMemo(() => {
+    let accounts = [...categoryFilteredAccounts];
+    if (accountTypeFilter !== 'all') {
+      accounts = accounts.filter(a => a.type === accountTypeFilter);
+    }
+    return applyPeriodBalances(
+      accounts,
+      filteredJournalDetails.map((line) => ({
+        accountId: line.account_id,
+        debit: line.debit,
+        credit: line.credit,
+      })),
+    );
+  }, [categoryFilteredAccounts, accountTypeFilter, filteredJournalDetails]);
 
-  // Group by tax code for detailed report
+  const summary = useMemo(() => summarizePeriodAccounts(filteredAccounts), [filteredAccounts]);
+
   const groupedByTaxCode = useMemo(() => {
+    const accountKind = new Map(categoryFilteredAccounts.map((account) => [account.accountId, account.type as TaxAccountKind]));
     const groups: Record<string, { code: string; name: string; collected: number; paid: number; net: number }> = {};
     
-    filteredJournalDetails.forEach((line: any) => {
+    filteredJournalDetails.forEach((line) => {
       const code = line.tax_code || 'Unclassified';
       if (!groups[code]) {
         groups[code] = { code, name: code, collected: 0, paid: 0, net: 0 };
       }
-      if (line.account_name.toLowerCase().includes('collected')) {
-        groups[code].collected += line.credit - line.debit;
-      } else {
-        groups[code].paid += line.debit - line.credit;
-      }
+      const kind = accountKind.get(line.account_id) ?? 'collected';
+      const movement = periodMovement(kind, line.debit, line.credit);
+      if (kind === 'paid') groups[code].paid += movement;
+      else groups[code].collected += movement;
       groups[code].net = groups[code].collected - groups[code].paid;
     });
     
     return Object.values(groups);
-  }, [filteredJournalDetails]);
+  }, [filteredJournalDetails, categoryFilteredAccounts]);
 
   const hasActiveFilters = selectedTaxCodes.length > 0 || accountTypeFilter !== 'all' || reportType !== 'summary';
 
@@ -560,7 +535,7 @@ export function TaxReportPreview({
       doc.text('Account', 20, y);
       doc.text('Code', 80, y);
       doc.text('Type', 110, y);
-      doc.text('Balance', pageWidth - 20, y, { align: 'right' });
+      doc.text('Period activity', pageWidth - 20, y, { align: 'right' });
       y += 8;
       
       doc.setFont('helvetica', 'normal');
@@ -905,7 +880,9 @@ export function TaxReportPreview({
           </CollapsibleContent>
         </Collapsible>
 
-        {isLoading ? (
+        {journalError ? (
+          <p className="text-sm text-destructive">Period activity could not be loaded. Refresh the page and choose the period again.</p>
+        ) : isLoading ? (
           <div className="space-y-4">
             <Skeleton className="h-20" />
             <Skeleton className="h-40" />
@@ -1148,7 +1125,7 @@ export function TaxReportPreview({
                           <TableHead>{isBurundi ? 'Compte' : 'Account'}</TableHead>
                           <TableHead>Code</TableHead>
                           <TableHead>Type</TableHead>
-                          <TableHead className="text-right">{isBurundi ? 'Solde' : 'Balance'}</TableHead>
+                          <TableHead className="text-right">{isBurundi ? 'Activité de la période' : 'Period activity'}</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -1341,7 +1318,7 @@ export function TaxReportPreview({
                     <TableHead>Account</TableHead>
                     <TableHead>Code</TableHead>
                     <TableHead>Type</TableHead>
-                    <TableHead className="text-right">Balance</TableHead>
+                    <TableHead className="text-right">Period activity</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
