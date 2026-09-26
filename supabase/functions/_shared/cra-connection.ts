@@ -20,6 +20,9 @@ export interface CraGatewayEnv {
   efileName: string;
   efileNumber: string;
   efilePassword: string;
+  contactEmail: string;
+  mailingAddress: string;
+  telephone: string;
   efileTransmitUrl: string;
   efileStatusUrl: string;
   cdeUrl: string;
@@ -148,6 +151,9 @@ export function craEnvFrom(read: (key: string) => string | undefined): CraGatewa
     efileName: cleanFirmName(read('CRA_EFILE_NAME')),
     efileNumber: (read('CRA_EFILE_NUMBER') ?? '').trim(),
     efilePassword: read('CRA_EFILE_PASSWORD') ?? '',
+    contactEmail: cleanFirmName(read('CRA_CONTACT_EMAIL')).toLowerCase(),
+    mailingAddress: cleanFirmName(read('CRA_MAILING_ADDRESS')),
+    telephone: cleanFirmName(read('CRA_TELEPHONE')),
     efileTransmitUrl: (read('CRA_EFILE_TRANSMIT_URL') ?? '').trim(),
     efileStatusUrl: (read('CRA_EFILE_STATUS_URL') ?? '').trim(),
     cdeUrl: (read('CRA_CDE_URL') ?? '').trim() || CRA_INTERNET_FILE_TRANSFER_URL,
@@ -166,6 +172,9 @@ export interface CraFirmSettings {
   efileName: string;
   efileNumber: string;
   efilePassword: string;
+  contactEmail: string;
+  mailingAddress: string;
+  telephone: string;
 }
 
 /** Admin-portal values replace server env when they are non-empty. */
@@ -178,6 +187,9 @@ export function applyCraFirmSettings(env: CraGatewayEnv, firm: CraFirmSettings |
     efileName: firm.efileName.trim() || env.efileName,
     efileNumber: firm.efileNumber.trim() || env.efileNumber,
     efilePassword: firm.efilePassword || env.efilePassword,
+    contactEmail: firm.contactEmail?.trim().toLowerCase() || env.contactEmail,
+    mailingAddress: firm.mailingAddress?.trim() || env.mailingAddress,
+    telephone: firm.telephone?.trim() || env.telephone,
   };
 }
 
@@ -190,8 +202,11 @@ export function parseCraFirmSettings(data: unknown): CraFirmSettings | null {
   const efileName = typeof record.efile_name === 'string' ? cleanFirmName(record.efile_name) : '';
   const efileNumber = typeof record.efile_number === 'string' ? record.efile_number.trim() : '';
   const efilePassword = typeof record.efile_password === 'string' ? record.efile_password : '';
-  if (!representativeName && !representativeId && !efileName && !efileNumber && !efilePassword) return null;
-  return { representativeName, representativeId, efileName, efileNumber, efilePassword };
+  const contactEmail = typeof record.contact_email === 'string' ? cleanFirmName(record.contact_email).toLowerCase() : '';
+  const mailingAddress = typeof record.mailing_address === 'string' ? cleanFirmName(record.mailing_address) : '';
+  const telephone = typeof record.telephone === 'string' ? cleanFirmName(record.telephone) : '';
+  if (!representativeName && !representativeId && !efileName && !efileNumber && !efilePassword && !contactEmail && !mailingAddress && !telephone) return null;
+  return { representativeName, representativeId, efileName, efileNumber, efilePassword, contactEmail, mailingAddress, telephone };
 }
 
 function cleanFirmName(value: string | undefined): string {
@@ -202,10 +217,35 @@ function cleanFirmName(value: string | undefined): string {
 export async function readCraFirmSettings(db: CraDb): Promise<CraFirmSettings | null> {
   try {
     const { data, error } = await db.rpc('gateway_cra_firm_settings', {});
-    if (!error) return parseCraFirmSettings(data);
+    if (!error) {
+      const fromGateway = parseCraFirmSettings(data);
+      if (gatewayRowHasContact(data) || !gatewayReturnedRow(data)) return fromGateway;
+      const fromPlatform = await readPlatformFirmSettings(db);
+      if (!fromGateway || !fromPlatform) return fromGateway ?? fromPlatform;
+      return {
+        ...fromGateway,
+        contactEmail: fromPlatform.contactEmail || fromGateway.contactEmail,
+        mailingAddress: fromPlatform.mailingAddress || fromGateway.mailingAddress,
+        telephone: fromPlatform.telephone || fromGateway.telephone,
+      };
+    }
   } catch {
     // The settings function is not installed yet. Try the admin settings row.
   }
+  return readPlatformFirmSettings(db);
+}
+
+function gatewayReturnedRow(data: unknown): boolean {
+  const row = Array.isArray(data) ? data[0] : data;
+  return !!row && typeof row === 'object';
+}
+
+function gatewayRowHasContact(data: unknown): boolean {
+  const row = Array.isArray(data) ? data[0] : data;
+  return !!row && typeof row === 'object' && 'contact_email' in row;
+}
+
+async function readPlatformFirmSettings(db: CraDb): Promise<CraFirmSettings | null> {
   try {
     const { data, error } = await db.from('platform_settings').select('setting_value').eq('setting_key', 'cra_firm_settings').limit(1);
     if (error || !data) return null;
@@ -321,6 +361,9 @@ export function buildEfileXml(input: {
   representativeId: string;
   efileName: string;
   efileNumber: string;
+  contactEmail: string;
+  mailingAddress: string;
+  telephone: string;
   amounts: Record<string, number>;
 }): string {
   const year = Number(input.taxYear) || new Date().getFullYear();
@@ -341,6 +384,9 @@ export function buildEfileXml(input: {
     <TransmitterBN>${xmlEscape(input.businessNumber)}</TransmitterBN>
     <RepresentativeName>${xmlEscape(input.representativeName)}</RepresentativeName>
     <RepresentativeId>${xmlEscape(input.representativeId)}</RepresentativeId>
+    <ContactEmail>${xmlEscape(input.contactEmail)}</ContactEmail>
+    <MailingAddress>${xmlEscape(input.mailingAddress)}</MailingAddress>
+    <Telephone>${xmlEscape(input.telephone)}</Telephone>
   </T619>
   <Return type="${xmlEscape(input.returnType)}">
     <BusinessNumber>${xmlEscape(input.businessNumber)}</BusinessNumber>
@@ -389,6 +435,9 @@ async function transmitEfile(payload: Record<string, unknown>, env: CraGatewayEn
     representativeId: env.representativeId,
     efileName: env.efileName,
     efileNumber: env.efileNumber,
+    contactEmail: env.contactEmail,
+    mailingAddress: env.mailingAddress,
+    telephone: env.telephone,
     amounts: numberMap(payload.amounts),
   });
   return postForConfirmation(action, env.efileTransmitUrl, xml, 'application/xml', env, fetchImpl);
@@ -408,6 +457,9 @@ async function efileStatus(payload: Record<string, unknown>, env: CraGatewayEnv,
     representativeId: env.representativeId,
     efileName: env.efileName,
     efileNumber: env.efileNumber,
+    contactEmail: env.contactEmail,
+    mailingAddress: env.mailingAddress,
+    telephone: env.telephone,
   });
   return postForConfirmation(action, env.efileStatusUrl, body, 'application/json', env, fetchImpl);
 }
@@ -506,6 +558,9 @@ async function refreshCde(payload: Record<string, unknown>, env: CraGatewayEnv, 
         representativeName: env.representativeName,
         representativeId: env.representativeId,
         efileName: env.efileName,
+        contactEmail: env.contactEmail,
+        mailingAddress: env.mailingAddress,
+        telephone: env.telephone,
         legalName: text(payload.legalName),
       }),
     });

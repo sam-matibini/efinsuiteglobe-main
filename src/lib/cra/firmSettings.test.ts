@@ -7,6 +7,9 @@ const named = {
   efileName: 'eFinTax EFILE',
   efileNumber: 'EF12345',
   efilePassword: 'secret1',
+  contactEmail: 'efile@efinsuite.com',
+  mailingAddress: '100 King St, Winnipeg, MB R3C 1A5',
+  telephone: '(204) 555-0100',
 };
 
 describe('CRA firm settings input', () => {
@@ -25,7 +28,13 @@ describe('CRA firm settings input', () => {
       efileName: '',
       efileNumber: '',
       efilePassword: '',
+      contactEmail: '',
+      mailingAddress: '',
+      telephone: '',
     })).toMatch(/Enter a representative name/);
+    expect(validateCraFirmInput({ ...named, contactEmail: 'not-an-email' })).toMatch(/valid email/);
+    expect(validateCraFirmInput({ ...named, telephone: '123' })).toMatch(/Telephone/);
+    expect(validateCraFirmInput({ ...named, mailingAddress: 'AB' })).toMatch(/Mailing address/);
     expect(validateCraFirmInput({ ...named, representativeId: 'AB' })).toMatch(/4 to 20/);
     expect(validateCraFirmInput({ ...named, representativeName: 'A' })).toMatch(/Representative name/);
     expect(validateCraFirmInput({ ...named, efileName: '..' })).toMatch(/EFILE name/);

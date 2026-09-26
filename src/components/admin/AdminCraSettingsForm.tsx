@@ -2,18 +2,22 @@ import { useEffect, useState } from 'react';
 import { Eye, EyeOff, Landmark, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import { missingCraSettingsFunction, normalizeFirmName, validateCraFirmInput } from '@/lib/cra/firmSettings';
+import { missingCraSettingsFunction, normalizeContactEmail, normalizeFirmName, normalizeMailingAddress, normalizeTelephone, validateCraFirmInput } from '@/lib/cra/firmSettings';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 
 interface StoredFirmSettings {
   representativeName: string;
   representativeId: string;
   efileName: string;
   efileNumber: string;
+  contactEmail: string;
+  mailingAddress: string;
+  telephone: string;
   passwordConfigured: boolean;
   updatedAt: string | null;
 }
@@ -23,6 +27,9 @@ const EMPTY: StoredFirmSettings = {
   representativeId: '',
   efileName: '',
   efileNumber: '',
+  contactEmail: '',
+  mailingAddress: '',
+  telephone: '',
   passwordConfigured: false,
   updatedAt: null,
 };
@@ -33,6 +40,9 @@ export function AdminCraSettingsForm() {
   const [representativeId, setRepresentativeId] = useState('');
   const [efileName, setEfileName] = useState('');
   const [efileNumber, setEfileNumber] = useState('');
+  const [contactEmail, setContactEmail] = useState('');
+  const [mailingAddress, setMailingAddress] = useState('');
+  const [telephone, setTelephone] = useState('');
   const [efilePassword, setEfilePassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -49,6 +59,9 @@ export function AdminCraSettingsForm() {
         setRepresentativeId(next.representativeId);
         setEfileName(next.efileName);
         setEfileNumber(next.efileNumber);
+        setContactEmail(next.contactEmail);
+        setMailingAddress(next.mailingAddress);
+        setTelephone(next.telephone);
       })
       .catch((error: unknown) => {
         if (!cancelled) setLoadError(error instanceof Error ? error.message : 'CRA settings could not be loaded.');
@@ -62,7 +75,16 @@ export function AdminCraSettingsForm() {
   }, []);
 
   const save = async () => {
-    const validation = validateCraFirmInput({ representativeName, representativeId, efileName, efileNumber, efilePassword });
+    const validation = validateCraFirmInput({
+      representativeName,
+      representativeId,
+      efileName,
+      efileNumber,
+      efilePassword,
+      contactEmail,
+      mailingAddress,
+      telephone,
+    });
     if (validation) {
       toast.error(validation);
       return;
@@ -74,6 +96,9 @@ export function AdminCraSettingsForm() {
         representativeId: representativeId.trim(),
         efileName: normalizeFirmName(efileName),
         efileNumber: efileNumber.trim(),
+        contactEmail: normalizeContactEmail(contactEmail),
+        mailingAddress: normalizeMailingAddress(mailingAddress),
+        telephone: normalizeTelephone(telephone),
         efilePassword,
       }, stored.passwordConfigured);
       setStored(next);
@@ -81,6 +106,9 @@ export function AdminCraSettingsForm() {
       setRepresentativeId(next.representativeId);
       setEfileName(next.efileName);
       setEfileNumber(next.efileNumber);
+      setContactEmail(next.contactEmail);
+      setMailingAddress(next.mailingAddress);
+      setTelephone(next.telephone);
       setEfilePassword('');
       setShowPassword(false);
       toast.success('Tax & CRA settings saved. Filing, enquiries, and remittances will use them.');
@@ -99,8 +127,8 @@ export function AdminCraSettingsForm() {
           Firm CRA credentials
         </CardTitle>
         <CardDescription>
-          Representative name and ID, plus the name and number registered for EFILE. These are the firm’s credentials, not a client’s CRA password.
-          Filing and Client Data Enquiry send these names when eFinsuite contacts CRA.
+          Representative name and ID, the name and number registered for EFILE, and the email, mailing address, and telephone CRA has for this representative.
+          These are the firm’s details, not a client’s CRA password. Filing and Client Data Enquiry send the names and this contact when eFinsuite contacts CRA.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -155,6 +183,42 @@ export function AdminCraSettingsForm() {
             <p className="text-xs text-muted-foreground">
               The representative name is the name on the CRA Rep ID. The EFILE name is the name registered with the EFILE number. Both are included when eFinsuite contacts CRA. A blank name keeps the one already stored.
             </p>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="cra-contact-email">Email</Label>
+                <Input
+                  id="cra-contact-email"
+                  type="email"
+                  value={contactEmail}
+                  autoComplete="email"
+                  spellCheck={false}
+                  onChange={(event) => setContactEmail(event.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="cra-telephone">Telephone</Label>
+                <Input
+                  id="cra-telephone"
+                  type="tel"
+                  value={telephone}
+                  autoComplete="tel"
+                  onChange={(event) => setTelephone(event.target.value)}
+                />
+              </div>
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="cra-mailing-address">Mailing address</Label>
+                <Textarea
+                  id="cra-mailing-address"
+                  value={mailingAddress}
+                  autoComplete="street-address"
+                  rows={3}
+                  onChange={(event) => setMailingAddress(event.target.value)}
+                />
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              These are the email, mailing address, and telephone CRA has for this representative. A blank field keeps the one already stored.
+            </p>
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-3">
                 <Label htmlFor="cra-efile-password">EFILE password</Label>
@@ -194,7 +258,17 @@ export function AdminCraSettingsForm() {
 async function loadStored(): Promise<StoredFirmSettings> {
   const rpc = supabase as unknown as RpcClient;
   const { data, error } = await rpc.rpc('admin_get_cra_firm_settings');
-  if (!error) return fromPublicRow(data);
+  if (!error) {
+    const saved = fromPublicRow(data);
+    if (publicRowHasContact(data)) return saved;
+    const extra = await existingFallback();
+    return {
+      ...saved,
+      contactEmail: textValue(extra.contact_email),
+      mailingAddress: textValue(extra.mailing_address),
+      telephone: textValue(extra.telephone),
+    };
+  }
   if (!missingCraSettingsFunction(error.message)) throw new Error(error.message);
   const { data: rows, error: readError } = await supabase
     .from('platform_settings')
@@ -211,12 +285,24 @@ async function loadStored(): Promise<StoredFirmSettings> {
     representativeId: typeof record.representative_id === 'string' ? record.representative_id : '',
     efileName: typeof record.efile_name === 'string' ? record.efile_name : '',
     efileNumber: typeof record.efile_number === 'string' ? record.efile_number : '',
+    contactEmail: typeof record.contact_email === 'string' ? record.contact_email : '',
+    mailingAddress: typeof record.mailing_address === 'string' ? record.mailing_address : '',
+    telephone: typeof record.telephone === 'string' ? record.telephone : '',
     passwordConfigured: typeof record.efile_password === 'string' && record.efile_password.length > 0,
     updatedAt: row.updated_at ?? null,
   };
 }
 
-async function saveStored(input: { representativeName: string; representativeId: string; efileName: string; efileNumber: string; efilePassword: string }, passwordConfigured: boolean): Promise<StoredFirmSettings> {
+async function saveStored(input: {
+  representativeName: string;
+  representativeId: string;
+  efileName: string;
+  efileNumber: string;
+  contactEmail: string;
+  mailingAddress: string;
+  telephone: string;
+  efilePassword: string;
+}, passwordConfigured: boolean): Promise<StoredFirmSettings> {
   const rpc = supabase as unknown as RpcClient;
   const { data, error } = await rpc.rpc('admin_save_cra_firm_settings', {
     _representative_name: input.representativeName,
@@ -224,12 +310,15 @@ async function saveStored(input: { representativeName: string; representativeId:
     _efile_name: input.efileName,
     _efile_number: input.efileNumber,
     _efile_password: input.efilePassword,
+    _contact_email: input.contactEmail,
+    _mailing_address: input.mailingAddress,
+    _telephone: input.telephone,
   });
-  if (!error) {
+  if (!error && publicRowHasContact(data)) {
     await supabase.from('platform_settings').delete().eq('setting_key', 'cra_firm_settings');
     return fromPublicRow(data);
   }
-  if (!missingCraSettingsFunction(error.message)) throw new Error(error.message);
+  if (error && !missingCraSettingsFunction(error.message)) throw new Error(error.message);
 
   const existing = await existingFallback();
   let efilePassword = input.efilePassword;
@@ -238,11 +327,17 @@ async function saveStored(input: { representativeName: string; representativeId:
   }
   const representativeName = input.representativeName || textValue(existing.representative_name);
   const efileName = input.efileName || textValue(existing.efile_name);
+  const contactEmail = input.contactEmail || textValue(existing.contact_email);
+  const mailingAddress = input.mailingAddress || textValue(existing.mailing_address);
+  const telephone = input.telephone || textValue(existing.telephone);
   const settingValue = {
     representative_name: representativeName,
     representative_id: input.representativeId,
     efile_name: efileName,
     efile_number: input.efileNumber,
+    contact_email: contactEmail,
+    mailing_address: mailingAddress,
+    telephone,
     efile_password: efilePassword,
   };
   const { error: writeError } = await supabase
@@ -254,6 +349,9 @@ async function saveStored(input: { representativeName: string; representativeId:
     representativeId: input.representativeId,
     efileName,
     efileNumber: input.efileNumber,
+    contactEmail,
+    mailingAddress,
+    telephone,
     passwordConfigured: efilePassword.length > 0 || passwordConfigured,
     updatedAt: new Date().toISOString(),
   };
@@ -274,6 +372,11 @@ function textValue(value: unknown): string {
   return typeof value === 'string' ? value : '';
 }
 
+function publicRowHasContact(data: unknown): boolean {
+  const row = Array.isArray(data) ? data[0] : data;
+  return !!row && typeof row === 'object' && 'contact_email' in row;
+}
+
 function fromPublicRow(data: unknown): StoredFirmSettings {
   const row = Array.isArray(data) ? data[0] : data;
   if (!row || typeof row !== 'object') return EMPTY;
@@ -283,6 +386,9 @@ function fromPublicRow(data: unknown): StoredFirmSettings {
     representativeId: typeof record.representative_id === 'string' ? record.representative_id : '',
     efileName: typeof record.efile_name === 'string' ? record.efile_name : '',
     efileNumber: typeof record.efile_number === 'string' ? record.efile_number : '',
+    contactEmail: typeof record.contact_email === 'string' ? record.contact_email : '',
+    mailingAddress: typeof record.mailing_address === 'string' ? record.mailing_address : '',
+    telephone: typeof record.telephone === 'string' ? record.telephone : '',
     passwordConfigured: record.password_configured === true,
     updatedAt: typeof record.updated_at === 'string' ? record.updated_at : null,
   };

@@ -22,6 +22,9 @@ const env: CraGatewayEnv = {
   efileName: 'eFinTax EFILE',
   efileNumber: 'AB1234',
   efilePassword: 'secret-efile',
+  contactEmail: 'efile@efinsuite.com',
+  mailingAddress: '100 King St, Winnipeg, MB R3C 1A5',
+  telephone: '(204) 555-0100',
   efileTransmitUrl: 'https://apps.cra-arc.gc.ca/efile-test/transmit',
   efileStatusUrl: 'https://apps.cra-arc.gc.ca/efile-test/status',
   cdeUrl: 'https://apps.cra-arc.gc.ca/efile-test/enquiry',
@@ -39,6 +42,9 @@ const blankEnv: CraGatewayEnv = {
   efileName: '',
   efileNumber: '',
   efilePassword: '',
+  contactEmail: '',
+  mailingAddress: '',
+  telephone: '',
   efileTransmitUrl: '',
   efileStatusUrl: '',
   cdeUrl: '',
@@ -167,6 +173,9 @@ describe('CRA gateway', () => {
     expect(String(okInit.headers.Authorization)).toMatch(/^Basic /);
     expect(String(okInit.body)).toContain('"representativeName":"eFinTax Advisors Ltd."');
     expect(String(okInit.body)).toContain('"efileName":"eFinTax EFILE"');
+    expect(String(okInit.body)).toContain('"contactEmail":"efile@efinsuite.com"');
+    expect(String(okInit.body)).toContain('"mailingAddress":"100 King St, Winnipeg, MB R3C 1A5"');
+    expect(String(okInit.body)).toContain('"telephone":"(204) 555-0100"');
 
     const denied = respond(401, 'Unauthorized', false);
     const result = await handleCraGateway('cde_refresh', { businessNumber: '711450965', programs: ['RT'] }, env, denied);
@@ -262,11 +271,17 @@ describe('CRA gateway', () => {
       representativeId: 'R9999999',
       efileName: 'eFinTax EFILE',
       efileNumber: 'AB1234',
+      contactEmail: 'efile@efinsuite.com',
+      mailingAddress: '100 King St, Winnipeg, MB R3C 1A5',
+      telephone: '(204) 555-0100',
       amounts: { cpp: 10, ei: 2, incomeTax: 8, net: 20 },
     });
     expect(xml).toContain('T619');
     expect(xml).toContain('<trnmtr_nm>eFinTax EFILE</trnmtr_nm>');
     expect(xml).toContain('<RepresentativeName>eFinTax Advisors Ltd.</RepresentativeName>');
+    expect(xml).toContain('<ContactEmail>efile@efinsuite.com</ContactEmail>');
+    expect(xml).toContain('<MailingAddress>100 King St, Winnipeg, MB R3C 1A5</MailingAddress>');
+    expect(xml).toContain('<Telephone>(204) 555-0100</Telephone>');
     expect(xml).toContain('A &amp; B &lt;Ltd&gt;');
     expect(xml).not.toContain('secret');
   });
@@ -286,11 +301,23 @@ describe('CRA gateway', () => {
     expect(String(init.body)).toContain('EF12345');
     expect(String(init.body)).not.toContain('portal-secret');
     expect(Buffer.from(String(init.headers.Authorization).replace('Basic ', ''), 'base64').toString()).toBe('EF12345:portal-secret');
-    const kept = applyCraFirmSettings(env, { representativeName: '', representativeId: '', efileName: '', efileNumber: '', efilePassword: '' });
+    const kept = applyCraFirmSettings(env, {
+      representativeName: '',
+      representativeId: '',
+      efileName: '',
+      efileNumber: '',
+      efilePassword: '',
+      contactEmail: '',
+      mailingAddress: '',
+      telephone: '',
+    });
     expect(kept.representativeName).toBe(env.representativeName);
     expect(kept.representativeId).toBe(env.representativeId);
     expect(kept.efileName).toBe(env.efileName);
     expect(kept.efilePassword).toBe(env.efilePassword);
+    expect(kept.contactEmail).toBe(env.contactEmail);
+    expect(kept.mailingAddress).toBe(env.mailingAddress);
+    expect(kept.telephone).toBe(env.telephone);
     expect(parseCraFirmSettings([{ representative_name: 'Saved Rep', representative_id: 'REP1234', efile_name: 'Saved EFILE', efile_number: '', efile_password: '' }])).toMatchObject({
       representativeName: 'Saved Rep',
       representativeId: 'REP1234',
@@ -309,7 +336,42 @@ describe('CRA gateway', () => {
       efileName: '',
       efileNumber: 'EF12345',
       efilePassword: 'from-db',
+      contactEmail: '',
+      mailingAddress: '',
+      telephone: '',
     });
+    const withContact = await readCraFirmSettings(settingsDb(
+      { data: [{ representative_id: 'REP1234', efile_number: 'EF12345', efile_password: 'from-db' }], error: null },
+      {
+        representative_id: 'OTHER1',
+        contact_email: 'efile@efinsuite.com',
+        mailing_address: '100 King St, Winnipeg, MB R3C 1A5',
+        telephone: '(204) 555-0100',
+      },
+    ));
+    expect(withContact).toMatchObject({
+      representativeId: 'REP1234',
+      efileNumber: 'EF12345',
+      contactEmail: 'efile@efinsuite.com',
+      mailingAddress: '100 King St, Winnipeg, MB R3C 1A5',
+      telephone: '(204) 555-0100',
+    });
+    const contactFromGateway = await readCraFirmSettings(settingsDb(
+      {
+        data: [{
+          representative_id: 'REP1234',
+          efile_number: 'EF12345',
+          efile_password: 'from-db',
+          contact_email: 'saved@efinsuite.com',
+          mailing_address: '1 Main St',
+          telephone: '2045550199',
+        }],
+        error: null,
+      },
+      { contact_email: 'other@example.com', mailing_address: '9 Other St', telephone: '2045550000' },
+    ));
+    expect(contactFromGateway?.contactEmail).toBe('saved@efinsuite.com');
+    expect(contactFromGateway?.mailingAddress).toBe('1 Main St');
     const fromPlatform = await readCraFirmSettings(settingsDb(
       { data: null, error: { message: 'function gateway_cra_firm_settings does not exist' } },
       { representative_id: 'REP9999', efile_number: 'EF99999', efile_password: 'from-platform' },
