@@ -26,17 +26,16 @@ export async function callCraGateway(body: Record<string, unknown>): Promise<Cra
   const token = data.session?.access_token;
   if (!token) return { ok: false, action: String(body.action ?? ''), error: 'Sign in before using the CRA gateway.' };
   try {
-    if (import.meta.env.DEV) {
-      const response = await fetch('/api/cra-gateway', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify(body),
-      });
-      return (await response.json()) as CraGatewayResult;
+    const response = await fetch('/api/cra-gateway', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(body),
+    });
+    const result = await response.json().catch(() => null);
+    if (!result || typeof result !== 'object') {
+      return { ok: false, action: String(body.action ?? ''), error: 'CRA gateway is unreachable.' };
     }
-    const { data: result, error } = await supabase.functions.invoke('cra-gateway', { body });
-    if (error) return { ok: false, action: String(body.action ?? ''), error: error.message };
-    return (result ?? { ok: false, action: String(body.action ?? ''), error: 'CRA gateway returned an empty response.' }) as CraGatewayResult;
+    return result as CraGatewayResult;
   } catch (error) {
     return {
       ok: false,

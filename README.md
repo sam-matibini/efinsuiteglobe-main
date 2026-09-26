@@ -52,7 +52,7 @@ npm run dev
 
 ## CRA Tax & Remittance connection
 
-The Tax & CRA screens keep an organization ledger in the browser. Filing, balance refresh, and payment release go through `POST /api/cra-gateway` in development and the `cra-gateway` Supabase function in production. Both call the same handler.
+The Tax & CRA screens keep an organization ledger in the browser. Filing, balance refresh, and payment release go through `POST /api/cra-gateway` on the same host. In development that route is the Vite server. On eFinsuite it is a Vercel function. Both call the same handler. The `cra-gateway` Supabase function is the same handler for a direct Supabase deploy.
 
 Nothing is marked accepted or paid unless the external service says so:
 
