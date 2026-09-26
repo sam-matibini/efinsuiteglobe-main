@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hasAccountingCategory, isBankTransactionLocked } from './bankTransactionLock';
+import { allowUnreconciledBankUpdate, hasAccountingCategory, isBankTransactionLocked } from './bankTransactionLock';
 
 describe('bank transaction lock', () => {
   it('does not lock a cleared download that has not been categorized', () => {
@@ -34,6 +34,32 @@ describe('bank transaction lock', () => {
 
   it('locks an explicit reconciliation even when the category is empty', () => {
     expect(isBankTransactionLocked({ status: 'reconciled', is_cleared: false, category: null })).toBe(true);
+  });
+
+  it('clears a posted download in the same update so the database trigger allows the edit', () => {
+    expect(allowUnreconciledBankUpdate(
+      { gl_account_id: 'acct-1', status: 'matched' },
+      { status: 'unmatched', is_cleared: true },
+    )).toEqual({
+      gl_account_id: 'acct-1',
+      status: 'matched',
+      is_cleared: false,
+      cleared_at: null,
+    });
+  });
+
+  it('does not unlock a transaction whose status is reconciled', () => {
+    expect(allowUnreconciledBankUpdate(
+      { category: 'Shops' },
+      { status: 'reconciled', is_cleared: true },
+    )).toEqual({ category: 'Shops' });
+  });
+
+  it('leaves an uncleared transaction unchanged', () => {
+    expect(allowUnreconciledBankUpdate(
+      { category: 'Shops' },
+      { status: 'unmatched', is_cleared: false },
+    )).toEqual({ category: 'Shops' });
   });
 
   it('treats placeholder categories as not categorized', () => {

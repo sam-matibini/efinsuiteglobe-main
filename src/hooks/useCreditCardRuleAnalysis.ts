@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { createJournalEntry } from './useJournalEntryCreation';
 import { TransactionRule } from './useTransactionRules';
 import { CreditCardTransaction } from './useCreditCards';
+import { allowUnreconciledBankUpdate } from '@/lib/bankTransactionLock';
 import { toast } from 'sonner';
 import { 
   matchText, 
@@ -384,7 +385,7 @@ export function useProcessCCTransactions() {
             // Update the transaction
             await supabase
               .from('credit_card_transactions')
-              .update(updates)
+              .update(allowUnreconciledBankUpdate(updates, transaction))
               .eq('id', transaction.id);
 
             // Update rule match count

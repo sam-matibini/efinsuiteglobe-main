@@ -4,6 +4,7 @@ import { createJournalEntry } from './useJournalEntryCreation';
 import { reverseLinkedJournalEntry, recalculateAndInvalidate } from './useGLPropagation';
 import { TransactionRule } from './useTransactionRules';
 import { BankTransaction } from './useBankTransactions';
+import { allowUnreconciledBankUpdate } from '@/lib/bankTransactionLock';
 import { toast } from 'sonner';
 import { 
   matchText, 
@@ -415,7 +416,7 @@ export function useProcessTransactions() {
             // Update the transaction
             await supabase
               .from('bank_transactions')
-              .update(updates)
+              .update(allowUnreconciledBankUpdate(updates, transaction))
               .eq('id', transaction.id);
 
             // Update rule match count

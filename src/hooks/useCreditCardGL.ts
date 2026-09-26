@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { createJournalEntry } from './useJournalEntryCreation';
+import { allowUnreconciledBankUpdate } from '@/lib/bankTransactionLock';
 import { TaxCode } from './useSalesTax';
 import { ensurePersistedTaxCode } from '@/lib/persistTaxCode';
 import { toast } from 'sonner';
@@ -98,13 +99,17 @@ export function usePostCreditCardTransactionToGL() {
       // Idempotency: if this transaction is already linked to a journal entry, don't create another
       const { data: existingTx, error: existingTxError } = await supabase
         .from('credit_card_transactions')
-        .select('journal_entry_id')
+        .select('journal_entry_id, status, is_cleared')
         .eq('id', transactionId)
         .maybeSingle();
 
       if (existingTxError) {
         console.error('Existing transaction lookup error:', existingTxError);
         throw new Error(`Failed to validate transaction state: ${existingTxError.message}`);
+      }
+
+      if (existingTx?.status === 'reconciled') {
+        throw new Error('This transaction is reconciled. Unreconcile it before posting.');
       }
 
       if (existingTx?.journal_entry_id) {
@@ -319,7 +324,7 @@ export function usePostCreditCardTransactionToGL() {
       }
       const { error: updateError } = await supabase
         .from('credit_card_transactions')
-        .update(ccTxUpdate)
+        .update(allowUnreconciledBankUpdate(ccTxUpdate, existingTx))
         .eq('id', transactionId);
 
       if (updateError) {
@@ -459,13 +464,18 @@ export function useBulkPostCreditCardToGL() {
             status: 'posted',
           });
 
+          const { data: existingBulk } = await supabase
+            .from('credit_card_transactions')
+            .select('status, is_cleared')
+            .eq('id', transactionId)
+            .maybeSingle();
           await supabase
             .from('credit_card_transactions')
-            .update({
+            .update(allowUnreconciledBankUpdate({
               journal_entry_id: journalEntryId,
               gl_account_id: glAccountId,
               status: 'matched',
-            })
+            }, existingBulk))
             .eq('id', transactionId);
 
           results.push({ transactionId, journalEntryId, success: true });

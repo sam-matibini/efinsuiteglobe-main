@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { createJournalEntry } from './useJournalEntryCreation';
+import { allowUnreconciledBankUpdate } from '@/lib/bankTransactionLock';
 import { TaxCode } from './useSalesTax';
 import { ensurePersistedTaxCode } from '@/lib/persistTaxCode';
 import { toast } from 'sonner';
@@ -97,13 +98,17 @@ export function usePostTransactionToGL() {
       // Idempotency: if this transaction is already linked to a journal entry, don't create another
       const { data: existingTx, error: existingTxError } = await supabase
         .from('bank_transactions')
-        .select('journal_entry_id')
+        .select('journal_entry_id, status, is_cleared')
         .eq('id', transactionId)
         .maybeSingle();
 
       if (existingTxError) {
         console.error('Existing transaction lookup error:', existingTxError);
         throw new Error(`Failed to validate transaction state: ${existingTxError.message}`);
+      }
+
+      if (existingTx?.status === 'reconciled') {
+        throw new Error('This transaction is reconciled. Unreconcile it before posting.');
       }
 
       if (existingTx?.journal_entry_id) {
@@ -477,7 +482,7 @@ export function usePostTransactionToGL() {
       }
       const { error: updateError } = await supabase
         .from('bank_transactions')
-        .update(txUpdate)
+        .update(allowUnreconciledBankUpdate(txUpdate, existingTx))
         .eq('id', transactionId);
 
       if (updateError) {
@@ -704,13 +709,21 @@ export function useBulkPostToGL() {
             status: 'posted',
           });
 
+          const { data: existingBulk } = await supabase
+            .from('bank_transactions')
+            .select('status, is_cleared')
+            .eq('id', transactionId)
+            .maybeSingle();
+          if (existingBulk?.status === 'reconciled') {
+            throw new Error('This transaction is reconciled. Unreconcile it before posting.');
+          }
            await supabase
             .from('bank_transactions')
-            .update({
+            .update(allowUnreconciledBankUpdate({
               journal_entry_id: journalEntryId,
               gl_account_id: glAccountId,
               status: 'matched',
-            })
+            }, existingBulk))
             .eq('id', transactionId);
 
           // Auto-create donation record for deposit transactions with a linked donor

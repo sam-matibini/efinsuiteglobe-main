@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { createJournalEntry } from './useJournalEntryCreation';
 import { reverseLinkedJournalEntry, recalculateAndInvalidate } from './useGLPropagation';
 import { parseLocalDate } from '@/lib/utils';
+import { allowUnreconciledBankUpdate } from '@/lib/bankTransactionLock';
 
 export interface CreditCard {
   id: string;
@@ -694,7 +695,7 @@ export function useCreditCardTransactions(creditCardId?: string, glAccountId?: s
       if (!linkedJEId || !glFieldChanged) {
         const { data, error } = await supabase
           .from('credit_card_transactions')
-          .update(updates)
+          .update(allowUnreconciledBankUpdate(updates, existing))
           .eq('id', id)
           .select()
           .single();
@@ -717,11 +718,11 @@ export function useCreditCardTransactions(creditCardId?: string, glAccountId?: s
 
       const { data: updated, error: updErr } = await supabase
         .from('credit_card_transactions')
-        .update({
+        .update(allowUnreconciledBankUpdate({
           ...updates,
           journal_entry_id: null,
           status: 'pending',
-        })
+        }, existing))
         .eq('id', id)
         .select('*')
         .single();
@@ -767,7 +768,7 @@ export function useCreditCardTransactions(creditCardId?: string, glAccountId?: s
           });
           await supabase
             .from('credit_card_transactions')
-            .update({ journal_entry_id: newJEId, status: 'matched' })
+            .update(allowUnreconciledBankUpdate({ journal_entry_id: newJEId, status: 'matched' }, existing))
             .eq('id', id);
         } catch (jeErr) {
           console.error('Failed to re-post CC journal entry after edit:', jeErr);

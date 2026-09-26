@@ -9,6 +9,7 @@
  */
 
 import { supabase } from '@/integrations/supabase/client';
+import { allowUnreconciledBankUpdate } from '@/lib/bankTransactionLock';
 
 /** Default ±N day window for cross-module duplicate detection. */
 export const CC_MATCH_WINDOW_DAYS = 7;
@@ -146,14 +147,19 @@ export async function linkBankTransactionToExistingCCPayment(
   existingJournalEntryId: string,
   ccGlAccountId: string
 ): Promise<void> {
+  const { data: existing } = await supabase
+    .from('bank_transactions')
+    .select('status, is_cleared')
+    .eq('id', bankTransactionId)
+    .maybeSingle();
   const { error } = await supabase
     .from('bank_transactions')
-    .update({
+    .update(allowUnreconciledBankUpdate({
       journal_entry_id: existingJournalEntryId,
       gl_account_id: ccGlAccountId,
       status: 'matched',
       category: 'Credit Card Payment',
-    })
+    }, existing))
     .eq('id', bankTransactionId);
   
   if (error) {
@@ -400,14 +406,19 @@ export async function linkBankTransactionToExistingTransfer(
   existingJournalEntryId: string,
   glAccountId: string
 ): Promise<void> {
+  const { data: existing } = await supabase
+    .from('bank_transactions')
+    .select('status, is_cleared')
+    .eq('id', bankTransactionId)
+    .maybeSingle();
   const { error } = await supabase
     .from('bank_transactions')
-    .update({
+    .update(allowUnreconciledBankUpdate({
       journal_entry_id: existingJournalEntryId,
       gl_account_id: glAccountId,
       status: 'matched',
       category: 'Inter-Account Transfer',
-    })
+    }, existing))
     .eq('id', bankTransactionId);
   
   if (error) {

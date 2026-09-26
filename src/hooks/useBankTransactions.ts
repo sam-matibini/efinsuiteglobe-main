@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { createJournalEntry } from './useJournalEntryCreation';
 import { reverseLinkedJournalEntry, recalculateAndInvalidate } from './useGLPropagation';
 import { repairLegacyPlaidRow } from '@/lib/plaidBankAmount';
+import { allowUnreconciledBankUpdate } from '@/lib/bankTransactionLock';
 
 export interface BankTransaction {
   id: string;
@@ -132,7 +133,7 @@ export function useBankTransactions(bankAccountId?: string) {
       if (!linkedJEId || !glFieldChanged) {
         const { data, error } = await supabase
           .from('bank_transactions')
-          .update(updates)
+          .update(allowUnreconciledBankUpdate(updates, existing))
           .eq('id', id)
           .select()
           .single();
@@ -155,11 +156,11 @@ export function useBankTransactions(bankAccountId?: string) {
 
       const { data: updated, error: updErr } = await supabase
         .from('bank_transactions')
-        .update({
+        .update(allowUnreconciledBankUpdate({
           ...updates,
           journal_entry_id: null,
           status: 'pending',
-        })
+        }, existing))
         .eq('id', id)
         .select('*')
         .single();
@@ -191,7 +192,7 @@ export function useBankTransactions(bankAccountId?: string) {
           });
           await supabase
             .from('bank_transactions')
-            .update({ journal_entry_id: newJEId, status: 'matched' })
+            .update(allowUnreconciledBankUpdate({ journal_entry_id: newJEId, status: 'matched' }, existing))
             .eq('id', id);
         } catch (jeErr) {
           console.error('Failed to re-post journal entry after edit:', jeErr);
@@ -232,7 +233,7 @@ export function useBankTransactions(bankAccountId?: string) {
       // Look up the existing transaction first so we can reverse any prior JE
       const { data: existing, error: existingErr } = await supabase
         .from('bank_transactions')
-        .select('journal_entry_id, bank_accounts!inner(organization_id)')
+        .select('journal_entry_id, status, is_cleared, bank_accounts!inner(organization_id)')
         .eq('id', id)
         .single();
       if (existingErr) throw existingErr;
@@ -256,12 +257,12 @@ export function useBankTransactions(bankAccountId?: string) {
       // Now update the transaction
       const { data: transaction, error } = await supabase
         .from('bank_transactions')
-        .update({
+        .update(allowUnreconciledBankUpdate({
           category,
           gl_account_id: gl_account_id || null,
           status: 'matched',
           journal_entry_id: null,
-        })
+        }, existing))
         .eq('id', id)
         .select('*, bank_accounts!inner(gl_account_id, organization_id)')
         .single();
