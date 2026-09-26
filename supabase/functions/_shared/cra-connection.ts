@@ -37,6 +37,14 @@ export interface CraBalancesPayload {
   corporate_tax?: number;
 }
 
+export interface CraEnquiryPayload {
+  outstandingReturns: number | null;
+  unfiledReturns: number | null;
+  reviewStatus: string | null;
+  efileRestricted: boolean | null;
+  directDepositAvailable: boolean | null;
+}
+
 export interface CraGatewayResult {
   ok: boolean;
   action: string;
@@ -55,6 +63,7 @@ export interface CraGatewayResult {
   confirmationNumber?: string | null;
   balances?: CraBalancesPayload | null;
   connected?: boolean;
+  enquiry?: CraEnquiryPayload | null;
   /** Shown when CRA answered but did not include balances or an authorization. */
   notice?: string;
   railStatus?: 'submitted' | 'processing' | 'accepted' | 'settled' | 'failed' | 'rejected' | null;
@@ -511,9 +520,10 @@ async function refreshCde(payload: Record<string, unknown>, env: CraGatewayEnv, 
           ok: true,
           action,
           httpStatus: response.status,
-          connected: false,
-          balances: null,
-          notice: 'CRA Internet File Transfer responded. Account balances were not included, so the amounts were not changed.',
+        connected: false,
+        balances: null,
+        enquiry: null,
+        notice: 'CRA Internet File Transfer responded. Account balances were not included, so the amounts were not changed.',
         };
       }
       return {
@@ -533,6 +543,7 @@ async function refreshCde(payload: Record<string, unknown>, env: CraGatewayEnv, 
       body: clip(body),
       balances: parsed.balances,
       connected: parsed.connected,
+      enquiry: parsed.enquiry,
       representativeId: env.representativeId,
     };
   } catch (error) {
@@ -711,7 +722,7 @@ function cardTypeFrom(data: Record<string, unknown>): string {
   return typeof cardType === 'string' ? cardType : '';
 }
 
-export function parseCdeBody(body: string): { balances: CraBalancesPayload | null; connected: boolean } {
+export function parseCdeBody(body: string): { balances: CraBalancesPayload | null; connected: boolean; enquiry: CraEnquiryPayload | null } {
   let record: Record<string, unknown> | null = null;
   try {
     const parsed = JSON.parse(body) as unknown;
@@ -719,7 +730,7 @@ export function parseCdeBody(body: string): { balances: CraBalancesPayload | nul
   } catch {
     record = null;
   }
-  if (!record) return { balances: null, connected: false };
+  if (!record) return { balances: null, connected: false, enquiry: null };
   const source = record.balances && typeof record.balances === 'object' ? (record.balances as Record<string, unknown>) : record;
   const balances: CraBalancesPayload = {};
   const gst = firstNumber(source, ['gst_hst', 'gstHst', 'GST', 'RT']);
@@ -731,7 +742,21 @@ export function parseCdeBody(body: string): { balances: CraBalancesPayload | nul
   const hasBalances = gst !== null || payroll !== null || corporate !== null;
   const status = typeof record.authorizationStatus === 'string' ? record.authorizationStatus.toLowerCase() : '';
   const connected = record.connected === true || record.representativeAuthorized === true || status === 'connected';
-  return { balances: hasBalances ? balances : null, connected };
+  const enquiry = parseEnquiry(record);
+  return { balances: hasBalances ? balances : null, connected, enquiry };
+}
+
+function parseEnquiry(record: Record<string, unknown>): CraEnquiryPayload | null {
+  const outstandingReturns = firstNumber(record, ['outstandingReturns', 'outstanding_returns']);
+  const unfiledReturns = firstNumber(record, ['unfiledReturns', 'unfiled_returns']);
+  const review = record.reviewStatus ?? record.accountReviewStatus;
+  const reviewStatus = typeof review === 'string' && review.trim() ? review.trim() : null;
+  const efileRestricted = typeof record.efileRestricted === 'boolean' ? record.efileRestricted : null;
+  const directDepositAvailable = typeof record.directDepositAvailable === 'boolean' ? record.directDepositAvailable : null;
+  if (outstandingReturns === null && unfiledReturns === null && !reviewStatus && efileRestricted === null && directDepositAvailable === null) {
+    return null;
+  }
+  return { outstandingReturns, unfiledReturns, reviewStatus, efileRestricted, directDepositAvailable };
 }
 
 async function persistSubmission(db: CraDb, organizationId: string, payload: Record<string, unknown>, result: CraGatewayResult): Promise<boolean> {

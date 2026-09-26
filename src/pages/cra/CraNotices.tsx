@@ -28,6 +28,7 @@ export default function CraNotices() {
       description="Notices shown here are limited to program accounts covered by the representative authorization."
     >
       <div className="space-y-3">
+        {cra.ledger.notices.length === 0 ? <p className="text-sm text-muted-foreground">CRA has not returned any notices.</p> : null}
         {cra.ledger.notices.map((notice) => (
           <Card key={notice.id}>
             <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">

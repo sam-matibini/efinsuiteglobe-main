@@ -8,6 +8,7 @@ import {
   createPayment,
   getLedger,
   pollPayment,
+  stripSampleCraLedger,
   recordClientConfirmation,
   recordConfirmation,
   releasePayment,
@@ -29,16 +30,72 @@ beforeEach(() => {
   resetCraStoreForTests();
 });
 
+function readyOrg() {
+  const ledger = getLedger(org, name);
+  ledger.profile.businessNumber = '123456789';
+  ledger.profile.programs = ['RC', 'RT', 'RP'];
+  ledger.accounts = [
+    { program: 'RC', reference: '0001', label: 'Corporate income tax' },
+    { program: 'RT', reference: '0001', label: 'GST/HST' },
+    { program: 'RP', reference: '0001', label: 'Payroll' },
+  ];
+  ledger.authorization = { status: 'connected', level: 'level_2', verifiedByCra: true };
+  ledger.walletBalance = 45000;
+  ledger.gst.filingStatus = 'calculated';
+  ledger.payroll.filingStatus = 'calculated';
+  return ledger;
+}
+
 describe('CRA tax centre', () => {
-  it('starts from the enrolled program balances', () => {
+  it('starts with no CRA balances, payments, or sample authorization', () => {
     const ledger = getLedger(org, name);
-    expect(outstandingBalance(ledger)).toBe(12450);
-    expect(upcomingAssessed(ledger)).toBe(8250);
+    expect(outstandingBalance(ledger)).toBeNull();
+    expect(upcomingAssessed(ledger)).toBeNull();
+    expect(ledger.balances).toEqual({ gst_hst: null, payroll: null, corporate_tax: null });
+    expect(ledger.payments).toEqual([]);
+    expect(ledger.notices).toEqual([]);
+    expect(ledger.authorization.status).toBe('not_started');
+    expect(ledger.authorization.verifiedByCra).toBeUndefined();
+    expect(ledger.profile.businessNumber).toBe('');
+    expect(ledger.walletBalance).toBe(0);
+  });
+
+  it('removes sample CRA figures and keeps a business number the user entered', () => {
+    const ledger = getLedger(org, name);
+    ledger.profile.legalName = '10255666 MANITOBA LTD.';
+    ledger.profile.businessNumber = '711450965';
+    ledger.profile.programs = ['RC', 'RT', 'RP'];
+    ledger.balances = { gst_hst: 4200, payroll: 3250, corporate_tax: 5000 };
+    ledger.balancesFromCra = false;
+    ledger.authorization = {
+      status: 'connected',
+      level: 'level_2',
+      reference: 'RAC-20260901-0042',
+      confirmedAt: '2026-09-03T18:12:00.000Z',
+    };
+    ledger.walletBalance = 45000;
+    ledger.gst.collected = 25000;
+    ledger.gst.itcs = 17500;
+    ledger.syncedAt = '2026-09-25T14:42:00.000Z';
+    ledger.payments.push({ id: 'EFS-CRA-00001246', craConfirmation: undefined } as never);
+    expect(stripSampleCraLedger(ledger)).toBe(true);
+    expect(ledger.profile.legalName).toBe('10255666 MANITOBA LTD.');
+    expect(ledger.profile.businessNumber).toBe('711450965');
     expect(ledger.profile.programs).toEqual(['RC', 'RT', 'RP']);
-    expect(ledger.gst.collected - ledger.gst.itcs).toBe(7500);
+    expect(ledger.balances).toEqual({ gst_hst: null, payroll: null, corporate_tax: null });
+    expect(ledger.authorization.status).toBe('not_started');
+    expect(ledger.walletBalance).toBe(0);
+    expect(ledger.gst.collected).toBe(0);
+    expect(ledger.payments).toEqual([]);
+    expect(ledger.syncedAt).toBe('');
+    ledger.balancesFromCra = true;
+    ledger.balances = { gst_hst: 10, payroll: null, corporate_tax: null };
+    stripSampleCraLedger(ledger);
+    expect(ledger.balances.gst_hst).toBe(10);
   });
 
   it('keeps filing separate from payment', () => {
+    readyOrg();
     const before = getLedger(org, name).payments.length;
     expect(reviewGst(org, name, cfo).ok).toBe(true);
     const filed = submitEfile(org, name, cfo, {
@@ -78,6 +135,7 @@ describe('CRA tax centre', () => {
   });
 
   it('requires a different approver and does not mark the payment paid on release', () => {
+    readyOrg();
     const prepared = createPayment(org, name, cfo, {
       taxType: 'gst_hst',
       account: 'RT0001',
@@ -91,30 +149,42 @@ describe('CRA tax centre', () => {
     expect(prepared.ok).toBe(true);
     expect(approvePayment(org, name, cfo, prepared.id!).ok).toBe(false);
 
-    expect(approvePayment(org, name, cfo, 'EFS-CRA-00001246').ok).toBe(true);
-    const released = releasePayment(org, name, cfo, 'EFS-CRA-00001246');
+    const payroll = createPayment(org, name, accountant, {
+      taxType: 'payroll',
+      account: 'RP0001',
+      amount: 14000,
+      paymentDate: '2026-09-30',
+      dueDate: '2026-09-30',
+      fundingAccount: FUNDING_ACCOUNT,
+      purpose: 'Payroll source deductions',
+      obligationId: 'payroll-current',
+    });
+    expect(payroll.ok).toBe(true);
+    expect(approvePayment(org, name, cfo, payroll.id!).ok).toBe(true);
+    const released = releasePayment(org, name, cfo, payroll.id!);
     expect(released.ok).toBe(true);
-    const submitted = getLedger(org, name).payments.find((payment) => payment.id === 'EFS-CRA-00001246')!;
+    const submitted = getLedger(org, name).payments.find((payment) => payment.id === payroll.id)!;
     expect(submitted.status).toBe('submitted');
     expect(submitted.glAccrual).toHaveLength(2);
     expect(submitted.walletDeduction).toBeUndefined();
 
-    pollPayment(org, name, cfo, 'EFS-CRA-00001246');
-    pollPayment(org, name, cfo, 'EFS-CRA-00001246');
-    pollPayment(org, name, cfo, 'EFS-CRA-00001246');
-    const settled = getLedger(org, name).payments.find((payment) => payment.id === 'EFS-CRA-00001246')!;
+    pollPayment(org, name, cfo, payroll.id!);
+    pollPayment(org, name, cfo, payroll.id!);
+    pollPayment(org, name, cfo, payroll.id!);
+    const settled = getLedger(org, name).payments.find((payment) => payment.id === payroll.id)!;
     expect(settled.status).toBe('settled');
     expect(getLedger(org, name).walletBalance).toBe(31000);
     expect(isReconciled(settled)).toBe(false);
 
-    const confirmed = recordConfirmation(org, name, cfo, 'EFS-CRA-00001246', 'CRA-888888888');
+    const confirmed = recordConfirmation(org, name, cfo, payroll.id!, 'CRA-888888888');
     expect(confirmed.ok).toBe(true);
-    const row = getLedger(org, name).payments.find((payment) => payment.id === 'EFS-CRA-00001246')!;
+    const row = getLedger(org, name).payments.find((payment) => payment.id === payroll.id)!;
     expect(row.status).toBe('confirmed');
     expect(isReconciled(row)).toBe(true);
   });
 
   it('does not connect CRA from a button and does not advance a payment without a rail status', () => {
+    readyOrg();
     expect(revokeAuthorization(org, name, cfo).ok).toBe(true);
     expect(requestAuthorization(org, name, cfo).ok).toBe(true);
     expect(recordClientConfirmation(org, name, cfo).ok).toBe(false);
@@ -128,6 +198,7 @@ describe('CRA tax centre', () => {
     });
     expect(checked.ok).toBe(true);
     expect(getLedger(org, name).authorization.verifiedByCra).toBe(true);
+    expect(getLedger(org, name).balancesFromCra).toBe(true);
     expect(getLedger(org, name).balances.gst_hst).toBe(10);
 
     resetCraStoreForTests();
@@ -146,18 +217,29 @@ describe('CRA tax centre', () => {
     expect(getLedger(org, name).authorization.status).toBe(status);
     expect(getLedger(org, name).authorization.verifiedByCra).toBeUndefined();
 
-    expect(approvePayment(org, name, cfo, 'EFS-CRA-00001246').ok).toBe(true);
-    const held = applyRailResult(org, name, cfo, 'EFS-CRA-00001246', { ok: false, error: 'Nomba card payments are not configured. The payment stays authorized.' });
+    readyOrg();
+    const payroll = createPayment(org, name, accountant, {
+      taxType: 'payroll',
+      account: 'RP0001',
+      amount: 14000,
+      paymentDate: '2026-09-30',
+      dueDate: '2026-09-30',
+      fundingAccount: FUNDING_ACCOUNT,
+      purpose: 'Payroll source deductions',
+    });
+    expect(payroll.ok).toBe(true);
+    expect(approvePayment(org, name, cfo, payroll.id!).ok).toBe(true);
+    const held = applyRailResult(org, name, cfo, payroll.id!, { ok: false, error: 'Nomba card payments are not configured. The payment stays authorized.' });
     expect(held.ok).toBe(false);
-    expect(getLedger(org, name).payments.find((payment) => payment.id === 'EFS-CRA-00001246')!.status).toBe('authorized');
-    const settled = applyRailResult(org, name, cfo, 'EFS-CRA-00001246', {
+    expect(getLedger(org, name).payments.find((payment) => payment.id === payroll.id)!.status).toBe('authorized');
+    const settled = applyRailResult(org, name, cfo, payroll.id!, {
       ok: true,
       railStatus: 'settled',
       railReference: 'ps-1',
       journalEntryId: 'je-1',
     });
     expect(settled.ok).toBe(true);
-    const row = getLedger(org, name).payments.find((payment) => payment.id === 'EFS-CRA-00001246')!;
+    const row = getLedger(org, name).payments.find((payment) => payment.id === payroll.id)!;
     expect(row.status).toBe('settled');
     expect(row.railReference).toBe('ps-1');
     expect(row.journalEntryId).toBe('je-1');
@@ -165,6 +247,7 @@ describe('CRA tax centre', () => {
   });
 
   it('refuses EFILE after authorization is revoked', () => {
+    readyOrg();
     expect(revokeAuthorization(org, name, cfo).ok).toBe(true);
     const filed = submitEfile(org, name, cfo, {
       returnType: 'T2',

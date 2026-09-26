@@ -5,13 +5,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { CraModule } from '@/components/cra/CraModule';
 import { FileReturnDialog } from '@/components/cra/FileReturnDialog';
 import { PayCraDialog } from '@/components/cra/PayCraDialog';
-import { filingLabel, formatCad, formatDay, obligationPayments } from '@/lib/cra/engine';
+import { bookAmount, craAmount, filingLabel, formatCad, formatDay, NOT_RETURNED_BY_CRA, obligationPayments } from '@/lib/cra/engine';
 import { useCraTaxCentre } from '@/hooks/useCraTaxCentre';
 
 export default function CraPayrollTax() {
   const cra = useCraTaxCentre();
   const payroll = cra.ledger.payroll;
   const total = payroll.cpp + payroll.ei + payroll.incomeTax;
+  const calculated = payroll.cpp !== 0 || payroll.ei !== 0 || payroll.incomeTax !== 0 || payroll.filingStatus !== 'calculated';
   const openPayment = obligationPayments(cra.ledger, payroll.id).find((payment) =>
     ['draft', 'authorized', 'submitted', 'processing', 'accepted', 'settled'].includes(payment.status),
   );
@@ -33,15 +34,15 @@ export default function CraPayrollTax() {
             </CardHeader>
             <CardContent className="grid gap-4 md:grid-cols-2">
               <Field label="Account" value={payroll.account} />
-              <Field label="Pay period" value={`${formatDay(payroll.periodStart)} – ${formatDay(payroll.periodEnd)}`} />
-              <Field label="Source" value={payroll.sourcePayRunLabel} />
-              <Field label="Remittance status" value={filingLabel(payroll.filingStatus)} />
-              <Field label="CPP" value={formatCad(payroll.cpp)} />
-              <Field label="EI" value={formatCad(payroll.ei)} />
-              <Field label="Income tax" value={formatCad(payroll.incomeTax)} />
-              <Field label="Total remittance" value={formatCad(total)} />
-              <Field label="Due date" value={formatDay(payroll.dueDate)} />
-              <Field label="CRA payroll balance" value={formatCad(cra.ledger.balances.payroll)} />
+              <Field label="Pay period" value={payroll.periodStart && payroll.periodEnd ? `${formatDay(payroll.periodStart)} – ${formatDay(payroll.periodEnd)}` : NOT_RETURNED_BY_CRA} />
+              <Field label="Source" value={payroll.sourcePayRunLabel || NOT_RETURNED_BY_CRA} />
+              <Field label="Remittance status" value={calculated ? filingLabel(payroll.filingStatus) : 'Not calculated'} />
+              <Field label="CPP" value={bookAmount(payroll.cpp, calculated)} />
+              <Field label="EI" value={bookAmount(payroll.ei, calculated)} />
+              <Field label="Income tax" value={bookAmount(payroll.incomeTax, calculated)} />
+              <Field label="Total remittance" value={bookAmount(total, calculated)} />
+              <Field label="Due date" value={payroll.dueDate ? formatDay(payroll.dueDate) : NOT_RETURNED_BY_CRA} />
+              <Field label="CRA payroll balance" value={craAmount(cra.ledger.balances.payroll)} />
             </CardContent>
           </Card>
           {openPayment ? (

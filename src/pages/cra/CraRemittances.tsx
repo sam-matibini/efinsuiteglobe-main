@@ -36,6 +36,7 @@ export default function CraRemittances() {
             <CardTitle>Payments</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
+            {cra.ledger.payments.length === 0 ? <p className="text-sm text-muted-foreground">No CRA payments yet. A payment appears here after it is prepared in eFinsuite.</p> : null}
             {cra.ledger.payments.map((item) => (
               <button
                 key={item.id}

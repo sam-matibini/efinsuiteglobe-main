@@ -178,10 +178,17 @@ describe('CRA gateway', () => {
   });
 
   it('applies balances only when CRA returns them', () => {
-    expect(parseCdeBody('{}')).toEqual({ balances: null, connected: false });
-    expect(parseCdeBody('{"balances":{"gst_hst":12.5,"RP":"3"},"authorizationStatus":"connected"}')).toEqual({
+    expect(parseCdeBody('{}')).toEqual({ balances: null, connected: false, enquiry: null });
+    expect(parseCdeBody('{"balances":{"gst_hst":12.5,"RP":"3"},"authorizationStatus":"connected","unfiledReturns":2,"directDepositAvailable":true}')).toEqual({
       balances: { gst_hst: 12.5, payroll: 3 },
       connected: true,
+      enquiry: {
+        outstandingReturns: null,
+        unfiledReturns: 2,
+        reviewStatus: null,
+        efileRestricted: null,
+        directDepositAvailable: true,
+      },
     });
   });
 

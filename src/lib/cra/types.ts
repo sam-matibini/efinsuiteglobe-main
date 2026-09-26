@@ -194,9 +194,18 @@ export interface AuditEvent {
 }
 
 export interface CraBalances {
-  gst_hst: number;
-  payroll: number;
-  corporate_tax: number;
+  gst_hst: number | null;
+  payroll: number | null;
+  corporate_tax: number | null;
+}
+
+/** Figures copied from a Client Data Enquiry payload. Missing fields stay empty. */
+export interface CraEnquiry {
+  outstandingReturns: number | null;
+  unfiledReturns: number | null;
+  reviewStatus: string | null;
+  efileRestricted: boolean | null;
+  directDepositAvailable: boolean | null;
 }
 
 export interface CraLedger {
@@ -208,6 +217,9 @@ export interface CraLedger {
   authorization: CraAuthorization;
   accessCeiling: AccessCeiling;
   balances: CraBalances;
+  /** True only after Client Data Enquiry returns at least one balance. */
+  balancesFromCra: boolean;
+  enquiry: CraEnquiry | null;
   accountReviewStatus: string;
   directDepositAvailable: boolean;
   gst: GstPosition;

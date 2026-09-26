@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { CraModule } from '@/components/cra/CraModule';
-import { formatCad, isReconciled, reconciliationReport } from '@/lib/cra/engine';
+import { craAmount, formatCad, isReconciled, reconciliationReport } from '@/lib/cra/engine';
 import type { CraPayment } from '@/lib/cra/types';
 import { useCraTaxCentre } from '@/hooks/useCraTaxCentre';
 
@@ -23,7 +23,7 @@ export default function CraReconciliationReport() {
       description="Wallet deductions, bank settlement, and CRA confirmations for this organization."
     >
       <div className="grid gap-4 md:grid-cols-3">
-        <Stat label="Outstanding balances" value={formatCad(report.outstanding)} />
+        <Stat label="Outstanding balances" value={craAmount(report.outstanding)} />
         <Stat label="Payment fees" value={formatCad(report.fees)} />
         <Stat label="Client wallet deductions" value={formatCad(report.walletDeductions)} />
       </div>

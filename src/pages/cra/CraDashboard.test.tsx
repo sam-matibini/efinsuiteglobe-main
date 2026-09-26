@@ -68,9 +68,12 @@ describe('CRA Tax & Remittance screens', () => {
     renderAt(<CraDashboard />);
     expect(screen.getByRole('heading', { name: 'Tax & CRA' })).toBeInTheDocument();
     expect(screen.getAllByText('ABC Manufacturing Ltd.').length).toBeGreaterThan(0);
-    expect(screen.getByText(/BN 123456789/)).toBeInTheDocument();
-    expect(screen.getByText('$12,450.00')).toBeInTheDocument();
-    expect(screen.getByText('$8,250.00')).toBeInTheDocument();
+    expect(screen.getByText('Business number not on file')).toBeInTheDocument();
+    expect(screen.queryByText(/\$12,450\.00/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/\$8,250\.00/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/\$4,200\.00/)).not.toBeInTheDocument();
+    expect(screen.getAllByText('Not returned by CRA').length).toBeGreaterThan(0);
+    expect(screen.getByText('CRA has not returned account balances.')).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'Pay CRA' }).length).toBeGreaterThan(0);
     expect(screen.getByRole('link', { name: 'File return' })).toBeInTheDocument();
     expect(screen.getByText(/does not store CRA passwords/)).toBeInTheDocument();
@@ -87,12 +90,12 @@ describe('CRA Tax & Remittance screens', () => {
     expect(screen.getByRole('button', { name: 'Request CRA authorization' })).toBeInTheDocument();
   });
 
-  it('lists the seeded remittance as draft and the prior payment as confirmed', () => {
+  it('lists no remittances until a payment is prepared', () => {
     renderAt(<CraRemittances />);
     expect(screen.getByRole('heading', { name: 'Tax remittances' })).toBeInTheDocument();
-    expect(screen.getAllByText('EFS-CRA-00001246').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('EFS-CRA-00001245').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('DRAFT').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('CONFIRMED').length).toBeGreaterThan(0);
+    expect(screen.getByText(/No CRA payments yet/)).toBeInTheDocument();
+    expect(screen.queryByText('EFS-CRA-00001246')).not.toBeInTheDocument();
+    expect(screen.queryByText('EFS-CRA-00001245')).not.toBeInTheDocument();
+    expect(screen.queryByText('CRA-123456789')).not.toBeInTheDocument();
   });
 });

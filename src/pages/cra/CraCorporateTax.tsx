@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { CraModule } from '@/components/cra/CraModule';
 import { FileReturnDialog } from '@/components/cra/FileReturnDialog';
 import { PayCraDialog } from '@/components/cra/PayCraDialog';
-import { filingLabel, formatCad, formatDay } from '@/lib/cra/engine';
+import { bookAmount, craAmount, filingLabel, formatCad, formatDay, NOT_RETURNED_BY_CRA } from '@/lib/cra/engine';
 import { useCraTaxCentre } from '@/hooks/useCraTaxCentre';
 
 export default function CraCorporateTax() {
@@ -28,12 +28,12 @@ export default function CraCorporateTax() {
               <CardTitle>T2</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-4 md:grid-cols-2">
-              <Field label="Fiscal year" value={`${formatDay(t2.fiscalStart)} → ${formatDay(t2.fiscalEnd)}`} />
-              <Field label="Return status" value={filingLabel(t2.filingStatus)} />
-              <Field label="Balance" value={formatCad(t2.balance)} />
-              <Field label="Installments" value={formatCad(t2.installmentsPaid)} />
-              <Field label="Next installment" value={`${formatDay(t2.nextInstallmentDate)} · ${formatCad(t2.nextInstallmentAmount)}`} />
-              <Field label="CRA account balance" value={formatCad(cra.ledger.balances.corporate_tax)} />
+              <Field label="Fiscal year" value={t2.fiscalStart && t2.fiscalEnd ? `${formatDay(t2.fiscalStart)} → ${formatDay(t2.fiscalEnd)}` : NOT_RETURNED_BY_CRA} />
+              <Field label="Return status" value={t2.filingStatus === 'not_filed' && t2.balance === 0 ? 'Not calculated' : filingLabel(t2.filingStatus)} />
+              <Field label="Balance" value={bookAmount(t2.balance, t2.balance !== 0 || t2.filingStatus !== 'not_filed')} />
+              <Field label="Installments" value={bookAmount(t2.installmentsPaid, t2.installmentsPaid !== 0 || t2.filingStatus !== 'not_filed')} />
+              <Field label="Next installment" value={t2.nextInstallmentDate ? `${formatDay(t2.nextInstallmentDate)} · ${formatCad(t2.nextInstallmentAmount)}` : NOT_RETURNED_BY_CRA} />
+              <Field label="CRA account balance" value={craAmount(cra.ledger.balances.corporate_tax)} />
               <Field label="Account" value="RC0001" />
               <Field label="Business number" value={cra.ledger.profile.businessNumber} />
             </CardContent>

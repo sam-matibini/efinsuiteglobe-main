@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { CraModule } from '@/components/cra/CraModule';
 import { FileReturnDialog } from '@/components/cra/FileReturnDialog';
 import { PayCraDialog } from '@/components/cra/PayCraDialog';
-import { filingLabel, formatCad, formatDay, obligationPayments } from '@/lib/cra/engine';
+import { bookAmount, craAmount, filingLabel, formatCad, formatDay, NOT_RETURNED_BY_CRA, obligationPayments } from '@/lib/cra/engine';
 import { useCraTaxCentre } from '@/hooks/useCraTaxCentre';
 
 const STEPS = ['Tax calculation', 'Return preparation', 'Filing', 'Payment', 'Reconciliation'];
@@ -14,6 +14,7 @@ export default function CraGstHst() {
   const cra = useCraTaxCentre();
   const gst = cra.ledger.gst;
   const payable = gst.collected - gst.itcs;
+  const calculated = gst.collected !== 0 || gst.itcs !== 0 || gst.filingStatus !== 'calculated';
   const payments = obligationPayments(cra.ledger, gst.id);
   const [fileOpen, setFileOpen] = useState(false);
   const [payOpen, setPayOpen] = useState(false);
@@ -40,13 +41,13 @@ export default function CraGstHst() {
               <CardTitle>Current period</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-4 md:grid-cols-2">
-              <Field label="Reporting period" value={`${formatDay(gst.periodStart)} – ${formatDay(gst.periodEnd)}`} />
-              <Field label="Return status" value={filingLabel(gst.filingStatus)} />
-              <Field label="GST/HST collected" value={formatCad(gst.collected)} />
-              <Field label="ITCs" value={formatCad(gst.itcs)} />
-              <Field label="Estimated amount payable" value={formatCad(payable)} />
-              <Field label="Due date" value={formatDay(gst.dueDate)} />
-              <Field label="CRA account balance" value={formatCad(cra.ledger.balances.gst_hst)} />
+              <Field label="Reporting period" value={gst.periodStart && gst.periodEnd ? `${formatDay(gst.periodStart)} – ${formatDay(gst.periodEnd)}` : NOT_RETURNED_BY_CRA} />
+              <Field label="Return status" value={calculated ? filingLabel(gst.filingStatus) : 'Not calculated'} />
+              <Field label="GST/HST collected" value={bookAmount(gst.collected, calculated)} />
+              <Field label="ITCs" value={bookAmount(gst.itcs, calculated)} />
+              <Field label="Estimated amount payable" value={bookAmount(payable, calculated)} />
+              <Field label="Due date" value={gst.dueDate ? formatDay(gst.dueDate) : NOT_RETURNED_BY_CRA} />
+              <Field label="CRA account balance" value={craAmount(cra.ledger.balances.gst_hst)} />
               <Field label="Account" value="RT0001" />
             </CardContent>
           </Card>

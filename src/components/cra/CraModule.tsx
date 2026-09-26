@@ -111,16 +111,20 @@ export function ConnectionSummary({ ledger }: { ledger: CraLedger }) {
           </div>
           <div>
             <div className="text-lg font-semibold">{ledger.profile.legalName}</div>
-            <div className="text-sm text-muted-foreground">BN {ledger.profile.businessNumber}</div>
+            <div className="text-sm text-muted-foreground">{ledger.profile.businessNumber ? `BN ${ledger.profile.businessNumber}` : 'Business number not on file'}</div>
           </div>
           <div className="flex flex-wrap items-center gap-2 text-sm">
-            <span className={`inline-flex h-2.5 w-2.5 rounded-full ${connected ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-            <span>{connected ? 'Connected' : ledger.authorization.status.replaceAll('_', ' ')}</span>
-            <Badge variant="outline">{connected ? (ledger.authorization.level === 'level_2' ? 'Level 2' : 'Level 1') : 'Not authorized'}</Badge>
+            <span className={`inline-flex h-2.5 w-2.5 rounded-full ${connected && ledger.authorization.verifiedByCra ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+            <span>{connected && ledger.authorization.verifiedByCra ? 'Connected' : ledger.authorization.verifiedByCra ? 'Connected' : 'Not confirmed by CRA'}</span>
+            <Badge variant="outline">{connected && ledger.authorization.verifiedByCra ? (ledger.authorization.level === 'level_2' ? 'Level 2' : 'Level 1') : 'Not authorized'}</Badge>
           </div>
-          <div className="text-sm text-muted-foreground">Last synchronized {formatWhen(ledger.syncedAt)}</div>
           <div className="text-sm text-muted-foreground">
-            {ledger.authorization.verifiedByCra ? 'Verified with CRA Client Data Enquiry.' : 'Stored record. Refresh asks CRA before this status is treated as live.'}
+            {ledger.syncedAt && (ledger.balancesFromCra || ledger.authorization.verifiedByCra)
+              ? `Last synchronized ${formatWhen(ledger.syncedAt)}`
+              : 'CRA has not returned account balances.'}
+          </div>
+          <div className="text-sm text-muted-foreground">
+            {ledger.authorization.verifiedByCra ? 'Verified with CRA Client Data Enquiry.' : 'Refresh asks CRA. Amounts stay blank until CRA returns them.'}
           </div>
         </div>
         <div className="space-y-2 text-sm">

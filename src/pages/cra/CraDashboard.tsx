@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ConnectionSummary, CraModule } from '@/components/cra/CraModule';
 import { PayCraDialog, type PayPreset } from '@/components/cra/PayCraDialog';
-import { formatCad, formatDay, outstandingBalance, upcomingAssessed } from '@/lib/cra/engine';
+import { bookAmount, craAmount, craCount, formatDay, NOT_RETURNED_BY_CRA, outstandingBalance, upcomingAssessed } from '@/lib/cra/engine';
 import { useCraTaxCentre } from '@/hooks/useCraTaxCentre';
 
 export default function CraDashboard() {
@@ -15,9 +15,12 @@ export default function CraDashboard() {
   const { ledger } = cra;
   const outstanding = outstandingBalance(ledger);
   const upcoming = upcomingAssessed(ledger);
+  const gstCalculated = ledger.gst.collected !== 0 || ledger.gst.itcs !== 0 || ledger.gst.filingStatus !== 'calculated';
+  const payrollCalculated = ledger.payroll.cpp !== 0 || ledger.payroll.ei !== 0 || ledger.payroll.incomeTax !== 0 || ledger.payroll.filingStatus !== 'calculated';
+  const corporateCalculated = ledger.corporate.balance !== 0 || ledger.corporate.installmentsPaid !== 0 || ledger.corporate.filingStatus !== 'not_filed';
   const gstPayable = ledger.gst.collected - ledger.gst.itcs;
   const payrollTotal = ledger.payroll.cpp + ledger.payroll.ei + ledger.payroll.incomeTax;
-  const unfiled = [ledger.gst.filingStatus !== 'filed', ledger.corporate.filingStatus !== 'filed'].filter(Boolean).length;
+  const enquiry = ledger.enquiry;
 
   const openPay = (next?: PayPreset) => {
     setPreset(next);
@@ -47,7 +50,7 @@ export default function CraDashboard() {
             <CardTitle className="text-sm font-medium text-muted-foreground">Outstanding CRA balance</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-semibold">{formatCad(outstanding)}</div>
+            <div className="text-2xl font-semibold">{craAmount(outstanding)}</div>
           </CardContent>
         </Card>
         <Card>
@@ -55,7 +58,7 @@ export default function CraDashboard() {
             <CardTitle className="text-sm font-medium text-muted-foreground">Upcoming assessed payments</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-semibold">{formatCad(upcoming)}</div>
+            <div className="text-2xl font-semibold">{craAmount(upcoming)}</div>
             <p className="mt-1 text-xs text-muted-foreground">Payroll and corporate account balances with a due date.</p>
           </CardContent>
         </Card>
@@ -64,13 +67,13 @@ export default function CraDashboard() {
             <CardTitle className="text-sm font-medium text-muted-foreground">Client data enquiry</CardTitle>
           </CardHeader>
           <CardContent className="space-y-1 text-sm">
-            <div>Balance owing {formatCad(outstanding)}</div>
-            <div>Outstanding returns {unfiled > 0 ? 1 : 0}</div>
-            <div>Review status {ledger.accountReviewStatus}</div>
-            <div>Unfiled returns {unfiled}</div>
-            <div>GST/HST outstanding {formatCad(ledger.balances.gst_hst)}</div>
-            <div>{ledger.authorization.status === 'connected' ? '✓' : '○'} No EFILE restriction</div>
-            <div>{ledger.directDepositAvailable ? '✓' : '○'} Direct deposit information available</div>
+            <div>Balance owing {craAmount(outstanding)}</div>
+            <div>Outstanding returns {craCount(enquiry?.outstandingReturns)}</div>
+            <div>Review status {enquiry?.reviewStatus || NOT_RETURNED_BY_CRA}</div>
+            <div>Unfiled returns {craCount(enquiry?.unfiledReturns)}</div>
+            <div>GST/HST outstanding {craAmount(ledger.balances.gst_hst)}</div>
+            <div>EFILE restriction {enquiry?.efileRestricted == null ? NOT_RETURNED_BY_CRA : enquiry.efileRestricted ? 'Yes' : 'No'}</div>
+            <div>Direct deposit {enquiry?.directDepositAvailable == null ? NOT_RETURNED_BY_CRA : enquiry.directDepositAvailable ? 'Available' : 'Not available'}</div>
           </CardContent>
         </Card>
       </div>
@@ -80,21 +83,21 @@ export default function CraDashboard() {
           title="GST/HST"
           href="/tax-cra/gst-hst"
           balance={ledger.balances.gst_hst}
-          detail={`Next filing ${formatDay(ledger.gst.dueDate)}`}
+          detail={ledger.gst.dueDate ? `Next filing ${formatDay(ledger.gst.dueDate)}` : 'Due date not returned by CRA'}
           enrolled={ledger.profile.programs.includes('RT')}
         />
         <ProgramCard
           title="Payroll"
           href="/tax-cra/payroll"
           balance={ledger.balances.payroll}
-          detail={`Next remittance ${formatDay(ledger.payroll.dueDate)}`}
+          detail={ledger.payroll.dueDate ? `Next remittance ${formatDay(ledger.payroll.dueDate)}` : 'Due date not returned by CRA'}
           enrolled={ledger.profile.programs.includes('RP')}
         />
         <ProgramCard
           title="Corporate tax"
           href="/tax-cra/corporate"
           balance={ledger.balances.corporate_tax}
-          detail={`Next payment ${formatDay(ledger.corporate.nextInstallmentDate)}`}
+          detail={ledger.corporate.nextInstallmentDate ? `Next payment ${formatDay(ledger.corporate.nextInstallmentDate)}` : 'Due date not returned by CRA'}
           enrolled={ledger.profile.programs.includes('RC')}
         />
       </div>
@@ -109,14 +112,14 @@ export default function CraDashboard() {
             <div className="text-sm">CRA connection {ledger.authorization.status === 'connected' ? '✓ Connected' : 'Pending'}</div>
           </div>
           <div className="grid gap-2 text-sm md:grid-cols-3">
-            <div>GST/HST <span className="float-right font-medium">{formatCad(gstPayable)} owing</span></div>
-            <div>Payroll <span className="float-right font-medium">{formatCad(payrollTotal)} owing</span></div>
-            <div>Corporate tax <span className="float-right font-medium">{formatCad(ledger.corporate.balance)} owing</span></div>
+            <div>GST/HST <span className="float-right font-medium">{bookAmount(gstPayable, gstCalculated)}</span></div>
+            <div>Payroll <span className="float-right font-medium">{bookAmount(payrollTotal, payrollCalculated)}</span></div>
+            <div>Corporate tax <span className="float-right font-medium">{bookAmount(ledger.corporate.balance, corporateCalculated)}</span></div>
           </div>
           <div className="border-t pt-3 text-sm">
             <div className="mb-2 font-medium">Upcoming</div>
-            <div className="flex justify-between"><span>GST/HST</span><span>{formatDay(ledger.gst.dueDate)} · {formatCad(gstPayable)}</span></div>
-            <div className="flex justify-between"><span>Payroll</span><span>{formatDay(ledger.payroll.dueDate)} · {formatCad(payrollTotal)}</span></div>
+            <div className="flex justify-between"><span>GST/HST</span><span>{ledger.gst.dueDate ? formatDay(ledger.gst.dueDate) : NOT_RETURNED_BY_CRA} · {bookAmount(gstPayable, gstCalculated)}</span></div>
+            <div className="flex justify-between"><span>Payroll</span><span>{ledger.payroll.dueDate ? formatDay(ledger.payroll.dueDate) : NOT_RETURNED_BY_CRA} · {bookAmount(payrollTotal, payrollCalculated)}</span></div>
           </div>
           <div className="flex flex-wrap gap-2">
             <Button onClick={() => openPay()} disabled={!cra.can('prepare_payment')}>Pay CRA</Button>
@@ -144,7 +147,7 @@ function ProgramCard({
 }: {
   title: string;
   href: string;
-  balance: number;
+  balance: number | null;
   detail: string;
   enrolled: boolean;
 }) {
@@ -156,7 +159,7 @@ function ProgramCard({
       <CardContent className="space-y-2 text-sm">
         {enrolled ? (
           <>
-            <div>Balance <span className="font-semibold">{formatCad(balance)}</span></div>
+            <div>Balance <span className="font-semibold">{craAmount(balance)}</span></div>
             <div className="text-muted-foreground">{detail}</div>
             <Button asChild variant="link" className="h-auto p-0">
               <Link to={href}>Open</Link>

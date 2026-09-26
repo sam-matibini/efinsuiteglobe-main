@@ -130,6 +130,7 @@ export function useCraTaxCentre() {
       notice: gateway.notice,
       connected: gateway.connected,
       balances: gateway.balances,
+      enquiry: gateway.enquiry,
     }));
   }, [actor, orgId, orgName, run]);
 

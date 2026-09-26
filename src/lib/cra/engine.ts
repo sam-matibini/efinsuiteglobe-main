@@ -147,22 +147,47 @@ export function isReconciled(payment: CraPayment): boolean {
   );
 }
 
-export function outstandingBalance(ledger: CraLedger): number {
+export const NOT_RETURNED_BY_CRA = 'Not returned by CRA';
+
+export function craAmount(amount: number | null | undefined): string {
+  if (typeof amount !== 'number' || !Number.isFinite(amount)) return NOT_RETURNED_BY_CRA;
+  return formatCad(amount);
+}
+
+export function craCount(amount: number | null | undefined): string {
+  if (typeof amount !== 'number' || !Number.isFinite(amount)) return NOT_RETURNED_BY_CRA;
+  return String(amount);
+}
+
+export function bookAmount(amount: number, calculated: boolean): string {
+  if (!calculated) return 'Not calculated';
+  return formatCad(amount);
+}
+
+function addReturned(total: number, amount: number | null, seen: { any: boolean }): number {
+  if (typeof amount !== 'number' || !Number.isFinite(amount)) return total;
+  seen.any = true;
+  return total + amount;
+}
+
+export function outstandingBalance(ledger: CraLedger): number | null {
   const enrolled = new Set(ledger.profile.programs);
+  const seen = { any: false };
   let total = 0;
-  if (enrolled.has('RT')) total += ledger.balances.gst_hst;
-  if (enrolled.has('RP')) total += ledger.balances.payroll;
-  if (enrolled.has('RC')) total += ledger.balances.corporate_tax;
-  return roundMoney(total);
+  if (enrolled.has('RT')) total = addReturned(total, ledger.balances.gst_hst, seen);
+  if (enrolled.has('RP')) total = addReturned(total, ledger.balances.payroll, seen);
+  if (enrolled.has('RC')) total = addReturned(total, ledger.balances.corporate_tax, seen);
+  return seen.any ? roundMoney(total) : null;
 }
 
 /** Assessed amounts with a near-term due date (payroll + corporate account balances). */
-export function upcomingAssessed(ledger: CraLedger): number {
+export function upcomingAssessed(ledger: CraLedger): number | null {
   const enrolled = new Set(ledger.profile.programs);
+  const seen = { any: false };
   let total = 0;
-  if (enrolled.has('RP')) total += ledger.balances.payroll;
-  if (enrolled.has('RC')) total += ledger.balances.corporate_tax;
-  return roundMoney(total);
+  if (enrolled.has('RP')) total = addReturned(total, ledger.balances.payroll, seen);
+  if (enrolled.has('RC')) total = addReturned(total, ledger.balances.corporate_tax, seen);
+  return seen.any ? roundMoney(total) : null;
 }
 
 export function roundMoney(n: number): number {
@@ -313,7 +338,7 @@ export interface ReconciliationReport {
   unreconciled: CraPayment[];
   fees: number;
   walletDeductions: number;
-  outstanding: number;
+  outstanding: number | null;
 }
 
 const SUBMITTED_OR_LATER: PaymentStatus[] = ['submitted', 'processing', 'accepted', 'settled', 'confirmed'];

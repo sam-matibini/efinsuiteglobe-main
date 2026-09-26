@@ -12,7 +12,7 @@ import {
   validatePaymentInput,
   type PaymentInput,
 } from './engine';
-import { ACCOUNT_FOR_TAX, CRA_REPRESENTATIVE, FUNDING_ACCOUNT, PROGRAM_LABEL } from './representative';
+import { FUNDING_ACCOUNT, PROGRAM_LABEL } from './representative';
 import type {
   AccessCeiling,
   ActionResult,
@@ -80,161 +80,169 @@ function emit(orgId: string) {
   listeners.get(orgId)?.forEach((listener) => listener());
 }
 
+const SAMPLE_PAYMENT_IDS = new Set(['EFS-CRA-00001245', 'EFS-CRA-00001246']);
+const SAMPLE_NOTICE_IDS = new Set(['notice-gst-reassess', 'notice-payroll-mail', 'notice-noa']);
+const SAMPLE_CONFIRMATION = 'CRA-123456789';
+const SAMPLE_AUTH_REFERENCE = 'RAC-20260901-0042';
+const SAMPLE_SYNCED_AT = '2026-09-25T14:42:00.000Z';
+const SAMPLE_BN = '123456789';
+
 function seed(orgName?: string): CraLedger {
-  const legalName = orgName?.trim() || 'ABC Manufacturing Ltd.';
+  const legalName = orgName?.trim() || '';
   return {
     version: 1,
-    syncedAt: '2026-09-25T14:42:00.000Z',
-    walletBalance: 45000,
+    syncedAt: '',
+    walletBalance: 0,
     profile: {
       legalName,
-      businessNumber: '123456789',
-      corporationNumber: '1234567-8',
+      businessNumber: '',
+      corporationNumber: '',
       businessType: 'Corporation',
-      province: 'ON',
-      address: '200 King Street West, Toronto, ON M5H 3T4',
-      fiscalYearEnd: '12-31',
-      contactName: 'Amina Diallo',
-      contactEmail: 'director@abcmfg.example',
-      programs: ['RC', 'RT', 'RP'],
+      province: '',
+      address: '',
+      fiscalYearEnd: '',
+      contactName: '',
+      contactEmail: '',
+      programs: [],
       otherProgramNote: '',
     },
-    accounts: [
-      { program: 'RC', reference: '0001', label: 'Corporate income tax' },
-      { program: 'RT', reference: '0001', label: 'GST/HST' },
-      { program: 'RP', reference: '0001', label: 'Payroll' },
-    ],
+    accounts: [],
     authorization: {
-      status: 'connected',
-      level: 'level_2',
-      requestedAt: '2026-09-01T15:00:00.000Z',
-      confirmedAt: '2026-09-03T18:12:00.000Z',
-      reference: 'RAC-20260901-0042',
-      instructionsSentAt: '2026-09-01T15:05:00.000Z',
+      status: 'not_started',
+      level: 'level_1',
     },
     accessCeiling: { ...OPEN_CEILING },
-    balances: { gst_hst: 4200, payroll: 3250, corporate_tax: 5000 },
-    accountReviewStatus: 'None',
-    directDepositAvailable: true,
+    balances: { gst_hst: null, payroll: null, corporate_tax: null },
+    balancesFromCra: false,
+    enquiry: null,
+    accountReviewStatus: '',
+    directDepositAvailable: false,
     gst: {
       id: 'gst-current',
-      periodStart: '2026-07-01',
-      periodEnd: '2026-09-30',
-      collected: 25000,
-      itcs: 17500,
-      dueDate: '2026-10-31',
+      periodStart: '',
+      periodEnd: '',
+      collected: 0,
+      itcs: 0,
+      dueDate: '',
       filingStatus: 'calculated',
     },
     payroll: {
       id: 'payroll-current',
       account: 'RP0001',
-      periodStart: '2026-09-01',
-      periodEnd: '2026-09-15',
-      cpp: 4250,
-      ei: 1250,
-      incomeTax: 8500,
-      dueDate: '2026-09-30',
+      periodStart: '',
+      periodEnd: '',
+      cpp: 0,
+      ei: 0,
+      incomeTax: 0,
+      dueDate: '',
       filingStatus: 'calculated',
-      sourcePayRunLabel: 'Pay run Sep 1 – Sep 15',
+      sourcePayRunLabel: '',
     },
     corporate: {
       id: 't2-current',
       form: 'T2',
-      fiscalStart: '2025-01-01',
-      fiscalEnd: '2025-12-31',
+      fiscalStart: '',
+      fiscalEnd: '',
       filingStatus: 'not_filed',
-      balance: 25000,
-      installmentsPaid: 10000,
-      nextInstallmentAmount: 10000,
-      nextInstallmentDate: '2026-10-31',
+      balance: 0,
+      installmentsPaid: 0,
+      nextInstallmentAmount: 0,
+      nextInstallmentDate: '',
     },
     submissions: [],
-    payments: [
-      {
-        id: 'EFS-CRA-00001245',
-        taxType: 'gst_hst',
-        account: 'RT0001',
-        amount: 7500,
-        paymentDate: '2026-06-30',
-        dueDate: '2026-06-30',
-        fundingAccount: FUNDING_ACCOUNT,
-        purpose: 'GST/HST return (prior period)',
-        obligationId: 'gst-prior',
-        status: 'confirmed',
-        preparedBy: 'accountant@abcmfg.example',
-        preparedByName: 'Accountant',
-        approvedBy: 'cfo@abcmfg.example',
-        releasedAt: '2026-06-30T15:00:00.000Z',
-        craConfirmation: 'CRA-123456789',
-        walletDeduction: 7500,
-        bankSettlement: 7500,
-        fee: 0,
-        glAccrual: accrualEntry({ taxType: 'gst_hst', amount: 7500, account: 'RT0001' }),
-        glSettlement: settlementEntry({ amount: 7500, account: 'RT0001', fundingAccount: FUNDING_ACCOUNT }),
-        createdAt: '2026-06-28T14:00:00.000Z',
-      },
-      {
-        id: 'EFS-CRA-00001246',
-        taxType: 'payroll',
-        account: 'RP0001',
-        amount: 14000,
-        paymentDate: '2026-09-30',
-        dueDate: '2026-09-30',
-        fundingAccount: FUNDING_ACCOUNT,
-        purpose: 'Payroll source deductions',
-        obligationId: 'payroll-current',
-        status: 'draft',
-        preparedBy: 'accountant@abcmfg.example',
-        preparedByName: 'Accountant',
-        fee: 0,
-        glAccrual: [],
-        glSettlement: [],
-        createdAt: '2026-09-25T14:30:00.000Z',
-      },
-    ],
-    notices: [
-      {
-        id: 'notice-gst-reassess',
-        severity: 'action',
-        title: 'GST/HST reassessment',
-        program: 'RT0001',
-        receivedAt: '2026-09-18T15:00:00.000Z',
-        body: 'CRA issued a GST/HST reassessment for the previous reporting period. Review the assessed balance before the next filing. This notice is available because the representative authorization includes GST/HST.',
-        read: false,
-      },
-      {
-        id: 'notice-payroll-mail',
-        severity: 'review',
-        title: 'Payroll account correspondence',
-        program: 'RP0001',
-        receivedAt: '2026-09-12T15:00:00.000Z',
-        body: 'Correspondence is waiting on the payroll program account. Open it with an employee who has Level 2 or payroll preparation access.',
-        read: false,
-      },
-      {
-        id: 'notice-noa',
-        severity: 'info',
-        title: 'Notice of Assessment',
-        program: 'RC0001',
-        receivedAt: '2026-08-20T15:00:00.000Z',
-        body: 'A notice of assessment was posted for the corporate income tax account. No action is required unless the assessed balance differs from the general ledger.',
-        read: false,
-      },
-    ],
-    audit: [
-      {
-        id: 'audit-1',
-        at: '2026-09-25T14:42:00.000Z',
-        userEmail: 'sam@company.com',
-        client: legalName,
-        action: 'CRA information synchronized',
-        craAccount: 'RT0001',
-        authorization: 'Level 2',
-        ipDevice: 'Recorded',
-      },
-    ],
-    seq: { payment: 1246, efile: 122, confirmation: 123456789, audit: 1 },
+    payments: [],
+    notices: [],
+    audit: [],
+    seq: { payment: 1246, efile: 122, confirmation: 0, audit: 1 },
   };
+}
+
+/** Drop sample CRA dollars, payments, notices, and the sample authorization. Keep a profile the user edited. */
+export function stripSampleCraLedger(ledger: CraLedger): boolean {
+  let changed = false;
+  const mark = () => {
+    changed = true;
+  };
+  const payments = ledger.payments.filter((payment) => !SAMPLE_PAYMENT_IDS.has(payment.id) && payment.craConfirmation !== SAMPLE_CONFIRMATION);
+  if (payments.length !== ledger.payments.length) {
+    ledger.payments = payments;
+    mark();
+  }
+  const notices = ledger.notices.filter((notice) => !SAMPLE_NOTICE_IDS.has(notice.id));
+  if (notices.length !== ledger.notices.length) {
+    ledger.notices = notices;
+    mark();
+  }
+  const audit = ledger.audit.filter((event) => event.id !== 'audit-1' && event.action !== 'CRA information synchronized');
+  if (audit.length !== ledger.audit.length) {
+    ledger.audit = audit;
+    mark();
+  }
+  const sampleAuthorization = ledger.authorization.reference === SAMPLE_AUTH_REFERENCE || ledger.authorization.confirmedAt === '2026-09-03T18:12:00.000Z';
+  if (!ledger.authorization.verifiedByCra && sampleAuthorization) {
+    ledger.authorization = { status: 'not_started', level: 'level_1' };
+    mark();
+  }
+  if (ledger.balancesFromCra !== true) {
+    if (ledger.balances.gst_hst !== null || ledger.balances.payroll !== null || ledger.balances.corporate_tax !== null || ledger.balancesFromCra !== false) {
+      ledger.balances = { gst_hst: null, payroll: null, corporate_tax: null };
+      ledger.balancesFromCra = false;
+      mark();
+    }
+    if (ledger.accountReviewStatus === 'None') {
+      ledger.accountReviewStatus = '';
+      mark();
+    }
+    if (ledger.directDepositAvailable) {
+      ledger.directDepositAvailable = false;
+      mark();
+    }
+    if (ledger.enquiry) {
+      ledger.enquiry = null;
+      mark();
+    }
+  }
+  if (!ledger.enquiry) ledger.enquiry = null;
+  if (ledger.gst.collected === 25000 && ledger.gst.itcs === 17500) {
+    ledger.gst = { ...ledger.gst, collected: 0, itcs: 0, periodStart: '', periodEnd: '', dueDate: '' };
+    mark();
+  }
+  if (ledger.payroll.cpp === 4250 && ledger.payroll.ei === 1250 && ledger.payroll.incomeTax === 8500) {
+    ledger.payroll = { ...ledger.payroll, cpp: 0, ei: 0, incomeTax: 0, periodStart: '', periodEnd: '', dueDate: '', sourcePayRunLabel: '' };
+    mark();
+  }
+  if (ledger.corporate.balance === 25000 && ledger.corporate.installmentsPaid === 10000 && ledger.corporate.nextInstallmentAmount === 10000) {
+    ledger.corporate = { ...ledger.corporate, balance: 0, installmentsPaid: 0, nextInstallmentAmount: 0, nextInstallmentDate: '', fiscalStart: '', fiscalEnd: '' };
+    mark();
+  }
+  if (ledger.walletBalance === 45000) {
+    ledger.walletBalance = 0;
+    mark();
+  }
+  if (ledger.profile.businessNumber === SAMPLE_BN) {
+    ledger.profile = {
+      ...ledger.profile,
+      businessNumber: '',
+      corporationNumber: '',
+      address: '',
+      contactName: '',
+      contactEmail: '',
+      fiscalYearEnd: '',
+      province: '',
+      programs: [],
+    };
+    ledger.accounts = [];
+    mark();
+  }
+  if (ledger.syncedAt === SAMPLE_SYNCED_AT && !ledger.balancesFromCra && !ledger.authorization.verifiedByCra) {
+    ledger.syncedAt = '';
+    mark();
+  }
+  if (ledger.seq.confirmation === 123456789) {
+    ledger.seq.confirmation = 0;
+    mark();
+  }
+  return changed;
 }
 
 function persist(orgId: string, ledger: CraLedger) {
@@ -243,22 +251,48 @@ function persist(orgId: string, ledger: CraLedger) {
   emit(orgId);
 }
 
+function ledgerFromStorage(raw: string, orgName?: string): CraLedger {
+  try {
+    const parsed = JSON.parse(raw) as CraLedger;
+    if (parsed?.version === 1 && parsed.profile) {
+      const ledger: CraLedger = {
+        ...seed(orgName),
+        ...parsed,
+        profile: { ...seed(orgName).profile, ...parsed.profile },
+        authorization: { ...seed(orgName).authorization, ...parsed.authorization },
+        balances: {
+          gst_hst: typeof parsed.balances?.gst_hst === 'number' ? parsed.balances.gst_hst : null,
+          payroll: typeof parsed.balances?.payroll === 'number' ? parsed.balances.payroll : null,
+          corporate_tax: typeof parsed.balances?.corporate_tax === 'number' ? parsed.balances.corporate_tax : null,
+        },
+        balancesFromCra: parsed.balancesFromCra === true,
+        enquiry: parsed.enquiry ?? null,
+        gst: { ...seed(orgName).gst, ...parsed.gst },
+        payroll: { ...seed(orgName).payroll, ...parsed.payroll },
+        corporate: { ...seed(orgName).corporate, ...parsed.corporate },
+        accessCeiling: { ...OPEN_CEILING, ...parsed.accessCeiling },
+        accounts: parsed.accounts ?? [],
+        payments: parsed.payments ?? [],
+        notices: parsed.notices ?? [],
+        submissions: parsed.submissions ?? [],
+        audit: parsed.audit ?? [],
+        seq: { ...seed(orgName).seq, ...parsed.seq },
+      };
+      stripSampleCraLedger(ledger);
+      return ledger;
+    }
+  } catch {
+    // Fall through to an empty ledger.
+  }
+  return seed(orgName);
+}
+
 export function getLedger(orgId: string, orgName?: string): CraLedger {
   const cached = snapshots.get(orgId);
   if (cached) return cached;
   const raw = storage.getItem(storageKey(orgId));
-  let ledger: CraLedger;
-  if (raw) {
-    try {
-      const parsed = JSON.parse(raw) as CraLedger;
-      ledger = parsed?.version === 1 && parsed.profile ? parsed : seed(orgName);
-    } catch {
-      ledger = seed(orgName);
-    }
-  } else {
-    ledger = seed(orgName);
-    storage.setItem(storageKey(orgId), JSON.stringify(ledger));
-  }
+  const ledger = raw ? ledgerFromStorage(raw, orgName) : seed(orgName);
+  storage.setItem(storageKey(orgId), JSON.stringify(ledger));
   snapshots.set(orgId, ledger);
   return ledger;
 }
@@ -268,6 +302,10 @@ function update(orgId: string, orgName: string | undefined, mutate: (draft: CraL
   mutate(draft);
   persist(orgId, draft);
   return draft;
+}
+
+function finiteOrNull(value: number | null | undefined): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
 function authLabel(ledger: CraLedger): string {
@@ -373,6 +411,7 @@ export function requestAuthorization(orgId: string, orgName: string | undefined,
       requestedAt: new Date().toISOString(),
       reference,
       confirmedAt: undefined,
+      verifiedByCra: undefined,
     };
     audit(draft, actor, 'CRA representative authorization requested', { confirmation: reference });
   });
@@ -425,6 +464,7 @@ export function revokeAuthorization(orgId: string, orgName: string | undefined, 
   }
   update(orgId, orgName, (draft) => {
     draft.authorization.status = 'revoked';
+    draft.authorization.verifiedByCra = undefined;
     audit(draft, actor, 'CRA representative authorization revoked');
   });
   return { ok: true, message: 'Authorization revoked for this organization. CRA filings and payments are blocked until it is connected again.' };
@@ -616,6 +656,13 @@ export interface CdeApplyInput {
   notice?: string;
   connected?: boolean;
   balances?: { gst_hst?: number; payroll?: number; corporate_tax?: number } | null;
+  enquiry?: {
+    outstandingReturns?: number | null;
+    unfiledReturns?: number | null;
+    reviewStatus?: string | null;
+    efileRestricted?: boolean | null;
+    directDepositAvailable?: boolean | null;
+  } | null;
 }
 
 /** Update balances or connection only from a Client Data Enquiry payload. */
@@ -649,6 +696,18 @@ export function applyCdeResult(orgId: string, orgName: string | undefined, actor
       if (typeof balances.corporate_tax === 'number' && Number.isFinite(balances.corporate_tax)) {
         draft.balances.corporate_tax = roundMoney(balances.corporate_tax);
       }
+      draft.balancesFromCra = true;
+    }
+    if (result.enquiry) {
+      draft.enquiry = {
+        outstandingReturns: finiteOrNull(result.enquiry.outstandingReturns),
+        unfiledReturns: finiteOrNull(result.enquiry.unfiledReturns),
+        reviewStatus: result.enquiry.reviewStatus ?? null,
+        efileRestricted: typeof result.enquiry.efileRestricted === 'boolean' ? result.enquiry.efileRestricted : null,
+        directDepositAvailable: typeof result.enquiry.directDepositAvailable === 'boolean' ? result.enquiry.directDepositAvailable : null,
+      };
+      if (draft.enquiry.reviewStatus) draft.accountReviewStatus = draft.enquiry.reviewStatus;
+      if (draft.enquiry.directDepositAvailable !== null) draft.directDepositAvailable = draft.enquiry.directDepositAvailable;
     }
     if (result.connected === true) {
       draft.authorization.status = 'connected';
@@ -933,16 +992,20 @@ export function recordConfirmation(
   }
   const cleaned = confirmation.trim().toUpperCase();
   if (!/^CRA-[A-Z0-9]{6,}$/.test(cleaned)) {
-    return { ok: false, error: 'Enter the CRA confirmation number, for example CRA-123456789.' };
+    return { ok: false, error: 'Enter the CRA confirmation number, for example CRA-AB123456.' };
   }
   update(orgId, orgName, (draft) => {
     const row = draft.payments.find((item) => item.id === paymentId)!;
     row.status = 'confirmed';
     row.craConfirmation = cleaned;
     if (row.purpose.toLowerCase().includes('balance')) {
-      if (row.taxType === 'gst_hst') draft.balances.gst_hst = roundMoney(Math.max(0, draft.balances.gst_hst - row.amount));
-      if (row.taxType === 'payroll') draft.balances.payroll = roundMoney(Math.max(0, draft.balances.payroll - row.amount));
-      if (row.taxType === 'corporate_tax') {
+      if (row.taxType === 'gst_hst' && typeof draft.balances.gst_hst === 'number') {
+        draft.balances.gst_hst = roundMoney(Math.max(0, draft.balances.gst_hst - row.amount));
+      }
+      if (row.taxType === 'payroll' && typeof draft.balances.payroll === 'number') {
+        draft.balances.payroll = roundMoney(Math.max(0, draft.balances.payroll - row.amount));
+      }
+      if (row.taxType === 'corporate_tax' && typeof draft.balances.corporate_tax === 'number') {
         draft.balances.corporate_tax = roundMoney(Math.max(0, draft.balances.corporate_tax - row.amount));
       }
     }
