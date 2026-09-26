@@ -52,7 +52,7 @@ describe('CRA tax centre', () => {
     const ledger = getLedger(org, name);
     expect(outstandingBalance(ledger)).toBeNull();
     expect(upcomingAssessed(ledger)).toBeNull();
-    expect(ledger.balances).toEqual({ gst_hst: null, payroll: null, corporate_tax: null, total_owing: null });
+    expect(ledger.balances).toEqual({ gst_hst: null, payroll: null, corporate_tax: null, total_owing: null, corporate_interim: null });
     expect(ledger.payments).toEqual([]);
     expect(ledger.notices).toEqual([]);
     expect(ledger.authorization.status).toBe('not_started');
@@ -83,7 +83,7 @@ describe('CRA tax centre', () => {
     expect(ledger.profile.legalName).toBe('10255666 MANITOBA LTD.');
     expect(ledger.profile.businessNumber).toBe('711450965');
     expect(ledger.profile.programs).toEqual(['RC', 'RT', 'RP']);
-    expect(ledger.balances).toEqual({ gst_hst: null, payroll: null, corporate_tax: null, total_owing: null });
+    expect(ledger.balances).toEqual({ gst_hst: null, payroll: null, corporate_tax: null, total_owing: null, corporate_interim: null });
     expect(ledger.authorization.status).toBe('connected');
     expect(ledger.authorization.representativeName).toBe('Samson Matibini');
     expect(ledger.authorization.verifiedByCra).toBeUndefined();
@@ -206,7 +206,7 @@ describe('CRA tax centre', () => {
     expect(getLedger(hsde).authorization.status).toBe('connected');
     expect(getLedger(hsde).authorization.representativeName).toBe('Samson Matibini');
     expect(getLedger(hsde).authorization.verifiedByCra).toBeUndefined();
-    expect(getLedger(hsde).balances).toEqual({ gst_hst: null, payroll: null, corporate_tax: null, total_owing: null });
+    expect(getLedger(hsde).balances).toEqual({ gst_hst: null, payroll: null, corporate_tax: null, total_owing: null, corporate_interim: null });
     expect(sendInstructions(hsde, hsdeLedger.profile.legalName, cfo).message).toMatch(/No authorization form was sent/);
     expect(getLedger(org, name).authorization.reference).toBeUndefined();
     expect(recordClientConfirmation(org, name, cfo).ok).toBe(false);

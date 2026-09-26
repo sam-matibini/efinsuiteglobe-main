@@ -202,6 +202,8 @@ export interface CraBalances {
   corporate_tax: number | null;
   /** Business total from Represent a Client when program lines are not itemized. */
   total_owing: number | null;
+  /** Current interim balance on the corporate account, when the overview lists it. */
+  corporate_interim: number | null;
 }
 
 /** Figures copied from a Client Data Enquiry payload. Missing fields stay empty. */

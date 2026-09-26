@@ -103,7 +103,8 @@ describe('CRA Tax & Remittance screens', () => {
     renderAt(<CraDashboard />);
     expect(screen.getAllByText('$1,601.65').length).toBeGreaterThan(0);
     expect(screen.getAllByText('$0.00').length).toBeGreaterThan(0);
-    expect(screen.getByText(/Balances match the Represent a Client overview/)).toBeInTheDocument();
+    expect(screen.getByText(/Balances pulled from Represent a Client/)).toBeInTheDocument();
+    expect(screen.getByText(/Current interim balance on RC0001/)).toBeInTheDocument();
     expect(screen.getByText(/Outstanding returns Yes/)).toBeInTheDocument();
     expect(screen.getByText(/GST\/HST outstanding returns Yes/)).toBeInTheDocument();
     expect(screen.getByText(/T2 Initial assessment/)).toBeInTheDocument();

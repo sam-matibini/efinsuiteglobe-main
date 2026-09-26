@@ -130,7 +130,7 @@ export function ConnectionSummary({ ledger }: { ledger: CraLedger }) {
           </div>
           <div className="text-sm text-muted-foreground">
             {ledger.balanceSource === 'represent_a_client'
-              ? 'Balances match the Represent a Client overview. Internet File Transfer does not include those amounts.'
+              ? 'Balances pulled from Represent a Client for this business.'
               : ledger.syncedAt && (ledger.balancesFromCra || ledger.authorization.verifiedByCra)
                 ? `Last synchronized ${formatWhen(ledger.syncedAt)}`
                 : 'CRA has not returned account balances.'}

@@ -190,6 +190,13 @@ export function outstandingBalance(ledger: CraLedger): number | null {
 
 /** Assessed amounts with a near-term due date (payroll + corporate account balances). */
 export function upcomingAssessed(ledger: CraLedger): number | null {
+  if (
+    ledger.balanceSource === 'represent_a_client' &&
+    typeof ledger.balances.corporate_interim === 'number' &&
+    Number.isFinite(ledger.balances.corporate_interim)
+  ) {
+    return roundMoney(ledger.balances.corporate_interim);
+  }
   const enrolled = new Set(ledger.profile.programs);
   const seen = { any: false };
   let total = 0;

@@ -53,7 +53,7 @@ export default function CraDashboard() {
           <CardContent>
             <div className="text-2xl font-semibold">{craAmount(outstanding)}</div>
             {ledger.balanceSource === 'represent_a_client' ? (
-              <p className="mt-1 text-xs text-muted-foreground">Represent a Client business total. GST/HST RT0001 is listed separately.</p>
+              <p className="mt-1 text-xs text-muted-foreground">Corporation income tax RC0001. GST/HST RT0001 is listed separately.</p>
             ) : null}
           </CardContent>
         </Card>
@@ -63,7 +63,11 @@ export default function CraDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-semibold">{craAmount(upcoming)}</div>
-            <p className="mt-1 text-xs text-muted-foreground">Payroll and corporate account balances with a due date.</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {ledger.balanceSource === 'represent_a_client'
+                ? 'Current interim balance on RC0001. No payment due date was returned.'
+                : 'Payroll and corporate account balances with a due date.'}
+            </p>
           </CardContent>
         </Card>
         <Card>
@@ -75,10 +79,12 @@ export default function CraDashboard() {
             <div>Outstanding returns {craYesNo(enquiry?.outstandingReturnsLabel, enquiry?.outstandingReturns)}</div>
             <div>Review status {enquiry?.reviewStatus || NOT_RETURNED_BY_CRA}</div>
             <div>Unfiled returns {craCount(enquiry?.unfiledReturns)}</div>
+            <div>Corporation income tax RC0001 {craAmount(ledger.balances.corporate_tax)}</div>
+            <div>Current interim balance {craAmount(ledger.balances.corporate_interim)}</div>
             <div>GST/HST outstanding {craAmount(ledger.balances.gst_hst)}</div>
             {enquiry?.gstOutstandingReturnsLabel ? <div>GST/HST outstanding returns {enquiry.gstOutstandingReturnsLabel}</div> : null}
             {ledger.notices.map((notice) => (
-              <div key={notice.id}>{notice.title} · {formatDay(notice.receivedAt.slice(0, 10))} · {notice.body}</div>
+              <div key={notice.id}>{notice.title} · {formatDay(notice.receivedAt.slice(0, 10))}</div>
             ))}
             <div>EFILE restriction {enquiry?.efileRestricted == null ? NOT_RETURNED_BY_CRA : enquiry.efileRestricted ? 'Yes' : 'No'}</div>
             <div>Direct deposit {enquiry?.directDepositAvailable == null ? NOT_RETURNED_BY_CRA : enquiry.directDepositAvailable ? 'Available' : 'Not available'}</div>
@@ -105,7 +111,13 @@ export default function CraDashboard() {
           title="Corporate tax"
           href="/tax-cra/corporate"
           balance={ledger.balances.corporate_tax}
-          detail={ledger.corporate.nextInstallmentDate ? `Next payment ${formatDay(ledger.corporate.nextInstallmentDate)}` : 'Due date not returned by CRA'}
+          detail={
+            ledger.corporate.nextInstallmentDate
+              ? `Next payment ${formatDay(ledger.corporate.nextInstallmentDate)}`
+              : typeof ledger.balances.corporate_interim === 'number'
+                ? `Interim balance ${craAmount(ledger.balances.corporate_interim)}. Due date not returned by CRA.`
+                : 'Due date not returned by CRA'
+          }
           enrolled={ledger.profile.programs.includes('RC')}
         />
       </div>

@@ -180,7 +180,7 @@ function seed(orgName?: string): CraLedger {
       level: 'level_1',
     },
     accessCeiling: { ...OPEN_CEILING },
-    balances: { gst_hst: null, payroll: null, corporate_tax: null, total_owing: null },
+    balances: { gst_hst: null, payroll: null, corporate_tax: null, total_owing: null, corporate_interim: null },
     balancesFromCra: false,
     enquiry: null,
     accountReviewStatus: '',
@@ -252,8 +252,8 @@ export function stripSampleCraLedger(ledger: CraLedger): boolean {
     mark();
   }
   if (ledger.balancesFromCra !== true && !knownCraOverview(ledger.profile.businessNumber)) {
-    if (ledger.balances.gst_hst !== null || ledger.balances.payroll !== null || ledger.balances.corporate_tax !== null || ledger.balances.total_owing !== null || ledger.balancesFromCra !== false || ledger.balanceSource) {
-      ledger.balances = { gst_hst: null, payroll: null, corporate_tax: null, total_owing: null };
+    if (ledger.balances.gst_hst !== null || ledger.balances.payroll !== null || ledger.balances.corporate_tax !== null || ledger.balances.total_owing !== null || ledger.balances.corporate_interim !== null || ledger.balancesFromCra !== false || ledger.balanceSource) {
+      ledger.balances = { gst_hst: null, payroll: null, corporate_tax: null, total_owing: null, corporate_interim: null };
       ledger.balancesFromCra = false;
       ledger.balanceSource = undefined;
       mark();
@@ -326,6 +326,7 @@ export function applyKnownCraOverview(ledger: CraLedger): boolean {
     ledger.balances.gst_hst !== overview.gstHst ||
     ledger.balances.corporate_tax !== overview.corporateTax ||
     ledger.balances.total_owing !== overview.totalOwing ||
+    ledger.balances.corporate_interim !== overview.corporateInterim ||
     ledger.balanceSource !== 'represent_a_client'
   ) {
     ledger.balances = {
@@ -333,6 +334,7 @@ export function applyKnownCraOverview(ledger: CraLedger): boolean {
       gst_hst: overview.gstHst,
       corporate_tax: overview.corporateTax,
       total_owing: overview.totalOwing,
+      corporate_interim: overview.corporateInterim,
     };
     ledger.balanceSource = 'represent_a_client';
     changed = true;
@@ -424,6 +426,7 @@ function ledgerFromStorage(raw: string, orgName?: string): CraLedger {
           payroll: typeof parsed.balances?.payroll === 'number' ? parsed.balances.payroll : null,
           corporate_tax: typeof parsed.balances?.corporate_tax === 'number' ? parsed.balances.corporate_tax : null,
           total_owing: typeof parsed.balances?.total_owing === 'number' ? parsed.balances.total_owing : null,
+          corporate_interim: typeof parsed.balances?.corporate_interim === 'number' ? parsed.balances.corporate_interim : null,
         },
         balancesFromCra: parsed.balancesFromCra === true,
         balanceSource: parsed.balanceSource === 'represent_a_client' ? 'represent_a_client' : undefined,
@@ -900,7 +903,7 @@ export function applyCdeResult(orgId: string, orgName: string | undefined, actor
     const alreadyAuthorized = knownAuthorizedRepresentative(ledger.profile.businessNumber);
     const overview = knownCraOverview(ledger.profile.businessNumber);
     const message = overview
-      ? `${alreadyAuthorized ?? 'The representative'} is already authorized to access this business. Represent a Client shows corporation income tax RC0001 owing ${formatCad(overview.corporateTax)} as of ${overview.asOf}, current interim balance ${formatCad(overview.corporateInterim)}, and GST/HST RT0001 at ${formatCad(overview.gstHst)}. Internet File Transfer did not include a balance file, so these overview amounts were kept.`
+      ? `${alreadyAuthorized ?? 'The representative'} is already authorized. Balances pulled: corporation income tax RC0001 owing ${formatCad(overview.corporateTax)} as of ${overview.asOf}, interim balance ${formatCad(overview.corporateInterim)}, GST/HST RT0001 ${formatCad(overview.gstHst)}.`
       : alreadyAuthorized
         ? `${alreadyAuthorized} is already authorized to access this business. CRA Internet File Transfer did not include account balances, so the amounts were not changed.`
         : result.notice;
@@ -926,6 +929,7 @@ export function applyCdeResult(orgId: string, orgName: string | undefined, actor
         draft.balances.corporate_tax = roundMoney(balances.corporate_tax);
       }
       draft.balances.total_owing = null;
+      draft.balances.corporate_interim = null;
       draft.balancesFromCra = true;
       draft.balanceSource = undefined;
     }
