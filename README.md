@@ -73,12 +73,12 @@ CRA_CDE_URL=
 NOMBA_CLIENT_ID=
 NOMBA_CLIENT_SECRET=
 NOMBA_ACCOUNT_ID=
-NOMBA_ENVIRONMENT=sandbox
+NOMBA_ENVIRONMENT=live
 NOMBA_CALLBACK_URL=
 NOMBA_CURRENCY=CAD
 ```
 
-`NOMBA_ENVIRONMENT=live` uses `https://api.nomba.com`. Any other value uses `https://sandbox.nomba.com`. Nomba's published checkout currencies are NGN, CDF, and USD. The CRA ledger is CAD, so set `NOMBA_CURRENCY` to the currency that Nomba account can charge. Card numbers are entered on Nomba's page, not in eFinsuite.
+`NOMBA_ENVIRONMENT=live` uses `https://api.nomba.com`. Any other value uses `https://sandbox.nomba.com`. This Nomba account charges CAD, so leave `NOMBA_CURRENCY=CAD`. Card numbers are entered on Nomba's page, not in eFinsuite. On this desktop, put the live client ID, client secret, and account ID in `Nomba Live Keys.txt` and press Save Nomba Keys. Those values are read by the dev gateway and are not committed.
 
 CRA does not publish a public transmit URL for uncertified software. Leave the CRA URLs empty until the firm's certification kit provides them. The app then fails closed and says what is missing.
 

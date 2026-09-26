@@ -78,9 +78,22 @@ async function serve(
   json(res, 200, finalized);
 }
 
+const NOMBA_DESKTOP_KEYS = new Set([
+  'NOMBA_CLIENT_ID',
+  'NOMBA_CLIENT_SECRET',
+  'NOMBA_ACCOUNT_ID',
+  'NOMBA_ENVIRONMENT',
+  'NOMBA_CURRENCY',
+  'NOMBA_CALLBACK_URL',
+]);
+
 function readCraSetting(env: Record<string, string>, key: string): string | undefined {
   if (key === 'CRA_REPRESENTATIVE_ID') {
     const fromDesktop = readDesktopRepresentativeId();
+    if (fromDesktop) return fromDesktop;
+  }
+  if (NOMBA_DESKTOP_KEYS.has(key)) {
+    const fromDesktop = readDesktopNomba(key);
     if (fromDesktop) return fromDesktop;
   }
   return env[key];
@@ -92,6 +105,19 @@ function readDesktopRepresentativeId(): string {
     const file = path.join(os.homedir(), 'Desktop', 'CRA Representative ID.txt');
     const text = fs.readFileSync(file, 'utf8');
     const match = text.match(/^CRA_REPRESENTATIVE_ID=(.*)$/m);
+    return (match?.[1] ?? '').trim();
+  } catch {
+    return '';
+  }
+}
+
+/** Live Nomba credentials typed on the desktop. Values stay out of the repository. */
+function readDesktopNomba(key: string): string {
+  try {
+    const file = path.join(os.homedir(), 'Desktop', 'Nomba Live Keys.txt');
+    const text = fs.readFileSync(file, 'utf8');
+    const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const match = text.match(new RegExp(`^${escaped}=(.*)$`, 'm'));
     return (match?.[1] ?? '').trim();
   } catch {
     return '';
