@@ -21,6 +21,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { signedBankAmount } from '@/lib/plaidBankAmount';
+import { isBankTransactionLocked } from '@/lib/bankTransactionLock';
 
 interface Transaction {
   id: string;
@@ -31,6 +32,7 @@ interface Transaction {
   status: string;
   is_cleared?: boolean | null;
   journal_entry_id?: string | null;
+  gl_account_id?: string | null;
   category?: string;
   matchedTo?: string;
   payee_payor?: string;
@@ -85,7 +87,7 @@ export default function TransactionExportDialog({
   };
 
   const effectiveLifecycle = (t: Transaction): LifecycleKey => {
-    if (t.is_cleared || t.status === 'reconciled') return 'reconciled';
+    if (isBankTransactionLocked(t)) return 'reconciled';
     if (t.status === 'matched') return 'matched';
     if (t.status === 'pending') return 'pending';
     return 'unmatched';

@@ -8,6 +8,7 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { cn, parseLocalDate } from '@/lib/utils';
+import { isBankTransactionLocked } from '@/lib/bankTransactionLock';
 import {
   Select,
   SelectContent,
@@ -783,8 +784,7 @@ export default function CreditCardTransactions() {
                   transaction.transaction_type === 'payment' ||
                   transaction.transaction_type === 'credit';
                 const isCharge = !isPaymentOrCredit;
-                // Check if transaction is reconciled (either by status or is_cleared flag)
-                const isReconciled = transaction.is_cleared || transaction.status === 'reconciled';
+                const isReconciled = isBankTransactionLocked(transaction);
                 const effectiveStatus = isReconciled ? 'reconciled' : (transaction.status || 'pending');
                 const statusInfo = statusConfig[effectiveStatus] || statusConfig.pending;
                 const StatusIcon = statusInfo.icon;

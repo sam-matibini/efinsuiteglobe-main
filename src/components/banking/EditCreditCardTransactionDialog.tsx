@@ -48,6 +48,7 @@ import { useCurrentOrganization } from '@/hooks/useOrganization';
 import { useVendors, Vendor } from '@/hooks/useVendors';
 import { useCustomers, Customer } from '@/hooks/useCustomers';
 import { TaxCode } from '@/hooks/useSalesTax';
+import { isBankTransactionLocked } from '@/lib/bankTransactionLock';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { parseLocalDate } from '@/lib/utils';
@@ -266,7 +267,7 @@ export function EditCreditCardTransactionDialog({
   if (!transaction) return null;
 
   const isPosted = !!transaction.journal_entry_id;
-  const isReconciled = transaction.is_cleared === true;
+  const isReconciled = isBankTransactionLocked(transaction);
   const isCharge = transaction.transaction_type === 'charge' || transaction.transaction_type === 'fee' || transaction.transaction_type === 'interest';
   // Check if this is a journal entry source transaction (e.g., payment from bank account)
   const isJournalEntrySource = 'source' in transaction && transaction.source === 'journal_entry';

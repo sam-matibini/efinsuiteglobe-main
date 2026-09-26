@@ -76,7 +76,8 @@ export function useCreditCardPlaidSync() {
       reference: `PLAID-${txn.id}`,
       category: txn.category || null,
       payee_payor: txn.merchantName || null,
-      is_cleared: !txn.pending,
+      // A posted download is not reconciled. Stay editable until it is categorized.
+      is_cleared: false,
       imported_at: new Date().toISOString(),
     }));
 

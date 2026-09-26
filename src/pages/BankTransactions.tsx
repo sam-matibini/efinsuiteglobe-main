@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { cn, parseLocalDate } from '@/lib/utils';
 import { signedBankAmount } from '@/lib/plaidBankAmount';
+import { isBankTransactionLocked } from '@/lib/bankTransactionLock';
 import {
   Select,
   SelectContent,
@@ -245,9 +246,9 @@ export default function BankTransactions() {
         (t.reference?.toLowerCase().includes(searchLower) ?? false) ||
         (t.category?.toLowerCase().includes(searchLower) ?? false);
       
-      // Status filter (expanded) - now checks is_cleared for reconciled
+      // A bank posting is not a reconciliation. Lock only after GL work or an explicit reconcile.
       let matchesStatus = true;
-      const isReconciled = t.is_cleared || t.status === 'reconciled';
+      const isReconciled = isBankTransactionLocked(t);
       switch (statusFilter) {
         case 'pending':
           matchesStatus = t.status === 'pending' && !isReconciled;
@@ -1050,7 +1051,7 @@ export default function BankTransactions() {
         const sumAbs = (arr: Tx[]) =>
           arr.reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0);
         const txs = transactions as Tx[];
-        const isReconciled = (t: Tx) => t.is_cleared || t.status === 'reconciled';
+        const isReconciled = (t: Tx) => isBankTransactionLocked(t);
         const hasMatch = (t: Tx) =>
           !!t.category || !!t.journal_entry_id || !!(t as any).matched_invoice_id || !!(t as any).matched_bill_id;
         const reconciledTx = txs.filter(isReconciled);
@@ -1561,8 +1562,7 @@ export default function BankTransactions() {
             </thead>
             <tbody>
             {filteredTransactions.map((transaction) => {
-                // Check if transaction is reconciled (either by status or is_cleared flag)
-                const isReconciled = transaction.is_cleared || transaction.status === 'reconciled';
+                const isReconciled = isBankTransactionLocked(transaction);
                 const effectiveStatus = isReconciled ? 'reconciled' : transaction.status;
                 const status = statusConfig[effectiveStatus] || statusConfig['unmatched'];
                 const StatusIcon = status.icon;
@@ -1810,6 +1810,7 @@ export default function BankTransactions() {
           status: t.status,
           is_cleared: t.is_cleared,
           journal_entry_id: t.journal_entry_id,
+          gl_account_id: t.gl_account_id,
           category: t.category || undefined,
           matchedTo: t.reference || undefined,
         }))}

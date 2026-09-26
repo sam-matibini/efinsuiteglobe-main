@@ -142,10 +142,10 @@ describe('Plaid → DB row mapping', () => {
     expect(row.is_cleared).toBe(false);
   });
 
-  it('cleared: status=unmatched, is_cleared=true', () => {
+  it('posted download stays unmatched and editable until it is categorized', () => {
     const row = mapPlaidToRow(sampleDeposit, ACCOUNT_ID);
     expect(row.status).toBe('unmatched');
-    expect(row.is_cleared).toBe(true);
+    expect(row.is_cleared).toBe(false);
   });
 
   it('reference is prefixed with PLAID-', () => {

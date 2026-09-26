@@ -53,6 +53,7 @@ import { TaxCode } from '@/hooks/useSalesTax';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { parseLocalDate } from '@/lib/utils';
+import { isBankTransactionLocked } from '@/lib/bankTransactionLock';
 
 interface EditTransactionDialogProps {
   open: boolean;
@@ -347,7 +348,7 @@ export function EditTransactionDialog({
   if (!transaction) return null;
 
   const isPosted = !!transaction.journal_entry_id;
-  const isReconciled = transaction.is_cleared === true;
+  const isReconciled = isBankTransactionLocked(transaction);
   const isDeposit = transactionType === 'deposit';
 
   return (
