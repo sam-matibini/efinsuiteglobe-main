@@ -77,6 +77,9 @@ export interface CraAuthorization {
   confirmedAt?: string;
   reference?: string;
   instructionsSentAt?: string;
+  /** CRA representative the business authorized. Not a CRA confirmation number. */
+  representativeName?: string;
+  representativeId?: string;
   /** True only after Client Data Enquiry says this representative can see the business. */
   verifiedByCra?: boolean;
 }

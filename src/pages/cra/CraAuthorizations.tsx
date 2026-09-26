@@ -20,6 +20,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { CraModule } from '@/components/cra/CraModule';
+import { authorizationView } from '@/lib/cra/authorizationView';
 import { CAPABILITY_COLUMNS, ROLE_MATRIX, effectiveCapabilities, formatWhen } from '@/lib/cra/engine';
 import { PROGRAM_LABEL } from '@/lib/cra/representative';
 import type { AccessCeiling, CraProfile, CraProgramCode } from '@/lib/cra/types';
@@ -35,7 +36,9 @@ export default function CraAuthorizations() {
   const [ceiling, setCeiling] = useState<AccessCeiling>(cra.ledger.accessCeiling);
   const [checkOpen, setCheckOpen] = useState(false);
   const auth = cra.ledger.authorization;
-  const representativeName = cra.connection?.representativeName || 'Not configured';
+  const view = authorizationView(auth);
+  const representativeName = auth.representativeName || cra.connection?.representativeName || 'Not configured';
+  const representativeId = auth.representativeId || cra.connection?.representativeId || 'Not configured';
   const efileName = cra.connection?.efileName || 'Not configured';
 
   useEffect(() => {
@@ -60,19 +63,35 @@ export default function CraAuthorizations() {
           <CardTitle>Connect your CRA business account</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
-          <p>eFinsuite is an authorized CRA representative.</p>
+          <p>
+            {view.tone === 'authorized'
+              ? `${representativeName} is the authorized CRA representative for this business.`
+              : `CRA representative on the firm account: ${representativeName}.`}
+          </p>
           <p>Representative: {representativeName}</p>
-          <p>CRA representative ID: {cra.connection?.representativeId || 'Not configured'}</p>
+          <p>CRA representative ID: {representativeId}</p>
           <p>EFILE name: {efileName}</p>
           <p className="text-muted-foreground">
-            Status: {auth.status === 'pending_client_confirmation' ? 'Pending client confirmation' : auth.status.replaceAll('_', ' ')}
-            {auth.level && auth.status === 'connected' ? ` · ${auth.level === 'level_2' ? 'Level 2' : 'Level 1'}` : ''}
+            Status: {view.label}
+            {auth.verifiedByCra && auth.level ? ` · ${auth.level === 'level_2' ? 'Level 2' : 'Level 1'}` : ''}
             {auth.reference ? ` · ${auth.reference}` : ''}
           </p>
+          {view.tone === 'authorized' && !auth.verifiedByCra ? (
+            <p>This authorization is on file in eFinsuite. CRA Internet File Transfer does not confirm Represent a Client, so account balances stay blank until CRA returns them.</p>
+          ) : null}
           {auth.status === 'pending_client_confirmation' ? (
             <p>The business owner or director must confirm {representativeName} as an authorized representative through CRA My Business Account.</p>
           ) : null}
           <div className="flex flex-wrap gap-2">
+            <Button
+              onClick={() => cra.recordRepresentativeAuthorization({
+                representativeName: auth.representativeName || cra.connection?.representativeName || '',
+                representativeId: auth.representativeId || cra.connection?.representativeId || '',
+              })}
+              disabled={!cra.can('manage_authorization') || !(auth.representativeName || cra.connection?.representativeName)}
+            >
+              Record CRA representative
+            </Button>
             <Button onClick={() => cra.requestAuthorization()} disabled={!cra.can('manage_authorization') || auth.status === 'connected' || auth.status === 'pending_client_confirmation'}>
               Request CRA authorization
             </Button>
@@ -90,7 +109,7 @@ export default function CraAuthorizations() {
             <ol className="list-decimal space-y-1 pl-5 text-muted-foreground">
               <li>Sign in to CRA My Business Account as a director or owner of {profile.legalName}.</li>
               <li>Open Manage authorized representatives.</li>
-              <li>Confirm {representativeName}, representative ID {cra.connection?.representativeId || 'not configured'}.</li>
+              <li>Confirm {representativeName}, representative ID {representativeId}.</li>
               <li>Return here and check status. eFinsuite never asks for the CRA password.</li>
             </ol>
           ) : null}

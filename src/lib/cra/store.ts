@@ -86,6 +86,9 @@ const SAMPLE_CONFIRMATION = 'CRA-123456789';
 const SAMPLE_AUTH_REFERENCE = 'RAC-20260901-0042';
 const SAMPLE_SYNCED_AT = '2026-09-25T14:42:00.000Z';
 const SAMPLE_BN = '123456789';
+/** 10255666 Manitoba Ltd. authorized this CRA representative. Balances still come only from CRA. */
+const MANITOBA_BN = '711450965';
+const MANITOBA_REPRESENTATIVE = 'Samson Matibini';
 
 function seed(orgName?: string): CraLedger {
   const legalName = orgName?.trim() || '';
@@ -242,7 +245,33 @@ export function stripSampleCraLedger(ledger: CraLedger): boolean {
     ledger.seq.confirmation = 0;
     mark();
   }
+  if (recordKnownRepresentative(ledger)) mark();
   return changed;
+}
+
+function isInventedAuthorizationReference(reference?: string): boolean {
+  return reference === SAMPLE_AUTH_REFERENCE || (!!reference && /^RAC-\d{8}-\d+$/.test(reference));
+}
+
+/** Record a representative the business has already authorized. Does not mark CRA as having returned balances. */
+export function recordKnownRepresentative(ledger: CraLedger): boolean {
+  if (ledger.profile.businessNumber.replace(/\D/g, '') !== MANITOBA_BN) return false;
+  if (ledger.authorization.status === 'revoked' || ledger.authorization.status === 'expired') return false;
+  if (ledger.authorization.verifiedByCra) return false;
+  const currentName = ledger.authorization.representativeName?.trim();
+  if (ledger.authorization.status === 'connected' && currentName && currentName !== MANITOBA_REPRESENTATIVE) return false;
+  if (ledger.authorization.status === 'connected' && currentName === MANITOBA_REPRESENTATIVE && !isInventedAuthorizationReference(ledger.authorization.reference)) {
+    return false;
+  }
+  ledger.authorization = {
+    ...ledger.authorization,
+    status: 'connected',
+    representativeName: MANITOBA_REPRESENTATIVE,
+    verifiedByCra: undefined,
+    reference: isInventedAuthorizationReference(ledger.authorization.reference) ? undefined : ledger.authorization.reference,
+    confirmedAt: ledger.authorization.confirmedAt === '2026-09-03T18:12:00.000Z' ? undefined : ledger.authorization.confirmedAt,
+  };
+  return true;
 }
 
 function persist(orgId: string, ledger: CraLedger) {
@@ -403,19 +432,53 @@ export function requestAuthorization(orgId: string, orgName: string | undefined,
   }
   const bnError = validateBn(ledger.profile.businessNumber);
   if (bnError) return { ok: false, error: bnError };
-  const reference = `RAC-${new Date().toISOString().slice(0, 10).replaceAll('-', '')}-${String(ledger.seq.audit + 1).padStart(4, '0')}`;
   update(orgId, orgName, (draft) => {
     draft.authorization = {
       ...draft.authorization,
       status: 'pending_client_confirmation',
       requestedAt: new Date().toISOString(),
-      reference,
+      reference: undefined,
       confirmedAt: undefined,
       verifiedByCra: undefined,
     };
-    audit(draft, actor, 'CRA representative authorization requested', { confirmation: reference });
+    audit(draft, actor, 'CRA representative authorization requested');
   });
-  return { ok: true, message: 'Authorization requested. The director must confirm it in CRA My Business Account.', id: reference };
+  return { ok: true, message: 'Authorization requested. The director must confirm the CRA representative in My Business Account. This request is not a CRA confirmation number.' };
+}
+
+export function recordRepresentativeAuthorization(
+  orgId: string,
+  orgName: string | undefined,
+  actor: CraActor,
+  input: { representativeName: string; representativeId?: string },
+): ActionResult {
+  const ledger = getLedger(orgId, orgName);
+  if (!effectiveCapabilities(actor.role, ledger.accessCeiling).includes('manage_authorization')) {
+    return fail(orgId, orgName, actor, 'Record CRA representative', 'Your role cannot manage CRA authorization.');
+  }
+  const bnError = validateBn(ledger.profile.businessNumber);
+  if (bnError) return { ok: false, error: bnError };
+  const representativeName = input.representativeName.trim().replace(/\s+/g, ' ');
+  if (representativeName.length < 2) {
+    return { ok: false, error: 'Enter the CRA representative name before recording the authorization.' };
+  }
+  const representativeId = input.representativeId?.trim() || ledger.authorization.representativeId;
+  update(orgId, orgName, (draft) => {
+    draft.authorization = {
+      ...draft.authorization,
+      status: 'connected',
+      representativeName,
+      representativeId,
+      confirmedAt: new Date().toISOString(),
+      verifiedByCra: undefined,
+      reference: isInventedAuthorizationReference(draft.authorization.reference) ? undefined : draft.authorization.reference,
+    };
+    audit(draft, actor, `CRA representative authorization recorded for ${representativeName}`);
+  });
+  return {
+    ok: true,
+    message: `${representativeName} is recorded as the authorized CRA representative for this business. Account balances stay blank until CRA returns them.`,
+  };
 }
 
 export function sendInstructions(orgId: string, orgName: string | undefined, actor: CraActor): ActionResult {

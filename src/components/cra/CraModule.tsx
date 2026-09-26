@@ -3,6 +3,7 @@ import { ShieldCheck } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { authorizationView } from '@/lib/cra/authorizationView';
 import { formatWhen } from '@/lib/cra/engine';
 import type { CraConnectionInfo } from '@/lib/cra/gatewayClient';
 import type { CraLedger } from '@/lib/cra/types';
@@ -97,7 +98,9 @@ export function CraModule({
 }
 
 export function ConnectionSummary({ ledger }: { ledger: CraLedger }) {
-  const connected = ledger.authorization.status === 'connected';
+  const cra = useCraTaxCentre();
+  const view = authorizationView(ledger.authorization);
+  const representativeId = ledger.authorization.representativeId || cra.connection?.representativeId || '';
   const programs = ledger.accounts.map((account) => ({
     ok: true,
     label: account.label,
@@ -113,10 +116,17 @@ export function ConnectionSummary({ ledger }: { ledger: CraLedger }) {
             <div className="text-lg font-semibold">{ledger.profile.legalName}</div>
             <div className="text-sm text-muted-foreground">{ledger.profile.businessNumber ? `BN ${ledger.profile.businessNumber}` : 'Business number not on file'}</div>
           </div>
+          {view.representativeName ? (
+            <div className="text-sm">
+              <span className="text-muted-foreground">CRA representative </span>
+              <span className="font-medium">{view.representativeName}</span>
+              {representativeId ? <span className="text-muted-foreground"> · {representativeId}</span> : null}
+            </div>
+          ) : null}
           <div className="flex flex-wrap items-center gap-2 text-sm">
-            <span className={`inline-flex h-2.5 w-2.5 rounded-full ${connected && ledger.authorization.verifiedByCra ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-            <span>{connected && ledger.authorization.verifiedByCra ? 'Connected' : ledger.authorization.verifiedByCra ? 'Connected' : 'Not confirmed by CRA'}</span>
-            <Badge variant="outline">{connected && ledger.authorization.verifiedByCra ? (ledger.authorization.level === 'level_2' ? 'Level 2' : 'Level 1') : 'Not authorized'}</Badge>
+            <span className={`inline-flex h-2.5 w-2.5 rounded-full ${view.tone === 'authorized' ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+            <span>{view.label}</span>
+            <Badge variant="outline">{view.badge}</Badge>
           </div>
           <div className="text-sm text-muted-foreground">
             {ledger.syncedAt && (ledger.balancesFromCra || ledger.authorization.verifiedByCra)
@@ -124,7 +134,11 @@ export function ConnectionSummary({ ledger }: { ledger: CraLedger }) {
               : 'CRA has not returned account balances.'}
           </div>
           <div className="text-sm text-muted-foreground">
-            {ledger.authorization.verifiedByCra ? 'Verified with CRA Client Data Enquiry.' : 'Refresh asks CRA. Amounts stay blank until CRA returns them.'}
+            {ledger.authorization.verifiedByCra
+              ? 'Verified with CRA Client Data Enquiry.'
+              : view.tone === 'authorized'
+                ? 'This representative is authorized for the business. Amounts stay blank until CRA returns them.'
+                : 'Refresh asks CRA. Amounts stay blank until CRA returns them.'}
           </div>
         </div>
         <div className="space-y-2 text-sm">

@@ -83,7 +83,14 @@ describe('CRA tax centre', () => {
     expect(ledger.profile.businessNumber).toBe('711450965');
     expect(ledger.profile.programs).toEqual(['RC', 'RT', 'RP']);
     expect(ledger.balances).toEqual({ gst_hst: null, payroll: null, corporate_tax: null });
-    expect(ledger.authorization.status).toBe('not_started');
+    expect(ledger.authorization.status).toBe('connected');
+    expect(ledger.authorization.representativeName).toBe('Samson Matibini');
+    expect(ledger.authorization.verifiedByCra).toBeUndefined();
+    expect(ledger.authorization.reference).toBeUndefined();
+    expect(stripSampleCraLedger(ledger)).toBe(false);
+    ledger.authorization = { status: 'revoked', level: 'level_1' };
+    expect(stripSampleCraLedger(ledger)).toBe(false);
+    expect(ledger.authorization.status).toBe('revoked');
     expect(ledger.walletBalance).toBe(0);
     expect(ledger.gst.collected).toBe(0);
     expect(ledger.payments).toEqual([]);
@@ -187,6 +194,7 @@ describe('CRA tax centre', () => {
     readyOrg();
     expect(revokeAuthorization(org, name, cfo).ok).toBe(true);
     expect(requestAuthorization(org, name, cfo).ok).toBe(true);
+    expect(getLedger(org, name).authorization.reference).toBeUndefined();
     expect(recordClientConfirmation(org, name, cfo).ok).toBe(false);
     expect(getLedger(org, name).authorization.status).toBe('pending_client_confirmation');
     expect(getLedger(org, name).authorization.verifiedByCra).toBeUndefined();
