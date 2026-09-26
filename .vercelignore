@@ -15,10 +15,13 @@ src/**/__tests__/
 # Temp files
 tmp/
 
-# Supabase backend (deployed separately)
+# Supabase backend is deployed separately. The Vite config still imports the
+# shared CRA handler while it loads, so that folder has to be on the build.
 supabase/.temp
 supabase/migrations/
-supabase/functions/
+supabase/functions/**
+!supabase/functions/_shared/
+!supabase/functions/_shared/**
 
 # Lock files (npm is primary)
 bun.lock
