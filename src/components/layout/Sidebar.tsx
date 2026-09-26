@@ -254,6 +254,7 @@ const getNavigation = (payrollLabels: { taxSlips: string; separationDoc: string;
       { label: 'Corporate Income Tax', href: '/tax-cra/corporate', icon: Landmark },
       { label: 'EFILE Gateway', href: '/tax-cra/efile', icon: Send },
       { label: 'Tax Remittances', href: '/tax-cra/remittances', icon: Wallet },
+      { label: 'CRA bill pay', href: '/tax-cra/bill-pay', icon: DollarSign },
       { label: 'CRA Authorizations', href: '/tax-cra/authorizations', icon: ShieldCheck },
       { label: 'CRA Notices', href: '/tax-cra/notices', icon: AlertTriangle },
       { label: 'CRA Activity', href: '/tax-cra/activity', icon: History },

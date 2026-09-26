@@ -30,6 +30,11 @@ export default function CraRemittances() {
         </Button>
       }
     >
+      <p className="text-sm text-muted-foreground">
+        Corporate bill pay with the client's CRA account number is a separate path.{' '}
+        <Link to="/tax-cra/bill-pay" className="text-primary underline">Open CRA bill pay</Link>.
+        Recording a bank confirmation there does not mark the payment paid on the CRA account.
+      </p>
       <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
         <Card>
           <CardHeader>
