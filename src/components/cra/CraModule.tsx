@@ -14,14 +14,14 @@ export function CraSandboxNote({ connection }: { connection?: CraConnectionInfo 
   const gaps = [
     connection?.loaded && !connection.efileConfigured ? 'EFILE transmit is not configured, so a return cannot be marked accepted.' : '',
     connection?.loaded && !connection.cdeConfigured ? 'Client Data Enquiry is not configured, so Refresh cannot replace these balances.' : '',
-    connection?.loaded && !connection.paysafeConfigured ? 'Paysafe is not configured, so a payment stays authorized.' : '',
+    connection?.loaded && !connection.nombaConfigured ? 'Nomba card checkout is not configured, so a payment stays authorized.' : '',
   ].filter(Boolean);
   return (
     <div className="rounded-lg border bg-muted/50 px-4 py-3 text-sm text-muted-foreground">
       eFinsuite does not store CRA passwords. Represent a Client uses{' '}
       <span className="text-foreground">{CRA_REPRESENTATIVE.shortName}</span>, representative ID{' '}
       <span className="text-foreground">{representativeId}</span>. A return is accepted only when the configured CRA
-      EFILE service returns a confirmation. A remittance leaves authorized only when Paysafe accepts it.
+      EFILE service returns a confirmation. A remittance is paid only after Nomba confirms a Visa or Mastercard charge. Card numbers stay on Nomba Checkout.
       {gaps.length ? ` ${gaps.join(' ')}` : ''}
     </div>
   );

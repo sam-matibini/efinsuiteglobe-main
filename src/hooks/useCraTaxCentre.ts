@@ -95,7 +95,7 @@ export function useCraTaxCentre() {
         representativeId: result.representativeId ?? null,
         efileConfigured: result.efileConfigured === true,
         cdeConfigured: result.cdeConfigured === true,
-        paysafeConfigured: result.paysafeConfigured === true,
+        nombaConfigured: result.nombaConfigured === true,
         loaded: true,
       });
     });
@@ -197,12 +197,15 @@ export function useCraTaxCentre() {
       approvedBy: payment.approvedBy ?? null,
       paymentStatus: payment.status,
       journalEntryId: payment.journalEntryId ?? null,
+      customerEmail: actor.email,
+      callbackUrl: typeof window !== 'undefined' ? `${window.location.origin}/tax-cra/remittances` : '',
     });
     return run(applyRailResult(orgId, orgName, actor, paymentId, {
       ok: gateway.ok,
       error: gateway.error,
       railStatus: (gateway.railStatus ?? null) as PaymentStatus | null,
       railReference: gateway.railReference,
+      checkoutUrl: gateway.checkoutUrl,
       journalEntryId: gateway.journalEntryId,
       glError: gateway.glError,
     }));
@@ -233,6 +236,7 @@ export function useCraTaxCentre() {
       error: gateway.error,
       railStatus: (gateway.railStatus ?? null) as PaymentStatus | null,
       railReference: gateway.railReference,
+      checkoutUrl: gateway.checkoutUrl,
       journalEntryId: gateway.journalEntryId,
       glError: gateway.glError,
     }));

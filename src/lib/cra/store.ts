@@ -815,11 +815,12 @@ export interface RailApplyInput {
   error?: string;
   railStatus?: PaymentStatus | null;
   railReference?: string | null;
+  checkoutUrl?: string | null;
   journalEntryId?: string | null;
   glError?: string | null;
 }
 
-/** Apply a Paysafe status. Missing or unknown statuses leave the payment where it is. */
+/** Apply a Nomba card status. Missing or unknown statuses leave the payment where it is. */
 export function applyRailResult(
   orgId: string,
   orgName: string | undefined,
@@ -844,6 +845,12 @@ export function applyRailResult(
   const railStatus = result.railStatus;
   if (payment.status === 'confirmed') return { ok: true, message: `Payment ${paymentId} is already confirmed.`, id: paymentId };
   if (payment.status === railStatus) {
+    if (result.checkoutUrl) {
+      update(orgId, orgName, (draft) => {
+        const row = draft.payments.find((item) => item.id === paymentId);
+        if (row) row.checkoutUrl = result.checkoutUrl ?? undefined;
+      });
+    }
     return { ok: true, message: `Payment ${paymentId} is still ${railStatus}.`, id: paymentId };
   }
   const currentRank = RAIL_RANK[payment.status];
@@ -877,6 +884,7 @@ export function applyRailResult(
     if (!row.releasedAt) row.releasedAt = new Date().toISOString();
     if (!row.glAccrual.length) row.glAccrual = accrualEntry(row);
     if (result.railReference) row.railReference = result.railReference;
+    if (result.checkoutUrl) row.checkoutUrl = result.checkoutUrl;
     if (result.journalEntryId) row.journalEntryId = result.journalEntryId;
     if (result.glError) row.glError = result.glError;
     if (railStatus === 'settled' && row.walletDeduction === undefined) {

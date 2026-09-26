@@ -163,6 +163,7 @@ export interface CraPayment {
   glSettlement: JournalLine[];
   failureReason?: string;
   railReference?: string;
+  checkoutUrl?: string;
   journalEntryId?: string;
   glError?: string;
   createdAt: string;

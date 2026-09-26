@@ -131,7 +131,7 @@ describe('CRA tax centre', () => {
     expect(getLedger(org, name).balances.gst_hst).toBe(10);
 
     expect(approvePayment(org, name, cfo, 'EFS-CRA-00001246').ok).toBe(true);
-    const held = applyRailResult(org, name, cfo, 'EFS-CRA-00001246', { ok: false, error: 'Paysafe is not configured. The payment stays authorized.' });
+    const held = applyRailResult(org, name, cfo, 'EFS-CRA-00001246', { ok: false, error: 'Nomba card payments are not configured. The payment stays authorized.' });
     expect(held.ok).toBe(false);
     expect(getLedger(org, name).payments.find((payment) => payment.id === 'EFS-CRA-00001246')!.status).toBe('authorized');
     const settled = applyRailResult(org, name, cfo, 'EFS-CRA-00001246', {

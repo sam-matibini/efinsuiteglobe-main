@@ -17,9 +17,12 @@ const env: CraGatewayEnv = {
   efileTransmitUrl: 'https://efile.example.test/transmit',
   efileStatusUrl: 'https://efile.example.test/status',
   cdeUrl: 'https://cde.example.test/enquiry',
-  paysafeApiKey: 'user:pass',
-  paysafeAccountIdEft: 'acct-1',
-  paysafeEnvironment: 'test',
+  nombaClientId: 'nomba-client',
+  nombaClientSecret: 'nomba-secret',
+  nombaAccountId: 'nomba-account',
+  nombaEnvironment: 'sandbox',
+  nombaCurrency: 'CAD',
+  nombaCallbackUrl: 'https://app.example.test/tax-cra/remittances',
 };
 
 const blankEnv: CraGatewayEnv = {
@@ -29,9 +32,12 @@ const blankEnv: CraGatewayEnv = {
   efileTransmitUrl: '',
   efileStatusUrl: '',
   cdeUrl: '',
-  paysafeApiKey: '',
-  paysafeAccountIdEft: '',
-  paysafeEnvironment: '',
+  nombaClientId: '',
+  nombaClientSecret: '',
+  nombaAccountId: '',
+  nombaEnvironment: '',
+  nombaCurrency: '',
+  nombaCallbackUrl: '',
 };
 
 function respond(status: number, body: string, ok = status >= 200 && status < 300): FetchLike {
@@ -108,28 +114,62 @@ describe('CRA gateway', () => {
     });
   });
 
-  it('keeps a payment authorized when Paysafe is missing or rejects it', async () => {
-    const missing = await handleCraGateway('payment_release', { paymentId: 'EFS-CRA-1', amount: 10 }, blankEnv, respond(200, '{}'));
+  it('keeps a payment authorized when Nomba is missing or rejects checkout', async () => {
+    const missing = await handleCraGateway('payment_release', cardPayload(), blankEnv, respond(200, '{}'));
     expect(missing.railStatus).toBeNull();
     expect(missing.error).toMatch(/stays authorized/);
-    const rejected = await handleCraGateway(
-      'payment_release',
-      { paymentId: 'EFS-CRA-1', amount: 10 },
-      env,
-      respond(402, '{"error":"no"}', false),
-    );
+    const rejected = await handleCraGateway('payment_release', cardPayload(), env, respond(401, '{"code":"401"}', false));
     expect(rejected.ok).toBe(false);
     expect(rejected.railStatus).toBeNull();
+    expect(String((rejected as { error?: string }).error)).not.toMatch(/nomba-secret/);
   });
 
-  it('records a Paysafe id only when the rail returns a status', async () => {
-    const fetchImpl = respond(200, '{"id":"ps-99","status":"COMPLETED"}');
-    const result = await handleCraGateway('payment_release', { paymentId: 'EFS-CRA-1', amount: 75 }, env, fetchImpl);
-    expect(result.ok).toBe(true);
-    expect(result.railStatus).toBe('settled');
-    expect(result.railReference).toBe('ps-99');
-    const [url] = (fetchImpl as ReturnType<typeof vi.fn>).mock.calls[0];
-    expect(url).toBe('https://api.test.paysafe.com/paymenthub/v1/payments');
+  it('opens Nomba card checkout and settles only a confirmed Visa or Mastercard payment', async () => {
+    const fetchImpl = vi.fn(async (url: string, init?: { body?: string }) => {
+      if (String(url).includes('/auth/token/issue')) {
+        return { ok: true, status: 200, text: async () => JSON.stringify({ code: '00', data: { access_token: 'tok' } }) };
+      }
+      if (String(url).includes('/checkout/order')) {
+        expect(String(init?.body)).toContain('"allowedPaymentMethods":["Card"]');
+        expect(String(init?.body)).not.toMatch(/cardNumber|cardPin|"cvv"/);
+        return {
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({
+            code: '00',
+            data: { checkoutLink: 'https://checkout.nomba.com/pay/abc', orderReference: 'nomba-order-1' },
+          }),
+        };
+      }
+      return { ok: false, status: 404, text: async () => '' };
+    });
+    const opened = await handleCraGateway('payment_release', cardPayload(), env, fetchImpl);
+    expect(opened.ok).toBe(true);
+    expect(opened.railStatus).toBe('submitted');
+    expect(opened.railReference).toBe('nomba-order-1');
+    expect(opened.checkoutUrl).toBe('https://checkout.nomba.com/pay/abc');
+    expect(fetchImpl.mock.calls[1][0]).toBe('https://sandbox.nomba.com/v1/checkout/order');
+
+    const transfer = await handleCraGateway('payment_status', cardPayload(), env, vi.fn(async (url: string) => {
+      if (String(url).includes('/auth/token')) return { ok: true, status: 200, text: async () => JSON.stringify({ code: '00', data: { access_token: 'tok' } }) };
+      return { ok: true, status: 200, text: async () => JSON.stringify({ code: '00', data: { status: 'SUCCESS', onlineCheckoutPaymentMethod: 'bank_transfer', id: 'tx-1' } }) };
+    }));
+    expect(transfer.railStatus).toBeNull();
+
+    const visa = await handleCraGateway('payment_status', cardPayload(), env, vi.fn(async (url: string) => {
+      if (String(url).includes('/auth/token')) return { ok: true, status: 200, text: async () => JSON.stringify({ code: '00', data: { access_token: 'tok' } }) };
+      return { ok: true, status: 200, text: async () => JSON.stringify({ code: '00', data: { status: 'SUCCESS', onlineCheckoutPaymentMethod: 'card_payment', cardType: 'Visa', id: 'tx-visa' } }) };
+    }));
+    expect(visa.ok).toBe(true);
+    expect(visa.railStatus).toBe('settled');
+    expect(visa.railReference).toBe('tx-visa');
+  });
+
+  it('refuses a card number in the CRA gateway payload', async () => {
+    const fetchImpl = respond(200, '{}');
+    const result = await handleCraGateway('payment_release', { ...cardPayload(), cardNumber: '4242424242424242' }, env, fetchImpl);
+    expect(result.ok).toBe(false);
+    expect((fetchImpl as ReturnType<typeof vi.fn>)).not.toHaveBeenCalled();
   });
 
   it('builds a T619 packet without embedding the EFILE password', () => {
@@ -163,6 +203,15 @@ describe('CRA gateway', () => {
     expect(finalized.glError).toBeTruthy();
   });
 });
+
+function cardPayload() {
+  return {
+    paymentId: 'EFS-CRA-1',
+    amount: 75,
+    customerEmail: 'cfo@company.com',
+    callbackUrl: 'https://app.example.test/tax-cra/remittances',
+  };
+}
 
 function payload() {
   return {

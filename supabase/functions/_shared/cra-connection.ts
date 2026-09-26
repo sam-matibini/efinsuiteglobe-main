@@ -2,7 +2,7 @@
  * CRA gateway used by the Vite dev server and the cra-gateway edge function.
  * Firm software credentials come from the environment. Client CRA passwords are rejected.
  * A filing is accepted only when CRA returns HTTP 2xx and a confirmation.
- * A payment leaves "authorized" only when Paysafe returns a status.
+ * A card payment is settled only when Nomba confirms a Visa or Mastercard charge.
  */
 import { formatCraAmount, omitEmptyOptionalTags, schemaForTaxYear, t619Version, xmlEscape } from './cra-xml-utils.ts';
 
@@ -21,9 +21,12 @@ export interface CraGatewayEnv {
   efileTransmitUrl: string;
   efileStatusUrl: string;
   cdeUrl: string;
-  paysafeApiKey: string;
-  paysafeAccountIdEft: string;
-  paysafeEnvironment: string;
+  nombaClientId: string;
+  nombaClientSecret: string;
+  nombaAccountId: string;
+  nombaEnvironment: string;
+  nombaCurrency: string;
+  nombaCallbackUrl: string;
 }
 
 export interface CraBalancesPayload {
@@ -39,7 +42,8 @@ export interface CraGatewayResult {
   representativeId?: string | null;
   efileConfigured?: boolean;
   cdeConfigured?: boolean;
-  paysafeConfigured?: boolean;
+  nombaConfigured?: boolean;
+  checkoutUrl?: string | null;
   httpStatus?: number;
   body?: string;
   accepted?: boolean;
@@ -82,7 +86,21 @@ export interface CraDb {
   rpc(name: string, args: Record<string, unknown>): PromiseLike<QueryResult>;
 }
 
-const BLOCKED_KEYS = new Set(['password', 'crapassword', 'cra_password', 'clientpassword', 'client_password', 'sin', 'socialinsurance']);
+const BLOCKED_KEYS = new Set([
+  'password',
+  'crapassword',
+  'cra_password',
+  'clientpassword',
+  'client_password',
+  'sin',
+  'socialinsurance',
+  'cardnumber',
+  'pan',
+  'cvv',
+  'cvc',
+  'cardcvv',
+  'cardpin',
+]);
 
 export function craEnvFrom(read: (key: string) => string | undefined): CraGatewayEnv {
   return {
@@ -92,9 +110,12 @@ export function craEnvFrom(read: (key: string) => string | undefined): CraGatewa
     efileTransmitUrl: (read('CRA_EFILE_TRANSMIT_URL') ?? '').trim(),
     efileStatusUrl: (read('CRA_EFILE_STATUS_URL') ?? '').trim(),
     cdeUrl: (read('CRA_CDE_URL') ?? '').trim(),
-    paysafeApiKey: read('PAYSAFE_API_KEY') ?? '',
-    paysafeAccountIdEft: (read('PAYSAFE_ACCOUNT_ID_EFT') ?? '').trim(),
-    paysafeEnvironment: (read('PAYSAFE_ENVIRONMENT') ?? '').trim(),
+    nombaClientId: (read('NOMBA_CLIENT_ID') ?? '').trim(),
+    nombaClientSecret: read('NOMBA_CLIENT_SECRET') ?? '',
+    nombaAccountId: (read('NOMBA_ACCOUNT_ID') ?? '').trim(),
+    nombaEnvironment: (read('NOMBA_ENVIRONMENT') ?? '').trim(),
+    nombaCurrency: (read('NOMBA_CURRENCY') ?? '').trim(),
+    nombaCallbackUrl: (read('NOMBA_CALLBACK_URL') ?? '').trim(),
   };
 }
 
@@ -130,14 +151,14 @@ export async function handleCraGateway(
   fetchImpl: FetchLike,
 ): Promise<CraGatewayResult> {
   if (containsBlockedSecret(payload)) {
-    return { ok: false, action, error: 'Client CRA passwords are not accepted.' };
+    return { ok: false, action, error: 'Client CRA passwords and card numbers are not accepted. Visa and Mastercard are entered on Nomba Checkout.' };
   }
   if (action === 'capabilities') return capabilities(env);
   if (action === 'efile_submit') return transmitEfile(payload, env, fetchImpl);
   if (action === 'efile_status') return efileStatus(payload, env, fetchImpl);
   if (action === 'cde_refresh') return refreshCde(payload, env, fetchImpl);
-  if (action === 'payment_release') return releasePaysafe(payload, env, fetchImpl);
-  if (action === 'payment_status') return paysafeStatus(payload, env, fetchImpl);
+  if (action === 'payment_release') return releaseNombaCard(payload, env, fetchImpl);
+  if (action === 'payment_status') return nombaCardStatus(payload, env, fetchImpl);
   return { ok: false, action, error: 'Unknown CRA gateway action.' };
 }
 
@@ -234,7 +255,7 @@ function capabilities(env: CraGatewayEnv): CraGatewayResult {
     representativeId: env.representativeId || null,
     efileConfigured: Boolean(env.efileTransmitUrl && env.efileNumber && env.efilePassword),
     cdeConfigured: Boolean(env.cdeUrl && env.representativeId),
-    paysafeConfigured: Boolean(env.paysafeApiKey && env.paysafeAccountIdEft),
+    nombaConfigured: Boolean(env.nombaClientId && env.nombaClientSecret && env.nombaAccountId),
   };
 }
 
@@ -383,95 +404,175 @@ async function refreshCde(payload: Record<string, unknown>, env: CraGatewayEnv, 
   }
 }
 
-async function releasePaysafe(payload: Record<string, unknown>, env: CraGatewayEnv, fetchImpl: FetchLike): Promise<CraGatewayResult> {
+async function releaseNombaCard(payload: Record<string, unknown>, env: CraGatewayEnv, fetchImpl: FetchLike): Promise<CraGatewayResult> {
   const action = 'payment_release';
-  if (!env.paysafeApiKey || !env.paysafeAccountIdEft) {
-    return { ok: false, action, railStatus: null, error: 'Paysafe is not configured. The payment stays authorized.' };
+  if (!env.nombaClientId || !env.nombaClientSecret || !env.nombaAccountId) {
+    return { ok: false, action, railStatus: null, error: 'Nomba card payments are not configured. Set NOMBA_CLIENT_ID, NOMBA_CLIENT_SECRET, and NOMBA_ACCOUNT_ID. The payment stays authorized.' };
   }
   const amount = typeof payload.amount === 'number' ? payload.amount : Number.NaN;
   if (!Number.isFinite(amount) || amount <= 0) {
     return { ok: false, action, railStatus: null, error: 'The payment amount is not valid. The payment stays authorized.' };
   }
+  const email = text(payload.customerEmail);
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return { ok: false, action, railStatus: null, error: 'A customer email is required before Nomba can open card checkout. The payment stays authorized.' };
+  }
+  const callback = text(payload.callbackUrl) || env.nombaCallbackUrl;
+  const callbackError = callback ? assertHttps(callback) : 'NOMBA_CALLBACK_URL is required so Nomba can return the payer to eFinsuite.';
+  if (callbackError) return { ok: false, action, railStatus: null, error: `${callbackError} The payment stays authorized.` };
   const paymentId = text(payload.paymentId) || 'cra-payment';
-  const merchantRefNum = paymentId.slice(0, 40);
   try {
-    const response = await fetchImpl(`${paysafeBase(env)}/paymenthub/v1/payments`, {
+    const token = await issueNombaToken(env, fetchImpl);
+    if (!token.token) return { ok: false, action, railStatus: null, error: token.error || 'Nomba did not issue an access token. The payment stays authorized.' };
+    const response = await fetchImpl(`${nombaBase(env)}/v1/checkout/order`, {
       method: 'POST',
       headers: {
-        Authorization: paysafeAuthHeader(env.paysafeApiKey),
+        Authorization: `Bearer ${token.token}`,
+        accountId: env.nombaAccountId,
         'Content-Type': 'application/json',
+        Accept: 'application/json',
       },
       body: JSON.stringify({
-        merchantRefNum,
-        amount: Math.round(amount * 100),
-        currencyCode: 'CAD',
-        settleWithAuth: true,
-        accountId: env.paysafeAccountIdEft,
+        order: {
+          orderReference: paymentId.slice(0, 64),
+          callbackUrl: callback,
+          customerEmail: email,
+          amount: Math.round(amount * 100) / 100,
+          currency: (env.nombaCurrency || 'CAD').toUpperCase(),
+          allowedPaymentMethods: ['Card'],
+        },
+        tokenizeCard: false,
       }),
     });
     const body = await response.text();
-    if (!response.ok) {
-      return { ok: false, action, httpStatus: response.status, body: clip(body), railStatus: null, error: `Paysafe did not accept the payment (HTTP ${response.status}). The payment stays authorized.` };
+    const parsed = parseNombaCheckout(body);
+    if (!response.ok || parsed.code !== '00' || !parsed.checkoutUrl || !parsed.orderReference) {
+      return { ok: false, action, httpStatus: response.status, body: clip(body), railStatus: null, error: 'Nomba did not open a Visa or Mastercard checkout. The payment stays authorized.' };
     }
-    const parsed = parsePaysafe(body);
-    if (!parsed.railStatus || !parsed.railReference) {
-      return { ok: false, action, httpStatus: response.status, body: clip(body), railStatus: null, error: 'Paysafe did not return a payment status. The payment stays authorized.' };
-    }
-    return { ok: true, action, httpStatus: response.status, body: clip(body), railStatus: parsed.railStatus, railReference: parsed.railReference };
+    return {
+      ok: true,
+      action,
+      httpStatus: response.status,
+      body: clip(body),
+      railStatus: 'submitted',
+      railReference: parsed.orderReference,
+      checkoutUrl: parsed.checkoutUrl,
+    };
   } catch (error) {
-    return { ok: false, action, railStatus: null, error: `Paysafe did not respond. The payment stays authorized. ${clip(error instanceof Error ? error.message : '')}` };
+    return { ok: false, action, railStatus: null, error: `Nomba did not respond. The payment stays authorized. ${clip(error instanceof Error ? error.message : '')}` };
   }
 }
 
-async function paysafeStatus(payload: Record<string, unknown>, env: CraGatewayEnv, fetchImpl: FetchLike): Promise<CraGatewayResult> {
+async function nombaCardStatus(payload: Record<string, unknown>, env: CraGatewayEnv, fetchImpl: FetchLike): Promise<CraGatewayResult> {
   const action = 'payment_status';
+  const merchantReference = text(payload.paymentId);
   const railReference = text(payload.railReference);
-  if (!railReference) {
-    return { ok: false, action, railStatus: null, error: 'This payment has no Paysafe reference. It has not been released.' };
+  if (!merchantReference && !railReference) {
+    return { ok: false, action, railStatus: null, error: 'This payment has no Nomba order. It has not been sent to card checkout.' };
   }
-  if (!env.paysafeApiKey || !env.paysafeAccountIdEft) {
-    return { ok: false, action, railStatus: null, error: 'Paysafe is not configured. The payment status was not changed.' };
+  if (!env.nombaClientId || !env.nombaClientSecret || !env.nombaAccountId) {
+    return { ok: false, action, railStatus: null, error: 'Nomba card payments are not configured. The payment status was not changed.' };
   }
   try {
-    const response = await fetchImpl(`${paysafeBase(env)}/paymenthub/v1/payments/${encodeURIComponent(railReference)}`, {
+    const token = await issueNombaToken(env, fetchImpl);
+    if (!token.token) return { ok: false, action, railStatus: null, error: token.error || 'Nomba did not issue an access token. The payment status was not changed.' };
+    const query = merchantReference
+      ? `orderReference=${encodeURIComponent(merchantReference.slice(0, 64))}`
+      : `orderId=${encodeURIComponent(railReference)}`;
+    const response = await fetchImpl(`${nombaBase(env)}/v1/transactions/accounts/single?${query}`, {
       method: 'GET',
-      headers: { Authorization: paysafeAuthHeader(env.paysafeApiKey), Accept: 'application/json' },
+      headers: {
+        Authorization: `Bearer ${token.token}`,
+        accountId: env.nombaAccountId,
+        Accept: 'application/json',
+      },
     });
     const body = await response.text();
-    if (!response.ok) {
-      return { ok: false, action, httpStatus: response.status, body: clip(body), railStatus: null, error: `Paysafe status returned HTTP ${response.status}. The payment status was not changed.` };
+    const parsed = parseNombaPayment(body);
+    if (!response.ok || parsed.code !== '00') {
+      return { ok: false, action, httpStatus: response.status, body: clip(body), railStatus: null, railReference, error: 'Nomba has not confirmed this card payment. It stays unpaid.' };
     }
-    const parsed = parsePaysafe(body);
+    if (parsed.railStatus === 'settled' && !parsed.visaOrMastercard) {
+      return { ok: false, action, httpStatus: response.status, body: clip(body), railStatus: null, railReference: parsed.railReference || railReference, error: 'Nomba did not confirm a Visa or Mastercard payment. The remittance was not marked settled.' };
+    }
     if (!parsed.railStatus) {
-      return { ok: false, action, httpStatus: response.status, body: clip(body), railStatus: null, railReference, error: 'Paysafe did not return a payment status. The payment status was not changed.' };
+      return { ok: false, action, httpStatus: response.status, body: clip(body), railStatus: null, railReference: parsed.railReference || railReference, error: 'Nomba did not return a card payment status. The payment was not changed.' };
     }
     return { ok: true, action, httpStatus: response.status, body: clip(body), railStatus: parsed.railStatus, railReference: parsed.railReference || railReference };
   } catch (error) {
-    return { ok: false, action, railStatus: null, error: `Paysafe status failed. ${clip(error instanceof Error ? error.message : 'The endpoint did not respond.')}` };
+    return { ok: false, action, railStatus: null, error: `Nomba status failed. ${clip(error instanceof Error ? error.message : 'The endpoint did not respond.')}` };
   }
 }
 
-function parsePaysafe(body: string): { railStatus: CraGatewayResult['railStatus']; railReference: string | null } {
-  let record: Record<string, unknown> = {};
+async function issueNombaToken(env: CraGatewayEnv, fetchImpl: FetchLike): Promise<{ token: string | null; error?: string }> {
+  const response = await fetchImpl(`${nombaBase(env)}/v1/auth/token/issue`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', accountId: env.nombaAccountId, Accept: 'application/json' },
+    body: JSON.stringify({ grant_type: 'client_credentials', client_id: env.nombaClientId, client_secret: env.nombaClientSecret }),
+  });
+  const body = await response.text();
+  if (!response.ok) return { token: null, error: `Nomba authentication failed (HTTP ${response.status}).` };
   try {
-    const parsed = JSON.parse(body) as unknown;
-    if (parsed && typeof parsed === 'object') record = parsed as Record<string, unknown>;
+    const parsed = JSON.parse(body) as { code?: string; data?: { access_token?: string } };
+    const token = parsed.data?.access_token ?? '';
+    if (parsed.code !== '00' || !token) return { token: null, error: 'Nomba did not issue an access token.' };
+    return { token };
   } catch {
-    return { railStatus: null, railReference: null };
+    return { token: null, error: 'Nomba authentication did not return a token.' };
   }
-  const status = typeof record.status === 'string' ? record.status.toUpperCase() : '';
-  const id = typeof record.id === 'string' ? record.id : '';
-  return { railStatus: mapPaysafeStatus(status), railReference: id || null };
 }
 
-function mapPaysafeStatus(status: string): CraGatewayResult['railStatus'] {
-  if (status === 'COMPLETED') return 'settled';
-  if (status === 'PENDING' || status === 'RECEIVED') return 'submitted';
-  if (status === 'PROCESSING' || status === 'HELD') return 'processing';
-  if (status === 'PAYABLE') return 'accepted';
-  if (status === 'FAILED') return 'failed';
-  if (status === 'CANCELLED' || status === 'EXPIRED') return 'rejected';
+function parseNombaCheckout(body: string): { code: string; checkoutUrl: string | null; orderReference: string | null } {
+  try {
+    const parsed = JSON.parse(body) as { code?: string; data?: { checkoutLink?: string; orderReference?: string } };
+    const link = parsed.data?.checkoutLink ?? '';
+    const reference = parsed.data?.orderReference ?? '';
+    const checkoutUrl = link.startsWith('https://') ? link : null;
+    return { code: parsed.code ?? '', checkoutUrl, orderReference: reference || null };
+  } catch {
+    return { code: '', checkoutUrl: null, orderReference: null };
+  }
+}
+
+function parseNombaPayment(body: string): { code: string; railStatus: CraGatewayResult['railStatus']; railReference: string | null; visaOrMastercard: boolean } {
+  try {
+    const parsed = JSON.parse(body) as { code?: string; data?: Record<string, unknown> | null };
+    const data = parsed.data ?? {};
+    const status = typeof data.status === 'string' ? data.status.toUpperCase() : '';
+    const id = typeof data.id === 'string' ? data.id : '';
+    return {
+      code: parsed.code ?? '',
+      railStatus: mapNombaStatus(status),
+      railReference: id || null,
+      visaOrMastercard: isVisaOrMastercard(data),
+    };
+  } catch {
+    return { code: '', railStatus: null, railReference: null, visaOrMastercard: false };
+  }
+}
+
+function mapNombaStatus(status: string): CraGatewayResult['railStatus'] {
+  if (status === 'SUCCESS') return 'settled';
+  if (status === 'PENDING' || status === 'PROCESSING' || status === 'NEW') return 'processing';
+  if (status === 'FAILED' || status === 'REVERSED') return 'failed';
+  if (status === 'CANCELLED' || status === 'CANCELED' || status === 'EXPIRED') return 'rejected';
   return null;
+}
+
+function isVisaOrMastercard(data: Record<string, unknown>): boolean {
+  const method = String(data.onlineCheckoutPaymentMethod ?? data.paymentMethod ?? '').toLowerCase();
+  const cardType = String(data.cardType ?? cardTypeFrom(data) ?? '').toLowerCase();
+  if (method.includes('transfer') || method.includes('ussd') || method.includes('momo') || method.includes('qr')) return false;
+  if (cardType.includes('verve')) return false;
+  if (cardType.includes('visa') || cardType.includes('mastercard') || cardType.includes('master card')) return true;
+  return method.includes('card');
+}
+
+function cardTypeFrom(data: Record<string, unknown>): string {
+  const details = data.cardDetails;
+  if (!details || typeof details !== 'object') return '';
+  const cardType = (details as { cardType?: unknown }).cardType;
+  return typeof cardType === 'string' ? cardType : '';
 }
 
 export function parseCdeBody(body: string): { balances: CraBalancesPayload | null; connected: boolean } {
@@ -709,20 +810,14 @@ function assertHttps(url: string): string | null {
     const parsed = new URL(url);
     if (parsed.protocol === 'https:') return null;
     if (parsed.protocol === 'http:' && (parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost')) return null;
-    return 'CRA and Paysafe endpoints must use HTTPS.';
+    return 'CRA and Nomba endpoints must use HTTPS.';
   } catch {
     return 'The CRA endpoint URL is invalid.';
   }
 }
 
-function paysafeBase(env: CraGatewayEnv): string {
-  return env.paysafeEnvironment === 'live' ? 'https://api.paysafe.com' : 'https://api.test.paysafe.com';
-}
-
-function paysafeAuthHeader(raw: string): string {
-  const trimmed = raw.trim().replace(/\s+/g, '');
-  const encoded = trimmed.includes(':') ? encodeBase64(trimmed) : trimmed;
-  return `Basic ${encoded}`;
+function nombaBase(env: CraGatewayEnv): string {
+  return env.nombaEnvironment === 'live' ? 'https://api.nomba.com' : 'https://sandbox.nomba.com';
 }
 
 function basicAuth(user: string, password: string): string {

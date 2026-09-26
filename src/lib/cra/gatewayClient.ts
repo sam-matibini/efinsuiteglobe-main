@@ -7,7 +7,7 @@ export interface CraConnectionInfo {
   representativeId: string | null;
   efileConfigured: boolean;
   cdeConfigured: boolean;
-  paysafeConfigured: boolean;
+  nombaConfigured: boolean;
   loaded: boolean;
 }
 
@@ -15,7 +15,7 @@ export const UNCONFIGURED_CONNECTION: CraConnectionInfo = {
   representativeId: null,
   efileConfigured: false,
   cdeConfigured: false,
-  paysafeConfigured: false,
+  nombaConfigured: false,
   loaded: false,
 };
 

@@ -23,7 +23,7 @@ export default function CraRemittances() {
   return (
     <CraModule
       title="Tax remittances"
-      description="CRA payments move through draft, authorization, submission, and settlement. A payment is reconciled only after the wallet, the bank, and CRA all agree."
+      description="CRA payments move through draft, authorization, Nomba card checkout, and settlement. A Visa or Mastercard charge is paid only after Nomba confirms it, and it is reconciled only after CRA confirms it too."
       actions={
         <Button onClick={() => setPayOpen(true)} disabled={!cra.can('prepare_payment')}>
           Pay CRA
@@ -105,7 +105,12 @@ function PaymentDetail({
         <div>Payment date {formatDay(payment.paymentDate)} · Due {formatDay(payment.dueDate)}</div>
         <div>Wallet {payment.walletDeduction ? formatCad(-payment.walletDeduction) : '—'} · Bank {payment.bankSettlement ? formatCad(-payment.bankSettlement) : '—'}</div>
         <div>CRA confirmation {payment.craConfirmation ?? '—'} · {isReconciled(payment) ? '✓ Reconciled' : 'Not reconciled'}</div>
-        <div>Paysafe reference {payment.railReference ?? '—'}</div>
+        <div>Nomba order {payment.railReference ?? '—'}</div>
+        {payment.checkoutUrl ? (
+          <a className="text-primary underline" href={payment.checkoutUrl} target="_blank" rel="noreferrer">
+            Open Nomba Visa or Mastercard checkout
+          </a>
+        ) : null}
         {payment.journalEntryId ? <div>Journal {payment.journalEntryId}</div> : null}
         {payment.glError ? <div className="text-destructive">{payment.glError}</div> : null}
         {payment.failureReason ? <div className="text-destructive">{payment.failureReason}</div> : null}
@@ -119,7 +124,7 @@ function PaymentDetail({
           ) : null}
           {payment.status === 'authorized' ? (
             <Button size="sm" onClick={() => run(() => cra.releasePayment(payment.id))} disabled={!cra.can('approve_payment') || busy}>
-              Release
+              Pay with Visa or Mastercard
             </Button>
           ) : null}
           {['submitted', 'processing', 'accepted'].includes(payment.status) ? (
