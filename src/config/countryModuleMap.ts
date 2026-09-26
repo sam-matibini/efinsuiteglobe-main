@@ -46,11 +46,12 @@ export function getCountryModuleFlags(country?: string | null): CountryModuleFla
  * no restriction, it is always visible.
  */
 export function isChildVisibleForCountry(
-  child: { hideForNonCA?: boolean; restrictToCountries?: string[] },
+  child: { hideForNonCA?: boolean; restrictToCountries?: string[]; hideForCountries?: string[] },
   country?: string | null
 ): boolean {
   const c = country?.toUpperCase() ?? '';
   if (child.hideForNonCA && c !== 'CA') return false;
+  if (child.hideForCountries?.some((code) => code.toUpperCase() === c)) return false;
   if (child.restrictToCountries && !child.restrictToCountries.includes(c)) return false;
   return true;
 }

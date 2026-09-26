@@ -24,7 +24,7 @@ export function EfinconnectSettingsTab() {
 
   const sectionKeys: Array<{ key: 'bills' | 'taxRemittances' | 'transfers' | 'payments' | 'governance'; label: string; hint: string }> = [
     { key: 'bills',          label: 'Bills',                   hint: 'Pay vendor bills and salaries' },
-    { key: 'taxRemittances', label: 'Taxes & Remittances',     hint: 'Remit taxes to CRA, IRS, NRS, ZRA and other authorities' },
+    { key: 'taxRemittances', label: 'Taxes & Remittances',     hint: config.countryCode === 'CA' ? 'Show Tax & CRA and sales tax reporting on the eFinConnect dashboard' : 'Remit taxes to IRS, NRS, ZRA and other authorities' },
     { key: 'transfers',      label: 'Transfers',               hint: 'Move money between accounts and rails' },
     { key: 'payments',       label: 'Payments & Collections',  hint: 'Payment links, connect payouts, scheduled' },
     { key: 'governance',     label: 'Governance',              hint: 'Approvals, history and settings' },
@@ -51,6 +51,13 @@ export function EfinconnectSettingsTab() {
         <p className="text-xs text-muted-foreground mt-4">
           To change country, update <span className="font-medium">Organization → Country</span> in the Organization tab.
         </p>
+        {config.countryCode === 'CA' && (
+          <p className="text-sm text-muted-foreground mt-4">
+            Sales tax reporting uses ledger figures in <Link to="/tax" className="text-primary underline-offset-4 hover:underline">Sales Tax</Link>.
+            CRA account balances, filing, and remittances are in <Link to="/tax-cra" className="text-primary underline-offset-4 hover:underline">Tax & CRA</Link>.
+            These toggles only show or hide eFinConnect cards. They do not change CRA authorization or balances.
+          </p>
+        )}
       </Card>
 
       {/* Payment rails */}
@@ -84,7 +91,7 @@ export function EfinconnectSettingsTab() {
       <Card className="p-6">
         <h3 className="text-base font-semibold mb-1">Tax authorities & remittance targets</h3>
         <p className="text-sm text-muted-foreground mb-4">
-          Choose which authorities appear in the "Pay business taxes" cards on the eFinconnect dashboard.
+          Choose which authorities appear on the eFinConnect tax cards. For Canada, those cards open Tax & CRA and sales tax reporting.
         </p>
         <div className="grid gap-3 md:grid-cols-2">
           {authorities.map((authority) => {

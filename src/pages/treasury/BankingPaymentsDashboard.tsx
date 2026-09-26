@@ -198,8 +198,8 @@ export default function BankingPaymentsDashboard() {
 
   const tiles = [
     {
-      title: `${primaryAuthority} Remittance`,
-      href: countryCode === 'CA' ? '/banking-payments/cra-remittance' : '/treasury/tax-payments',
+      title: countryCode === 'CA' ? 'Tax & CRA remittances' : `${primaryAuthority} Remittance`,
+      href: countryCode === 'CA' ? '/tax-cra/remittances' : '/treasury/tax-payments',
       icon: Receipt,
     },
     { title: 'AP Payments', href: '/treasury/ap-payments', icon: CreditCard },
@@ -232,7 +232,7 @@ export default function BankingPaymentsDashboard() {
             <Link to="/banking-payments/payment-links"><Link2 className="h-4 w-4 mr-1" />New payment link</Link>
           </Button>
           <Button asChild size="sm" variant="outline">
-            <Link to={countryCode === 'CA' ? '/banking-payments/cra-remittance' : '/treasury/tax-payments'}><Receipt className="h-4 w-4 mr-1" />{primaryAuthority} remittance</Link>
+            <Link to={countryCode === 'CA' ? '/tax-cra/remittances' : '/treasury/tax-payments'}><Receipt className="h-4 w-4 mr-1" />{countryCode === 'CA' ? 'Tax & CRA remittances' : `${primaryAuthority} remittance`}</Link>
           </Button>
         </div>
       </div>

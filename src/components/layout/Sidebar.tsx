@@ -64,7 +64,7 @@ interface NavItem {
   label: string;
   icon: React.ElementType;
   href?: string;
-  children?: { label: string; href: string; icon: React.ElementType; hideForReadOnly?: boolean; hideForNonCA?: boolean; restrictToCountries?: string[] }[];
+  children?: { label: string; href: string; icon: React.ElementType; hideForReadOnly?: boolean; hideForNonCA?: boolean; restrictToCountries?: string[]; hideForCountries?: string[] }[];
   /** Module codes required for this nav item to be visible */
   requiredModules?: ModuleCode[];
   /** Hide this nav item when user is in read-only (auditor) mode */
@@ -206,7 +206,7 @@ const getNavigation = (payrollLabels: { taxSlips: string; separationDoc: string;
       { label: 'Exceptions', href: '/tax/exceptions', icon: AlertTriangle },
       { label: 'Audit Trail', href: '/tax/audit-trail', icon: History },
       { label: 'Advanced Reports', href: '/tax/reports', icon: BarChart3 },
-      { label: 'E-File Returns', href: '/tax/e-file', icon: Send, hideForReadOnly: true },
+      { label: 'E-File Returns', href: '/tax/e-file', icon: Send, hideForReadOnly: true, hideForCountries: ['CA'] },
       { label: 'Address Tax (US)', href: '/tax/address-tax', icon: MapPin, restrictToCountries: ['US'] },
       { label: 'UK VAT (MTD)', href: '/intl/uk-vat', icon: Globe, restrictToCountries: ['GB'] },
       { label: 'EU VAT (OSS)', href: '/tax/eu-vat', icon: Globe, restrictToCountries: ['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE'] },

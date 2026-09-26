@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { format, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear, endOfYear, subMonths, subQuarters, subYears } from 'date-fns';
 import { parseLocalDate } from '@/lib/utils';
 import { Download, Eye, FileText, Printer, Calendar, ArrowRight, Filter, SlidersHorizontal, GitCompare, Check, ChevronDown } from 'lucide-react';
@@ -474,14 +475,14 @@ export function TaxReportPreview({
 
   const getReportCategoryTitle = () => {
     if (!isCanada) return taxTerminology.title;
-    return reportCategory === 'gst' ? 'CRA GST/HST Report' : 'Provincial Sales Tax (PST) Report';
+    return reportCategory === 'gst' ? 'GST/HST report (books)' : 'Provincial Sales Tax (PST) Report';
   };
 
   const getReportCategoryDescription = () => {
     if (!isCanada) return 'Tax reporting and analysis';
     return reportCategory === 'gst' 
-      ? 'Federal GST/HST collected and ITCs for CRA filing'
-      : 'Provincial sales tax (MB PST, SK PST, BC PST, QST) reporting';
+      ? 'Federal GST/HST collected and ITCs from the general ledger. CRA account balances are in Tax & CRA.'
+      : 'Provincial sales tax (MB PST, SK PST, BC PST, QST) from the general ledger.';
   };
 
   const generatePdf = async (download: boolean = true) => {
@@ -699,7 +700,7 @@ export function TaxReportPreview({
                 className="gap-2 data-[state=active]:bg-emerald-500/10 data-[state=active]:text-emerald-700 dark:data-[state=active]:text-emerald-400 data-[state=active]:shadow-sm data-[state=active]:border-b-2 data-[state=active]:border-emerald-500"
               >
                 <FileText className="w-4 h-4" />
-                CRA GST/HST
+                GST/HST (books)
               </TabsTrigger>
               <TabsTrigger
                 value="pst"
@@ -716,6 +717,12 @@ export function TaxReportPreview({
         <div className="mb-4 p-3 bg-muted/50 rounded-lg border">
           <h4 className="font-medium text-foreground">{getReportCategoryTitle()}</h4>
           <p className="text-sm text-muted-foreground">{getReportCategoryDescription()}</p>
+          {isCanada && (
+            <p className="text-sm text-muted-foreground mt-2">
+              Filing, CRA balances, and remittances are in{' '}
+              <Link to="/tax-cra" className="text-primary underline-offset-4 hover:underline">Tax & CRA</Link>.
+            </p>
+          )}
         </div>
 
         {/* Filter Bar */}

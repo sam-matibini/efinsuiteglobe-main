@@ -91,7 +91,7 @@ export default function CraRemittanceCentre() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold">CRA Remittance Centre</h1>
-          <p className="text-muted-foreground">Remit GST/HST, payroll source deductions and corporate tax to the Canada Revenue Agency. Filing, authorization, and reconciliation live in <Link to="/tax-cra" className="text-primary underline-offset-4 hover:underline">CRA Tax & Remittance</Link>.</p>
+          <p className="text-muted-foreground">Treasury history for GST/HST, payroll, and corporate tax payments. CRA account balances, filing, authorization, and remittances are in <Link to="/tax-cra" className="text-primary underline-offset-4 hover:underline">Tax & CRA</Link>. Ledger GST/HST reports stay in <Link to="/tax" className="text-primary underline-offset-4 hover:underline">Sales Tax</Link>.</p>
       </div>
 
 

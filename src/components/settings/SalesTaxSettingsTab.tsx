@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { Plus, Lock } from 'lucide-react';
 import { Card } from '@/components/ui/card';
@@ -393,6 +394,13 @@ export function SalesTaxSettingsTab() {
   // Render Canadian tax settings
   const renderCanadianTaxSettings = () => (
     <>
+      <Alert>
+        <AlertDescription>
+          Registration numbers on this tab are used for invoices and ledger reports.
+          CRA representative access, EFILE, account balances, and remittances are in{' '}
+          <Link to="/tax-cra" className="text-primary underline-offset-4 hover:underline">Tax & CRA</Link>.
+        </AlertDescription>
+      </Alert>
       <Card className="p-6">
         <h2 className="text-lg font-semibold text-foreground mb-4">Tax Jurisdiction</h2>
         <Alert className="mb-4">

@@ -76,6 +76,8 @@ describe('CRA Tax & Remittance screens', () => {
     expect(screen.getByText('CRA has not returned account balances.')).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'Pay CRA' }).length).toBeGreaterThan(0);
     expect(screen.getByRole('link', { name: 'File return' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Sales tax reporting' })).toHaveAttribute('href', '/tax');
+    expect(screen.getByText(/They are not CRA account balances/)).toBeInTheDocument();
     expect(screen.getByText(/does not store CRA passwords/)).toBeInTheDocument();
   });
 

@@ -84,7 +84,7 @@ export default function SalesTax() {
       case 'CA':
         return {
           title: 'Sales Tax',
-          description: 'GST/HST/PST management and CRA reporting',
+          description: 'GST/HST and PST from the general ledger. CRA account balances are in Tax & CRA.',
           returnLabel: 'Tax Returns',
           collectedLabel: 'Tax Collected (Sales)',
           paidLabel: 'Tax Paid (ITCs)',
@@ -316,13 +316,20 @@ export default function SalesTax() {
               Advanced Reports
             </Button>
           </Link>
-          <Link to="/settings">
+          <Link to="/settings?tab=sales-tax">
             <Button variant="outline" size="sm">
               <Settings className="w-4 h-4 mr-2" />
               {countryCode === 'BI' ? 'Paramètres' : 'Tax Settings'}
             </Button>
           </Link>
-          {!isReadOnly && (
+          {countryCode === 'CA' ? (
+            <Button asChild>
+              <Link to="/tax-cra/gst-hst">
+                <FileText className="w-4 h-4 mr-2" />
+                File with CRA
+              </Link>
+            </Button>
+          ) : !isReadOnly && (
             <Button>
               <FileText className="w-4 h-4 mr-2" />
               {countryCode === 'BI' ? 'Soumettre Déclaration' : 'File Return'}
@@ -570,6 +577,12 @@ export default function SalesTax() {
         </TabsContent>
 
         <TabsContent value="summary" className="space-y-6">
+          {countryCode === 'CA' && (
+            <p className="text-sm text-muted-foreground">
+              Amounts on this tab come from the general ledger. CRA account balances, EFILE, and remittances are in{' '}
+              <Link to="/tax-cra" className="text-primary underline-offset-4 hover:underline">Tax & CRA</Link>.
+            </p>
+          )}
           {/* Category Tabs for Canada */}
           {countryCode === 'CA' && (
             <Tabs value={summaryCategory} onValueChange={(v) => setSummaryCategory(v as 'gst' | 'pst')} className="mb-4">
@@ -579,7 +592,7 @@ export default function SalesTax() {
                   className="gap-2 data-[state=active]:bg-emerald-500/10 data-[state=active]:text-emerald-700 dark:data-[state=active]:text-emerald-400 data-[state=active]:shadow-sm data-[state=active]:border-b-2 data-[state=active]:border-emerald-500"
                 >
                   <FileText className="w-4 h-4" />
-                  CRA GST/HST
+                  GST/HST (books)
                 </TabsTrigger>
                 <TabsTrigger
                   value="pst"
@@ -634,7 +647,7 @@ export default function SalesTax() {
                   {countryCode === 'BI' 
                     ? 'Soldes TVA en Temps Réel' 
                     : countryCode === 'CA' 
-                      ? 'CRA GST/HST Balances (from GL)' 
+                      ? 'GST/HST balances from the general ledger' 
                       : 'Current Tax Balances (from GL)'}
                 </h3>
               </div>
@@ -642,7 +655,7 @@ export default function SalesTax() {
                 {countryCode === 'BI' 
                   ? 'Montants actuels dans vos comptes de taxes du grand livre'
                   : countryCode === 'CA'
-                    ? 'Federal GST/HST amounts from your General Ledger accounts'
+                    ? 'Federal GST/HST posted in the general ledger. This is not the CRA account balance.'
                     : 'Current amounts posted to your tax liability accounts'}
               </p>
               <div className="grid grid-cols-1 md:grid-cols-5 gap-6">

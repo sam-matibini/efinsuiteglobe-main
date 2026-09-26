@@ -107,8 +107,9 @@ export default function CraDashboard() {
         <CardContent className="space-y-4 p-5">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">eFinsuite Tax Centre</div>
+              <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Books in eFinsuite</div>
               <div className="text-lg font-semibold">{ledger.profile.legalName}</div>
+              <p className="text-xs text-muted-foreground">Local book figures. They are not CRA account balances. Ledger GST/HST and PST reports are in Sales Tax.</p>
             </div>
             <div className="text-sm">CRA connection {authorizationView(ledger.authorization).label}</div>
           </div>
@@ -129,6 +130,9 @@ export default function CraDashboard() {
             </Button>
             <Button asChild variant="outline">
               <Link to="/tax-cra/efile">EFILE gateway</Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link to="/tax">Sales tax reporting</Link>
             </Button>
           </div>
         </CardContent>
