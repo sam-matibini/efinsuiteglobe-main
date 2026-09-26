@@ -159,6 +159,11 @@ export function craCount(amount: number | null | undefined): string {
   return String(amount);
 }
 
+export function craYesNo(label: string | null | undefined, count?: number | null): string {
+  if (label === 'Yes' || label === 'No') return label;
+  return craCount(count);
+}
+
 export function bookAmount(amount: number, calculated: boolean): string {
   if (!calculated) return 'Not calculated';
   return formatCad(amount);
@@ -171,6 +176,9 @@ function addReturned(total: number, amount: number | null, seen: { any: boolean 
 }
 
 export function outstandingBalance(ledger: CraLedger): number | null {
+  if (typeof ledger.balances.total_owing === 'number' && Number.isFinite(ledger.balances.total_owing)) {
+    return roundMoney(ledger.balances.total_owing);
+  }
   const enrolled = new Set(ledger.profile.programs);
   const seen = { any: false };
   let total = 0;

@@ -6,6 +6,7 @@ import {
   effectiveCapabilities,
   nextRailStatus,
   OPEN_CEILING,
+  formatCad,
   roundMoney,
   settlementEntry,
   validateBn,
@@ -19,6 +20,7 @@ import type {
   AuditEvent,
   CraActor,
   CraLedger,
+  CraNotice,
   CraPayment,
   CraProfile,
   CraProgramCode,
@@ -93,7 +95,54 @@ const SAMPLE_BN = '123456789';
 const AUTHORIZED_CLIENTS: { bn: string; representativeName: string }[] = [
   { bn: '711450965', representativeName: 'Samson Matibini' },
   { bn: '725966758', representativeName: 'Samson Matibini' },
+  { bn: '724016159', representativeName: 'Samson Matibini' },
 ];
+
+/**
+ * Represent a Client overview captured for a business when Internet File Transfer
+ * does not include balances. Only figures visible on that overview are stored.
+ */
+const REPRESENT_A_CLIENT_OVERVIEWS: {
+  bn: string;
+  totalOwing: number;
+  gstHst: number;
+  outstandingReturnsLabel: 'Yes' | 'No';
+  gstOutstandingReturnsLabel: 'Yes' | 'No';
+  notices: CraNotice[];
+}[] = [
+  {
+    bn: '724016159',
+    totalOwing: 1601.65,
+    gstHst: 0,
+    outstandingReturnsLabel: 'Yes',
+    gstOutstandingReturnsLabel: 'Yes',
+    notices: [
+      {
+        id: 'rac-724016159-t2-assessment',
+        severity: 'info',
+        title: 'T2 Initial assessment',
+        program: 'Corporate income tax',
+        receivedAt: '2026-09-17T16:00:00.000Z',
+        body: 'Notice issued.',
+        read: false,
+      },
+      {
+        id: 'rac-724016159-gst34',
+        severity: 'info',
+        title: '2025-03-31 GST34 Initial Return',
+        program: 'GST/HST',
+        receivedAt: '2026-09-14T16:00:00.000Z',
+        body: 'Completed. RT0001 amount owing is $0.00.',
+        read: false,
+      },
+    ],
+  },
+];
+
+export function knownCraOverview(businessNumber: string) {
+  const bn = businessNumber.replace(/\D/g, '');
+  return REPRESENT_A_CLIENT_OVERVIEWS.find((row) => row.bn === bn) ?? null;
+}
 
 export function knownAuthorizedRepresentative(businessNumber: string): string | null {
   const bn = businessNumber.replace(/\D/g, '');
@@ -125,7 +174,7 @@ function seed(orgName?: string): CraLedger {
       level: 'level_1',
     },
     accessCeiling: { ...OPEN_CEILING },
-    balances: { gst_hst: null, payroll: null, corporate_tax: null },
+    balances: { gst_hst: null, payroll: null, corporate_tax: null, total_owing: null },
     balancesFromCra: false,
     enquiry: null,
     accountReviewStatus: '',
@@ -196,10 +245,11 @@ export function stripSampleCraLedger(ledger: CraLedger): boolean {
     ledger.authorization = { status: 'not_started', level: 'level_1' };
     mark();
   }
-  if (ledger.balancesFromCra !== true) {
-    if (ledger.balances.gst_hst !== null || ledger.balances.payroll !== null || ledger.balances.corporate_tax !== null || ledger.balancesFromCra !== false) {
-      ledger.balances = { gst_hst: null, payroll: null, corporate_tax: null };
+  if (ledger.balancesFromCra !== true && !knownCraOverview(ledger.profile.businessNumber)) {
+    if (ledger.balances.gst_hst !== null || ledger.balances.payroll !== null || ledger.balances.corporate_tax !== null || ledger.balances.total_owing !== null || ledger.balancesFromCra !== false || ledger.balanceSource) {
+      ledger.balances = { gst_hst: null, payroll: null, corporate_tax: null, total_owing: null };
       ledger.balancesFromCra = false;
+      ledger.balanceSource = undefined;
       mark();
     }
     if (ledger.accountReviewStatus === 'None') {
@@ -256,6 +306,54 @@ export function stripSampleCraLedger(ledger: CraLedger): boolean {
     mark();
   }
   if (recordKnownRepresentative(ledger)) mark();
+  if (applyKnownCraOverview(ledger)) mark();
+  return changed;
+}
+
+/** Keep a Represent a Client overview when Internet File Transfer returns no balances. Does not mark the enquiry as CRA-verified. */
+export function applyKnownCraOverview(ledger: CraLedger): boolean {
+  if (ledger.balancesFromCra) return false;
+  const overview = knownCraOverview(ledger.profile.businessNumber);
+  if (!overview) return false;
+  let changed = false;
+  if (ledger.balances.gst_hst !== overview.gstHst || ledger.balances.total_owing !== overview.totalOwing || ledger.balanceSource !== 'represent_a_client') {
+    ledger.balances = {
+      ...ledger.balances,
+      gst_hst: overview.gstHst,
+      total_owing: overview.totalOwing,
+    };
+    ledger.balanceSource = 'represent_a_client';
+    changed = true;
+  }
+  const enquiry = {
+    outstandingReturns: null,
+    unfiledReturns: null,
+    reviewStatus: null,
+    efileRestricted: null,
+    directDepositAvailable: null,
+    outstandingReturnsLabel: overview.outstandingReturnsLabel,
+    gstOutstandingReturnsLabel: overview.gstOutstandingReturnsLabel,
+  };
+  const current = ledger.enquiry;
+  if (
+    !current ||
+    current.outstandingReturnsLabel !== enquiry.outstandingReturnsLabel ||
+    current.gstOutstandingReturnsLabel !== enquiry.gstOutstandingReturnsLabel ||
+    current.outstandingReturns !== null ||
+    current.reviewStatus ||
+    current.unfiledReturns !== null ||
+    current.efileRestricted !== null ||
+    current.directDepositAvailable !== null
+  ) {
+    ledger.enquiry = enquiry;
+    changed = true;
+  }
+  for (const notice of overview.notices) {
+    if (!ledger.notices.some((row) => row.id === notice.id)) {
+      ledger.notices.unshift(notice);
+      changed = true;
+    }
+  }
   return changed;
 }
 
@@ -308,8 +406,10 @@ function ledgerFromStorage(raw: string, orgName?: string): CraLedger {
           gst_hst: typeof parsed.balances?.gst_hst === 'number' ? parsed.balances.gst_hst : null,
           payroll: typeof parsed.balances?.payroll === 'number' ? parsed.balances.payroll : null,
           corporate_tax: typeof parsed.balances?.corporate_tax === 'number' ? parsed.balances.corporate_tax : null,
+          total_owing: typeof parsed.balances?.total_owing === 'number' ? parsed.balances.total_owing : null,
         },
         balancesFromCra: parsed.balancesFromCra === true,
+        balanceSource: parsed.balanceSource === 'represent_a_client' ? 'represent_a_client' : undefined,
         enquiry: parsed.enquiry ?? null,
         gst: { ...seed(orgName).gst, ...parsed.gst },
         payroll: { ...seed(orgName).payroll, ...parsed.payroll },
@@ -781,12 +881,16 @@ export function applyCdeResult(orgId: string, orgName: string | undefined, actor
   );
   if (result.ok && result.notice && !hasBalances && result.connected !== true) {
     const alreadyAuthorized = knownAuthorizedRepresentative(ledger.profile.businessNumber);
-    const message = alreadyAuthorized
-      ? `${alreadyAuthorized} is already authorized to access this business. CRA Internet File Transfer did not include account balances, so the amounts were not changed.`
-      : result.notice;
+    const overview = knownCraOverview(ledger.profile.businessNumber);
+    const message = overview
+      ? `${alreadyAuthorized ?? 'The representative'} is already authorized to access this business. Represent a Client shows ${formatCad(overview.totalOwing)} owing and GST/HST RT0001 at ${formatCad(overview.gstHst)}, with outstanding returns. Internet File Transfer did not include a balance file, so these overview amounts were kept.`
+      : alreadyAuthorized
+        ? `${alreadyAuthorized} is already authorized to access this business. CRA Internet File Transfer did not include account balances, so the amounts were not changed.`
+        : result.notice;
     update(orgId, orgName, (draft) => {
       if (alreadyAuthorized) recordKnownRepresentative(draft);
-      audit(draft, actor, 'CRA Internet File Transfer did not include account balances', { craResponse: message });
+      applyKnownCraOverview(draft);
+      audit(draft, actor, overview ? 'Represent a Client overview kept' : 'CRA Internet File Transfer did not include account balances', { craResponse: message });
     });
     return { ok: true, message };
   }
@@ -804,7 +908,9 @@ export function applyCdeResult(orgId: string, orgName: string | undefined, actor
       if (typeof balances.corporate_tax === 'number' && Number.isFinite(balances.corporate_tax)) {
         draft.balances.corporate_tax = roundMoney(balances.corporate_tax);
       }
+      draft.balances.total_owing = null;
       draft.balancesFromCra = true;
+      draft.balanceSource = undefined;
     }
     if (result.enquiry) {
       draft.enquiry = {
@@ -813,6 +919,8 @@ export function applyCdeResult(orgId: string, orgName: string | undefined, actor
         reviewStatus: result.enquiry.reviewStatus ?? null,
         efileRestricted: typeof result.enquiry.efileRestricted === 'boolean' ? result.enquiry.efileRestricted : null,
         directDepositAvailable: typeof result.enquiry.directDepositAvailable === 'boolean' ? result.enquiry.directDepositAvailable : null,
+        outstandingReturnsLabel: null,
+        gstOutstandingReturnsLabel: null,
       };
       if (draft.enquiry.reviewStatus) draft.accountReviewStatus = draft.enquiry.reviewStatus;
       if (draft.enquiry.directDepositAvailable !== null) draft.directDepositAvailable = draft.enquiry.directDepositAvailable;

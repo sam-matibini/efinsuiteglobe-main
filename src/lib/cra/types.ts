@@ -200,6 +200,8 @@ export interface CraBalances {
   gst_hst: number | null;
   payroll: number | null;
   corporate_tax: number | null;
+  /** Business total from Represent a Client when program lines are not itemized. */
+  total_owing: number | null;
 }
 
 /** Figures copied from a Client Data Enquiry payload. Missing fields stay empty. */
@@ -209,6 +211,9 @@ export interface CraEnquiry {
   reviewStatus: string | null;
   efileRestricted: boolean | null;
   directDepositAvailable: boolean | null;
+  /** "Yes" or "No" when CRA states outstanding returns without a count. */
+  outstandingReturnsLabel?: string | null;
+  gstOutstandingReturnsLabel?: string | null;
 }
 
 export interface CraLedger {
@@ -222,6 +227,8 @@ export interface CraLedger {
   balances: CraBalances;
   /** True only after Client Data Enquiry returns at least one balance. */
   balancesFromCra: boolean;
+  /** Set when balances come from a Represent a Client overview rather than a balance file. */
+  balanceSource?: 'represent_a_client';
   enquiry: CraEnquiry | null;
   accountReviewStatus: string;
   directDepositAvailable: boolean;

@@ -49,6 +49,9 @@ export default function CraGstHst() {
               <Field label="Due date" value={gst.dueDate ? formatDay(gst.dueDate) : NOT_RETURNED_BY_CRA} />
               <Field label="CRA account balance" value={craAmount(cra.ledger.balances.gst_hst)} />
               <Field label="Account" value="RT0001" />
+              {cra.ledger.enquiry?.gstOutstandingReturnsLabel ? (
+                <Field label="Outstanding returns" value={cra.ledger.enquiry.gstOutstandingReturnsLabel} />
+              ) : null}
             </CardContent>
           </Card>
           <div className="flex flex-wrap gap-2">

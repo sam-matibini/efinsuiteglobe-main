@@ -52,7 +52,7 @@ describe('CRA tax centre', () => {
     const ledger = getLedger(org, name);
     expect(outstandingBalance(ledger)).toBeNull();
     expect(upcomingAssessed(ledger)).toBeNull();
-    expect(ledger.balances).toEqual({ gst_hst: null, payroll: null, corporate_tax: null });
+    expect(ledger.balances).toEqual({ gst_hst: null, payroll: null, corporate_tax: null, total_owing: null });
     expect(ledger.payments).toEqual([]);
     expect(ledger.notices).toEqual([]);
     expect(ledger.authorization.status).toBe('not_started');
@@ -83,7 +83,7 @@ describe('CRA tax centre', () => {
     expect(ledger.profile.legalName).toBe('10255666 MANITOBA LTD.');
     expect(ledger.profile.businessNumber).toBe('711450965');
     expect(ledger.profile.programs).toEqual(['RC', 'RT', 'RP']);
-    expect(ledger.balances).toEqual({ gst_hst: null, payroll: null, corporate_tax: null });
+    expect(ledger.balances).toEqual({ gst_hst: null, payroll: null, corporate_tax: null, total_owing: null });
     expect(ledger.authorization.status).toBe('connected');
     expect(ledger.authorization.representativeName).toBe('Samson Matibini');
     expect(ledger.authorization.verifiedByCra).toBeUndefined();
@@ -206,7 +206,7 @@ describe('CRA tax centre', () => {
     expect(getLedger(hsde).authorization.status).toBe('connected');
     expect(getLedger(hsde).authorization.representativeName).toBe('Samson Matibini');
     expect(getLedger(hsde).authorization.verifiedByCra).toBeUndefined();
-    expect(getLedger(hsde).balances).toEqual({ gst_hst: null, payroll: null, corporate_tax: null });
+    expect(getLedger(hsde).balances).toEqual({ gst_hst: null, payroll: null, corporate_tax: null, total_owing: null });
     expect(sendInstructions(hsde, hsdeLedger.profile.legalName, cfo).message).toMatch(/No authorization form was sent/);
     expect(getLedger(org, name).authorization.reference).toBeUndefined();
     expect(recordClientConfirmation(org, name, cfo).ok).toBe(false);
@@ -236,6 +236,44 @@ describe('CRA tax centre', () => {
     expect(unchanged.ok).toBe(true);
     expect(unchanged.message).toMatch(/not included/);
     expect(getLedger(org, name).balances).toEqual(balances);
+
+    const oka = 'oka-org';
+    const okaLedger = getLedger(oka, 'C.C. OKA LOGISTICS INC.');
+    okaLedger.profile.businessNumber = '724016159';
+    okaLedger.profile.legalName = 'C.C. OKA LOGISTICS INC.';
+    okaLedger.authorization = { status: 'connected', level: 'level_1', representativeName: 'Samson Matibini' };
+    const refreshed = applyCdeResult(oka, okaLedger.profile.legalName, cfo, {
+      ok: true,
+      connected: false,
+      balances: null,
+      notice: 'CRA Internet File Transfer responded. Account balances were not included, so the amounts were not changed.',
+    });
+    expect(refreshed.ok).toBe(true);
+    expect(refreshed.message).toMatch(/\$1,601\.65/);
+    expect(refreshed.message).toMatch(/\$0\.00/);
+    expect(refreshed.message).toMatch(/outstanding returns/i);
+    const kept = getLedger(oka);
+    expect(kept.balances.total_owing).toBe(1601.65);
+    expect(kept.balances.gst_hst).toBe(0);
+    expect(kept.balances.payroll).toBeNull();
+    expect(kept.balances.corporate_tax).toBeNull();
+    expect(kept.balancesFromCra).toBe(false);
+    expect(kept.authorization.verifiedByCra).toBeUndefined();
+    expect(kept.enquiry?.outstandingReturnsLabel).toBe('Yes');
+    expect(kept.enquiry?.gstOutstandingReturnsLabel).toBe('Yes');
+    expect(kept.notices.map((notice) => notice.title)).toEqual([
+      '2025-03-31 GST34 Initial Return',
+      'T2 Initial assessment',
+    ]);
+    expect(outstandingBalance(kept)).toBe(1601.65);
+    expect(applyCdeResult(oka, okaLedger.profile.legalName, cfo, {
+      ok: true,
+      balances: { gst_hst: 12 },
+    }).ok).toBe(true);
+    expect(getLedger(oka).balances.gst_hst).toBe(12);
+    expect(getLedger(oka).balances.total_owing).toBeNull();
+    expect(getLedger(oka).balancesFromCra).toBe(true);
+    expect(getLedger(oka).balanceSource).toBeUndefined();
     expect(getLedger(org, name).authorization.status).toBe(status);
     expect(getLedger(org, name).authorization.verifiedByCra).toBeUndefined();
 

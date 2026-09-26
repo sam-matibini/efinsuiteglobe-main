@@ -129,16 +129,20 @@ export function ConnectionSummary({ ledger }: { ledger: CraLedger }) {
             <Badge variant="outline">{view.badge}</Badge>
           </div>
           <div className="text-sm text-muted-foreground">
-            {ledger.syncedAt && (ledger.balancesFromCra || ledger.authorization.verifiedByCra)
-              ? `Last synchronized ${formatWhen(ledger.syncedAt)}`
-              : 'CRA has not returned account balances.'}
+            {ledger.balanceSource === 'represent_a_client'
+              ? 'Balances match the Represent a Client overview. Internet File Transfer does not include those amounts.'
+              : ledger.syncedAt && (ledger.balancesFromCra || ledger.authorization.verifiedByCra)
+                ? `Last synchronized ${formatWhen(ledger.syncedAt)}`
+                : 'CRA has not returned account balances.'}
           </div>
           <div className="text-sm text-muted-foreground">
             {ledger.authorization.verifiedByCra
               ? 'Verified with CRA Client Data Enquiry.'
-              : view.tone === 'authorized'
-                ? 'This representative is authorized for the business. Amounts stay blank until CRA returns them.'
-                : 'Refresh asks CRA. Amounts stay blank until CRA returns them.'}
+              : ledger.balanceSource === 'represent_a_client'
+                ? 'This representative is authorized for the business. Payroll and corporate account lines were not itemized on the overview, so those amounts stay blank.'
+                : view.tone === 'authorized'
+                  ? 'This representative is authorized for the business. Amounts stay blank until CRA returns them.'
+                  : 'Refresh asks CRA. Amounts stay blank until CRA returns them.'}
           </div>
         </div>
         <div className="space-y-2 text-sm">

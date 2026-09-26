@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { effectiveCapabilities } from '@/lib/cra/engine';
-import { getLedger, resetCraStoreForTests } from '@/lib/cra/store';
+import { applyCdeResult, getLedger, resetCraStoreForTests } from '@/lib/cra/store';
 import CraDashboard from './CraDashboard';
 import CraAuthorizations from './CraAuthorizations';
 import CraRemittances from './CraRemittances';
@@ -79,6 +79,36 @@ describe('CRA Tax & Remittance screens', () => {
     expect(screen.getByRole('link', { name: 'Sales tax reporting' })).toHaveAttribute('href', '/tax');
     expect(screen.getByText(/They are not CRA account balances/)).toBeInTheDocument();
     expect(screen.getByText(/does not store CRA passwords/)).toBeInTheDocument();
+  });
+
+  it('shows the Represent a Client overview for C.C. Oka Logistics', () => {
+    const ledger = getLedger('render-org', 'C.C. OKA LOGISTICS INC.');
+    ledger.profile.legalName = 'C.C. OKA LOGISTICS INC.';
+    ledger.profile.businessNumber = '724016159';
+    ledger.profile.programs = ['RC', 'RT', 'RP'];
+    ledger.accounts = [
+      { program: 'RC', reference: '0001', label: 'Corporate income tax' },
+      { program: 'RP', reference: '0001', label: 'Payroll' },
+      { program: 'RT', reference: '0001', label: 'GST/HST' },
+    ];
+    applyCdeResult('render-org', ledger.profile.legalName, {
+      email: 'cfo@company.com',
+      role: 'finance_manager',
+      displayName: 'CFO',
+    }, {
+      ok: true,
+      balances: null,
+      notice: 'CRA Internet File Transfer responded. Account balances were not included, so the amounts were not changed.',
+    });
+    renderAt(<CraDashboard />);
+    expect(screen.getAllByText('$1,601.65').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('$0.00').length).toBeGreaterThan(0);
+    expect(screen.getByText(/Balances match the Represent a Client overview/)).toBeInTheDocument();
+    expect(screen.getByText(/Outstanding returns Yes/)).toBeInTheDocument();
+    expect(screen.getByText(/GST\/HST outstanding returns Yes/)).toBeInTheDocument();
+    expect(screen.getByText(/T2 Initial assessment/)).toBeInTheDocument();
+    expect(screen.getByText(/2025-03-31 GST34 Initial Return/)).toBeInTheDocument();
+    expect(screen.queryByText('CRA has not returned account balances.')).not.toBeInTheDocument();
   });
 
   it('shows the representative authorization without a password field', () => {

@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ConnectionSummary, CraModule } from '@/components/cra/CraModule';
 import { PayCraDialog, type PayPreset } from '@/components/cra/PayCraDialog';
 import { authorizationView } from '@/lib/cra/authorizationView';
-import { bookAmount, craAmount, craCount, formatDay, NOT_RETURNED_BY_CRA, outstandingBalance, upcomingAssessed } from '@/lib/cra/engine';
+import { bookAmount, craAmount, craCount, craYesNo, formatDay, NOT_RETURNED_BY_CRA, outstandingBalance, upcomingAssessed } from '@/lib/cra/engine';
 import { useCraTaxCentre } from '@/hooks/useCraTaxCentre';
 
 export default function CraDashboard() {
@@ -52,6 +52,9 @@ export default function CraDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-semibold">{craAmount(outstanding)}</div>
+            {ledger.balanceSource === 'represent_a_client' ? (
+              <p className="mt-1 text-xs text-muted-foreground">Represent a Client business total. GST/HST RT0001 is listed separately.</p>
+            ) : null}
           </CardContent>
         </Card>
         <Card>
@@ -69,10 +72,14 @@ export default function CraDashboard() {
           </CardHeader>
           <CardContent className="space-y-1 text-sm">
             <div>Balance owing {craAmount(outstanding)}</div>
-            <div>Outstanding returns {craCount(enquiry?.outstandingReturns)}</div>
+            <div>Outstanding returns {craYesNo(enquiry?.outstandingReturnsLabel, enquiry?.outstandingReturns)}</div>
             <div>Review status {enquiry?.reviewStatus || NOT_RETURNED_BY_CRA}</div>
             <div>Unfiled returns {craCount(enquiry?.unfiledReturns)}</div>
             <div>GST/HST outstanding {craAmount(ledger.balances.gst_hst)}</div>
+            {enquiry?.gstOutstandingReturnsLabel ? <div>GST/HST outstanding returns {enquiry.gstOutstandingReturnsLabel}</div> : null}
+            {ledger.notices.map((notice) => (
+              <div key={notice.id}>{notice.title} · {formatDay(notice.receivedAt.slice(0, 10))} · {notice.body}</div>
+            ))}
             <div>EFILE restriction {enquiry?.efileRestricted == null ? NOT_RETURNED_BY_CRA : enquiry.efileRestricted ? 'Yes' : 'No'}</div>
             <div>Direct deposit {enquiry?.directDepositAvailable == null ? NOT_RETURNED_BY_CRA : enquiry.directDepositAvailable ? 'Available' : 'Not available'}</div>
           </CardContent>
