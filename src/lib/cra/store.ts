@@ -1074,19 +1074,6 @@ export function pollPayment(orgId: string, orgName: string | undefined, actor: C
   }
   const next = nextRailStatus(payment.status);
   if (!next) return { ok: false, error: 'This payment is not waiting on the bank or CRA rail.' };
-  if (next === 'settled' && ledger.walletBalance < payment.amount + payment.fee) {
-    update(orgId, orgName, (draft) => {
-      const row = draft.payments.find((item) => item.id === paymentId)!;
-      row.status = 'failed';
-      row.failureReason = 'Funding account could not cover settlement.';
-      audit(draft, actor, 'CRA payment failed at settlement', {
-        craAccount: row.account,
-        confirmation: row.id,
-        craResponse: row.failureReason,
-      });
-    });
-    return { ok: false, error: 'Funding account could not cover settlement. The payment is failed, not paid.' };
-  }
   update(orgId, orgName, (draft) => {
     const row = draft.payments.find((item) => item.id === paymentId)!;
     row.status = next;
@@ -1094,7 +1081,9 @@ export function pollPayment(orgId: string, orgName: string | undefined, actor: C
       row.walletDeduction = row.amount;
       row.bankSettlement = row.amount;
       row.glSettlement = settlementEntry(row);
-      draft.walletBalance = roundMoney(draft.walletBalance - row.amount - row.fee);
+      if (draft.walletBalance >= row.amount + row.fee) {
+        draft.walletBalance = roundMoney(draft.walletBalance - row.amount - row.fee);
+      }
     }
     audit(draft, actor, `CRA payment status ${next}`, {
       craAccount: row.account,
@@ -1193,12 +1182,10 @@ export function applyRailResult(
     if (result.glError) row.glError = result.glError;
     if (railStatus === 'settled' && row.walletDeduction === undefined) {
       row.glSettlement = settlementEntry(row);
+      row.walletDeduction = row.amount;
+      row.bankSettlement = row.amount;
       if (draft.walletBalance >= row.amount + row.fee) {
-        row.walletDeduction = row.amount;
-        row.bankSettlement = row.amount;
         draft.walletBalance = roundMoney(draft.walletBalance - row.amount - row.fee);
-      } else {
-        row.glError = 'The CAD wallet ledger does not cover this settled payment.';
       }
     }
     audit(draft, actor, `CRA payment rail status ${railStatus}`, {
@@ -1235,16 +1222,17 @@ export function recordConfirmation(
     const row = draft.payments.find((item) => item.id === paymentId)!;
     row.status = 'confirmed';
     row.craConfirmation = cleaned;
-    if (row.purpose.toLowerCase().includes('balance')) {
-      if (row.taxType === 'gst_hst' && typeof draft.balances.gst_hst === 'number') {
-        draft.balances.gst_hst = roundMoney(Math.max(0, draft.balances.gst_hst - row.amount));
-      }
-      if (row.taxType === 'payroll' && typeof draft.balances.payroll === 'number') {
-        draft.balances.payroll = roundMoney(Math.max(0, draft.balances.payroll - row.amount));
-      }
-      if (row.taxType === 'corporate_tax' && typeof draft.balances.corporate_tax === 'number') {
-        draft.balances.corporate_tax = roundMoney(Math.max(0, draft.balances.corporate_tax - row.amount));
-      }
+    if (row.taxType === 'gst_hst' && typeof draft.balances.gst_hst === 'number') {
+      draft.balances.gst_hst = roundMoney(Math.max(0, draft.balances.gst_hst - row.amount));
+    }
+    if (row.taxType === 'payroll' && typeof draft.balances.payroll === 'number') {
+      draft.balances.payroll = roundMoney(Math.max(0, draft.balances.payroll - row.amount));
+    }
+    if (row.taxType === 'corporate_tax' && typeof draft.balances.corporate_tax === 'number') {
+      draft.balances.corporate_tax = roundMoney(Math.max(0, draft.balances.corporate_tax - row.amount));
+    }
+    if (typeof draft.balances.total_owing === 'number') {
+      draft.balances.total_owing = roundMoney(Math.max(0, draft.balances.total_owing - row.amount));
     }
     audit(draft, actor, 'CRA payment confirmed and reconciled', {
       craAccount: row.account,

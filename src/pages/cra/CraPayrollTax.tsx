@@ -5,13 +5,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { CraModule } from '@/components/cra/CraModule';
 import { FileReturnDialog } from '@/components/cra/FileReturnDialog';
 import { PayCraDialog } from '@/components/cra/PayCraDialog';
-import { bookAmount, craAmount, filingLabel, formatCad, formatDay, NOT_RETURNED_BY_CRA, obligationPayments } from '@/lib/cra/engine';
+import { bookAmount, craAmount, filingLabel, formatCad, formatDay, NOT_RETURNED_BY_CRA, obligationPayments, remitAmount } from '@/lib/cra/engine';
 import { useCraTaxCentre } from '@/hooks/useCraTaxCentre';
 
 export default function CraPayrollTax() {
   const cra = useCraTaxCentre();
   const payroll = cra.ledger.payroll;
   const total = payroll.cpp + payroll.ei + payroll.incomeTax;
+  const payAmount = remitAmount(cra.ledger.balances.payroll, total);
   const calculated = payroll.cpp !== 0 || payroll.ei !== 0 || payroll.incomeTax !== 0 || payroll.filingStatus !== 'calculated';
   const openPayment = obligationPayments(cra.ledger, payroll.id).find((payment) =>
     ['draft', 'authorized', 'submitted', 'processing', 'accepted', 'settled'].includes(payment.status),
@@ -57,8 +58,8 @@ export default function CraPayrollTax() {
             <Button onClick={() => setFileOpen(true)} disabled={!cra.can('file_return') || payroll.filingStatus === 'calculated'}>
               Submit
             </Button>
-            <Button variant="outline" onClick={() => setPayOpen(true)} disabled={!cra.can('prepare_payment') || Boolean(openPayment)}>
-              Pay CRA
+            <Button variant="outline" onClick={() => setPayOpen(true)} disabled={!cra.can('prepare_payment') || Boolean(openPayment) || payAmount <= 0}>
+              Remit source deductions
             </Button>
             <Button asChild variant="link">
               <Link to="/payroll/runs">Open pay runs</Link>
@@ -67,6 +68,11 @@ export default function CraPayrollTax() {
               <Link to="/payroll/remittances">Payroll remittances</Link>
             </Button>
           </div>
+          <p className="text-sm text-muted-foreground">
+            {payAmount > 0
+              ? `Remit source deductions sends ${formatCad(payAmount)} for ${payroll.account}. Filing the PD7A is a separate step and does not move money.`
+              : 'CRA has not returned a payroll balance, and source deductions are not calculated yet. Review and file the PD7A after the pay run is ready, or remit once CRA returns an RP balance.'}
+          </p>
           <FileReturnDialog
             open={fileOpen}
             onOpenChange={setFileOpen}
@@ -87,9 +93,9 @@ export default function CraPayrollTax() {
             onOpenChange={setPayOpen}
             preset={{
               taxType: 'payroll',
-              amount: total,
+              amount: payAmount,
               dueDate: payroll.dueDate,
-              purpose: 'Payroll source deductions',
+              purpose: 'Payroll source deductions balance',
               obligationId: payroll.id,
             }}
           />

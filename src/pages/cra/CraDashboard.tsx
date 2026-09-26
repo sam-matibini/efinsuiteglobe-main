@@ -7,6 +7,7 @@ import { ConnectionSummary, CraModule } from '@/components/cra/CraModule';
 import { PayCraDialog, type PayPreset } from '@/components/cra/PayCraDialog';
 import { authorizationView } from '@/lib/cra/authorizationView';
 import { bookAmount, craAmount, craCount, craYesNo, formatDay, NOT_RETURNED_BY_CRA, outstandingBalance, upcomingAssessed } from '@/lib/cra/engine';
+import type { CraLedger } from '@/lib/cra/types';
 import { useCraTaxCentre } from '@/hooks/useCraTaxCentre';
 
 export default function CraDashboard() {
@@ -24,7 +25,7 @@ export default function CraDashboard() {
   const enquiry = ledger.enquiry;
 
   const openPay = (next?: PayPreset) => {
-    setPreset(next);
+    setPreset(next ?? outstandingPreset(ledger));
     setPayOpen(true);
   };
 
@@ -160,6 +161,38 @@ export default function CraDashboard() {
       <PayCraDialog open={payOpen} onOpenChange={setPayOpen} preset={preset} />
     </CraModule>
   );
+}
+
+function outstandingPreset(ledger: CraLedger): PayPreset | undefined {
+  const today = new Date().toISOString().slice(0, 10);
+  if (typeof ledger.balances.corporate_tax === 'number' && ledger.balances.corporate_tax > 0) {
+    return {
+      taxType: 'corporate_tax',
+      amount: ledger.balances.corporate_tax,
+      dueDate: ledger.corporate.nextInstallmentDate || today,
+      purpose: 'Corporation income tax RC0001 balance',
+      obligationId: ledger.corporate.id,
+    };
+  }
+  if (typeof ledger.balances.payroll === 'number' && ledger.balances.payroll > 0) {
+    return {
+      taxType: 'payroll',
+      amount: ledger.balances.payroll,
+      dueDate: ledger.payroll.dueDate || today,
+      purpose: 'Payroll source deductions balance',
+      obligationId: ledger.payroll.id,
+    };
+  }
+  if (typeof ledger.balances.gst_hst === 'number' && ledger.balances.gst_hst > 0) {
+    return {
+      taxType: 'gst_hst',
+      amount: ledger.balances.gst_hst,
+      dueDate: ledger.gst.dueDate || today,
+      purpose: 'GST/HST balance',
+      obligationId: ledger.gst.id,
+    };
+  }
+  return undefined;
 }
 
 function ProgramCard({

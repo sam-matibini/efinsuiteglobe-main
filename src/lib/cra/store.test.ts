@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { effectiveCapabilities, isReconciled, outstandingBalance, upcomingAssessed } from './engine';
+import { effectiveCapabilities, isReconciled, outstandingBalance, remitAmount, upcomingAssessed } from './engine';
 import {
   applyCdeResult,
   applyEfileResult,
@@ -16,6 +16,7 @@ import {
   sendInstructions,
   resetCraStoreForTests,
   reviewGst,
+  reviewPayroll,
   revokeAuthorization,
   submitEfile,
 } from './store';
@@ -316,6 +317,64 @@ describe('CRA tax centre', () => {
       account: 'RC0001',
     });
     expect(filed.ok).toBe(false);
+  });
+
+  it('pays an outstanding CRA balance and files GST/HST and source deductions without a wallet balance', () => {
+    const ledger = readyOrg();
+    ledger.walletBalance = 0;
+    ledger.balances = { gst_hst: 0, payroll: 250, corporate_tax: 1601.65, total_owing: 1851.65, corporate_interim: 0 };
+    ledger.gst.collected = 100;
+    ledger.gst.itcs = 40;
+    ledger.payroll.cpp = 80;
+    ledger.payroll.ei = 20;
+    ledger.payroll.incomeTax = 50;
+    expect(remitAmount(ledger.balances.gst_hst, ledger.gst.collected - ledger.gst.itcs)).toBe(60);
+    expect(remitAmount(ledger.balances.payroll, 150)).toBe(250);
+    expect(remitAmount(0, 0)).toBe(0);
+
+    const corporate = createPayment(org, name, accountant, {
+      taxType: 'corporate_tax',
+      account: 'RC0001',
+      amount: 1601.65,
+      paymentDate: '2026-09-26',
+      dueDate: '2026-09-26',
+      fundingAccount: FUNDING_ACCOUNT,
+      purpose: 'Corporation income tax RC0001 balance',
+      obligationId: 't2-current',
+    });
+    expect(corporate.ok).toBe(true);
+    expect(approvePayment(org, name, cfo, corporate.id!).ok).toBe(true);
+    expect(releasePayment(org, name, cfo, corporate.id!).ok).toBe(true);
+    const settled = applyRailResult(org, name, cfo, corporate.id!, {
+      ok: true,
+      railStatus: 'settled',
+      railReference: 'nomba-1',
+      journalEntryId: 'je-cra-1',
+    });
+    expect(settled.ok).toBe(true);
+    expect(getLedger(org, name).walletBalance).toBe(0);
+    const confirmed = recordConfirmation(org, name, cfo, corporate.id!, 'CRA-AB160165');
+    expect(confirmed.ok).toBe(true);
+    expect(getLedger(org, name).balances.corporate_tax).toBe(0);
+    expect(getLedger(org, name).balances.total_owing).toBe(250);
+
+    expect(reviewGst(org, name, accountant).ok).toBe(true);
+    const gst = submitEfile(org, name, cfo, {
+      returnType: 'GST34',
+      obligationId: 'gst-current',
+      taxYear: '2026',
+      account: 'RT0001',
+    });
+    expect(gst.ok).toBe(true);
+    expect(reviewPayroll(org, name, accountant).ok).toBe(true);
+    const pd7a = submitEfile(org, name, cfo, {
+      returnType: 'PD7A',
+      obligationId: 'payroll-current',
+      taxYear: '2026',
+      account: 'RP0001',
+    });
+    expect(pd7a.ok).toBe(true);
+    expect(getLedger(org, name).submissions.map((row) => row.returnType)).toEqual(['PD7A', 'GST34']);
   });
 
   it('lets the access ceiling remove filing from a CFO', () => {

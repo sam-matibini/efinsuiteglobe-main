@@ -53,11 +53,12 @@ export function PayCraDialog({
 
   useEffect(() => {
     if (!open) return;
+    const today = new Date().toISOString().slice(0, 10);
     setStep('form');
     setTaxType(preset?.taxType ?? 'gst_hst');
     setAmount(preset?.amount ? String(preset.amount) : '');
-    setDueDate(preset?.dueDate ?? '');
-    setPaymentDate(preset?.dueDate ?? new Date().toISOString().slice(0, 10));
+    setDueDate(preset?.dueDate || today);
+    setPaymentDate(preset?.dueDate || today);
     setPurpose(preset?.purpose ?? 'Account balance');
     setResultId(undefined);
   }, [open, preset]);
@@ -97,7 +98,7 @@ export function PayCraDialog({
         <DialogHeader>
           <DialogTitle>{step === 'review' ? 'Review CRA payment' : 'Pay CRA'}</DialogTitle>
           <DialogDescription>
-            Recipient is the Canada Revenue Agency. The wallet is not marked paid until the payment settles and CRA confirms it.
+            Recipient is the Canada Revenue Agency. Visa or Mastercard checkout sends the payment. It is not paid until that charge settles and CRA confirms it.
           </DialogDescription>
         </DialogHeader>
 
@@ -141,7 +142,9 @@ export function PayCraDialog({
             <div className="rounded-md border p-3 text-sm">
               <div className="text-muted-foreground">Funding account</div>
               <div className="font-medium">{FUNDING_ACCOUNT}</div>
-              <div className="text-muted-foreground">Available balance {formatCad(cra.ledger.walletBalance)}</div>
+              <div className="text-muted-foreground">
+                CAD wallet ledger {formatCad(cra.ledger.walletBalance)}. Checkout does not require a wallet balance.
+              </div>
             </div>
           </div>
         ) : null}

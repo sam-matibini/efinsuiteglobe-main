@@ -271,11 +271,14 @@ export function validatePaymentInput(
   if (input.amount > 10_000_000) return 'Amount exceeds the CRA payment limit configured for this workspace.';
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.paymentDate)) return 'Payment date is required.';
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.dueDate)) return 'A CRA due date is required before a remittance can be prepared.';
-  const fee = 0;
-  if (ledger.walletBalance < roundMoney(input.amount + fee)) {
-    return `Available balance ${formatCad(ledger.walletBalance)} does not cover ${formatCad(input.amount)}.`;
-  }
   return null;
+}
+
+/** Amount to remit: the CRA account balance when CRA returned one, otherwise the calculated book figure. */
+export function remitAmount(craBalance: number | null | undefined, bookAmount: number): number {
+  if (typeof craBalance === 'number' && Number.isFinite(craBalance) && craBalance > 0) return roundMoney(craBalance);
+  if (Number.isFinite(bookAmount) && bookAmount > 0) return roundMoney(bookAmount);
+  return 0;
 }
 
 export function complianceFailures(ledger: CraLedger, payment: CraPayment): string[] {
@@ -285,7 +288,6 @@ export function complianceFailures(ledger: CraLedger, payment: CraPayment): stri
   if (!(payment.amount > 0)) failures.push('Amount is not valid.');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(payment.dueDate)) failures.push('Due date is missing.');
   if (ledger.authorization.status !== 'connected') failures.push('Representative authorization is not connected.');
-  if (ledger.walletBalance < payment.amount + payment.fee) failures.push('Funding account cannot cover the payment.');
   return failures;
 }
 
