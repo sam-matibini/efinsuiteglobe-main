@@ -87,6 +87,14 @@ const NOMBA_DESKTOP_KEYS = new Set([
   'NOMBA_CALLBACK_URL',
 ]);
 
+const EFILE_DESKTOP_KEYS = new Set([
+  'CRA_EFILE_NUMBER',
+  'CRA_EFILE_PASSWORD',
+  'CRA_EFILE_TRANSMIT_URL',
+  'CRA_EFILE_STATUS_URL',
+  'CRA_CDE_URL',
+]);
+
 function readCraSetting(env: Record<string, string>, key: string): string | undefined {
   if (key === 'CRA_REPRESENTATIVE_ID') {
     const fromDesktop = readDesktopRepresentativeId();
@@ -94,6 +102,10 @@ function readCraSetting(env: Record<string, string>, key: string): string | unde
   }
   if (NOMBA_DESKTOP_KEYS.has(key)) {
     const fromDesktop = readDesktopNomba(key);
+    if (fromDesktop) return fromDesktop;
+  }
+  if (EFILE_DESKTOP_KEYS.has(key)) {
+    const fromDesktop = readDesktopEfile(key);
     if (fromDesktop) return fromDesktop;
   }
   return env[key];
@@ -105,6 +117,19 @@ function readDesktopRepresentativeId(): string {
     const file = path.join(os.homedir(), 'Desktop', 'CRA Representative ID.txt');
     const text = fs.readFileSync(file, 'utf8');
     const match = text.match(/^CRA_REPRESENTATIVE_ID=(.*)$/m);
+    return (match?.[1] ?? '').trim();
+  } catch {
+    return '';
+  }
+}
+
+/** Firm EFILE number, password, and certification-kit addresses. Values stay out of the repository. */
+function readDesktopEfile(key: string): string {
+  try {
+    const file = path.join(os.homedir(), 'Desktop', 'CRA EFILE.txt');
+    const text = fs.readFileSync(file, 'utf8');
+    const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const match = text.match(new RegExp(`^${escaped}=(.*)$`, 'm'));
     return (match?.[1] ?? '').trim();
   } catch {
     return '';

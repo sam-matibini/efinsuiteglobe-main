@@ -41,6 +41,7 @@ export interface CraGatewayResult {
   error?: string;
   representativeId?: string | null;
   efileConfigured?: boolean;
+  efileNumberConfigured?: boolean;
   cdeConfigured?: boolean;
   nombaConfigured?: boolean;
   checkoutUrl?: string | null;
@@ -249,22 +250,23 @@ export function buildEfileXml(input: {
 }
 
 function capabilities(env: CraGatewayEnv): CraGatewayResult {
+  const signedIn = Boolean(env.efileNumber && env.efilePassword);
   return {
     ok: true,
     action: 'capabilities',
     representativeId: env.representativeId || null,
-    efileConfigured: Boolean(env.efileTransmitUrl && env.efileNumber && env.efilePassword),
-    cdeConfigured: Boolean(env.cdeUrl && env.representativeId),
+    efileNumberConfigured: Boolean(env.efileNumber),
+    efileConfigured: Boolean(signedIn && env.efileTransmitUrl),
+    cdeConfigured: Boolean(signedIn && env.cdeUrl && env.representativeId),
     nombaConfigured: Boolean(env.nombaClientId && env.nombaClientSecret && env.nombaAccountId),
   };
 }
 
 async function transmitEfile(payload: Record<string, unknown>, env: CraGatewayEnv, fetchImpl: FetchLike): Promise<CraGatewayResult> {
   const action = 'efile_submit';
-  if (!env.efileTransmitUrl || !env.efileNumber || !env.efilePassword) {
-    return { ok: false, action, accepted: false, httpStatus: 0, body: '', error: 'CRA EFILE is not configured. Set CRA_EFILE_TRANSMIT_URL, CRA_EFILE_NUMBER, and CRA_EFILE_PASSWORD. The return was not accepted.' };
-  }
-  const urlError = assertHttps(env.efileTransmitUrl);
+  const setupError = efileSetupError(env, ['number', 'password', 'transmit']);
+  if (setupError) return { ok: false, action, accepted: false, httpStatus: 0, body: '', error: setupError };
+  const urlError = assertCraServiceUrl(env.efileTransmitUrl);
   if (urlError) return { ok: false, action, accepted: false, httpStatus: 0, body: '', error: urlError };
   const businessNumber = text(payload.businessNumber);
   if (!/^\d{9}$/.test(businessNumber)) {
@@ -286,10 +288,9 @@ async function transmitEfile(payload: Record<string, unknown>, env: CraGatewayEn
 
 async function efileStatus(payload: Record<string, unknown>, env: CraGatewayEnv, fetchImpl: FetchLike): Promise<CraGatewayResult> {
   const action = 'efile_status';
-  if (!env.efileStatusUrl || !env.efileNumber || !env.efilePassword) {
-    return { ok: false, action, accepted: false, httpStatus: 0, body: '', error: 'CRA EFILE status is not configured. Set CRA_EFILE_STATUS_URL. The return was not accepted.' };
-  }
-  const urlError = assertHttps(env.efileStatusUrl);
+  const setupError = efileSetupError(env, ['number', 'password', 'status']);
+  if (setupError) return { ok: false, action, accepted: false, httpStatus: 0, body: '', error: setupError };
+  const urlError = assertCraServiceUrl(env.efileStatusUrl);
   if (urlError) return { ok: false, action, accepted: false, httpStatus: 0, body: '', error: urlError };
   const body = JSON.stringify({
     submissionId: text(payload.submissionId),
@@ -364,10 +365,22 @@ async function postForConfirmation(
 
 async function refreshCde(payload: Record<string, unknown>, env: CraGatewayEnv, fetchImpl: FetchLike): Promise<CraGatewayResult> {
   const action = 'cde_refresh';
-  if (!env.cdeUrl || !env.representativeId) {
-    return { ok: false, action, connected: false, balances: null, error: 'CRA Client Data Enquiry is not configured. Set CRA_CDE_URL and CRA_REPRESENTATIVE_ID. Balances were not refreshed.' };
+  const missing = [
+    !env.representativeId ? 'CRA_REPRESENTATIVE_ID' : '',
+    !env.efileNumber ? 'CRA_EFILE_NUMBER' : '',
+    !env.efilePassword ? 'CRA_EFILE_PASSWORD' : '',
+    !env.cdeUrl ? 'CRA_CDE_URL' : '',
+  ].filter(Boolean);
+  if (missing.length) {
+    return {
+      ok: false,
+      action,
+      connected: false,
+      balances: null,
+      error: `CRA Client Data Enquiry is not configured. Still missing ${missing.join(', ')}. The enquiry address comes from the CRA certification kit. Balances were not refreshed.`,
+    };
   }
-  const urlError = assertHttps(env.cdeUrl);
+  const urlError = assertCraServiceUrl(env.cdeUrl);
   if (urlError) return { ok: false, action, connected: false, balances: null, error: urlError };
   const headers: Record<string, string> = { 'Content-Type': 'application/json', Accept: 'application/json, application/xml, text/plain' };
   if (env.efileNumber && env.efilePassword) headers.Authorization = basicAuth(env.efileNumber, env.efilePassword);
@@ -803,6 +816,31 @@ function containsBlockedSecret(value: unknown): boolean {
     if (nested && typeof nested === 'object' && containsBlockedSecret(nested)) return true;
   }
   return false;
+}
+
+function efileSetupError(env: CraGatewayEnv, need: Array<'number' | 'password' | 'transmit' | 'status'>): string | null {
+  const missing = [
+    need.includes('number') && !env.efileNumber ? 'CRA_EFILE_NUMBER' : '',
+    need.includes('password') && !env.efilePassword ? 'CRA_EFILE_PASSWORD' : '',
+    need.includes('transmit') && !env.efileTransmitUrl ? 'CRA_EFILE_TRANSMIT_URL' : '',
+    need.includes('status') && !env.efileStatusUrl ? 'CRA_EFILE_STATUS_URL' : '',
+  ].filter(Boolean);
+  if (!missing.length) return null;
+  return `CRA EFILE is not configured. Still missing ${missing.join(', ')}. The transmit and status addresses come from the CRA certification kit. The return was not accepted.`;
+}
+
+function assertCraServiceUrl(url: string): string | null {
+  const httpsError = assertHttps(url);
+  if (httpsError) return httpsError;
+  let host = '';
+  try {
+    host = new URL(url).hostname.toLowerCase();
+  } catch {
+    return 'The CRA endpoint URL is invalid.';
+  }
+  const government = host === 'gc.ca' || host.endsWith('.gc.ca') || host === 'canada.ca' || host.endsWith('.canada.ca');
+  if (!government) return 'CRA filing and Client Data Enquiry only call an https address on gc.ca. The request was not sent.';
+  return null;
 }
 
 function assertHttps(url: string): string | null {

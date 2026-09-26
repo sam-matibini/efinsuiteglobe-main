@@ -14,9 +14,9 @@ const env: CraGatewayEnv = {
   representativeId: 'R9999999',
   efileNumber: 'AB1234',
   efilePassword: 'secret-efile',
-  efileTransmitUrl: 'https://efile.example.test/transmit',
-  efileStatusUrl: 'https://efile.example.test/status',
-  cdeUrl: 'https://cde.example.test/enquiry',
+  efileTransmitUrl: 'https://apps.cra-arc.gc.ca/efile-test/transmit',
+  efileStatusUrl: 'https://apps.cra-arc.gc.ca/efile-test/status',
+  cdeUrl: 'https://apps.cra-arc.gc.ca/efile-test/enquiry',
   nombaClientId: 'nomba-client',
   nombaClientSecret: 'nomba-secret',
   nombaAccountId: 'nomba-account',
@@ -75,7 +75,7 @@ describe('CRA gateway', () => {
     expect(result.accepted).toBe(true);
     expect(result.confirmationNumber).toBe('CRA-123456');
     const [url, init] = (fetchImpl as ReturnType<typeof vi.fn>).mock.calls[0];
-    expect(url).toBe('https://efile.example.test/transmit');
+    expect(url).toBe('https://apps.cra-arc.gc.ca/efile-test/transmit');
     expect(String(init.body)).toContain('<Return type="GST34">');
     expect(String(init.body)).not.toContain('secret-efile');
     expect(String(init.headers.Authorization)).toMatch(/^Basic /);
@@ -86,6 +86,17 @@ describe('CRA gateway', () => {
     const result = await handleCraGateway('efile_submit', payload(), blankEnv, fetchImpl);
     expect(result.ok).toBe(false);
     expect(result.accepted).toBe(false);
+    expect(result.error).toMatch(/CRA_EFILE_NUMBER/);
+    expect(result.error).toMatch(/CRA_EFILE_TRANSMIT_URL/);
+    expect((fetchImpl as ReturnType<typeof vi.fn>)).not.toHaveBeenCalled();
+  });
+
+  it('does not post a return to a host outside gc.ca', async () => {
+    const fetchImpl = respond(200, '{"ConfirmationNumber":"CRA-123456"}');
+    const result = await handleCraGateway('efile_submit', payload(), { ...env, efileTransmitUrl: 'https://efile.example.test/transmit' }, fetchImpl);
+    expect(result.ok).toBe(false);
+    expect(result.accepted).toBe(false);
+    expect(result.error).toMatch(/gc\.ca/);
     expect((fetchImpl as ReturnType<typeof vi.fn>)).not.toHaveBeenCalled();
   });
 

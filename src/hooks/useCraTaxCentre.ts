@@ -94,6 +94,7 @@ export function useCraTaxCentre() {
       setConnection({
         representativeId: result.representativeId ?? null,
         efileConfigured: result.efileConfigured === true,
+        efileNumberConfigured: result.efileNumberConfigured === true,
         cdeConfigured: result.cdeConfigured === true,
         nombaConfigured: result.nombaConfigured === true,
         loaded: true,

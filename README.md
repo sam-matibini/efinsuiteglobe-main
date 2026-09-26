@@ -56,9 +56,9 @@ The Tax & CRA screens keep an organization ledger in the browser. Filing, balanc
 
 Nothing is marked accepted or paid unless the external service says so:
 
-- EFILE transmit posts GST34, PD7A, or T2 XML to `CRA_EFILE_TRANSMIT_URL` with the firm's EFILE software number and password. HTTP 200 without a confirmation number stays unaccepted.
+- EFILE transmit posts GST34, PD7A, or T2 XML to `CRA_EFILE_TRANSMIT_URL` with the firm's EFILE software number and password. The address must be https on `gc.ca` or `canada.ca`. HTTP 200 without a confirmation number stays unaccepted.
 - Status checks use `CRA_EFILE_STATUS_URL` and do not post the return again.
-- Refresh calls `CRA_CDE_URL` (Client Data Enquiry). Balances and the connected flag change only when that response includes them.
+- Refresh calls `CRA_CDE_URL` (Client Data Enquiry) with the same EFILE number and password. Balances and the connected flag change only when that response includes them.
 - Release opens a Nomba Checkout limited to cards. The payment stays authorized until Nomba confirms a Visa or Mastercard charge. Creating the checkout link does not mark it paid.
 
 Set these on the server. Do not put a client's CRA password in any of them.
@@ -80,7 +80,7 @@ NOMBA_CURRENCY=CAD
 
 `NOMBA_ENVIRONMENT=live` uses `https://api.nomba.com`. Any other value uses `https://sandbox.nomba.com`. This Nomba account charges CAD, so leave `NOMBA_CURRENCY=CAD`. Card numbers are entered on Nomba's page, not in eFinsuite. On this desktop, put the live client ID, client secret, and account ID in `Nomba Live Keys.txt` and press Save Nomba Keys. Those values are read by the dev gateway and are not committed.
 
-CRA does not publish a public transmit URL for uncertified software. Leave the CRA URLs empty until the firm's certification kit provides them. The app then fails closed and says what is missing.
+CRA does not publish a public transmit or Client Data Enquiry URL. An EFILE number and password, issued when the firm registers for EFILE, are not enough by themselves. Leave the three CRA URLs empty until the certification kit provides them. The app then fails closed and names the missing setting. On this desktop, put the number, password, and those addresses in `CRA EFILE.txt` and press Save CRA EFILE. The dev gateway reads that file on each request. The password is not committed and is not shown in the app.
 
 ## What technologies are used for this project?
 

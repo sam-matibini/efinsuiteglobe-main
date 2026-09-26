@@ -12,8 +12,14 @@ import { useCraTaxCentre } from '@/hooks/useCraTaxCentre';
 export function CraSandboxNote({ connection }: { connection?: CraConnectionInfo }) {
   const representativeId = connection?.representativeId || 'not configured';
   const gaps = [
-    connection?.loaded && !connection.efileConfigured ? 'EFILE transmit is not configured, so a return cannot be marked accepted.' : '',
-    connection?.loaded && !connection.cdeConfigured ? 'Client Data Enquiry is not configured, so Refresh cannot replace these balances.' : '',
+    connection?.loaded && !connection.efileConfigured
+      ? connection.efileNumberConfigured
+        ? 'The EFILE number is saved. Transmit still needs the https address from the CRA certification kit, so a return is not accepted.'
+        : 'Save the firm EFILE number and password in the desktop CRA EFILE notepad. A return is not accepted until CRA confirms it.'
+      : '',
+    connection?.loaded && !connection.cdeConfigured
+      ? 'Client Data Enquiry is not configured. Refresh does not change balances until the certification-kit enquiry address is saved.'
+      : '',
     connection?.loaded && !connection.nombaConfigured ? 'Nomba card checkout is not configured, so a payment stays authorized.' : '',
   ].filter(Boolean);
   return (

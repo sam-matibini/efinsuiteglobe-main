@@ -6,6 +6,7 @@ export type { CraGatewayResult };
 export interface CraConnectionInfo {
   representativeId: string | null;
   efileConfigured: boolean;
+  efileNumberConfigured: boolean;
   cdeConfigured: boolean;
   nombaConfigured: boolean;
   loaded: boolean;
@@ -14,6 +15,7 @@ export interface CraConnectionInfo {
 export const UNCONFIGURED_CONNECTION: CraConnectionInfo = {
   representativeId: null,
   efileConfigured: false,
+  efileNumberConfigured: false,
   cdeConfigured: false,
   nombaConfigured: false,
   loaded: false,
