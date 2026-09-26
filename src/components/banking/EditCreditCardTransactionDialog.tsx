@@ -47,7 +47,9 @@ import { DivisionSelect } from '@/components/dimensions/DivisionSelect';
 import { useCurrentOrganization } from '@/hooks/useOrganization';
 import { useVendors, Vendor } from '@/hooks/useVendors';
 import { useCustomers, Customer } from '@/hooks/useCustomers';
-import { TaxCode } from '@/hooks/useSalesTax';
+import { TaxCode, useTaxCodes } from '@/hooks/useSalesTax';
+import { useAccounts } from '@/hooks/useAccounts';
+import { withResolvedTaxAccounts } from '@/lib/taxGlAccounts';
 import { isBankTransactionLocked } from '@/lib/bankTransactionLock';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -115,13 +117,20 @@ export function EditCreditCardTransactionDialog({
   const [quickAddCustomerOpen, setQuickAddCustomerOpen] = useState(false);
   const [departmentId, setDepartmentId] = useState<string | null>(null);
 
+  const { data: taxCodes = [] } = useTaxCodes(organization?.id);
+  const { data: orgAccounts = [] } = useAccounts(organization?.id);
+  const resolvedTaxCode = useMemo(
+    () => (withResolvedTaxAccounts(selectedTaxCode, orgAccounts, taxCodes) ?? selectedTaxCode) as TaxCode | null,
+    [selectedTaxCode, orgAccounts, taxCodes],
+  );
+
   // Calculate tax amounts - preserve sign from transaction amount
   const taxCalculation = useMemo(() => {
     if (!transaction) return null;
     const rawAmount = Number(transaction.amount);
     const isNegative = rawAmount < 0;
     const absAmount = Math.abs(rawAmount);
-    const calc = calculateTax(absAmount, selectedTaxCode, taxInclusive, 'withdrawal');
+    const calc = calculateTax(absAmount, resolvedTaxCode, taxInclusive, 'withdrawal');
     
     // Preserve sign: negative transactions should show negative subtotal/tax/total
     if (isNegative) {
@@ -137,7 +146,7 @@ export function EditCreditCardTransactionDialog({
       };
     }
     return calc;
-  }, [transaction, selectedTaxCode, taxInclusive]);
+  }, [transaction, resolvedTaxCode, taxInclusive]);
 
   // Filter vendors based on search
   const filteredVendors = useMemo(() => {
@@ -220,7 +229,7 @@ export function EditCreditCardTransactionDialog({
         category: category || undefined,
         payeePayor: payeePayor || undefined,
         reference: reference || undefined,
-        taxCode: selectedTaxCode || undefined,
+        taxCode: resolvedTaxCode || undefined,
         taxAmount: taxCalculation?.taxAmount,
         taxBreakdown: taxCalculation?.taxBreakdown,
         dimensions: departmentId ? { department_id: departmentId } : undefined,
@@ -755,6 +764,11 @@ export function EditCreditCardTransactionDialog({
                           <span className="font-mono">{formatCurrency(tb.amount)}</span>
                         </div>
                       ))}
+                      {taxCalculation.taxBreakdown.some(tb => !tb.glAccountId) && (
+                        <div className="text-xs text-amber-600 dark:text-amber-400 border-t pt-2">
+                          ⚠️ {taxCalculation.taxBreakdown.filter(tb => !tb.glAccountId).map(tb => tb.code).join(' and ')} account is not on the chart. That tax will not be posted until the account exists.
+                        </div>
+                      )}
                       <div className="flex justify-between font-medium border-t pt-2">
                         <span>Total</span>
                         <span className="font-mono">{formatCurrency(taxCalculation.total)}</span>

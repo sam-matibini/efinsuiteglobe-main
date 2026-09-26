@@ -49,7 +49,9 @@ import { usePostTransactionToGL } from '@/hooks/useBankingGL';
 import { DivisionSelect } from '@/components/dimensions/DivisionSelect';
 import { useCurrentOrganization } from '@/hooks/useOrganization';
 import { useDonationForTransaction, useCreateDonationFromTransaction } from '@/hooks/useDonationFromTransaction';
-import { TaxCode } from '@/hooks/useSalesTax';
+import { TaxCode, useTaxCodes } from '@/hooks/useSalesTax';
+import { useAccounts } from '@/hooks/useAccounts';
+import { withResolvedTaxAccounts } from '@/lib/taxGlAccounts';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { parseLocalDate } from '@/lib/utils';
@@ -212,13 +214,20 @@ export function EditTransactionDialog({
   const [transactionDate, setTransactionDate] = useState<Date | undefined>(undefined);
   const [transactionDateOpen, setTransactionDateOpen] = useState(false);
 
+  const { data: taxCodes = [] } = useTaxCodes(organization?.id);
+  const { data: orgAccounts = [] } = useAccounts(organization?.id);
+  const resolvedTaxCode = useMemo(
+    () => (withResolvedTaxAccounts(selectedTaxCode, orgAccounts, taxCodes) ?? selectedTaxCode) as TaxCode | null,
+    [selectedTaxCode, orgAccounts, taxCodes],
+  );
+
   // Calculate tax amounts
   const taxCalculation = useMemo(() => {
     if (!transaction) return null;
     const amount = Math.abs(Number(transaction.amount));
     const txDir = (transaction.transaction_type as 'deposit' | 'withdrawal' | 'transfer') || 'withdrawal';
-    return calculateTax(amount, selectedTaxCode, taxInclusive, txDir);
-  }, [transaction, selectedTaxCode, taxInclusive]);
+    return calculateTax(amount, resolvedTaxCode, taxInclusive, txDir);
+  }, [transaction, resolvedTaxCode, taxInclusive]);
 
   useEffect(() => {
     if (transaction) {
@@ -280,7 +289,7 @@ export function EditTransactionDialog({
         category: category || undefined,
         payeePayor: payeePayor || undefined,
         reference: reference || undefined,
-        taxCode: selectedTaxCode || undefined,
+        taxCode: resolvedTaxCode || undefined,
         taxAmount: taxCalculation?.taxAmount,
         taxBreakdown: taxCalculation?.taxBreakdown,
         dimensions: departmentId ? { department_id: departmentId } : undefined,
@@ -684,7 +693,7 @@ export function EditTransactionDialog({
                   ))}
                   {taxCalculation.taxBreakdown.some(tb => !tb.glAccountId) && (
                     <div className="text-xs text-amber-600 dark:text-amber-400 border-t pt-2">
-                      ⚠️ Tax GL accounts not configured. Tax will not be posted to GL.
+                      ⚠️ {taxCalculation.taxBreakdown.filter(tb => !tb.glAccountId).map(tb => tb.code).join(' and ')} account is not on the chart. That tax will not be posted until the account exists.
                     </div>
                   )}
                   <div className="flex justify-between font-medium border-t pt-2">

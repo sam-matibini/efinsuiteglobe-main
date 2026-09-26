@@ -29,21 +29,7 @@ import {
   PROVINCE_TAX_CONFIG,
 } from '@/lib/splitTaxCalculator';
 import { isPaidRetailTaxCode, taxCodeGroupLabel } from '@/lib/retailTaxRateCatalog';
-
-// Fallback: resolve a tax GL account directly from the chart of accounts by
-// name patterns. Used when tax_codes rows lack gl_collected/gl_paid links so
-// the dialog can still post tax to the GL.
-function resolveTaxAccount(
-  accounts: Array<{ id: string; name: string }> | undefined,
-  patterns: RegExp[],
-): string | null {
-  if (!accounts?.length) return null;
-  for (const re of patterns) {
-    const hit = accounts.find(a => re.test(a.name));
-    if (hit) return hit.id;
-  }
-  return null;
-}
+import { resolveTaxAccount, withResolvedTaxAccounts } from '@/lib/taxGlAccounts';
 
 // Combined provincial tax rates for Canadian place-of-supply compliance
 // These are logical display options that map to actual tax calculations
@@ -245,7 +231,7 @@ export function TaxCodeSelect({
     );
     
     if (matchingCode) {
-      onValueChange(matchingCode);
+      onValueChange(withResolvedTaxAccounts(matchingCode, orgAccounts, taxCodes) ?? matchingCode);
     } else {
       // Look up the org's individual tax codes so we can attach real GL accounts
       // to the synthetic combined code. Without this, calculateTax falls into the
@@ -355,7 +341,7 @@ export function TaxCodeSelect({
         // @ts-ignore - Extended field consumed by calculateTax for split posting
         component_taxes,
       };
-      onValueChange(syntheticCode);
+      onValueChange(withResolvedTaxAccounts(syntheticCode, orgAccounts, taxCodes) ?? syntheticCode);
     }
     setOpen(false);
     setSearch('');
