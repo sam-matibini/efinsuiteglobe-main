@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   CRA_INTERNET_FILE_TRANSFER_URL,
   applyCraFirmSettings,
+  isInternetFileTransferUrl,
   buildEfileXml,
   craEnvFrom,
   finalizeCraGateway,
@@ -127,6 +128,45 @@ describe('CRA gateway', () => {
     expect(result.connected).toBe(false);
     expect(result.balances).toBeNull();
     expect((fetchImpl as ReturnType<typeof vi.fn>)).not.toHaveBeenCalled();
+  });
+
+  it('does not send Basic auth to the CRA Internet File Transfer application', async () => {
+    expect(isInternetFileTransferUrl(`${CRA_INTERNET_FILE_TRANSFER_URL}?request_locale=en`)).toBe(true);
+    expect(isInternetFileTransferUrl('https://apps.cra-arc.gc.ca/efile-test/enquiry')).toBe(false);
+    const html = '<html><title>Internet file transfer</title></html>';
+    const fetchImpl = respond(200, html);
+    const result = await handleCraGateway(
+      'cde_refresh',
+      { businessNumber: '711450965', programs: ['RC'], legalName: '10255666 MANITOBA LTD.' },
+      { ...env, cdeUrl: `${CRA_INTERNET_FILE_TRANSFER_URL}?request_locale=en` },
+      fetchImpl,
+    );
+    expect(result.ok).toBe(true);
+    expect(result.connected).toBe(false);
+    expect(result.balances).toBeNull();
+    expect(result.notice).toMatch(/Account balances were not included/);
+    expect(result.error).toBeUndefined();
+    const [, init] = (fetchImpl as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(init.headers.Authorization).toBeUndefined();
+    expect(String(init.body)).not.toContain(env.efilePassword);
+  });
+
+  it('sends Basic auth to a certification-kit enquiry and keeps HTTP 401 as an error', async () => {
+    const okFetch = respond(200, '{"balances":{"gst_hst":12},"connected":true}');
+    const refreshed = await handleCraGateway('cde_refresh', { businessNumber: '711450965', programs: ['RT'] }, env, okFetch);
+    expect(refreshed.ok).toBe(true);
+    expect(refreshed.connected).toBe(true);
+    expect(refreshed.balances).toEqual({ gst_hst: 12 });
+    const okInit = (okFetch as ReturnType<typeof vi.fn>).mock.calls[0][1];
+    expect(String(okInit.headers.Authorization)).toMatch(/^Basic /);
+
+    const denied = respond(401, 'Unauthorized', false);
+    const result = await handleCraGateway('cde_refresh', { businessNumber: '711450965', programs: ['RT'] }, env, denied);
+    expect(result.ok).toBe(false);
+    expect(result.connected).toBe(false);
+    expect(result.balances).toBeNull();
+    expect(result.error).toMatch(/HTTP 401/);
+    expect(result.notice).toBeUndefined();
   });
 
   it('applies balances only when CRA returns them', () => {

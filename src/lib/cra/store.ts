@@ -613,6 +613,7 @@ export function applyEfileResult(
 export interface CdeApplyInput {
   ok: boolean;
   error?: string;
+  notice?: string;
   connected?: boolean;
   balances?: { gst_hst?: number; payroll?: number; corporate_tax?: number } | null;
 }
@@ -627,6 +628,13 @@ export function applyCdeResult(orgId: string, orgName: string | undefined, actor
   const hasBalances = Boolean(
     balances && [balances.gst_hst, balances.payroll, balances.corporate_tax].some((value) => typeof value === 'number' && Number.isFinite(value)),
   );
+  if (result.ok && result.notice && !hasBalances && result.connected !== true) {
+    const message = result.notice;
+    update(orgId, orgName, (draft) => {
+      audit(draft, actor, 'CRA Internet File Transfer did not include account balances', { craResponse: message });
+    });
+    return { ok: true, message };
+  }
   if (!result.ok || (!hasBalances && result.connected !== true)) {
     const message = result.error || 'CRA did not return account data.';
     update(orgId, orgName, (draft) => {

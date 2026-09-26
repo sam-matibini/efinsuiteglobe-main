@@ -130,6 +130,22 @@ describe('CRA tax centre', () => {
     expect(getLedger(org, name).authorization.verifiedByCra).toBe(true);
     expect(getLedger(org, name).balances.gst_hst).toBe(10);
 
+    resetCraStoreForTests();
+    const before = getLedger(org, name);
+    const balances = { ...before.balances };
+    const status = before.authorization.status;
+    const unchanged = applyCdeResult(org, name, cfo, {
+      ok: true,
+      connected: false,
+      balances: null,
+      notice: 'CRA Internet File Transfer responded. Account balances were not included, so the amounts were not changed.',
+    });
+    expect(unchanged.ok).toBe(true);
+    expect(unchanged.message).toMatch(/not included/);
+    expect(getLedger(org, name).balances).toEqual(balances);
+    expect(getLedger(org, name).authorization.status).toBe(status);
+    expect(getLedger(org, name).authorization.verifiedByCra).toBeUndefined();
+
     expect(approvePayment(org, name, cfo, 'EFS-CRA-00001246').ok).toBe(true);
     const held = applyRailResult(org, name, cfo, 'EFS-CRA-00001246', { ok: false, error: 'Nomba card payments are not configured. The payment stays authorized.' });
     expect(held.ok).toBe(false);

@@ -51,6 +51,8 @@ export interface CraGatewayResult {
   confirmationNumber?: string | null;
   balances?: CraBalancesPayload | null;
   connected?: boolean;
+  /** Shown when CRA answered but did not include balances or an authorization. */
+  notice?: string;
   railStatus?: 'submitted' | 'processing' | 'accepted' | 'settled' | 'failed' | 'rejected' | null;
   railReference?: string | null;
   journalEntryId?: string | null;
@@ -109,6 +111,22 @@ const BLOCKED_KEYS = new Set([
  * The previous upload address on /ebci/uisp/ returns 404. This NJFS disclaimer is the live entry point.
  */
 export const CRA_INTERNET_FILE_TRANSFER_URL = 'https://apps.cra-arc.gc.ca/ebci/njfs/ext/disclaimer';
+
+/**
+ * The Internet File Transfer application rejects HTTP Basic auth with HTTP 401.
+ * A certification-kit enquiry address is a different service and still uses the firm EFILE number and password.
+ */
+export function isInternetFileTransferUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'https:') return false;
+    const host = parsed.hostname.toLowerCase();
+    const onCra = host === 'gc.ca' || host.endsWith('.gc.ca') || host === 'canada.ca' || host.endsWith('.canada.ca');
+    return onCra && parsed.pathname.includes('/ebci/njfs/');
+  } catch {
+    return false;
+  }
+}
 
 export function craEnvFrom(read: (key: string) => string | undefined): CraGatewayEnv {
   return {
@@ -438,8 +456,9 @@ async function refreshCde(payload: Record<string, unknown>, env: CraGatewayEnv, 
   }
   const urlError = assertCraServiceUrl(env.cdeUrl);
   if (urlError) return { ok: false, action, connected: false, balances: null, error: urlError };
+  const ift = isInternetFileTransferUrl(env.cdeUrl);
   const headers: Record<string, string> = { 'Content-Type': 'application/json', Accept: 'application/json, application/xml, text/plain' };
-  if (env.efileNumber && env.efilePassword) headers.Authorization = basicAuth(env.efileNumber, env.efilePassword);
+  if (!ift && env.efileNumber && env.efilePassword) headers.Authorization = basicAuth(env.efileNumber, env.efilePassword);
   try {
     const response = await fetchImpl(env.cdeUrl, {
       method: 'POST',
@@ -457,7 +476,16 @@ async function refreshCde(payload: Record<string, unknown>, env: CraGatewayEnv, 
     }
     const parsed = parseCdeBody(body);
     if (!parsed.balances && !parsed.connected) {
-      const ift = env.cdeUrl.startsWith(CRA_INTERNET_FILE_TRANSFER_URL);
+      if (ift) {
+        return {
+          ok: true,
+          action,
+          httpStatus: response.status,
+          connected: false,
+          balances: null,
+          notice: 'CRA Internet File Transfer responded. Account balances were not included, so the amounts were not changed.',
+        };
+      }
       return {
         ok: false,
         action,
@@ -465,9 +493,7 @@ async function refreshCde(payload: Record<string, unknown>, env: CraGatewayEnv, 
         body: clip(body),
         connected: false,
         balances: null,
-        error: ift
-          ? 'CRA Internet File Transfer did not return account balances. The amounts on this page were not changed.'
-          : 'CRA did not return account data.',
+        error: 'CRA did not return account data.',
       };
     }
     return {

@@ -37,6 +37,17 @@ var BLOCKED_KEYS = /* @__PURE__ */ new Set([
   "cardpin"
 ]);
 var CRA_INTERNET_FILE_TRANSFER_URL = "https://apps.cra-arc.gc.ca/ebci/njfs/ext/disclaimer";
+function isInternetFileTransferUrl(url) {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "https:") return false;
+    const host = parsed.hostname.toLowerCase();
+    const onCra = host === "gc.ca" || host.endsWith(".gc.ca") || host === "canada.ca" || host.endsWith(".canada.ca");
+    return onCra && parsed.pathname.includes("/ebci/njfs/");
+  } catch {
+    return false;
+  }
+}
 function craEnvFrom(read) {
   return {
     representativeId: (read("CRA_REPRESENTATIVE_ID") ?? "").trim(),
@@ -310,8 +321,9 @@ async function refreshCde(payload, env, fetchImpl) {
   }
   const urlError = assertCraServiceUrl(env.cdeUrl);
   if (urlError) return { ok: false, action, connected: false, balances: null, error: urlError };
+  const ift = isInternetFileTransferUrl(env.cdeUrl);
   const headers = { "Content-Type": "application/json", Accept: "application/json, application/xml, text/plain" };
-  if (env.efileNumber && env.efilePassword) headers.Authorization = basicAuth(env.efileNumber, env.efilePassword);
+  if (!ift && env.efileNumber && env.efilePassword) headers.Authorization = basicAuth(env.efileNumber, env.efilePassword);
   try {
     const response = await fetchImpl(env.cdeUrl, {
       method: "POST",
@@ -329,7 +341,16 @@ async function refreshCde(payload, env, fetchImpl) {
     }
     const parsed = parseCdeBody(body);
     if (!parsed.balances && !parsed.connected) {
-      const ift = env.cdeUrl.startsWith(CRA_INTERNET_FILE_TRANSFER_URL);
+      if (ift) {
+        return {
+          ok: true,
+          action,
+          httpStatus: response.status,
+          connected: false,
+          balances: null,
+          notice: "CRA Internet File Transfer responded. Account balances were not included, so the amounts were not changed."
+        };
+      }
       return {
         ok: false,
         action,
@@ -337,7 +358,7 @@ async function refreshCde(payload, env, fetchImpl) {
         body: clip(body),
         connected: false,
         balances: null,
-        error: ift ? "CRA Internet File Transfer did not return account balances. The amounts on this page were not changed." : "CRA did not return account data."
+        error: "CRA did not return account data."
       };
     }
     return {

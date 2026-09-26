@@ -125,6 +125,7 @@ export function useCraTaxCentre() {
     return run(applyCdeResult(orgId, orgName, actor, {
       ok: gateway.ok,
       error: gateway.error,
+      notice: gateway.notice,
       connected: gateway.connected,
       balances: gateway.balances,
     }));
