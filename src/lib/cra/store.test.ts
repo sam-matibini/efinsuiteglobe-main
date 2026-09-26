@@ -249,14 +249,14 @@ describe('CRA tax centre', () => {
       notice: 'CRA Internet File Transfer responded. Account balances were not included, so the amounts were not changed.',
     });
     expect(refreshed.ok).toBe(true);
+    expect(refreshed.message).toMatch(/RC0001/);
     expect(refreshed.message).toMatch(/\$1,601\.65/);
-    expect(refreshed.message).toMatch(/\$0\.00/);
-    expect(refreshed.message).toMatch(/outstanding returns/i);
+    expect(refreshed.message).toMatch(/interim balance \$0\.00/);
     const kept = getLedger(oka);
     expect(kept.balances.total_owing).toBe(1601.65);
     expect(kept.balances.gst_hst).toBe(0);
     expect(kept.balances.payroll).toBeNull();
-    expect(kept.balances.corporate_tax).toBeNull();
+    expect(kept.balances.corporate_tax).toBe(1601.65);
     expect(kept.balancesFromCra).toBe(false);
     expect(kept.authorization.verifiedByCra).toBeUndefined();
     expect(kept.enquiry?.outstandingReturnsLabel).toBe('Yes');

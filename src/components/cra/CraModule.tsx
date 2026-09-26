@@ -139,7 +139,7 @@ export function ConnectionSummary({ ledger }: { ledger: CraLedger }) {
             {ledger.authorization.verifiedByCra
               ? 'Verified with CRA Client Data Enquiry.'
               : ledger.balanceSource === 'represent_a_client'
-                ? 'This representative is authorized for the business. Payroll and corporate account lines were not itemized on the overview, so those amounts stay blank.'
+                ? 'This representative is authorized for the business. Corporation income tax RC0001 is on the overview. Payroll was not itemized, so that amount stays blank.'
                 : view.tone === 'authorized'
                   ? 'This representative is authorized for the business. Amounts stay blank until CRA returns them.'
                   : 'Refresh asks CRA. Amounts stay blank until CRA returns them.'}

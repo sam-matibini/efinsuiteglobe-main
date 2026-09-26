@@ -5,11 +5,14 @@ import { CraModule } from '@/components/cra/CraModule';
 import { FileReturnDialog } from '@/components/cra/FileReturnDialog';
 import { PayCraDialog } from '@/components/cra/PayCraDialog';
 import { bookAmount, craAmount, filingLabel, formatCad, formatDay, NOT_RETURNED_BY_CRA } from '@/lib/cra/engine';
+import { knownCraOverview } from '@/lib/cra/store';
 import { useCraTaxCentre } from '@/hooks/useCraTaxCentre';
 
 export default function CraCorporateTax() {
   const cra = useCraTaxCentre();
   const t2 = cra.ledger.corporate;
+  const overview = knownCraOverview(cra.ledger.profile.businessNumber);
+  const craBalance = cra.ledger.balances.corporate_tax;
   const [fileOpen, setFileOpen] = useState(false);
   const [payOpen, setPayOpen] = useState(false);
   const [refile, setRefile] = useState(false);
@@ -33,7 +36,9 @@ export default function CraCorporateTax() {
               <Field label="Balance" value={bookAmount(t2.balance, t2.balance !== 0 || t2.filingStatus !== 'not_filed')} />
               <Field label="Installments" value={bookAmount(t2.installmentsPaid, t2.installmentsPaid !== 0 || t2.filingStatus !== 'not_filed')} />
               <Field label="Next installment" value={t2.nextInstallmentDate ? `${formatDay(t2.nextInstallmentDate)} · ${formatCad(t2.nextInstallmentAmount)}` : NOT_RETURNED_BY_CRA} />
-              <Field label="CRA account balance" value={craAmount(cra.ledger.balances.corporate_tax)} />
+              <Field label="CRA account balance" value={craAmount(craBalance)} />
+              <Field label="Current interim balance" value={overview ? formatCad(overview.corporateInterim) : NOT_RETURNED_BY_CRA} />
+              <Field label="As of" value={overview?.asOf ? formatDay(overview.asOf) : NOT_RETURNED_BY_CRA} />
               <Field label="Account" value="RC0001" />
               <Field label="Business number" value={cra.ledger.profile.businessNumber} />
             </CardContent>
@@ -75,9 +80,9 @@ export default function CraCorporateTax() {
             onOpenChange={setPayOpen}
             preset={{
               taxType: 'corporate_tax',
-              amount: t2.nextInstallmentAmount,
+              amount: typeof craBalance === 'number' ? craBalance : t2.nextInstallmentAmount,
               dueDate: t2.nextInstallmentDate,
-              purpose: 'Corporate tax installment',
+              purpose: typeof craBalance === 'number' ? 'Corporation income tax RC0001' : 'Corporate tax installment',
               obligationId: `${t2.id}-installment-${t2.nextInstallmentDate}`,
             }}
           />

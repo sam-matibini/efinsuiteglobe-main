@@ -106,6 +106,9 @@ const REPRESENT_A_CLIENT_OVERVIEWS: {
   bn: string;
   totalOwing: number;
   gstHst: number;
+  corporateTax: number;
+  corporateInterim: number;
+  asOf: string;
   outstandingReturnsLabel: 'Yes' | 'No';
   gstOutstandingReturnsLabel: 'Yes' | 'No';
   notices: CraNotice[];
@@ -114,6 +117,9 @@ const REPRESENT_A_CLIENT_OVERVIEWS: {
     bn: '724016159',
     totalOwing: 1601.65,
     gstHst: 0,
+    corporateTax: 1601.65,
+    corporateInterim: 0,
+    asOf: '2026-09-26',
     outstandingReturnsLabel: 'Yes',
     gstOutstandingReturnsLabel: 'Yes',
     notices: [
@@ -123,7 +129,7 @@ const REPRESENT_A_CLIENT_OVERVIEWS: {
         title: 'T2 Initial assessment',
         program: 'Corporate income tax',
         receivedAt: '2026-09-17T16:00:00.000Z',
-        body: 'Notice issued.',
+        body: 'Notice issued. RC0001 amount owing is $1,601.65 as of September 26, 2026. Current interim balance is $0.00.',
         read: false,
       },
       {
@@ -316,10 +322,16 @@ export function applyKnownCraOverview(ledger: CraLedger): boolean {
   const overview = knownCraOverview(ledger.profile.businessNumber);
   if (!overview) return false;
   let changed = false;
-  if (ledger.balances.gst_hst !== overview.gstHst || ledger.balances.total_owing !== overview.totalOwing || ledger.balanceSource !== 'represent_a_client') {
+  if (
+    ledger.balances.gst_hst !== overview.gstHst ||
+    ledger.balances.corporate_tax !== overview.corporateTax ||
+    ledger.balances.total_owing !== overview.totalOwing ||
+    ledger.balanceSource !== 'represent_a_client'
+  ) {
     ledger.balances = {
       ...ledger.balances,
       gst_hst: overview.gstHst,
+      corporate_tax: overview.corporateTax,
       total_owing: overview.totalOwing,
     };
     ledger.balanceSource = 'represent_a_client';
@@ -349,8 +361,13 @@ export function applyKnownCraOverview(ledger: CraLedger): boolean {
     changed = true;
   }
   for (const notice of overview.notices) {
-    if (!ledger.notices.some((row) => row.id === notice.id)) {
+    const existing = ledger.notices.find((row) => row.id === notice.id);
+    if (!existing) {
       ledger.notices.unshift(notice);
+      changed = true;
+    } else if (existing.body !== notice.body || existing.title !== notice.title) {
+      existing.body = notice.body;
+      existing.title = notice.title;
       changed = true;
     }
   }
@@ -883,7 +900,7 @@ export function applyCdeResult(orgId: string, orgName: string | undefined, actor
     const alreadyAuthorized = knownAuthorizedRepresentative(ledger.profile.businessNumber);
     const overview = knownCraOverview(ledger.profile.businessNumber);
     const message = overview
-      ? `${alreadyAuthorized ?? 'The representative'} is already authorized to access this business. Represent a Client shows ${formatCad(overview.totalOwing)} owing and GST/HST RT0001 at ${formatCad(overview.gstHst)}, with outstanding returns. Internet File Transfer did not include a balance file, so these overview amounts were kept.`
+      ? `${alreadyAuthorized ?? 'The representative'} is already authorized to access this business. Represent a Client shows corporation income tax RC0001 owing ${formatCad(overview.corporateTax)} as of ${overview.asOf}, current interim balance ${formatCad(overview.corporateInterim)}, and GST/HST RT0001 at ${formatCad(overview.gstHst)}. Internet File Transfer did not include a balance file, so these overview amounts were kept.`
       : alreadyAuthorized
         ? `${alreadyAuthorized} is already authorized to access this business. CRA Internet File Transfer did not include account balances, so the amounts were not changed.`
         : result.notice;
