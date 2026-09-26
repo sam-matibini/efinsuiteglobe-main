@@ -95,7 +95,7 @@ export default function CraAuthorizations() {
             <Button onClick={() => cra.requestAuthorization()} disabled={!cra.can('manage_authorization') || auth.status === 'connected' || auth.status === 'pending_client_confirmation'}>
               Request CRA authorization
             </Button>
-            <Button variant="outline" onClick={() => cra.sendInstructions()} disabled={auth.status === 'not_started'}>
+            <Button variant="outline" onClick={() => cra.sendInstructions()} disabled={auth.status === 'not_started' || view.tone === 'authorized'}>
               Send instructions
             </Button>
             <Button variant="outline" onClick={() => setCheckOpen(true)}>

@@ -13,6 +13,7 @@ import {
   recordConfirmation,
   releasePayment,
   requestAuthorization,
+  sendInstructions,
   resetCraStoreForTests,
   reviewGst,
   revokeAuthorization,
@@ -194,6 +195,19 @@ describe('CRA tax centre', () => {
     readyOrg();
     expect(revokeAuthorization(org, name, cfo).ok).toBe(true);
     expect(requestAuthorization(org, name, cfo).ok).toBe(true);
+    const hsde = 'hsde-org';
+    const hsdeLedger = getLedger(hsde, 'Humanitarian Solidarity for Development and Empowerment Canada');
+    hsdeLedger.profile.businessNumber = '725966758';
+    hsdeLedger.authorization = { status: 'pending_client_confirmation', level: 'level_1' };
+    const already = requestAuthorization(hsde, hsdeLedger.profile.legalName, cfo);
+    expect(already.ok).toBe(true);
+    expect(already.message).toMatch(/already authorized/);
+    expect(already.message).toMatch(/No authorization form was sent/);
+    expect(getLedger(hsde).authorization.status).toBe('connected');
+    expect(getLedger(hsde).authorization.representativeName).toBe('Samson Matibini');
+    expect(getLedger(hsde).authorization.verifiedByCra).toBeUndefined();
+    expect(getLedger(hsde).balances).toEqual({ gst_hst: null, payroll: null, corporate_tax: null });
+    expect(sendInstructions(hsde, hsdeLedger.profile.legalName, cfo).message).toMatch(/No authorization form was sent/);
     expect(getLedger(org, name).authorization.reference).toBeUndefined();
     expect(recordClientConfirmation(org, name, cfo).ok).toBe(false);
     expect(getLedger(org, name).authorization.status).toBe('pending_client_confirmation');

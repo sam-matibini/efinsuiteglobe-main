@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ConnectionSummary, CraModule } from '@/components/cra/CraModule';
 import { PayCraDialog, type PayPreset } from '@/components/cra/PayCraDialog';
+import { authorizationView } from '@/lib/cra/authorizationView';
 import { bookAmount, craAmount, craCount, formatDay, NOT_RETURNED_BY_CRA, outstandingBalance, upcomingAssessed } from '@/lib/cra/engine';
 import { useCraTaxCentre } from '@/hooks/useCraTaxCentre';
 
@@ -109,7 +110,7 @@ export default function CraDashboard() {
               <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">eFinsuite Tax Centre</div>
               <div className="text-lg font-semibold">{ledger.profile.legalName}</div>
             </div>
-            <div className="text-sm">CRA connection {ledger.authorization.status === 'connected' ? '✓ Connected' : 'Pending'}</div>
+            <div className="text-sm">CRA connection {authorizationView(ledger.authorization).label}</div>
           </div>
           <div className="grid gap-2 text-sm md:grid-cols-3">
             <div>GST/HST <span className="float-right font-medium">{bookAmount(gstPayable, gstCalculated)}</span></div>

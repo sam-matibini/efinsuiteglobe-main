@@ -86,9 +86,19 @@ const SAMPLE_CONFIRMATION = 'CRA-123456789';
 const SAMPLE_AUTH_REFERENCE = 'RAC-20260901-0042';
 const SAMPLE_SYNCED_AT = '2026-09-25T14:42:00.000Z';
 const SAMPLE_BN = '123456789';
-/** 10255666 Manitoba Ltd. authorized this CRA representative. Balances still come only from CRA. */
-const MANITOBA_BN = '711450965';
-const MANITOBA_REPRESENTATIVE = 'Samson Matibini';
+/**
+ * Businesses that already authorized Samson Matibini in Represent a Client.
+ * Recording that fact does not invent CRA balances or a confirmation number.
+ */
+const AUTHORIZED_CLIENTS: { bn: string; representativeName: string }[] = [
+  { bn: '711450965', representativeName: 'Samson Matibini' },
+  { bn: '725966758', representativeName: 'Samson Matibini' },
+];
+
+export function knownAuthorizedRepresentative(businessNumber: string): string | null {
+  const bn = businessNumber.replace(/\D/g, '');
+  return AUTHORIZED_CLIENTS.find((row) => row.bn === bn)?.representativeName ?? null;
+}
 
 function seed(orgName?: string): CraLedger {
   const legalName = orgName?.trim() || '';
@@ -253,24 +263,29 @@ function isInventedAuthorizationReference(reference?: string): boolean {
   return reference === SAMPLE_AUTH_REFERENCE || (!!reference && /^RAC-\d{8}-\d+$/.test(reference));
 }
 
-/** Record a representative the business has already authorized. Does not mark CRA as having returned balances. */
-export function recordKnownRepresentative(ledger: CraLedger): boolean {
-  if (ledger.profile.businessNumber.replace(/\D/g, '') !== MANITOBA_BN) return false;
-  if (ledger.authorization.status === 'revoked' || ledger.authorization.status === 'expired') return false;
-  if (ledger.authorization.verifiedByCra) return false;
-  const currentName = ledger.authorization.representativeName?.trim();
-  if (ledger.authorization.status === 'connected' && currentName && currentName !== MANITOBA_REPRESENTATIVE) return false;
-  if (ledger.authorization.status === 'connected' && currentName === MANITOBA_REPRESENTATIVE && !isInventedAuthorizationReference(ledger.authorization.reference)) {
-    return false;
-  }
+function writeKnownRepresentative(ledger: CraLedger, representativeName: string) {
   ledger.authorization = {
     ...ledger.authorization,
     status: 'connected',
-    representativeName: MANITOBA_REPRESENTATIVE,
+    representativeName,
     verifiedByCra: undefined,
     reference: isInventedAuthorizationReference(ledger.authorization.reference) ? undefined : ledger.authorization.reference,
     confirmedAt: ledger.authorization.confirmedAt === '2026-09-03T18:12:00.000Z' ? undefined : ledger.authorization.confirmedAt,
   };
+}
+
+/** Record a representative the business has already authorized. Does not mark CRA as having returned balances. */
+export function recordKnownRepresentative(ledger: CraLedger): boolean {
+  const representativeName = knownAuthorizedRepresentative(ledger.profile.businessNumber);
+  if (!representativeName) return false;
+  if (ledger.authorization.status === 'revoked' || ledger.authorization.status === 'expired') return false;
+  if (ledger.authorization.verifiedByCra) return false;
+  const currentName = ledger.authorization.representativeName?.trim();
+  if (ledger.authorization.status === 'connected' && currentName && currentName !== representativeName) return false;
+  if (ledger.authorization.status === 'connected' && currentName === representativeName && !isInventedAuthorizationReference(ledger.authorization.reference)) {
+    return false;
+  }
+  writeKnownRepresentative(ledger, representativeName);
   return true;
 }
 
@@ -424,6 +439,19 @@ export function requestAuthorization(orgId: string, orgName: string | undefined,
   if (!effectiveCapabilities(actor.role, ledger.accessCeiling).includes('manage_authorization')) {
     return fail(orgId, orgName, actor, 'Request CRA authorization', 'Your role cannot manage CRA authorization.');
   }
+  const alreadyAuthorized = knownAuthorizedRepresentative(ledger.profile.businessNumber);
+  if (alreadyAuthorized) {
+    if (ledger.authorization.status !== 'connected' || ledger.authorization.representativeName !== alreadyAuthorized) {
+      update(orgId, orgName, (draft) => {
+        writeKnownRepresentative(draft, alreadyAuthorized);
+        audit(draft, actor, `Authorization check found ${alreadyAuthorized} already authorized. No form was sent.`);
+      });
+    }
+    return {
+      ok: true,
+      message: `${alreadyAuthorized} is already authorized to access this business. No authorization form was sent.`,
+    };
+  }
   if (ledger.authorization.status === 'connected') {
     return { ok: false, error: 'This organization is already connected. Revoke the authorization before requesting a new one.' };
   }
@@ -483,6 +511,19 @@ export function recordRepresentativeAuthorization(
 
 export function sendInstructions(orgId: string, orgName: string | undefined, actor: CraActor): ActionResult {
   const ledger = getLedger(orgId, orgName);
+  const alreadyAuthorized = knownAuthorizedRepresentative(ledger.profile.businessNumber);
+  if (alreadyAuthorized) {
+    if (ledger.authorization.status !== 'connected' || ledger.authorization.representativeName !== alreadyAuthorized) {
+      update(orgId, orgName, (draft) => {
+        writeKnownRepresentative(draft, alreadyAuthorized);
+        audit(draft, actor, `Authorization check found ${alreadyAuthorized} already authorized. No form was sent.`);
+      });
+    }
+    return {
+      ok: true,
+      message: `${alreadyAuthorized} is already authorized to access this business. No authorization form was sent.`,
+    };
+  }
   if (ledger.authorization.status === 'not_started') {
     return { ok: false, error: 'Request CRA authorization before sending confirmation instructions.' };
   }
@@ -739,8 +780,12 @@ export function applyCdeResult(orgId: string, orgName: string | undefined, actor
     balances && [balances.gst_hst, balances.payroll, balances.corporate_tax].some((value) => typeof value === 'number' && Number.isFinite(value)),
   );
   if (result.ok && result.notice && !hasBalances && result.connected !== true) {
-    const message = result.notice;
+    const alreadyAuthorized = knownAuthorizedRepresentative(ledger.profile.businessNumber);
+    const message = alreadyAuthorized
+      ? `${alreadyAuthorized} is already authorized to access this business. CRA Internet File Transfer did not include account balances, so the amounts were not changed.`
+      : result.notice;
     update(orgId, orgName, (draft) => {
+      if (alreadyAuthorized) recordKnownRepresentative(draft);
       audit(draft, actor, 'CRA Internet File Transfer did not include account balances', { craResponse: message });
     });
     return { ok: true, message };
