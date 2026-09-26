@@ -20,6 +20,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
+import { signedBankAmount } from '@/lib/plaidBankAmount';
 
 interface Transaction {
   id: string;
@@ -117,7 +118,7 @@ export default function TransactionExportDialog({
       `"${t.description.replace(/"/g, '""')}"`,
       `"${(t.payee_payor || '').replace(/"/g, '""')}"`,
       `"${(t.reference || '').replace(/"/g, '""')}"`,
-      t.amount.toFixed(2),
+      signedBankAmount(t.amount, t.type).toFixed(2),
       t.type,
       t.status,
       t.category || '',
@@ -138,10 +139,10 @@ export default function TransactionExportDialog({
     // Create a printable HTML document
     const totalDeposits = filteredTransactions
       .filter((t) => t.type === 'deposit')
-      .reduce((sum, t) => sum + t.amount, 0);
+      .reduce((sum, t) => sum + signedBankAmount(t.amount, t.type), 0);
     const totalWithdrawals = filteredTransactions
       .filter((t) => t.type === 'withdrawal')
-      .reduce((sum, t) => sum + t.amount, 0);
+      .reduce((sum, t) => sum + signedBankAmount(t.amount, t.type), 0);
 
     const htmlContent = `
       <!DOCTYPE html>

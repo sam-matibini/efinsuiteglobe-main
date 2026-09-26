@@ -53,7 +53,7 @@ function openPdfPrintWindow(title: string, snapshot: string, rows: CardActionRow
         <td>${escapeHtml(r.payee)}</td>
         <td>${escapeHtml(r.category)}</td>
         <td>${escapeHtml(r.reference)}</td>
-        <td style="text-align:right;font-variant-numeric:tabular-nums">${fmt(Number(r.amount) || 0)}</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums">${Number(r.amount) < 0 ? '-' : ''}${fmt(Number(r.amount) || 0)}</td>
         <td>${escapeHtml(r.status)}</td>
       </tr>`,
     )

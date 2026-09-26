@@ -5,13 +5,14 @@
  * logic extracted from usePlaidSync.ts WITHOUT touching Supabase or the network.
  * They guard against the bugs that were fixed in Feb 2026:
  *   1. organization_id inserted into bank_transactions (PGRST204)
- *   2. Plaid sign convention (negative = deposit, positive = withdrawal)
+ *   2. Gateway sign convention (positive = deposit, negative = withdrawal)
  *   3. Duplicate suppression via PLAID-{id} reference prefix
  *   4. Pending transaction status & is_cleared mapping
  *   5. Batch insert payload shape matching the actual DB schema
  */
 
 import { describe, it, expect } from 'vitest';
+import { mapPlaidBankRow } from '@/lib/plaidBankAmount';
 
 // ──────────────────────────────────────────────────────────────────
 // Extracted pure functions (mirrors usePlaidSync logic exactly)
@@ -21,7 +22,7 @@ interface RawPlaidTransaction {
   id: string;
   date: string;
   description: string;
-  amount: number;       // Plaid: negative = money IN (deposit), positive = money OUT
+  amount: number;       // Gateway: positive = deposit, negative = withdrawal
   type: string;
   category: string;
   merchantName?: string;
@@ -41,22 +42,23 @@ interface BankTransactionRow {
   is_cleared: boolean;
 }
 
-/** Maps a Plaid transaction to the bank_transactions DB row shape */
+/** Maps a gateway transaction to the bank_transactions DB row shape */
 function mapPlaidToRow(
   txn: RawPlaidTransaction,
   bankAccountId: string,
 ): BankTransactionRow {
+  const row = mapPlaidBankRow(txn, bankAccountId, '2026-09-26T00:00:00.000Z');
   return {
-    bank_account_id: bankAccountId,
-    transaction_date: txn.date,
-    description: txn.description || txn.merchantName || 'Unnamed transaction',
-    amount: Math.abs(txn.amount),
-    transaction_type: txn.amount < 0 ? 'deposit' : 'withdrawal',
-    status: txn.pending ? 'pending' : 'unmatched',
-    reference: `PLAID-${txn.id}`,
-    category: txn.category || null,
-    memo: txn.merchantName || null,
-    is_cleared: !txn.pending,
+    bank_account_id: row.bank_account_id,
+    transaction_date: row.transaction_date,
+    description: row.description,
+    amount: row.amount,
+    transaction_type: row.transaction_type,
+    status: row.status,
+    reference: row.reference,
+    category: row.category,
+    memo: row.memo,
+    is_cleared: row.is_cleared,
   };
 }
 
@@ -86,8 +88,8 @@ const sampleDeposit: RawPlaidTransaction = {
   id: 'plaid-txn-001',
   date: '2026-02-10',
   description: 'Payroll Direct Deposit',
-  amount: -3500.00,   // Plaid: negative = money IN
-  type: 'special',
+  amount: 3500.00,   // Gateway: positive = money IN
+  type: 'deposit',
   category: 'Payroll',
   merchantName: 'Efintax Inc',
   pending: false,
@@ -97,8 +99,8 @@ const sampleWithdrawal: RawPlaidTransaction = {
   id: 'plaid-txn-002',
   date: '2026-02-11',
   description: 'Office Supplies',
-  amount: 89.99,       // Plaid: positive = money OUT
-  type: 'place',
+  amount: -89.99,      // Gateway: negative = money OUT
+  type: 'withdrawal',
   category: 'Office',
   merchantName: 'Staples',
   pending: false,
@@ -108,8 +110,8 @@ const samplePending: RawPlaidTransaction = {
   id: 'plaid-txn-003',
   date: '2026-02-19',
   description: 'Coffee shop',
-  amount: 12.50,
-  type: 'place',
+  amount: -12.50,
+  type: 'withdrawal',
   category: 'Food',
   merchantName: 'Second Cup',
   pending: true,
@@ -120,18 +122,18 @@ const samplePending: RawPlaidTransaction = {
 // ──────────────────────────────────────────────────────────────────
 
 describe('Plaid → DB row mapping', () => {
-  it('deposit: Plaid negative amount → transaction_type=deposit, positive amount stored', () => {
+  it('deposit: gateway positive amount → transaction_type=deposit, positive amount stored', () => {
     const row = mapPlaidToRow(sampleDeposit, ACCOUNT_ID);
     expect(row.transaction_type).toBe('deposit');
     expect(row.amount).toBe(3500.00);
-    expect(row.amount).toBeGreaterThan(0); // always stored positive
+    expect(row.amount).toBeGreaterThan(0);
   });
 
-  it('withdrawal: Plaid positive amount → transaction_type=withdrawal, positive amount stored', () => {
+  it('withdrawal: gateway negative amount → transaction_type=withdrawal, negative amount stored', () => {
     const row = mapPlaidToRow(sampleWithdrawal, ACCOUNT_ID);
     expect(row.transaction_type).toBe('withdrawal');
-    expect(row.amount).toBe(89.99);
-    expect(row.amount).toBeGreaterThan(0);
+    expect(row.amount).toBe(-89.99);
+    expect(row.amount).toBeLessThan(0);
   });
 
   it('pending: status=pending, is_cleared=false', () => {
@@ -290,10 +292,10 @@ describe('DB schema compliance', () => {
     expect(keys).toContain('is_cleared');
   });
 
-  it('amount is always a positive number (Math.abs applied)', () => {
+  it('stores deposits positive and withdrawals negative', () => {
     const rowDeposit = mapPlaidToRow(sampleDeposit, ACCOUNT_ID);
     const rowWithdrawal = mapPlaidToRow(sampleWithdrawal, ACCOUNT_ID);
     expect(rowDeposit.amount).toBeGreaterThan(0);
-    expect(rowWithdrawal.amount).toBeGreaterThan(0);
+    expect(rowWithdrawal.amount).toBeLessThan(0);
   });
 });

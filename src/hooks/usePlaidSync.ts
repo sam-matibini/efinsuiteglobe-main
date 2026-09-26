@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
+import { mapPlaidBankRow } from '@/lib/plaidBankAmount';
 import { BankAccount } from './useBankAccounts';
 
 interface SyncResult {
@@ -84,20 +85,9 @@ export function usePlaidSync() {
       return { accountId: account.id, synced: 0, skipped: plaidTransactions.length, errors: 0 };
     }
 
-    // Map Plaid transactions to bank_transactions schema
-    // Note: organization_id is NOT a column in bank_transactions — omit it
-    const rows = newTransactions.map((txn) => ({
-      bank_account_id: account.id,
-      transaction_date: txn.date,
-      description: txn.description || txn.merchantName || 'Unnamed transaction',
-      amount: Math.abs(txn.amount),
-      transaction_type: txn.amount < 0 ? 'deposit' : 'withdrawal', // Plaid: negative = money in
-      status: txn.pending ? 'pending' : 'unmatched',
-      reference: `PLAID-${txn.id}`,
-      category: txn.category || null,
-      memo: txn.merchantName || null,
-      is_cleared: !txn.pending,
-    }));
+    // The gateway already uses a positive amount for a deposit and a negative
+    // amount for a withdrawal. Keep that sign. organization_id is not a column.
+    const rows = newTransactions.map((txn) => mapPlaidBankRow(txn, account.id));
 
     let errors = 0;
     // Insert in batches of 100

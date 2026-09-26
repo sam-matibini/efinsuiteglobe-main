@@ -8,6 +8,7 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { cn, parseLocalDate } from '@/lib/utils';
+import { signedBankAmount } from '@/lib/plaidBankAmount';
 import {
   Select,
   SelectContent,
@@ -1076,7 +1077,9 @@ export default function BankTransactions() {
             payee: String((t as any).payee_payor ?? ''),
             category: String(t.category ?? ''),
             reference: String((t as any).reference ?? ''),
-            amount: Number(t.amount) || 0,
+            amount: accountType === 'bank'
+              ? signedBankAmount(Number(t.amount) || 0, t.transaction_type)
+              : Number(t.amount) || 0,
             status: String(t.status ?? (isReconciled(t) ? 'reconciled' : hasMatch(t) ? 'matched' : 'unmatched')),
           }));
 
@@ -1590,7 +1593,8 @@ export default function BankTransactions() {
                              transaction.description?.toLowerCase().includes('payment') ||
                              transaction.description?.toLowerCase().includes('paiement') ||
                              Number(transaction.amount) < 0)
-                          : transaction.transaction_type === 'deposit';
+                          : signedBankAmount(Number(transaction.amount), transaction.transaction_type) >= 0
+                            && transaction.transaction_type !== 'withdrawal';
                         return (
                           <div className={cn(
                             "w-8 h-8 rounded-lg flex items-center justify-center",
@@ -1654,7 +1658,8 @@ export default function BankTransactions() {
                              transaction.description?.toLowerCase().includes('payment') ||
                              transaction.description?.toLowerCase().includes('paiement') ||
                              Number(transaction.amount) < 0)
-                          : transaction.transaction_type === 'deposit';
+                          : signedBankAmount(Number(transaction.amount), transaction.transaction_type) >= 0
+                            && transaction.transaction_type !== 'withdrawal';
                         return isPositiveFlow ? "text-success" : "text-foreground";
                       })()
                     )}>
@@ -1667,8 +1672,12 @@ export default function BankTransactions() {
                              transaction.description?.toLowerCase().includes('payment') ||
                              transaction.description?.toLowerCase().includes('paiement') ||
                              Number(transaction.amount) < 0)
-                          : transaction.transaction_type === 'deposit';
-                        return `${isPositiveFlow ? '+' : '-'}${formatCurrency(Math.abs(Number(transaction.amount)))}`;
+                          : signedBankAmount(Number(transaction.amount), transaction.transaction_type) >= 0
+                            && transaction.transaction_type !== 'withdrawal';
+                        const shown = accountType === 'bank'
+                          ? signedBankAmount(Number(transaction.amount), transaction.transaction_type)
+                          : Number(transaction.amount);
+                        return `${isPositiveFlow ? '+' : '-'}${formatCurrency(Math.abs(shown))}`;
                       })()}
                     </td>
                     <td>

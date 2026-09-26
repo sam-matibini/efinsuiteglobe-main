@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { createJournalEntry } from './useJournalEntryCreation';
 import { reverseLinkedJournalEntry, recalculateAndInvalidate } from './useGLPropagation';
+import { repairLegacyPlaidRow } from '@/lib/plaidBankAmount';
 
 export interface BankTransaction {
   id: string;
@@ -56,7 +57,11 @@ export function useBankTransactions(bankAccountId?: string) {
         .order('transaction_date', { ascending: false });
       
       if (error) throw error;
-      return data as BankTransaction[];
+      const rows = await repairDownloadedPlaidRows(data as BankTransaction[]);
+      const original = data as BankTransaction[];
+      const changed = rows.some((row, index) => row.amount !== original[index]?.amount || row.transaction_type !== original[index]?.transaction_type);
+      if (changed) queryClient.invalidateQueries({ queryKey: ['bank-accounts'] });
+      return rows;
     },
     enabled: !!bankAccountId,
   });
@@ -499,4 +504,40 @@ export function useBankTransactions(bankAccountId?: string) {
     unimportTransactions,
     deleteTransaction,
   };
+}
+
+async function repairDownloadedPlaidRows(rows: BankTransaction[]): Promise<BankTransaction[]> {
+  const importedAt = new Date().toISOString();
+  const repairs = rows.flatMap((row) => {
+    const next = repairLegacyPlaidRow(row);
+    return next ? [{ id: row.id, ...next, imported_at: importedAt }] : [];
+  });
+  if (repairs.length === 0) return rows;
+
+  for (let i = 0; i < repairs.length; i += 25) {
+    const chunk = repairs.slice(i, i + 25);
+    await Promise.all(chunk.map(async (row) => {
+      const { error } = await supabase
+        .from('bank_transactions')
+        .update({
+          amount: row.amount,
+          transaction_type: row.transaction_type,
+          imported_at: row.imported_at,
+        })
+        .eq('id', row.id);
+      if (error) console.error('Plaid amount repair failed', error);
+    }));
+  }
+
+  const byId = new Map(repairs.map((row) => [row.id, row]));
+  return rows.map((row) => {
+    const fixed = byId.get(row.id);
+    if (!fixed) return row;
+    return {
+      ...row,
+      amount: fixed.amount,
+      transaction_type: fixed.transaction_type,
+      imported_at: fixed.imported_at,
+    };
+  });
 }
