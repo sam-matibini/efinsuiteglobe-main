@@ -1,4 +1,4 @@
-import { applyPeriodBalances, summarizePeriodAccounts } from './taxReportPeriod';
+import { applyPeriodBalances, periodChange, summarizeLinesInRange, summarizePeriodAccounts } from './taxReportPeriod';
 
 const accounts = [
   { accountId: 'payable', accountName: 'GST/HST Payable', type: 'collected' as const, balance: 909.5 },
@@ -34,6 +34,23 @@ describe('GST/HST period activity', () => {
       { accountId: 'payable', debit: 40, credit: 0 },
     ]);
     expect(summarizePeriodAccounts(period).collected).toBe(60);
+  });
+
+  it('fills earlier periods and the change against the previous one', () => {
+    const lines = [
+      { accountId: 'payable', debit: 0, credit: 100, entryDate: '2026-09-15' },
+      { accountId: 'itc', debit: 9.13, credit: 0, entryDate: '2026-09-04' },
+      { accountId: 'itc', debit: 20, credit: 0, entryDate: '2026-08-20' },
+      { accountId: 'payable', debit: 0, credit: 40, entryDate: '2026-07-02' },
+    ];
+    const september = summarizeLinesInRange(accounts, lines, '2026-09-01', '2026-09-30');
+    const august = summarizeLinesInRange(accounts, lines, '2026-08-01', '2026-08-31');
+    const july = summarizeLinesInRange(accounts, lines, '2026-07-01', '2026-07-31');
+    expect(september).toMatchObject({ collected: 100, paid: 9.13, netPayable: 90.87 });
+    expect(august).toMatchObject({ collected: 0, paid: 20, netPayable: -20 });
+    expect(july).toMatchObject({ collected: 40, paid: 0, netPayable: 40 });
+    expect(periodChange(september.paid, august.paid)).toBe(-10.87);
+    expect(periodChange(september.netPayable, august.netPayable)).toBe(110.87);
   });
 
   it('ignores lines for accounts outside the report', () => {

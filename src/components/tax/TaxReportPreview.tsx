@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { format, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear, endOfYear, subMonths, subQuarters, subYears } from 'date-fns';
+import { format, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear, endOfYear, subMonths, subQuarters, subYears, subDays, differenceInCalendarDays } from 'date-fns';
 import { parseLocalDate } from '@/lib/utils';
 import { Download, Eye, FileText, Printer, Calendar, ArrowRight, Filter, SlidersHorizontal, GitCompare, Check, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -24,7 +24,7 @@ import { addPdfBrandingFooter } from '@/lib/pdfBrandingFooter';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
-import { applyPeriodBalances, periodMovement, summarizePeriodAccounts, type TaxAccountKind } from '@/lib/taxReportPeriod';
+import { applyPeriodBalances, periodChange, periodMovement, summarizeLinesInRange, summarizePeriodAccounts, type PeriodTaxSummary, type TaxAccountKind } from '@/lib/taxReportPeriod';
 
 interface TaxReportPreviewProps {
   organizationId?: string;
@@ -71,6 +71,80 @@ type ReportType = 'summary' | 'detailed' | 'by_tax_code' | 'by_jurisdiction';
 type AccountTypeFilter = 'all' | 'collected' | 'paid' | 'pst';
 type CompareType = 'none' | 'previous_period' | 'previous_year';
 type ReportCategory = 'gst' | 'pst';
+
+async function loadPostedTaxLines(organizationId: string, accountIds: string[], start: string, end: string): Promise<JournalEntryLine[]> {
+  if (!organizationId || accountIds.length === 0) return [];
+  const journalEntries: { id: string; entry_date: string; description: string | null; reference: string | null }[] = [];
+  const pageSize = 1000;
+  let offset = 0;
+  while (true) {
+    const { data, error } = await supabase
+      .from('journal_entries')
+      .select('id, entry_date, description, reference')
+      .eq('organization_id', organizationId)
+      .eq('status', 'posted')
+      .gte('entry_date', start)
+      .lte('entry_date', end)
+      .order('id', { ascending: true })
+      .range(offset, offset + pageSize - 1);
+    if (error) throw error;
+    const rows = data ?? [];
+    journalEntries.push(...rows);
+    if (rows.length < pageSize) break;
+    offset += pageSize;
+  }
+  if (journalEntries.length === 0) return [];
+
+  const journalEntriesMap = new Map(journalEntries.map((entry) => [entry.id, entry]));
+  const lines: { journal_entry_id: string; account_id: string; debit: number | null; credit: number | null; description: string | null }[] = [];
+  for (let index = 0; index < journalEntries.length; index += 200) {
+    const ids = journalEntries.slice(index, index + 200).map((entry) => entry.id);
+    const { data, error } = await supabase
+      .from('journal_entry_lines')
+      .select('journal_entry_id, account_id, debit, credit, description')
+      .in('journal_entry_id', ids)
+      .in('account_id', accountIds);
+    if (error) throw error;
+    lines.push(...(data ?? []));
+  }
+
+  const { data: accounts, error: accountError } = await supabase
+    .from('accounts')
+    .select('id, code, name')
+    .in('id', accountIds);
+  if (accountError) throw accountError;
+  const accountsMap = new Map(accounts?.map((account) => [account.id, account]) || []);
+
+  return lines.map((line) => {
+    const entry = journalEntriesMap.get(line.journal_entry_id);
+    const account = accountsMap.get(line.account_id);
+    const taxCodeMatch = line.description?.match(/^(GST|HST|PST|QST|VAT)(\s*-\s*\w+)?/i);
+    return {
+      entry_date: String(entry?.entry_date || ''),
+      description: entry?.description || line.description || '',
+      line_description: line.description || '',
+      reference: entry?.reference || '',
+      debit: Number(line.debit || 0),
+      credit: Number(line.credit || 0),
+      account_id: line.account_id,
+      account_code: account?.code || '',
+      account_name: account?.name || '',
+      tax_code: taxCodeMatch ? taxCodeMatch[0].trim() : undefined,
+    };
+  });
+}
+
+function lineMatchesCategory(line: JournalEntryLine, reportCategory: ReportCategory, isCanada: boolean) {
+  if (!isCanada) return true;
+  const nameLower = line.account_name.toLowerCase();
+  const codeLower = (line.tax_code || '').toLowerCase();
+  if (reportCategory === 'gst') {
+    return (nameLower.includes('gst') || nameLower.includes('hst') || codeLower.includes('gst') || codeLower.includes('hst'))
+      && !nameLower.includes('pst') && !codeLower.includes('pst')
+      && !nameLower.includes('qst') && !codeLower.includes('qst');
+  }
+  return nameLower.includes('pst') || nameLower.includes('qst') || codeLower.includes('pst') || codeLower.includes('qst');
+}
 
 export function TaxReportPreview({
   organizationId,
@@ -129,13 +203,12 @@ export function TaxReportPreview({
   const comparisonRanges = useMemo(() => {
     if (compareType === 'none') return [];
     
-    const ranges: { start: Date; end: Date; label: string }[] = [];
+    const ranges: { start: Date; end: Date; label: string; stepsBack: number }[] = [];
     
     for (let i = 1; i <= comparePeriodsCount; i++) {
       let start: Date, end: Date, label: string;
       
       if (compareType === 'previous_period') {
-        // Calculate based on current period type
         switch (periodType) {
           case 'current_month':
           case 'last_month':
@@ -149,19 +222,25 @@ export function TaxReportPreview({
             end = endOfQuarter(subQuarters(dateRange.start, i));
             label = `Q${Math.ceil((start.getMonth() + 1) / 3)} ${start.getFullYear()}`;
             break;
+          case 'custom': {
+            const length = differenceInCalendarDays(dateRange.end, dateRange.start) + 1;
+            end = subDays(dateRange.start, 1 + (i - 1) * length);
+            start = subDays(end, length - 1);
+            label = `${format(start, 'MMM d')} – ${format(end, 'MMM d, yyyy')}`;
+            break;
+          }
           default:
             start = startOfYear(subYears(dateRange.start, i));
             end = endOfYear(subYears(dateRange.start, i));
             label = start.getFullYear().toString();
         }
       } else {
-        // Previous year comparison
         start = subYears(dateRange.start, i);
         end = subYears(dateRange.end, i);
-        label = `${format(start, 'MMM d')} - ${format(end, 'MMM d, yyyy')}`;
+        label = `${format(start, 'MMM d')} – ${format(end, 'MMM d, yyyy')}`;
       }
       
-      ranges.push({ start, end, label });
+      ranges.push({ start, end, label, stepsBack: i });
     }
     
     return compareArrangeLatest ? ranges : ranges.reverse();
@@ -250,98 +329,31 @@ export function TaxReportPreview({
   // Fetch journal entry details for the period with enhanced data
   const { data: journalDetails = [], isLoading: journalLoading, isError: journalError } = useQuery({
     queryKey: ['tax-report-journal', organizationId, periodStart, periodEnd, taxAccounts.map((account) => account.accountId).join(',')],
-    queryFn: async () => {
-      if (!organizationId || taxAccounts.length === 0) return [];
-      
-      const accountIds = taxAccounts.map(a => a.accountId);
-      
-      const journalEntries: { id: string; entry_date: string; description: string | null; reference: string | null }[] = [];
-      const pageSize = 1000;
-      let offset = 0;
-      while (true) {
-        const { data, error: jeError } = await supabase
-          .from('journal_entries')
-          .select('id, entry_date, description, reference')
-          .eq('organization_id', organizationId)
-          .eq('status', 'posted')
-          .gte('entry_date', periodStart)
-          .lte('entry_date', periodEnd)
-          .order('id', { ascending: true })
-          .range(offset, offset + pageSize - 1);
-        if (jeError) throw jeError;
-        const rows = data ?? [];
-        journalEntries.push(...rows);
-        if (rows.length < pageSize) break;
-        offset += pageSize;
-      }
-      if (journalEntries.length === 0) return [];
-      
-      const journalEntriesMap = new Map(journalEntries.map(je => [je.id, je]));
-      const lines: { id: string; journal_entry_id: string; account_id: string; debit: number | null; credit: number | null; description: string | null }[] = [];
-      for (let index = 0; index < journalEntries.length; index += 200) {
-        const ids = journalEntries.slice(index, index + 200).map((entry) => entry.id);
-        const { data, error: linesError } = await supabase
-          .from('journal_entry_lines')
-          .select('id, journal_entry_id, account_id, debit, credit, description')
-          .in('journal_entry_id', ids)
-          .in('account_id', accountIds);
-        if (linesError) throw linesError;
-        lines.push(...(data ?? []));
-      }
-      
-      // Fetch accounts for display
-      const { data: accounts, error: accError } = await supabase
-        .from('accounts')
-        .select('id, code, name')
-        .in('id', accountIds);
-      
-      if (accError) throw accError;
-      
-      const accountsMap = new Map(accounts?.map(a => [a.id, a]) || []);
-      
-      return lines.map((line) => {
-        const je = journalEntriesMap.get(line.journal_entry_id);
-        const acc = accountsMap.get(line.account_id);
-        
-        // Extract tax code from line description (e.g., "GST - Federal on ...")
-        const taxCodeMatch = line.description?.match(/^(GST|HST|PST|QST|VAT)(\s*-\s*\w+)?/i);
-        const taxCode = taxCodeMatch ? taxCodeMatch[0].trim() : undefined;
-        
-        return {
-          entry_date: je?.entry_date,
-          description: je?.description || line.description,
-          line_description: line.description,
-          reference: je?.reference,
-          debit: Number(line.debit || 0),
-          credit: Number(line.credit || 0),
-          account_id: line.account_id,
-          account_code: acc?.code,
-          account_name: acc?.name,
-          tax_code: taxCode,
-        };
-      }) as JournalEntryLine[];
-    },
+    queryFn: () => loadPostedTaxLines(organizationId || '', taxAccounts.map((account) => account.accountId), periodStart, periodEnd),
     enabled: !!organizationId && taxAccounts.length > 0,
+  });
+
+  const compareWindow = useMemo(() => {
+    if (compareType === 'none' || comparisonRanges.length === 0) return null;
+    const starts = comparisonRanges.map((range) => format(range.start, 'yyyy-MM-dd'));
+    const ends = comparisonRanges.map((range) => format(range.end, 'yyyy-MM-dd'));
+    return {
+      start: starts.reduce((earliest, day) => (day < earliest ? day : earliest)),
+      end: ends.reduce((latest, day) => (day > latest ? day : latest)),
+    };
+  }, [compareType, comparisonRanges]);
+
+  const { data: comparisonLines = [], isLoading: comparisonLoading, isError: comparisonError } = useQuery({
+    queryKey: ['tax-report-compare', organizationId, compareWindow?.start, compareWindow?.end, taxAccounts.map((account) => account.accountId).join(',')],
+    queryFn: () => loadPostedTaxLines(organizationId || '', taxAccounts.map((account) => account.accountId), compareWindow?.start || '', compareWindow?.end || ''),
+    enabled: !!organizationId && taxAccounts.length > 0 && !!compareWindow,
   });
 
   // Filter journal details by category
   const categoryFilteredJournalDetails = useMemo(() => {
     if (!isCanada) return journalDetails;
     
-    return journalDetails.filter((line: any) => {
-      const nameLower = line.account_name?.toLowerCase() || '';
-      const codeLower = line.tax_code?.toLowerCase() || '';
-      
-      if (reportCategory === 'gst') {
-        return (nameLower.includes('gst') || nameLower.includes('hst') || 
-                codeLower.includes('gst') || codeLower.includes('hst')) &&
-               !nameLower.includes('pst') && !codeLower.includes('pst') &&
-               !nameLower.includes('qst') && !codeLower.includes('qst');
-      } else {
-        return nameLower.includes('pst') || nameLower.includes('qst') ||
-               codeLower.includes('pst') || codeLower.includes('qst');
-      }
-    });
+    return journalDetails.filter((line) => lineMatchesCategory(line, reportCategory, isCanada));
   }, [journalDetails, reportCategory, isCanada]);
 
   // Derive available tax codes from journal details when tax_codes table is empty
@@ -412,6 +424,40 @@ export function TaxReportPreview({
   }, [categoryFilteredAccounts, accountTypeFilter, filteredJournalDetails]);
 
   const summary = useMemo(() => summarizePeriodAccounts(filteredAccounts), [filteredAccounts]);
+
+  const comparisonSummaries = useMemo(() => {
+    const accounts = filteredAccounts.map((account) => ({ accountId: account.accountId, type: account.type, balance: 0 }));
+    return comparisonRanges.map((range) => {
+      const lines = comparisonLines
+        .filter((line) => lineMatchesCategory(line, reportCategory, isCanada))
+        .filter((line) => selectedTaxCodes.length === 0 || (line.tax_code && selectedTaxCodes.includes(line.tax_code)))
+        .filter((line) => accounts.some((account) => account.accountId === line.account_id))
+        .map((line) => ({
+          accountId: line.account_id,
+          debit: line.debit,
+          credit: line.credit,
+          entryDate: line.entry_date,
+        }));
+      return summarizeLinesInRange(accounts, lines, format(range.start, 'yyyy-MM-dd'), format(range.end, 'yyyy-MM-dd'));
+    });
+  }, [filteredAccounts, comparisonRanges, comparisonLines, reportCategory, isCanada, selectedTaxCodes]);
+
+  const priorSummary: PeriodTaxSummary = comparisonSummaries[comparisonRanges.findIndex((range) => range.stepsBack === 1)]
+    ?? { collected: 0, paid: 0, pst: 0, netPayable: 0 };
+
+  const comparisonRows = useMemo(() => {
+    const rows: { label: string; current: number; key: keyof PeriodTaxSummary }[] = [];
+    if (reportCategory !== 'pst') {
+      rows.push(
+        { label: taxTerminology.collectedLabel, current: summary.collected, key: 'collected' },
+        { label: taxTerminology.paidLabel, current: summary.paid, key: 'paid' },
+      );
+    } else {
+      rows.push({ label: 'PST/QST Payable', current: summary.pst, key: 'pst' });
+    }
+    rows.push({ label: taxTerminology.netLabel, current: summary.netPayable, key: 'netPayable' });
+    return rows;
+  }, [reportCategory, summary, taxTerminology]);
 
   const groupedByTaxCode = useMemo(() => {
     const accountKind = new Map(categoryFilteredAccounts.map((account) => [account.accountId, account.type as TaxAccountKind]));
@@ -966,48 +1012,42 @@ export function TaxReportPreview({
                   <GitCompare className="w-4 h-4" />
                   Period Comparison
                 </h4>
-                <div className="border rounded-lg overflow-hidden">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Metric</TableHead>
-                        <TableHead className="text-right">Current Period</TableHead>
-                        {comparisonRanges.map((range, idx) => (
-                          <TableHead key={idx} className="text-right">{range.label}</TableHead>
+                {comparisonError ? (
+                  <p className="text-sm text-destructive">Earlier periods could not be loaded. Refresh the page and apply the comparison again.</p>
+                ) : (
+                  <div className="overflow-x-auto rounded-lg border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Metric</TableHead>
+                          <TableHead className="text-right">Current Period</TableHead>
+                          {comparisonRanges.map((range) => (
+                            <TableHead key={range.stepsBack} className="text-right">{range.label}</TableHead>
+                          ))}
+                          <TableHead className="text-right">Change</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {comparisonRows.map((row, rowIndex) => (
+                          <TableRow key={row.key} className={rowIndex === comparisonRows.length - 1 ? 'bg-muted/50 font-medium' : undefined}>
+                            <TableCell className="font-medium">{row.label}</TableCell>
+                            <TableCell className="text-right font-mono">{formatCurrency(row.current)}</TableCell>
+                            {comparisonSummaries.map((periodSummary, index) => (
+                              <TableCell key={comparisonRanges[index]?.stepsBack ?? index} className="text-right font-mono">
+                                {comparisonLoading ? '…' : formatCurrency(periodSummary[row.key])}
+                              </TableCell>
+                            ))}
+                            <TableCell className="text-right font-mono">
+                              {comparisonLoading ? '…' : formatCurrency(periodChange(row.current, priorSummary[row.key]))}
+                            </TableCell>
+                          </TableRow>
                         ))}
-                        <TableHead className="text-right">Change</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      <TableRow>
-                        <TableCell className="font-medium">{taxTerminology.collectedLabel}</TableCell>
-                        <TableCell className="text-right font-mono">{formatCurrency(summary.collected)}</TableCell>
-                        {comparisonRanges.map((_, idx) => (
-                          <TableCell key={idx} className="text-right font-mono text-muted-foreground">-</TableCell>
-                        ))}
-                        <TableCell className="text-right font-mono">-</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell className="font-medium">{taxTerminology.paidLabel}</TableCell>
-                        <TableCell className="text-right font-mono">{formatCurrency(summary.paid)}</TableCell>
-                        {comparisonRanges.map((_, idx) => (
-                          <TableCell key={idx} className="text-right font-mono text-muted-foreground">-</TableCell>
-                        ))}
-                        <TableCell className="text-right font-mono">-</TableCell>
-                      </TableRow>
-                      <TableRow className="bg-muted/50 font-medium">
-                        <TableCell>{taxTerminology.netLabel}</TableCell>
-                        <TableCell className="text-right font-mono">{formatCurrency(summary.netPayable)}</TableCell>
-                        {comparisonRanges.map((_, idx) => (
-                          <TableCell key={idx} className="text-right font-mono text-muted-foreground">-</TableCell>
-                        ))}
-                        <TableCell className="text-right font-mono">-</TableCell>
-                      </TableRow>
-                    </TableBody>
-                  </Table>
-                </div>
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
                 <p className="text-xs text-muted-foreground mt-2">
-                  Note: Historical comparison data will be populated from journal entries for each period.
+                  Change is this period minus the previous period. Amounts are posted journal activity.
                 </p>
               </div>
             )}
