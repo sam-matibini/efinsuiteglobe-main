@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Save, X, Send, DollarSign, FileText, User, Percent, Lock, CalendarIcon, Heart, CheckCircle } from 'lucide-react';
+import { Save, X, Send, DollarSign, FileText, User, Percent, Lock, CalendarIcon, Heart, CheckCircle, Plus, Trash2 } from 'lucide-react';
 import { Calendar as CalendarPicker } from '@/components/ui/calendar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -56,6 +56,8 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { parseLocalDate } from '@/lib/utils';
 import { isBankTransactionLocked } from '@/lib/bankTransactionLock';
+import { readStoredSplits, roundMoney, splitRemainder, splitsFromJournalLines, validateBankSplits, writeStoredSplits, type BankGlSplit } from '@/lib/bankTransactionSplit';
+import { supabase } from '@/integrations/supabase/client';
 
 interface EditTransactionDialogProps {
   open: boolean;
@@ -203,6 +205,8 @@ export function EditTransactionDialog({
   const [memo, setMemo] = useState('');
   const [glAccountId, setGlAccountId] = useState('');
   const [, setGlAccountName] = useState('');
+  const [splitEnabled, setSplitEnabled] = useState(false);
+  const [splits, setSplits] = useState<BankGlSplit[]>([]);
   const [transactionType, setTransactionType] = useState<string>('');
   const [selectedTaxCode, setSelectedTaxCode] = useState<TaxCode | null>(null);
   const [taxInclusive, setTaxInclusive] = useState(false);
@@ -230,34 +234,91 @@ export function EditTransactionDialog({
   }, [transaction, resolvedTaxCode, taxInclusive]);
 
   useEffect(() => {
-    if (transaction) {
-      setDescription(transaction.description || '');
-      setPayeePayor(transaction.payee_payor || '');
-      setReference(transaction.reference || '');
-      setCategory(transaction.category || '');
-      setMemo(transaction.memo || '');
-      setGlAccountId(transaction.gl_account_id || '');
-      setTransactionType(transaction.transaction_type || 'withdrawal');
-      setSelectedTaxCode(null);
-      setTaxInclusive(false);
-      setLinkedCustomerId(transaction.customer_id || '');
-      setDepartmentId((transaction as any).department_id ?? null);
-      // Initialize date
-      setTransactionDate(transaction.transaction_date ? parseLocalDate(transaction.transaction_date) : undefined);
+    if (!transaction) return;
+    setDescription(transaction.description || '');
+    setPayeePayor(transaction.payee_payor || '');
+    setReference(transaction.reference || '');
+    setCategory(transaction.category || '');
+    setMemo(transaction.memo || '');
+    setGlAccountId(transaction.gl_account_id || '');
+    setTransactionType(transaction.transaction_type || 'withdrawal');
+    setSelectedTaxCode(null);
+    setTaxInclusive(false);
+    setLinkedCustomerId(transaction.customer_id || '');
+    setDepartmentId((transaction as any).department_id ?? null);
+    setTransactionDate(transaction.transaction_date ? parseLocalDate(transaction.transaction_date) : undefined);
+
+    const stored = readStoredSplits(transaction.id);
+    if (!transaction.journal_entry_id) {
+      setSplitEnabled(stored.length >= 2);
+      setSplits(stored.length >= 2 ? stored : []);
+      return;
     }
+
+    let cancelled = false;
+    supabase
+      .from('journal_entry_lines')
+      .select('id, account_id, debit, credit, description')
+      .eq('journal_entry_id', transaction.journal_entry_id)
+      .then(({ data }) => {
+        if (cancelled) return;
+        const posted = splitsFromJournalLines(data || [], transaction.transaction_type);
+        if (posted.length >= 2) {
+          setSplitEnabled(true);
+          setSplits(posted);
+          writeStoredSplits(transaction.id, posted);
+        } else if (stored.length >= 2) {
+          setSplitEnabled(true);
+          setSplits(stored);
+        } else {
+          setSplitEnabled(false);
+          setSplits([]);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [transaction]);
 
+  const bankAmount = transaction ? Math.abs(Number(transaction.amount)) : 0;
+  const postedType = transaction?.transaction_type || 'withdrawal';
+  const separateTax = postedType !== 'transfer' && !!selectedTaxCode && (taxCalculation?.taxAmount ?? 0) > 0;
+  const allocateTotal = separateTax && taxCalculation ? roundMoney(taxCalculation.subtotal) : bankAmount;
+  const splitError = splitEnabled ? validateBankSplits(allocateTotal, splits) : null;
+  const unallocated = splitRemainder(allocateTotal, splits);
+
+  const updateSplit = (id: string, patch: Partial<BankGlSplit>) => {
+    setSplits((current) => current.map((line) => (line.id === id ? { ...line, ...patch } : line)));
+  };
+
+  const enableSplit = (on: boolean) => {
+    setSplitEnabled(on);
+    if (on && splits.length < 2) {
+      setSplits([
+        { id: crypto.randomUUID(), accountId: glAccountId, amount: allocateTotal, memo: '' },
+        { id: crypto.randomUUID(), accountId: '', amount: 0, memo: 'Bank charges' },
+      ]);
+    }
+    if (!on) setSplits([]);
+  };
+
   const handleSave = () => {
+    if (!transaction) return;
+    const activeSplits = splitEnabled ? splits : [];
+    writeStoredSplits(transaction.id, activeSplits);
+    const primaryAccount = splitEnabled
+      ? (splits.find((line) => line.accountId)?.accountId || '')
+      : glAccountId;
     onSave({
-      id: transaction?.id,
+      id: transaction.id,
       description,
       payee_payor: payeePayor || null,
       reference: reference || null,
       category: category || null,
       memo: memo || null,
-      gl_account_id: glAccountId || null,
+      gl_account_id: primaryAccount || null,
       transaction_type: transactionType as 'deposit' | 'withdrawal' | 'transfer',
-      transaction_date: transactionDate ? format(transactionDate, 'yyyy-MM-dd') : transaction?.transaction_date,
+      transaction_date: transactionDate ? format(transactionDate, 'yyyy-MM-dd') : transaction.transaction_date,
       customer_id: linkedCustomerId || null,
       department_id: departmentId,
     } as any);
@@ -266,10 +327,17 @@ export function EditTransactionDialog({
   };
 
   const handlePostToGL = async () => {
-    if (!transaction || !glAccountId || !organization?.id) {
+    if (!transaction || !organization?.id) return;
+    if (splitEnabled) {
+      if (splitError) {
+        toast.error(splitError);
+        return;
+      }
+    } else if (!glAccountId) {
       toast.error('Please select a GL account first');
       return;
     }
+    const primaryAccount = splitEnabled ? splits[0].accountId : glAccountId;
 
     // Persist customer_id before posting
     if (linkedCustomerId !== (transaction.customer_id || '')) {
@@ -277,21 +345,26 @@ export function EditTransactionDialog({
     }
 
     try {
+      const splitTransfer = splitEnabled && transaction.transaction_type === 'transfer';
+      writeStoredSplits(transaction.id, splitEnabled ? splits : []);
       await postToGL.mutateAsync({
         transactionId: transaction.id,
         bankAccountId: transaction.bank_account_id,
-        glAccountId,
+        glAccountId: primaryAccount,
         organizationId: organization.id,
-        amount: taxCalculation?.subtotal ?? Math.abs(Number(transaction.amount)),
+        amount: splitEnabled ? allocateTotal : (taxCalculation?.subtotal ?? bankAmount),
         transactionType: transaction.transaction_type,
         description: transaction.description,
         transactionDate: transaction.transaction_date,
         category: category || undefined,
         payeePayor: payeePayor || undefined,
         reference: reference || undefined,
-        taxCode: resolvedTaxCode || undefined,
-        taxAmount: taxCalculation?.taxAmount,
-        taxBreakdown: taxCalculation?.taxBreakdown,
+        taxCode: splitTransfer ? undefined : (resolvedTaxCode || undefined),
+        taxAmount: splitTransfer ? undefined : taxCalculation?.taxAmount,
+        taxBreakdown: splitTransfer ? undefined : taxCalculation?.taxBreakdown,
+        splits: splitEnabled
+          ? splits.map(({ accountId, amount, memo: lineMemo }) => ({ accountId, amount, memo: lineMemo }))
+          : undefined,
         dimensions: departmentId ? { department_id: departmentId } : undefined,
       });
 
@@ -362,7 +435,7 @@ export function EditTransactionDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl max-h-[90vh]">
+      <DialogContent className={cn('max-h-[90vh]', splitEnabled ? 'max-w-2xl' : 'max-w-xl')}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             {isReconciled ? 'View Transaction' : 'Edit Transaction'}
@@ -605,21 +678,109 @@ export function EditTransactionDialog({
             </div>
 
             <div>
-              <Label>GL Account for Posting</Label>
-              <div className="mt-1.5">
-                <SearchableGLAccountSelect
-                  value={glAccountId}
-                  onValueChange={(id, acc) => {
-                    setGlAccountId(id);
-                    if (acc) setGlAccountName(acc.name);
-                  }}
-                  placeholder="Search and select GL account..."
-                  disabled={isReconciled}
-                />
+              <div className="flex items-center justify-between gap-3">
+                <Label>GL Account for Posting</Label>
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="split-gl" className="text-sm font-normal">Split this transaction</Label>
+                  <Switch
+                    id="split-gl"
+                    checked={splitEnabled}
+                    onCheckedChange={enableSplit}
+                    disabled={isReconciled}
+                  />
+                </div>
               </div>
-              <p className="text-xs text-muted-foreground mt-1">
-                Select the account to post the contra entry to (e.g., Expense or Revenue account)
-              </p>
+              {!splitEnabled ? (
+                <>
+                  <div className="mt-1.5">
+                    <SearchableGLAccountSelect
+                      value={glAccountId}
+                      onValueChange={(id, acc) => {
+                        setGlAccountId(id);
+                        if (acc) setGlAccountName(acc.name);
+                      }}
+                      placeholder="Search and select GL account..."
+                      disabled={isReconciled}
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Select the account to post the contra entry to (e.g., Expense or Revenue account)
+                  </p>
+                </>
+              ) : (
+                <div className="mt-2 space-y-3 rounded-lg border p-3">
+                  <p className="text-xs text-muted-foreground">
+                    Allocate {formatCurrency(allocateTotal)} across more than one account. An ATM withdrawal can be split between the owner&apos;s withdrawal and bank charges for the fee.
+                    {separateTax
+                      ? ' Sales tax posts on its own lines, so these amounts are before tax.'
+                      : postedType === 'transfer'
+                        ? ' Split the full bank amount. A transfer does not post sales tax on a separate line.'
+                        : ''}
+                  </p>
+                  {splits.map((line, index) => (
+                    <div key={line.id} className="grid grid-cols-1 items-start gap-2 sm:grid-cols-[minmax(0,1.4fr)_6.5rem_minmax(0,1fr)_auto]">
+                      <SearchableGLAccountSelect
+                        value={line.accountId}
+                        onValueChange={(id, acc) => {
+                          updateSplit(line.id, { accountId: id });
+                          if (index === 0) {
+                            setGlAccountId(id);
+                            if (acc) setGlAccountName(acc.name);
+                          }
+                        }}
+                        placeholder="GL account"
+                        disabled={isReconciled}
+                      />
+                      <Input
+                        type="number"
+                        inputMode="decimal"
+                        min="0"
+                        step="0.01"
+                        value={line.amount || ''}
+                        placeholder="0.00"
+                        disabled={isReconciled}
+                        aria-label={`Split amount ${index + 1}`}
+                        onChange={(e) => updateSplit(line.id, { amount: Number(e.target.value) || 0 })}
+                      />
+                      <Input
+                        value={line.memo}
+                        placeholder={index === 0 ? "Owner's withdrawal" : 'Memo'}
+                        disabled={isReconciled}
+                        aria-label={`Split memo ${index + 1}`}
+                        onChange={(e) => updateSplit(line.id, { memo: e.target.value })}
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        disabled={isReconciled || splits.length <= 2}
+                        onClick={() => setSplits((current) => current.filter((row) => row.id !== line.id))}
+                        aria-label="Remove split line"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={isReconciled}
+                      onClick={() => setSplits((current) => [
+                        ...current,
+                        { id: crypto.randomUUID(), accountId: '', amount: unallocated > 0 ? unallocated : 0, memo: '' },
+                      ])}
+                    >
+                      <Plus className="mr-1.5 h-3.5 w-3.5" />
+                      Add account
+                    </Button>
+                    <p className={cn('text-xs', splitError ? 'text-destructive' : 'text-muted-foreground')}>
+                      {splitError || `Fully allocated ${formatCurrency(allocateTotal)}`}
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div>
@@ -733,7 +894,7 @@ export function EditTransactionDialog({
               </Button>
               <Button 
                 onClick={handlePostToGL} 
-                disabled={!glAccountId || postToGL.isPending}
+                disabled={postToGL.isPending || (splitEnabled ? !!splitError : !glAccountId)}
               >
                 <Send className="w-4 h-4 mr-2" />
                 {postToGL.isPending ? 'Posting...' : 'Save & Post to GL'}

@@ -4,6 +4,8 @@ import { createJournalEntry } from './useJournalEntryCreation';
 import { allowUnreconciledBankUpdate } from '@/lib/bankTransactionLock';
 import { TaxCode } from './useSalesTax';
 import { ensurePersistedTaxCode } from '@/lib/persistTaxCode';
+import { roundMoney, type BankGlSplit } from '@/lib/bankTransactionSplit';
+import { reverseLinkedJournalEntry } from './useGLPropagation';
 import { toast } from 'sonner';
 import { JournalEntryLineDimensions } from './useJournalEntryCreation';
 import { 
@@ -39,6 +41,7 @@ export interface PostTransactionToGLParams {
   taxAmount?: number;
   // Split tax breakdown for GST+PST provinces
   taxBreakdown?: TaxBreakdownItem[];
+  splits?: Pick<BankGlSplit, 'accountId' | 'amount' | 'memo'>[];
   // Dimension support
   dimensions?: JournalEntryLineDimensions;
 }
@@ -67,8 +70,20 @@ export function usePostTransactionToGL() {
         taxCode,
         taxAmount,
         taxBreakdown,
+        splits,
         dimensions,
       } = params;
+
+      const splitLines = (splits || []).filter((line) => line.accountId && Number(line.amount) > 0);
+      if (splitLines.length >= 2) {
+        const splitTotal = roundMoney(splitLines.reduce((sum, line) => sum + Number(line.amount), 0));
+        if (Math.abs(splitTotal - roundMoney(amount)) >= 0.01) {
+          throw new Error('Split amounts must equal the amount posted to the ledger.');
+        }
+      }
+      const offsetLines = splitLines.length >= 2
+        ? splitLines
+        : [{ accountId: glAccountId, amount, memo: category || description }];
 
       // Get the bank account's linked GL account (the cash/bank account)
       const { data: bankAccount, error: bankError } = await supabase
@@ -111,8 +126,18 @@ export function usePostTransactionToGL() {
         throw new Error('This transaction is reconciled. Unreconcile it before posting.');
       }
 
+      let reposting = false;
       if (existingTx?.journal_entry_id) {
-        return { journalEntryId: existingTx.journal_entry_id, transactionId };
+        if (splitLines.length >= 2) {
+          await reverseLinkedJournalEntry({
+            bankTransactionId: transactionId,
+            journalEntryId: existingTx.journal_entry_id,
+            organizationId,
+          });
+          reposting = true;
+        } else {
+          return { journalEntryId: existingTx.journal_entry_id, transactionId };
+        }
       }
 
       // CRITICAL: Check if this is a credit card payment that should link to existing CC-side JE
@@ -279,16 +304,17 @@ export function usePostTransactionToGL() {
           exchange_rate: fxRate,
           ...baseDimensions,
         });
-        // Credit Income/Revenue account for subtotal (translated to base)
-        lines.push({
-          account_id: glAccountId,
-          debit: 0,
-          credit: toBase(subtotal),
-          memo: category || description,
-          currency: offsetCur,
-          exchange_rate: 1,
-          ...baseDimensions,
-        });
+        for (const split of offsetLines) {
+          lines.push({
+            account_id: split.accountId,
+            debit: 0,
+            credit: toBase(split.amount),
+            memo: split.memo?.trim() || category || description,
+            currency: offsetCur,
+            exchange_rate: 1,
+            ...baseDimensions,
+          });
+        }
         if (taxBreakdown && taxBreakdown.length > 0) {
           for (const taxItem of taxBreakdown) {
             if (taxItem.amount > 0 && taxItem.glAccountId) {
@@ -315,19 +341,33 @@ export function usePostTransactionToGL() {
           });
         }
       } else if (transactionType === 'transfer') {
-        lines.push({
-          account_id: glAccountId,
-          debit: toBase(total),
-          credit: 0,
-          memo: `Transfer out${payeeInfo}: ${description}`,
-          currency: offsetCur,
-          exchange_rate: 1,
-          ...baseDimensions,
-        });
+        if (splitLines.length >= 2) {
+          for (const split of offsetLines) {
+            lines.push({
+              account_id: split.accountId,
+              debit: toBase(split.amount),
+              credit: 0,
+              memo: split.memo?.trim() || `Transfer out${payeeInfo}: ${description}`,
+              currency: offsetCur,
+              exchange_rate: 1,
+              ...baseDimensions,
+            });
+          }
+        } else {
+          lines.push({
+            account_id: glAccountId,
+            debit: toBase(total),
+            credit: 0,
+            memo: `Transfer out${payeeInfo}: ${description}`,
+            currency: offsetCur,
+            exchange_rate: 1,
+            ...baseDimensions,
+          });
+        }
         lines.push({
           account_id: bankAccount.gl_account_id,
           debit: 0,
-          credit: total,
+          credit: splitLines.length >= 2 ? amount : total,
           memo: `Transfer${payeeInfo}: ${description}`,
           currency: bankCur,
           exchange_rate: fxRate,
@@ -335,15 +375,17 @@ export function usePostTransactionToGL() {
         });
       } else {
         // Withdrawal
-        lines.push({
-          account_id: glAccountId,
-          debit: toBase(subtotal),
-          credit: 0,
-          memo: category || description,
-          currency: offsetCur,
-          exchange_rate: 1,
-          ...baseDimensions,
-        });
+        for (const split of offsetLines) {
+          lines.push({
+            account_id: split.accountId,
+            debit: toBase(split.amount),
+            credit: 0,
+            memo: split.memo?.trim() || category || description,
+            currency: offsetCur,
+            exchange_rate: 1,
+            ...baseDimensions,
+          });
+        }
         if (taxBreakdown && taxBreakdown.length > 0) {
           const gstLine = taxBreakdown.find(t => t.code === 'GST' || /^GST$/i.test(t.code));
           for (const taxItem of taxBreakdown) {
@@ -425,7 +467,10 @@ export function usePostTransactionToGL() {
             : 'Payment';
 
       // IMPORTANT: journal_entries.reference is unique per org; never reuse imported bank references here.
-      const journalReference = `BANK-${transactionId.toUpperCase()}`;
+      // A re-post keeps the reversed entry's BANK- id, so the replacement needs its own reference.
+      const journalReference = reposting
+        ? `BANK-${transactionId.toUpperCase()}-R${Date.now().toString(36).toUpperCase()}`
+        : `BANK-${transactionId.toUpperCase()}`;
       const bankRefInfo = reference ? ` (Bank Ref: ${reference})` : '';
 
       try {
@@ -467,7 +512,7 @@ export function usePostTransactionToGL() {
       // Update bank transaction with the journal entry ID + persist tax data for audit
       const txUpdate: Record<string, unknown> = {
         journal_entry_id: journalEntryId,
-        gl_account_id: glAccountId,
+        gl_account_id: splitLines.length >= 2 ? splitLines[0].accountId : glAccountId,
         status: 'matched',
       };
       if (dimensions?.department_id) txUpdate.department_id = dimensions.department_id;
@@ -498,7 +543,7 @@ export function usePostTransactionToGL() {
         .eq('id', bankAccountId)
         .single();
 
-      if (currentBalance) {
+      if (!reposting && currentBalance) {
         await supabase
           .from('bank_accounts')
           .update({ 

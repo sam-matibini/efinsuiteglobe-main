@@ -5,6 +5,7 @@ import { createJournalEntry } from './useJournalEntryCreation';
 import { reverseLinkedJournalEntry, recalculateAndInvalidate } from './useGLPropagation';
 import { repairLegacyPlaidRow } from '@/lib/plaidBankAmount';
 import { allowUnreconciledBankUpdate } from '@/lib/bankTransactionLock';
+import { readStoredSplits, validateBankSplits } from '@/lib/bankTransactionSplit';
 
 export interface BankTransaction {
   id: string;
@@ -129,8 +130,14 @@ export function useBankTransactions(bankAccountId?: string) {
         (k) => (updates as any)[k] !== undefined && (updates as any)[k] !== (existing as any)[k]
       );
 
-      // Simple path: not posted, or only non-GL fields changed.
-      if (!linkedJEId || !glFieldChanged) {
+      const storedSplits = readStoredSplits(id);
+      const fullAmount = Math.abs(Number(updates.amount !== undefined ? updates.amount : existing.amount));
+      const splitPost = validateBankSplits(fullAmount, storedSplits) === null;
+      // An unfinished split stays on this device until Save & Post. Do not reverse the ledger for it.
+      const draftSplit = storedSplits.length >= 2 && !splitPost;
+
+      // Simple path: not posted, only non-GL fields changed, or a split that is not ready to post.
+      if (!linkedJEId || !glFieldChanged || draftSplit) {
         const { data, error } = await supabase
           .from('bank_transactions')
           .update(allowUnreconciledBankUpdate(updates, existing))
@@ -168,17 +175,24 @@ export function useBankTransactions(bankAccountId?: string) {
 
       // Re-post if we have the accounts we need.
       const glAcct = (updated as any).gl_account_id as string | null;
-      if (orgId && bankGLAccountId && glAcct) {
-        const amount = Math.abs(Number(updated.amount));
+      if (orgId && bankGLAccountId && (glAcct || splitPost)) {
+        const amount = fullAmount;
         const isDeposit = updated.transaction_type === 'deposit';
         const payeeInfo = updated.payee_payor ? ` - ${updated.payee_payor}` : '';
+        const offsets = splitPost
+          ? storedSplits.map((line) => ({
+              account_id: line.accountId,
+              amount: line.amount,
+              memo: line.memo?.trim() || updated.category || updated.description,
+            }))
+          : [{ account_id: glAcct as string, amount, memo: updated.category || updated.description }];
         const lines = isDeposit
           ? [
               { account_id: bankGLAccountId, debit: amount, credit: 0, memo: `Deposit${payeeInfo}: ${updated.description}` },
-              { account_id: glAcct, debit: 0, credit: amount, memo: updated.category || updated.description },
+              ...offsets.map((line) => ({ account_id: line.account_id, debit: 0, credit: line.amount, memo: line.memo })),
             ]
           : [
-              { account_id: glAcct, debit: amount, credit: 0, memo: updated.category || updated.description },
+              ...offsets.map((line) => ({ account_id: line.account_id, debit: line.amount, credit: 0, memo: line.memo })),
               { account_id: bankGLAccountId, debit: 0, credit: amount, memo: `Payment${payeeInfo}: ${updated.description}` },
             ];
         try {
