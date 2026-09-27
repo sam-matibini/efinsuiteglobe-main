@@ -128,21 +128,17 @@ export function usePostTransactionToGL() {
 
       let reposting = false;
       if (existingTx?.journal_entry_id) {
-        if (splitLines.length >= 2) {
-          await reverseLinkedJournalEntry({
-            bankTransactionId: transactionId,
-            journalEntryId: existingTx.journal_entry_id,
-            organizationId,
-          });
-          reposting = true;
-        } else {
-          return { journalEntryId: existingTx.journal_entry_id, transactionId };
-        }
+        await reverseLinkedJournalEntry({
+          bankTransactionId: transactionId,
+          journalEntryId: existingTx.journal_entry_id,
+          organizationId,
+        });
+        reposting = true;
       }
 
-      // CRITICAL: Check if this is a credit card payment that should link to existing CC-side JE
-      // This prevents double-posting when a CC payment appears on both bank and CC statements
-      if (transactionType === 'withdrawal' || transactionType === 'transfer') {
+      // A re-post uses the account the user just chose. Skip the automatic
+      // match, which would keep the previous journal entry.
+      if (!reposting && (transactionType === 'withdrawal' || transactionType === 'transfer')) {
         const isCCPayment = await isCreditCardGLAccount(glAccountId);
         
         if (isCCPayment) {
@@ -184,9 +180,8 @@ export function usePostTransactionToGL() {
         }
       }
 
-      // CRITICAL: Check if this targets another bank account's GL (inter-account transfer)
-      // This prevents double-posting when the same transfer appears on both bank statements
-      {
+      // A re-post uses the account the user just chose instead of linking to an older transfer.
+      if (!reposting) {
         const bankCheck = await isBankGLAccount(glAccountId);
         if (bankCheck.isBankAccount && bankCheck.bankAccountId) {
           const existingTransfer = await findExistingBankTransferJE(

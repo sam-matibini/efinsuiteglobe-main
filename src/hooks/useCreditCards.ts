@@ -762,7 +762,7 @@ export function useCreditCardTransactions(creditCardId?: string, glAccountId?: s
             organizationId: orgId,
             date: updated.transaction_date,
             description: `CC ${label}${payeeInfo}: ${updated.description}`,
-            reference: updated.reference || `CC-${id.slice(0, 8).toUpperCase()}`,
+            reference: `CC-${id.slice(0, 8).toUpperCase()}-R${Date.now().toString(36).toUpperCase()}`,
             lines,
             status: 'posted',
           });

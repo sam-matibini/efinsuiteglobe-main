@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Save, X, Send, Calendar, DollarSign, FileText, User, Percent, Plus, Building2, Users, Lock, CalendarIcon } from 'lucide-react';
 import { Calendar as CalendarPicker } from '@/components/ui/calendar';
 import { Button } from '@/components/ui/button';
@@ -51,6 +52,7 @@ import { TaxCode, useTaxCodes } from '@/hooks/useSalesTax';
 import { useAccounts } from '@/hooks/useAccounts';
 import { withResolvedTaxAccounts } from '@/lib/taxGlAccounts';
 import { isBankTransactionLocked } from '@/lib/bankTransactionLock';
+import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { parseLocalDate } from '@/lib/utils';
@@ -82,6 +84,7 @@ export function EditCreditCardTransactionDialog({
   onSave,
 }: EditCreditCardTransactionDialogProps) {
   const { organization } = useCurrentOrganization();
+  const queryClient = useQueryClient();
   const postToGL = usePostCreditCardTransactionToGL();
   const { vendors } = useVendors();
   const { customers } = useCustomers();
@@ -93,6 +96,7 @@ export function EditCreditCardTransactionDialog({
   const [memo, setMemo] = useState('');
   const [glAccountId, setGlAccountId] = useState('');
   const [glAccountName, setGlAccountName] = useState('');
+  const [offsetLineIds, setOffsetLineIds] = useState<string[]>([]);
   const [transactionType, setTransactionType] = useState<string>('');
   const [selectedTaxCode, setSelectedTaxCode] = useState<TaxCode | null>(null);
   const [taxInclusive, setTaxInclusive] = useState(false);
@@ -189,7 +193,65 @@ export function EditCreditCardTransactionDialog({
     }
   }, [transaction]);
 
+  const journalSource = !!transaction && 'source' in transaction && transaction.source === 'journal_entry';
+
+  useEffect(() => {
+    if (!transaction || !journalSource || !transaction.journal_entry_id) {
+      setOffsetLineIds([]);
+      return;
+    }
+    const cardAccountId = transaction.gl_account_id;
+    let cancelled = false;
+    supabase
+      .from('journal_entry_lines')
+      .select('id, account_id, debit, credit')
+      .eq('journal_entry_id', transaction.journal_entry_id)
+      .then(({ data }) => {
+        if (cancelled) return;
+        const offsets = (data || []).filter((line) => line.account_id && line.account_id !== cardAccountId);
+        const primary = [...offsets].sort(
+          (a, b) => (Number(b.debit) + Number(b.credit)) - (Number(a.debit) + Number(a.credit)),
+        )[0];
+        if (!primary) {
+          setOffsetLineIds([]);
+          return;
+        }
+        setOffsetLineIds(offsets.filter((line) => line.account_id === primary.account_id).map((line) => line.id));
+        setGlAccountId(primary.account_id);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [transaction, journalSource]);
+
+  const moveJournalOffset = async () => {
+    if (!transaction?.journal_entry_id || offsetLineIds.length === 0 || !glAccountId) {
+      toast.error('Choose the GL account that should replace the other side of this entry.');
+      return false;
+    }
+    const { error } = await supabase
+      .from('journal_entry_lines')
+      .update({ account_id: glAccountId })
+      .in('id', offsetLineIds);
+    if (error) {
+      toast.error('Could not move this entry to the new GL account.');
+      return false;
+    }
+    queryClient.invalidateQueries({ queryKey: ['credit-card-transactions'] });
+    queryClient.invalidateQueries({ queryKey: ['journal-entries'] });
+    queryClient.invalidateQueries({ queryKey: ['accounts'] });
+    return true;
+  };
+
   const handleSave = async () => {
+    if (journalSource) {
+      const moved = await moveJournalOffset();
+      if (moved) {
+        toast.success('Journal entry posted to the new GL account');
+        onOpenChange(false);
+      }
+      return;
+    }
     const updates = {
       id: transaction?.id,
       description,
@@ -211,6 +273,14 @@ export function EditCreditCardTransactionDialog({
   };
 
   const handlePostToGL = async () => {
+    if (journalSource) {
+      const moved = await moveJournalOffset();
+      if (moved) {
+        toast.success('Journal entry posted to the new GL account');
+        onOpenChange(false);
+      }
+      return;
+    }
     if (!transaction || !glAccountId || !organization?.id) {
       toast.error('Please select a GL account first');
       return;
@@ -278,10 +348,8 @@ export function EditCreditCardTransactionDialog({
   const isPosted = !!transaction.journal_entry_id;
   const isReconciled = isBankTransactionLocked(transaction);
   const isCharge = transaction.transaction_type === 'charge' || transaction.transaction_type === 'fee' || transaction.transaction_type === 'interest';
-  // Check if this is a journal entry source transaction (e.g., payment from bank account)
-  const isJournalEntrySource = 'source' in transaction && transaction.source === 'journal_entry';
-  // If it's a JE source, treat it as locked since the source of truth is the journal entry
-  const isLocked = isReconciled || isJournalEntrySource;
+  const isJournalEntrySource = journalSource;
+  const isLocked = isReconciled;
   const selectedVendor = vendors.find(v => v.id === selectedVendorId);
   const selectedCustomer = customers.find(c => c.id === selectedCustomerId);
 
@@ -291,7 +359,7 @@ export function EditCreditCardTransactionDialog({
         <DialogContent className="max-w-2xl max-h-[90vh]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              {isLocked ? 'View Credit Card Transaction' : 'Edit Credit Card Transaction'}
+              {isReconciled ? 'View Credit Card Transaction' : 'Edit Credit Card Transaction'}
               {isReconciled && (
                 <Badge variant="secondary" className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
                   <Lock className="w-3 h-3 mr-1" />
@@ -300,7 +368,6 @@ export function EditCreditCardTransactionDialog({
               )}
               {isJournalEntrySource && !isReconciled && (
                 <Badge variant="secondary" className="bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
-                  <Lock className="w-3 h-3 mr-1" />
                   Bank Payment
                 </Badge>
               )}
@@ -313,9 +380,7 @@ export function EditCreditCardTransactionDialog({
             <DialogDescription>
               {isReconciled 
                 ? 'This transaction has been reconciled and is locked. To edit, unreconcile the transaction first.'
-                : isJournalEntrySource
-                ? 'This transaction originates from a bank account payment. To modify it, edit the original bank transaction.'
-                : 'Update transaction details, categorize, and optionally post to the General Ledger.'}
+                : 'Update the category and GL account, then post again. Posting does not lock the transaction.'}
             </DialogDescription>
           </DialogHeader>
 
@@ -335,10 +400,8 @@ export function EditCreditCardTransactionDialog({
               {/* Journal Entry Source Warning */}
               {isJournalEntrySource && !isReconciled && (
                 <Alert className="border-blue-500 bg-blue-50 dark:bg-blue-950/20">
-                  <Lock className="h-4 w-4 text-blue-600" />
-                  <AlertDescription className="text-blue-800 dark:text-blue-300">
-                    <strong>Bank Payment:</strong> This payment was posted from a bank account transaction. 
-                    The source of truth is the original journal entry. During reconciliation, this will be matched with the corresponding payment on your credit card statement.
+                  <AlertDescription className="text-blue-800 dark:text-blue-300 text-sm">
+                    This payment is already on the ledger. Choose another GL account and save to move the other side of the journal entry. The card line stays in place.
                   </AlertDescription>
                 </Alert>
               )}
@@ -455,8 +518,7 @@ export function EditCreditCardTransactionDialog({
                 <Alert>
                   <FileText className="h-4 w-4" />
                   <AlertDescription>
-                    This transaction has already been posted to the General Ledger. 
-                    You can still update the details, but posting again will create a new journal entry.
+                    This transaction is already posted. Choose another GL account and use Save & Post to reverse the old entry and post the new one.
                   </AlertDescription>
                 </Alert>
               )}

@@ -200,7 +200,7 @@ export function useBankTransactions(bankAccountId?: string) {
             organizationId: orgId,
             date: updated.transaction_date,
             description: `${isDeposit ? 'Deposit' : 'Payment'}${payeeInfo}: ${updated.description}`,
-            reference: updated.reference || `BANK-${id.slice(0, 8).toUpperCase()}`,
+            reference: `BANK-${id.slice(0, 8).toUpperCase()}-R${Date.now().toString(36).toUpperCase()}`,
             lines,
             status: 'posted',
           });

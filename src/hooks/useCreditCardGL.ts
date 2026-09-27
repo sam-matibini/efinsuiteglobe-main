@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { createJournalEntry } from './useJournalEntryCreation';
 import { allowUnreconciledBankUpdate } from '@/lib/bankTransactionLock';
+import { reverseLinkedJournalEntry } from './useGLPropagation';
 import { TaxCode } from './useSalesTax';
 import { ensurePersistedTaxCode } from '@/lib/persistTaxCode';
 import { toast } from 'sonner';
@@ -112,8 +113,14 @@ export function usePostCreditCardTransactionToGL() {
         throw new Error('This transaction is reconciled. Unreconcile it before posting.');
       }
 
+      let reposting = false;
       if (existingTx?.journal_entry_id) {
-        return { journalEntryId: existingTx.journal_entry_id, transactionId };
+        await reverseLinkedJournalEntry({
+          creditCardTransactionId: transactionId,
+          journalEntryId: existingTx.journal_entry_id,
+          organizationId,
+        });
+        reposting = true;
       }
 
       // Calculate amounts for journal entries
@@ -193,10 +200,9 @@ export function usePostCreditCardTransactionToGL() {
           ...baseDimensions,
         });
       } else if (transactionType === 'payment') {
-        // REVERSE DEDUPE: if the bank side already posted a withdrawal that debited
-        // this CC liability for the same amount within ±7 days, link to that JE
-        // instead of creating a duplicate.
-        const bankCandidates = await findBankPaymentJEForCC(
+        // First post only: link to the bank withdrawal when one already exists.
+        // A re-post keeps the account selected in the form.
+        const bankCandidates = reposting ? [] : await findBankPaymentJEForCC(
           creditCard.gl_account_id,
           grossAmount,
           organizationId,
@@ -265,8 +271,10 @@ export function usePostCreditCardTransactionToGL() {
         transactionType === 'credit' ? 'Credit' :
         transactionType === 'fee' ? 'Fee' : 'Interest';
 
-      // IMPORTANT: journal_entries.reference is unique per org
-      const journalReference = `CC-${transactionId.slice(0, 8).toUpperCase()}`;
+      // A re-post keeps the reversed entry's CC- reference, so the replacement needs its own.
+      const journalReference = reposting
+        ? `CC-${transactionId.slice(0, 8).toUpperCase()}-R${Date.now().toString(36).toUpperCase()}`
+        : `CC-${transactionId.slice(0, 8).toUpperCase()}`;
       const ccRefInfo = reference ? ` (Ref: ${reference})` : '';
 
       try {

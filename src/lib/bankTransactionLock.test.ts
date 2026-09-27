@@ -19,17 +19,23 @@ describe('bank transaction lock', () => {
     })).toBe(false);
   });
 
-  it('locks a cleared transaction after it is posted or assigned a GL account', () => {
+  it('keeps a posted or rule-categorized transaction editable', () => {
     expect(isBankTransactionLocked({
       status: 'unmatched',
       is_cleared: true,
       gl_account_id: 'acct-1',
-    })).toBe(true);
+    })).toBe(false);
     expect(isBankTransactionLocked({
       status: 'matched',
       is_cleared: true,
       journal_entry_id: 'je-1',
-    })).toBe(true);
+      gl_account_id: 'acct-1',
+    })).toBe(false);
+    expect(isBankTransactionLocked({
+      status: 'pending',
+      is_cleared: false,
+      journal_entry_id: 'je-1',
+    })).toBe(false);
   });
 
   it('locks an explicit reconciliation even when the category is empty', () => {

@@ -1,7 +1,9 @@
 /**
- * A downloaded bank line is often marked cleared because the bank has posted
- * it. That is not a reconciliation. Keep it editable until it is categorized
- * to a GL account, posted, or explicitly reconciled.
+ * A downloaded line is often marked cleared because the bank has posted it,
+ * and a transaction rule may already have posted it to the ledger. Neither
+ * of those is a reconciliation. The line stays editable so it can be
+ * re-categorized and posted to another GL account. Only an explicit
+ * reconciliation locks it.
  */
 
 const PLACEHOLDER_CATEGORIES = new Set(['', 'uncategorized', 'unclassified']);
@@ -18,9 +20,7 @@ export function isBankTransactionLocked(tx: {
   gl_account_id?: string | null;
   journal_entry_id?: string | null;
 }): boolean {
-  if (tx.status === 'reconciled') return true;
-  if (!tx.is_cleared) return false;
-  return Boolean(tx.journal_entry_id || tx.gl_account_id);
+  return tx.status === 'reconciled';
 }
 
 /**
