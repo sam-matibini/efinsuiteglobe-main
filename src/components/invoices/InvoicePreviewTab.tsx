@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { format } from 'date-fns';
 import { parseLocalDate } from '@/lib/utils';
 import JsBarcode from 'jsbarcode';
+import { notesDistinctFromPayment } from '@/lib/invoiceDocumentText';
 
 interface LineItem {
   description?: string;
@@ -190,6 +191,7 @@ export function InvoicePreviewTab({
 }: InvoicePreviewTabProps) {
   const barcodeRef = useRef<SVGSVGElement>(null);
   const isBillOfSale = documentTitle?.toLowerCase().includes('bill of sale');
+  const visibleNotes = notesDistinctFromPayment(notes, showPaymentInstructions ? paymentInstructions : undefined);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat(locale, {
@@ -458,10 +460,10 @@ export function InvoicePreviewTab({
                     {showLineNumbers && (
                       <td className="p-2 text-xs text-center text-muted-foreground">{index + 1}</td>
                     )}
-                    <td className="p-2 text-xs">
-                      {line.description || '-'}
+                    <td className="p-2 text-xs whitespace-pre-wrap break-words max-w-0">
+                      <p className="whitespace-pre-wrap break-words">{line.description || '-'}</p>
                       {line.notes && (
-                        <p className="text-[10px] italic text-muted-foreground mt-0.5">{line.notes}</p>
+                        <p className="text-[10px] italic text-muted-foreground mt-0.5 whitespace-pre-wrap break-words">{line.notes}</p>
                       )}
                     </td>
                     {showQuantityColumn && (
@@ -594,12 +596,12 @@ export function InvoicePreviewTab({
         )}
 
         {/* Notes & Terms */}
-        {(notes || terms) && (
+        {(visibleNotes || terms) && (
           <div className="grid grid-cols-2 gap-4 text-xs mb-4">
-            {notes && (
+            {visibleNotes && (
               <div>
                 <p className="font-semibold text-muted-foreground mb-1">Notes</p>
-                <p className="text-muted-foreground">{notes}</p>
+                <p className="text-muted-foreground whitespace-pre-wrap break-words">{visibleNotes}</p>
               </div>
             )}
             {terms && (

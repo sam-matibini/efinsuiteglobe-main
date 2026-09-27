@@ -248,30 +248,31 @@ function renderLineItemsTable(
       y = margins.top + 10;
     }
 
-    // Truncate long descriptions
-    const description = line.description.length > 45
-      ? line.description.substring(0, 42) + '...'
-      : line.description;
-
-    doc.text(description, margins.left + 2, y);
+    const descriptionWidth = 70;
+    const descriptionLines = doc.splitTextToSize(line.description, descriptionWidth) as string[];
+    descriptionLines.forEach((part, lineIndex) => {
+      doc.text(part, margins.left + 2, y + lineIndex * 3.5);
+    });
     doc.text(line.quantity.toString(), margins.left + 90, y, { align: 'center' });
     doc.text(formatPrintCurrency(line.unitPrice, localization.currency), margins.left + 115, y, { align: 'right' });
     doc.text(line.taxRate ? `${line.taxRate}%` : '-', margins.left + 140, y, { align: 'right' });
     doc.text(formatPrintCurrency(line.amount, localization.currency), pageWidth - margins.right - 2, y, { align: 'right' });
 
-    y += 7;
+    y += Math.max(descriptionLines.length, 1) * 3.5 + 2;
 
-    // Render line notes if present
     if (line.notes) {
       doc.setFontSize(7);
       doc.setFont('helvetica', 'italic');
       doc.setTextColor(120, 120, 120);
-      const noteText = line.notes.length > 80 ? line.notes.substring(0, 77) + '...' : line.notes;
-      doc.text(noteText, margins.left + 4, y);
+      const noteLines = doc.splitTextToSize(line.notes, _contentWidth - 4) as string[];
+      noteLines.forEach((part) => {
+        doc.text(part, margins.left + 4, y);
+        y += 3.5;
+      });
       doc.setTextColor(0, 0, 0);
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(8);
-      y += 5;
+      y += 1.5;
     }
   }
 

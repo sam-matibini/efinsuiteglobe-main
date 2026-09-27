@@ -1,4 +1,9 @@
 import jsPDF from 'jspdf';
+import { notesDistinctFromPayment } from './invoiceDocumentText';
+
+function wrappedPdfLines(doc: jsPDF, text: string, width: number): string[] {
+  return doc.splitTextToSize(text, Math.max(width, 24)) as string[];
+}
 
 interface CustomField {
   id: string;
@@ -459,29 +464,36 @@ async function generateBillOfSalePdf(
       doc.rect(margin, yPos - 3, contentWidth, 7, 'F');
     }
     
-    const description = line.description.length > 55 
-      ? line.description.substring(0, 52) + '...' 
-      : line.description;
-    
-    doc.text(description, margin + 3, yPos);
+    const descriptionWidth = 90;
+    const descriptionLines = wrappedPdfLines(doc, line.description, descriptionWidth);
+    descriptionLines.forEach((part, lineIndex) => {
+      doc.text(part, margin + 3, yPos + lineIndex * 3.5);
+    });
     doc.text(line.quantity.toString(), margin + 110, yPos, { align: 'center' });
     doc.text(formatCurrency(line.unitPrice), margin + 140, yPos, { align: 'right' });
     doc.setFont('helvetica', 'bold');
     doc.text(formatCurrency(line.amount), pageWidth - margin - 3, yPos, { align: 'right' });
     doc.setFont('helvetica', 'normal');
-    
-    yPos += 7;
 
-    // Render line-level notes
+    yPos += Math.max(descriptionLines.length, 1) * 3.5 + 1.5;
+
     if (line.notes && line.notes.trim()) {
       doc.setFontSize(6.5);
       doc.setFont('helvetica', 'italic');
       doc.setTextColor(mutedColor.r, mutedColor.g, mutedColor.b);
-      doc.text(line.notes.trim(), margin + 6, yPos - 2);
+      const noteLines = wrappedPdfLines(doc, line.notes.trim(), contentWidth - 6);
+      noteLines.forEach((part) => {
+        if (yPos > pageHeight - 20) {
+          doc.addPage();
+          yPos = 20;
+        }
+        doc.text(part, margin + 6, yPos);
+        yPos += 3.2;
+      });
       doc.setTextColor(0, 0, 0);
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(8);
-      yPos += 4;
+      yPos += 1;
     }
   });
 
@@ -891,34 +903,41 @@ async function generateStandardInvoicePdf(
       yPos = 20;
     }
     
-    const description = line.description.length > 50 
-      ? line.description.substring(0, 47) + '...' 
-      : line.description;
-    
     let lineX = margin + 2;
     if (showLineNums) {
       doc.text((idx + 1).toString(), lineX, yPos, { align: 'center' });
       lineX += 8;
     }
-    doc.text(description, lineX, yPos);
+    const descriptionWidth = Math.max(36, margin + 78 - lineX);
+    const descriptionLines = wrappedPdfLines(doc, line.description, descriptionWidth);
+    descriptionLines.forEach((part, lineIndex) => {
+      doc.text(part, lineX, yPos + lineIndex * 3.2);
+    });
     if (showQty) doc.text(line.quantity.toString(), margin + 85, yPos, { align: 'center' });
     if (showRate) doc.text(formatCurrency(line.unitPrice), margin + 105, yPos, { align: 'right' });
     doc.text(line.taxRate ? `${line.taxRate}%` : '-', margin + 125, yPos, { align: 'right' });
     doc.text(formatCurrency(line.amount), pageWidth - margin - 2, yPos, { align: 'right' });
-    
-    yPos += 5;
 
-    // Render line-level notes
+    yPos += Math.max(descriptionLines.length, 1) * 3.2 + 1.2;
+
     if (line.notes && line.notes.trim()) {
       doc.setFontSize(6);
       doc.setFont('helvetica', 'italic');
       doc.setTextColor(100, 100, 100);
       const noteX = showLineNums ? margin + 10 : margin + 2;
-      doc.text(line.notes.trim(), noteX, yPos);
+      const noteLines = wrappedPdfLines(doc, line.notes.trim(), pageWidth - margin - noteX);
+      noteLines.forEach((part) => {
+        if (yPos > pageHeight - 20) {
+          doc.addPage();
+          yPos = 20;
+        }
+        doc.text(part, noteX, yPos);
+        yPos += 3;
+      });
       doc.setTextColor(0, 0, 0);
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(7);
-      yPos += 4;
+      yPos += 1;
     }
   });
 
@@ -1007,7 +1026,8 @@ async function generateStandardInvoicePdf(
   }
 
   // ==================== NOTES & TERMS (Always full-width) ====================
-  if (invoice.notes) {
+  const noteText = notesDistinctFromPayment(invoice.notes, invoice.paymentInstructions);
+  if (noteText) {
     if (yPos > pageHeight - 30) {
       doc.addPage();
       yPos = 20;
@@ -1018,7 +1038,7 @@ async function generateStandardInvoicePdf(
     yPos += 4;
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7);
-    const splitNotes = doc.splitTextToSize(invoice.notes, contentWidth);
+    const splitNotes = doc.splitTextToSize(noteText, contentWidth);
     splitNotes.forEach((line: string) => {
       if (yPos > pageHeight - 20) {
         doc.addPage();
