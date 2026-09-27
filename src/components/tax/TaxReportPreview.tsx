@@ -1271,9 +1271,11 @@ export function TaxReportPreview({
                   <Input
                     type="number"
                     min={1}
-                    max={5}
                     value={comparePeriodsCount}
-                    onChange={(e) => setComparePeriodsCount(Math.min(5, Math.max(1, parseInt(e.target.value) || 1)))}
+                    onChange={(e) => {
+                      const next = parseInt(e.target.value, 10);
+                      setComparePeriodsCount(Number.isFinite(next) && next > 0 ? next : 1);
+                    }}
                   />
                 </div>
 
