@@ -401,7 +401,7 @@ export function EditCreditCardTransactionDialog({
               {isJournalEntrySource && !isReconciled && (
                 <Alert className="border-blue-500 bg-blue-50 dark:bg-blue-950/20">
                   <AlertDescription className="text-blue-800 dark:text-blue-300 text-sm">
-                    This payment is already on the ledger. Choose another GL account and save to move the other side of the journal entry. The card line stays in place.
+                    This payment is already on the ledger. Choose another GL account and save. The card line stays, and the other side of the entry uses the account you pick.
                   </AlertDescription>
                 </Alert>
               )}
@@ -518,7 +518,7 @@ export function EditCreditCardTransactionDialog({
                 <Alert>
                   <FileText className="h-4 w-4" />
                   <AlertDescription>
-                    This transaction is already posted. Choose another GL account and use Save & Post to reverse the old entry and post the new one.
+                    This transaction is already posted. Choose another GL account and save. The entry stays matched to this transaction and keeps the new account.
                   </AlertDescription>
                 </Alert>
               )}

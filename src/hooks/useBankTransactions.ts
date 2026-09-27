@@ -6,6 +6,7 @@ import { reverseLinkedJournalEntry, recalculateAndInvalidate } from './useGLProp
 import { repairLegacyPlaidRow } from '@/lib/plaidBankAmount';
 import { allowUnreconciledBankUpdate } from '@/lib/bankTransactionLock';
 import { readStoredSplits, validateBankSplits } from '@/lib/bankTransactionSplit';
+import { applyGlEditToJournalLines } from '@/lib/postedJournalEdit';
 
 export interface BankTransaction {
   id: string;
@@ -148,25 +149,59 @@ export function useBankTransactions(bankAccountId?: string) {
         return data;
       }
 
-      // Posted + GL-relevant change: reverse the linked JE, apply the update, then re-post.
-      if (orgId) {
-        try {
-          await reverseLinkedJournalEntry({
-            bankTransactionId: id,
-            journalEntryId: linkedJEId,
-            organizationId: orgId,
-          });
-        } catch (revErr) {
-          console.error('Failed to reverse prior journal entry:', revErr);
+      const nextOffset = (updates.gl_account_id as string | null | undefined) ?? (existing as any).gl_account_id;
+      const nextAmount = updates.amount !== undefined ? Math.abs(Number(updates.amount)) : null;
+      // A posted line keeps its journal entry. Change the offset account in place
+      // so the status stays matched and the new GL account remains on the row.
+      if (!splitPost && bankGLAccountId && linkedJEId) {
+        const { data: jeLines, error: lineErr } = await supabase
+          .from('journal_entry_lines')
+          .select('id, account_id, debit, credit')
+          .eq('journal_entry_id', linkedJEId);
+        if (lineErr) throw lineErr;
+        const rewritten = applyGlEditToJournalLines(
+          jeLines || [],
+          bankGLAccountId,
+          (existing as any).gl_account_id,
+          nextOffset,
+          nextAmount,
+        );
+        for (const line of rewritten) {
+          const original = (jeLines || []).find((row) => row.id === line.id);
+          if (!original) continue;
+          if (
+            original.account_id === line.account_id
+            && Number(original.debit) === line.debit
+            && Number(original.credit) === line.credit
+          ) continue;
+          const { error: lineUpdateErr } = await supabase
+            .from('journal_entry_lines')
+            .update({ account_id: line.account_id, debit: line.debit, credit: line.credit })
+            .eq('id', line.id);
+          if (lineUpdateErr) throw lineUpdateErr;
         }
+        const { data, error } = await supabase
+          .from('bank_transactions')
+          .update(allowUnreconciledBankUpdate({
+            ...updates,
+            gl_account_id: nextOffset ?? null,
+            journal_entry_id: linkedJEId,
+            status: existing.status === 'reconciled' ? 'reconciled' : 'matched',
+          }, existing))
+          .eq('id', id)
+          .select()
+          .single();
+        if (error) throw error;
+        await recalculateAndInvalidate(orgId, queryClient);
+        return data;
       }
 
       const { data: updated, error: updErr } = await supabase
         .from('bank_transactions')
         .update(allowUnreconciledBankUpdate({
           ...updates,
-          journal_entry_id: null,
-          status: 'pending',
+          journal_entry_id: linkedJEId,
+          status: existing.status === 'reconciled' ? 'reconciled' : 'matched',
         }, existing))
         .eq('id', id)
         .select('*')
@@ -196,6 +231,13 @@ export function useBankTransactions(bankAccountId?: string) {
               { account_id: bankGLAccountId, debit: 0, credit: amount, memo: `Payment${payeeInfo}: ${updated.description}` },
             ];
         try {
+          if (linkedJEId && orgId) {
+            await reverseLinkedJournalEntry({
+              bankTransactionId: id,
+              journalEntryId: linkedJEId,
+              organizationId: orgId,
+            });
+          }
           const newJEId = await createJournalEntry({
             organizationId: orgId,
             date: updated.transaction_date,

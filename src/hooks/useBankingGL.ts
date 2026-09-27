@@ -6,6 +6,7 @@ import { TaxCode } from './useSalesTax';
 import { ensurePersistedTaxCode } from '@/lib/persistTaxCode';
 import { roundMoney, type BankGlSplit } from '@/lib/bankTransactionSplit';
 import { reverseLinkedJournalEntry } from './useGLPropagation';
+import { applyGlEditToJournalLines } from '@/lib/postedJournalEdit';
 import { toast } from 'sonner';
 import { JournalEntryLineDimensions } from './useJournalEntryCreation';
 import { 
@@ -127,6 +128,37 @@ export function usePostTransactionToGL() {
       }
 
       let reposting = false;
+      if (existingTx?.journal_entry_id && splitLines.length < 2 && bankAccount.gl_account_id) {
+        const { data: jeLines, error: lineErr } = await supabase
+          .from('journal_entry_lines')
+          .select('id, account_id, debit, credit')
+          .eq('journal_entry_id', existingTx.journal_entry_id);
+        if (lineErr) throw new Error(lineErr.message);
+        const rewritten = applyGlEditToJournalLines(
+          jeLines || [],
+          bankAccount.gl_account_id,
+          null,
+          glAccountId,
+          Math.abs(amount),
+        );
+        for (const line of rewritten) {
+          const { error: lineUpdateErr } = await supabase
+            .from('journal_entry_lines')
+            .update({ account_id: line.account_id, debit: line.debit, credit: line.credit })
+            .eq('id', line.id);
+          if (lineUpdateErr) throw new Error(lineUpdateErr.message);
+        }
+        const { error: keepErr } = await supabase
+          .from('bank_transactions')
+          .update(allowUnreconciledBankUpdate({
+            journal_entry_id: existingTx.journal_entry_id,
+            gl_account_id: glAccountId,
+            status: 'matched',
+          }, existingTx))
+          .eq('id', transactionId);
+        if (keepErr) throw new Error(keepErr.message);
+        return { journalEntryId: existingTx.journal_entry_id, transactionId };
+      }
       if (existingTx?.journal_entry_id) {
         await reverseLinkedJournalEntry({
           bankTransactionId: transactionId,

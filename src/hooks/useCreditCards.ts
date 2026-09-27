@@ -6,6 +6,7 @@ import { createJournalEntry } from './useJournalEntryCreation';
 import { reverseLinkedJournalEntry, recalculateAndInvalidate } from './useGLPropagation';
 import { parseLocalDate } from '@/lib/utils';
 import { allowUnreconciledBankUpdate } from '@/lib/bankTransactionLock';
+import { applyGlEditToJournalLines, isReversalJournal, matchingCardPayment } from '@/lib/postedJournalEdit';
 
 export interface CreditCard {
   id: string;
@@ -382,7 +383,8 @@ export function useCreditCardTransactions(creditCardId?: string, glAccountId?: s
               reference,
               entry_date,
               description,
-              status
+              status,
+              reversal_of
             )
           `)
           .eq('account_id', glAccountId);
@@ -395,44 +397,97 @@ export function useCreditCardTransactions(creditCardId?: string, glAccountId?: s
         );
 
         // Convert unlinked journal entries to transaction items
-        const journalEntryItems: ExtendedCreditCardTransaction[] = (journalLines || [])
-          .filter(line => {
-            const je = line.journal_entry as any;
-            return je?.status === 'posted' && !linkedJournalIds.has(je.id);
-          })
-          .map(line => {
-            const je = line.journal_entry as any;
-            const debit = Number(line.debit) || 0;
-            const credit = Number(line.credit) || 0;
-            // For liability account: Credit increases (charge), Debit decreases (payment)
-            const amount = credit - debit;
-            const transactionType = amount >= 0 ? 'charge' : 'payment';
-            
-            return {
-              id: `je-${line.id}`,
-              credit_card_id: creditCardId,
-              transaction_date: je.entry_date,
-              posted_date: je.entry_date,
-              description: line.description || je.description || 'Journal Entry',
-              amount,
-              transaction_type: transactionType,
-              category: 'Credit Card Payable',
-              merchant_category_code: null,
-              payee_payor: line.description || je.description || 'Journal Entry',
-              memo: null,
-              reference: je.reference,
-              is_cleared: false,
-              cleared_at: null,
-              gl_account_id: glAccountId,
-              journal_entry_id: je.id,
-              status: 'pending', // Awaiting match with imported credit card statement
-              imported_at: null,
-              created_at: je.entry_date,
-              updated_at: je.entry_date,
-              source: 'journal_entry' as const,
-              journal_entry_line_id: line.id,
-            };
+        const candidates = (journalLines || []).filter((line) => {
+          const je = line.journal_entry as any;
+          return je?.status === 'posted' && !isReversalJournal(je) && !linkedJournalIds.has(je.id);
+        });
+        const entryIds = [...new Set(candidates.map((line) => (line.journal_entry as any).id as string))];
+        const offsetByEntry = new Map<string, string>();
+        if (entryIds.length > 0) {
+          const { data: siblingLines } = await supabase
+            .from('journal_entry_lines')
+            .select('id, journal_entry_id, account_id, debit, credit')
+            .in('journal_entry_id', entryIds);
+          for (const entryId of entryIds) {
+            const siblings = (siblingLines || []).filter((row) => row.journal_entry_id === entryId && row.account_id !== glAccountId);
+            const largest = [...siblings].sort(
+              (a, b) => (Number(b.debit) + Number(b.credit)) - (Number(a.debit) + Number(a.credit)),
+            )[0];
+            if (largest?.account_id) offsetByEntry.set(entryId, largest.account_id);
+          }
+        }
+        const usedPayments = new Set<string>();
+        const paymentCandidates = ccTransactions.map((row) => ({
+          id: row.id,
+          amount: Number(row.amount),
+          date: row.transaction_date,
+          transactionType: row.transaction_type,
+          journalEntryId: row.journal_entry_id,
+        }));
+        const journalEntryItems: ExtendedCreditCardTransaction[] = [];
+        for (const line of candidates) {
+          const je = line.journal_entry as any;
+          const debit = Number(line.debit) || 0;
+          const credit = Number(line.credit) || 0;
+          const amount = credit - debit;
+          const transactionType = amount >= 0 ? 'charge' : 'payment';
+          const offsetAccountId = offsetByEntry.get(je.id) || null;
+          if (transactionType === 'payment') {
+            const partner = matchingCardPayment(
+              { journalEntryId: je.id, amount: Math.abs(amount), date: String(je.entry_date) },
+              paymentCandidates,
+              usedPayments,
+            );
+            if (partner) {
+              usedPayments.add(partner.id);
+              if (!partner.journalEntryId) {
+                const current = ccTransactions.find((row) => row.id === partner.id);
+                const keepAccount = current?.gl_account_id && current.gl_account_id !== glAccountId
+                  ? current.gl_account_id
+                  : offsetAccountId;
+                await supabase
+                  .from('credit_card_transactions')
+                  .update(allowUnreconciledBankUpdate({
+                    journal_entry_id: je.id,
+                    status: 'matched',
+                    ...(keepAccount ? { gl_account_id: keepAccount } : {}),
+                  }, current))
+                  .eq('id', partner.id);
+                if (current) {
+                  current.journal_entry_id = je.id;
+                  current.status = 'matched';
+                  if (keepAccount) current.gl_account_id = keepAccount;
+                }
+              }
+              continue;
+            }
+          }
+
+          journalEntryItems.push({
+            id: `je-${line.id}`,
+            credit_card_id: creditCardId,
+            transaction_date: je.entry_date,
+            posted_date: je.entry_date,
+            description: line.description || je.description || 'Journal Entry',
+            amount,
+            transaction_type: transactionType,
+            category: 'Credit Card Payable',
+            merchant_category_code: null,
+            payee_payor: line.description || je.description || 'Journal Entry',
+            memo: null,
+            reference: je.reference,
+            is_cleared: false,
+            cleared_at: null,
+            gl_account_id: offsetAccountId || glAccountId,
+            journal_entry_id: je.id,
+            status: 'matched',
+            imported_at: null,
+            created_at: je.entry_date,
+            updated_at: je.entry_date,
+            source: 'journal_entry' as const,
+            journal_entry_line_id: line.id,
           });
+        }
 
         // Merge and sort all transactions
         const allTransactions = [...ccTransactions, ...journalEntryItems];
@@ -486,13 +541,12 @@ export function useCreditCardTransactions(creditCardId?: string, glAccountId?: s
     
     // Update matched CC transactions to link to journal entry and set status
     for (const pair of matchedPairs) {
-      const jeId = pair.jeTxnId.replace('je-', '');
+      const source = existingTransactions.find((row) => row.id === pair.jeTxnId);
       await supabase
         .from('credit_card_transactions')
-        .update({ 
-          journal_entry_id: jeId,
+        .update({
+          journal_entry_id: source?.journal_entry_id || null,
           status: 'matched',
-          category: 'Credit Card Payment',
         })
         .eq('id', pair.ccTxnId);
     }
@@ -685,7 +739,6 @@ export function useCreditCardTransactions(creditCardId?: string, glAccountId?: s
 
       const orgId = (existing?.credit_cards as any)?.organization_id as string | undefined;
       const ccGLAccountId = (existing?.credit_cards as any)?.gl_account_id as string | undefined;
-      const ccName = (existing?.credit_cards as any)?.name as string | undefined;
       const linkedJEId = (existing as any)?.journal_entry_id as string | null;
 
       const glFieldChanged = CC_GL_FIELDS.some(
@@ -703,78 +756,62 @@ export function useCreditCardTransactions(creditCardId?: string, glAccountId?: s
         return data;
       }
 
-      // Reverse prior JE
-      if (orgId) {
-        try {
-          await reverseLinkedJournalEntry({
-            creditCardTransactionId: id,
-            journalEntryId: linkedJEId,
-            organizationId: orgId,
-          });
-        } catch (revErr) {
-          console.error('Failed to reverse prior CC journal entry:', revErr);
+      const nextOffset = (updates.gl_account_id as string | null | undefined) ?? (existing as any).gl_account_id;
+      const nextAmount = updates.amount !== undefined ? Math.abs(Number(updates.amount)) : null;
+      if (ccGLAccountId && linkedJEId) {
+        const { data: jeLines, error: lineErr } = await supabase
+          .from('journal_entry_lines')
+          .select('id, account_id, debit, credit')
+          .eq('journal_entry_id', linkedJEId);
+        if (lineErr) throw lineErr;
+        const rewritten = applyGlEditToJournalLines(
+          jeLines || [],
+          ccGLAccountId,
+          (existing as any).gl_account_id,
+          nextOffset,
+          nextAmount,
+        );
+        for (const line of rewritten) {
+          const original = (jeLines || []).find((row) => row.id === line.id);
+          if (!original) continue;
+          if (
+            original.account_id === line.account_id
+            && Number(original.debit) === line.debit
+            && Number(original.credit) === line.credit
+          ) continue;
+          const { error: lineUpdateErr } = await supabase
+            .from('journal_entry_lines')
+            .update({ account_id: line.account_id, debit: line.debit, credit: line.credit })
+            .eq('id', line.id);
+          if (lineUpdateErr) throw lineUpdateErr;
         }
+        const { data, error } = await supabase
+          .from('credit_card_transactions')
+          .update(allowUnreconciledBankUpdate({
+            ...updates,
+            gl_account_id: nextOffset ?? null,
+            journal_entry_id: linkedJEId,
+            status: existing.status === 'reconciled' ? 'reconciled' : 'matched',
+          }, existing))
+          .eq('id', id)
+          .select()
+          .single();
+        if (error) throw error;
+        await recalculateAndInvalidate(orgId, queryClient);
+        return data;
       }
 
       const { data: updated, error: updErr } = await supabase
         .from('credit_card_transactions')
         .update(allowUnreconciledBankUpdate({
           ...updates,
-          journal_entry_id: null,
-          status: 'pending',
+          journal_entry_id: linkedJEId,
+          status: existing.status === 'reconciled' ? 'reconciled' : 'matched',
         }, existing))
         .eq('id', id)
         .select('*')
         .single();
       if (updErr) throw updErr;
-
-      // Re-post minimal 2-line JE (no tax split — user can re-categorize with tax if needed)
-      const glAcct = (updated as any).gl_account_id as string | null;
-      if (orgId && ccGLAccountId && glAcct) {
-        const amount = Math.abs(Number(updated.amount));
-        const type = updated.transaction_type as string;
-        const payeeInfo = updated.payee_payor ? ` - ${updated.payee_payor}` : '';
-        let lines: Array<{ account_id: string; debit: number; credit: number; memo: string }> = [];
-        let label = 'Charge';
-        if (type === 'payment') {
-          label = 'Payment';
-          lines = [
-            { account_id: ccGLAccountId, debit: amount, credit: 0, memo: `CC Payment${payeeInfo}: ${updated.description}` },
-            { account_id: glAcct, debit: 0, credit: amount, memo: `Payment to ${ccName || 'Credit Card'}` },
-          ];
-        } else if (type === 'credit' || type === 'refund') {
-          label = 'Credit';
-          lines = [
-            { account_id: ccGLAccountId, debit: amount, credit: 0, memo: `CC Credit${payeeInfo}: ${updated.description}` },
-            { account_id: glAcct, debit: 0, credit: amount, memo: `Refund - ${updated.description}` },
-          ];
-        } else {
-          // charge / fee / interest (default)
-          label = 'Charge';
-          lines = [
-            { account_id: glAcct, debit: amount, credit: 0, memo: updated.category || updated.description },
-            { account_id: ccGLAccountId, debit: 0, credit: amount, memo: `CC Charge${payeeInfo}: ${updated.description}` },
-          ];
-        }
-
-        try {
-          const newJEId = await createJournalEntry({
-            organizationId: orgId,
-            date: updated.transaction_date,
-            description: `CC ${label}${payeeInfo}: ${updated.description}`,
-            reference: `CC-${id.slice(0, 8).toUpperCase()}-R${Date.now().toString(36).toUpperCase()}`,
-            lines,
-            status: 'posted',
-          });
-          await supabase
-            .from('credit_card_transactions')
-            .update(allowUnreconciledBankUpdate({ journal_entry_id: newJEId, status: 'matched' }, existing))
-            .eq('id', id);
-        } catch (jeErr) {
-          console.error('Failed to re-post CC journal entry after edit:', jeErr);
-          toast.error('Transaction updated, but re-posting to GL failed. Please re-post manually.');
-        }
-      }
 
       await recalculateAndInvalidate(orgId, queryClient);
       return updated;

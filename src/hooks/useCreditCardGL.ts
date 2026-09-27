@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { createJournalEntry } from './useJournalEntryCreation';
 import { allowUnreconciledBankUpdate } from '@/lib/bankTransactionLock';
-import { reverseLinkedJournalEntry } from './useGLPropagation';
+import { applyGlEditToJournalLines } from '@/lib/postedJournalEdit';
 import { TaxCode } from './useSalesTax';
 import { ensurePersistedTaxCode } from '@/lib/persistTaxCode';
 import { toast } from 'sonner';
@@ -113,14 +113,36 @@ export function usePostCreditCardTransactionToGL() {
         throw new Error('This transaction is reconciled. Unreconcile it before posting.');
       }
 
-      let reposting = false;
-      if (existingTx?.journal_entry_id) {
-        await reverseLinkedJournalEntry({
-          creditCardTransactionId: transactionId,
-          journalEntryId: existingTx.journal_entry_id,
-          organizationId,
-        });
-        reposting = true;
+      if (existingTx?.journal_entry_id && creditCard.gl_account_id) {
+        const { data: jeLines, error: lineErr } = await supabase
+          .from('journal_entry_lines')
+          .select('id, account_id, debit, credit')
+          .eq('journal_entry_id', existingTx.journal_entry_id);
+        if (lineErr) throw new Error(lineErr.message);
+        const rewritten = applyGlEditToJournalLines(
+          jeLines || [],
+          creditCard.gl_account_id,
+          null,
+          glAccountId,
+          Math.abs(amount),
+        );
+        for (const line of rewritten) {
+          const { error: lineUpdateErr } = await supabase
+            .from('journal_entry_lines')
+            .update({ account_id: line.account_id, debit: line.debit, credit: line.credit })
+            .eq('id', line.id);
+          if (lineUpdateErr) throw new Error(lineUpdateErr.message);
+        }
+        const { error: keepErr } = await supabase
+          .from('credit_card_transactions')
+          .update(allowUnreconciledBankUpdate({
+            journal_entry_id: existingTx.journal_entry_id,
+            gl_account_id: glAccountId,
+            status: 'matched',
+          }, existingTx))
+          .eq('id', transactionId);
+        if (keepErr) throw new Error(keepErr.message);
+        return { journalEntryId: existingTx.journal_entry_id, transactionId };
       }
 
       // Calculate amounts for journal entries
@@ -202,7 +224,7 @@ export function usePostCreditCardTransactionToGL() {
       } else if (transactionType === 'payment') {
         // First post only: link to the bank withdrawal when one already exists.
         // A re-post keeps the account selected in the form.
-        const bankCandidates = reposting ? [] : await findBankPaymentJEForCC(
+        const bankCandidates = await findBankPaymentJEForCC(
           creditCard.gl_account_id,
           grossAmount,
           organizationId,
@@ -213,7 +235,7 @@ export function usePostCreditCardTransactionToGL() {
           await linkCCTransactionToExistingBankPayment(
             transactionId,
             m.journalEntryId,
-            creditCard.gl_account_id,
+            glAccountId,
             m.bankTransactionId
           );
           return { journalEntryId: m.journalEntryId, transactionId, linkedToExisting: true };
@@ -271,10 +293,7 @@ export function usePostCreditCardTransactionToGL() {
         transactionType === 'credit' ? 'Credit' :
         transactionType === 'fee' ? 'Fee' : 'Interest';
 
-      // A re-post keeps the reversed entry's CC- reference, so the replacement needs its own.
-      const journalReference = reposting
-        ? `CC-${transactionId.slice(0, 8).toUpperCase()}-R${Date.now().toString(36).toUpperCase()}`
-        : `CC-${transactionId.slice(0, 8).toUpperCase()}`;
+      const journalReference = `CC-${transactionId.slice(0, 8).toUpperCase()}`;
       const ccRefInfo = reference ? ` (Ref: ${reference})` : '';
 
       try {
@@ -414,7 +433,7 @@ export function useBulkPostCreditCardToGL() {
           if (bankCandidates.length === 1) {
             const m = bankCandidates[0];
             await linkCCTransactionToExistingBankPayment(
-              transactionId, m.journalEntryId, creditCard.gl_account_id, m.bankTransactionId
+              transactionId, m.journalEntryId, glAccountId, m.bankTransactionId
             );
             results.push({ transactionId, journalEntryId: m.journalEntryId, success: true });
             continue;

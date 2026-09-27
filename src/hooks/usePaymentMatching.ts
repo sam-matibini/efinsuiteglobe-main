@@ -346,16 +346,17 @@ export async function findBankPaymentJEForCC(
 export async function linkCCTransactionToExistingBankPayment(
   ccTransactionId: string,
   existingJournalEntryId: string,
-  ccGlAccountId: string,
+  offsetAccountId?: string | null,
   bankTransactionId?: string
 ): Promise<void> {
+  const update: Record<string, unknown> = {
+    journal_entry_id: existingJournalEntryId,
+    status: 'matched',
+  };
+  if (offsetAccountId) update.gl_account_id = offsetAccountId;
   const { error: ccErr } = await supabase
     .from('credit_card_transactions')
-    .update({
-      journal_entry_id: existingJournalEntryId,
-      gl_account_id: ccGlAccountId,
-      status: 'matched',
-    })
+    .update(update)
     .eq('id', ccTransactionId);
   if (ccErr) throw new Error(`Failed to link CC transaction to bank payment: ${ccErr.message}`);
 

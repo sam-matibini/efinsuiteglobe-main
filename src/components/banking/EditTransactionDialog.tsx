@@ -481,7 +481,7 @@ export function EditTransactionDialog({
           {isPosted && !isReconciled && (
             <Alert className="border-blue-500 bg-blue-50 dark:bg-blue-950/20">
               <AlertDescription className="text-blue-800 dark:text-blue-300 text-sm">
-                This transaction is posted to the GL. Change the category or GL account, then save or post again. The previous journal entry is reversed and the new account is posted. Posting does not lock the transaction.
+                This transaction is posted to the GL. Change the category or GL account and save. The same journal entry keeps the new account, and the transaction stays matched.
               </AlertDescription>
             </Alert>
           )}
