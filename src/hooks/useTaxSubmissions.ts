@@ -7,6 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useOrganizationContext } from '@/hooks/useOrganizationContext';
 import { toast } from 'sonner';
 import type { EFilePacket, SubmissionRow } from '@/lib/efile/types';
+import { authorityConfirmation } from '@/lib/efile/portalFiling';
 
 export function useTaxSubmissions(filingPeriodId?: string) {
   const { currentOrganization } = useOrganizationContext();
@@ -81,13 +82,35 @@ export function useTaxSubmissions(filingPeriodId?: string) {
     onError: (e: Error) => toast.error(`Submission failed: ${e.message}`),
   });
 
+  const markPortalReady = useMutation({
+    mutationFn: async (submissionId: string) => {
+      const { error } = await supabase
+        .from('tax_submissions')
+        .update({
+          status: 'transmitted',
+          transmitted_at: new Date().toISOString(),
+          error_message: null,
+        })
+        .eq('id', submissionId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['tax-submissions', orgId] });
+    },
+    onError: (e: Error) => toast.error(`Could not save the packet: ${e.message}`),
+  });
+
   const recordConfirmation = useMutation({
     mutationFn: async (input: { submissionId: string; confirmationNumber: string }) => {
+      const confirmation = authorityConfirmation(input.confirmationNumber);
+      if (!confirmation) {
+        throw new Error('Enter the confirmation number shown by CRA. This return stays unfiled until that number is saved.');
+      }
       const { error } = await supabase
         .from('tax_submissions')
         .update({
           status: 'acknowledged',
-          confirmation_number: input.confirmationNumber,
+          confirmation_number: confirmation,
           acknowledged_at: new Date().toISOString(),
         })
         .eq('id', input.submissionId);
@@ -111,7 +134,7 @@ export function useTaxSubmissions(filingPeriodId?: string) {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['tax-submissions', orgId] }),
   });
 
-  return { ...list, submissions: list.data ?? [], createSubmission, transmitDirect, recordConfirmation, markRejected };
+  return { ...list, submissions: list.data ?? [], createSubmission, transmitDirect, markPortalReady, recordConfirmation, markRejected };
 }
 
 export function useAuthorityCredentials(authorityId?: string) {

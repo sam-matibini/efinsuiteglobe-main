@@ -35,6 +35,7 @@ import { useTaxReturnPreview } from '@/hooks/useTaxReturnPreview';
 import { useTaxSubmissions, useAuthorityCredentials } from '@/hooks/useTaxSubmissions';
 import { useOrganizationContext } from '@/hooks/useOrganizationContext';
 import { buildEFilePacket } from '@/lib/efile';
+import { isDirectEfile } from '@/lib/efile/portalFiling';
 import { useIsReadOnly } from '@/hooks/useIsReadOnly';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -73,7 +74,7 @@ export default function TaxEFile() {
   const [confirmationNumber, setConfirmationNumber] = useState('');
 
   const { periods } = useTaxFilingPeriods(selectedAuthorityId || undefined);
-  const { submissions, createSubmission, transmitDirect, recordConfirmation } = useTaxSubmissions();
+  const { submissions, createSubmission, transmitDirect, markPortalReady, recordConfirmation } = useTaxSubmissions();
   const authority = authorities.find((a) => a.id === selectedAuthorityId);
   const { credentials, upsert: upsertCred } = useAuthorityCredentials(selectedAuthorityId || undefined);
 
@@ -127,17 +128,25 @@ export default function TaxEFile() {
 
   const handleSubmit = async () => {
     if (!packet || !period || !authority) return;
-    const sub = await createSubmission.mutateAsync({
-      packet,
-      filingPeriodId: period.id,
-      authorityId: authority.id,
-    });
-    if (packet.canDirectSubmit) {
-      await transmitDirect.mutateAsync({ submissionId: sub.id, channel: packet.channel });
-    } else {
-      // For manual channels, mark transmitted and open the portal
-      await transmitDirect.mutateAsync({ submissionId: sub.id, channel: packet.channel });
+    try {
+      const sub = await createSubmission.mutateAsync({
+        packet,
+        filingPeriodId: period.id,
+        authorityId: authority.id,
+      });
+      if (isDirectEfile(packet)) {
+        await transmitDirect.mutateAsync({ submissionId: sub.id, channel: packet.channel });
+        return;
+      }
+      await markPortalReady.mutateAsync(sub.id);
       if (packet.portalUrl) window.open(packet.portalUrl, '_blank', 'noopener');
+      toast.success(
+        packet.channel === 'cra_packet'
+          ? 'Packet saved. Finish the GST/HST return on the CRA site, then paste the confirmation number CRA gives you.'
+          : 'Packet saved. Finish the return on the authority site, then paste the confirmation number they give you.',
+      );
+    } catch {
+      // The mutation already reports the database or HMRC error.
     }
   };
 
@@ -162,7 +171,7 @@ export default function TaxEFile() {
           <Send className="w-7 h-7 text-primary" /> E-File Returns
         </h1>
         <p className="text-muted-foreground mt-1">
-          Submit tax returns directly to authorities (HMRC) or generate portal-ready packets (CRA, US states). Canadian T2, GST/HST, and PD7A filings also run through the <Link to="/tax-cra/efile" className="text-primary underline-offset-4 hover:underline">EFILE gateway</Link>.
+          HMRC VAT can be sent from here. A Canadian GST/HST return is calculated in eFinsuite and filed by you on CRA GST/HST NETFILE or My Business Account. eFinsuite does not transmit that GST34 to CRA. T2 and PD7A stay on the <Link to="/tax-cra/efile" className="text-primary underline-offset-4 hover:underline">EFILE gateway</Link>.
         </p>
       </div>
 
@@ -218,7 +227,7 @@ export default function TaxEFile() {
                 <CardTitle className="flex items-center justify-between flex-wrap gap-2">
                   <span>Submission Packet — {packet.form.formCode}</span>
                   <Badge variant={packet.canDirectSubmit ? 'default' : 'secondary'}>
-                    {packet.canDirectSubmit ? 'Direct API' : 'Portal Upload'}
+                    {packet.canDirectSubmit ? 'Direct API' : packet.channel === 'cra_packet' ? 'File on CRA site' : 'File on authority site'}
                   </Badge>
                 </CardTitle>
               </CardHeader>
@@ -264,15 +273,15 @@ export default function TaxEFile() {
                   )}
                   <Button
                     onClick={handleSubmit}
-                    disabled={readOnly || createSubmission.isPending || transmitDirect.isPending ||
+                    disabled={readOnly || createSubmission.isPending || transmitDirect.isPending || markPortalReady.isPending ||
                       (packet.channel === 'hmrc_mtd' && !hmrcCred?.access_token)}
                   >
-                    {(createSubmission.isPending || transmitDirect.isPending) ? (
+                    {(createSubmission.isPending || transmitDirect.isPending || markPortalReady.isPending) ? (
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                     ) : (
                       <Send className="w-4 h-4 mr-2" />
                     )}
-                    {packet.canDirectSubmit ? 'Submit to HMRC' : 'Mark Transmitted & Open Portal'}
+                    {packet.canDirectSubmit ? 'Submit to HMRC' : packet.channel === 'cra_packet' ? 'Save packet & open CRA' : 'Save packet & open portal'}
                   </Button>
                 </div>
               </CardContent>
@@ -308,7 +317,9 @@ export default function TaxEFile() {
                         <TableCell className="text-xs">{s.period_start} → {s.period_end}</TableCell>
                         <TableCell className="font-mono text-xs">{s.channel}</TableCell>
                         <TableCell>
-                          <Badge className={STATUS_VARIANT[s.status] ?? 'bg-muted'}>{s.status}</Badge>
+                          <Badge className={STATUS_VARIANT[s.status] ?? 'bg-muted'}>
+                            {s.status === 'transmitted' && !s.confirmation_number ? 'ready to file' : s.status}
+                          </Badge>
                         </TableCell>
                         <TableCell className="text-right font-mono">
                           {s.currency} {Number(s.net_payable ?? 0).toFixed(2)}
@@ -423,7 +434,7 @@ export default function TaxEFile() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Record Confirmation Number</DialogTitle>
-            <DialogDescription>Paste the confirmation reference returned by the authority portal.</DialogDescription>
+            <DialogDescription>Paste the confirmation number CRA or the authority showed you. The return stays unfiled until that number is saved.</DialogDescription>
           </DialogHeader>
           <Input
             placeholder="Confirmation number"

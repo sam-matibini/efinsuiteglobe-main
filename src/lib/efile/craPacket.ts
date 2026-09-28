@@ -1,10 +1,8 @@
 /**
- * Phase 11b — CRA submission packet generator.
- *
- * CRA does NOT expose a public REST API for non-certified software. The realistic
- * path is: generate a signed XML packet matching the GST/HST NETFILE schema, capture
- * the Web Access Code (WAC), and deep-link the user into "My Business Account" or
- * NETFILE so they can upload the file and copy the confirmation number back.
+ * GST34 worksheet for the sales-tax e-file screen.
+ * CRA GST/HST NETFILE is completed by the user on canada.ca. This file is the
+ * line amounts to enter there. It is not a certified NETFILE transmission,
+ * and it does not contain a Web Access Code.
  */
 import type { FilingFormResult } from '@/lib/filings/types';
 import type { EFilePacket } from './types';
@@ -31,7 +29,6 @@ export function buildCraGstHstPacket(form: FilingFormResult, opts: CraOptions): 
   <Header>
     <SchemaVersion>${schemaYear}</SchemaVersion>
     <BusinessNumber>${xmlEscape(opts.businessNumber)}</BusinessNumber>
-    ${opts.webAccessCode ? `<WebAccessCode>${xmlEscape(opts.webAccessCode)}</WebAccessCode>` : ''}
     <FilerType>Software</FilerType>
     <SoftwareIdentifier>efinsuite-globe</SoftwareIdentifier>
     <ReturnType>GST34</ReturnType>
@@ -66,17 +63,14 @@ export function buildCraGstHstPacket(form: FilingFormResult, opts: CraOptions): 
     filename: `CRA_GST34_${form.periodStart}_${form.periodEnd}.xml`,
     mimeType: 'application/xml',
     contents: xml,
-    portalUrl: 'https://www.canada.ca/en/revenue-agency/services/e-services/digital-services-businesses/business-account.html',
+    portalUrl: 'https://www.canada.ca/en/revenue-agency/services/e-services/digital-services-businesses/gst-hst-netfile.html',
     canDirectSubmit: false,
     schemaVersion: schemaYear,
     instructions: [
-      'Sign in to CRA My Business Account or use GST/HST NETFILE.',
-      'Select the GST/HST return for this period.',
-      'Upload the generated XML packet OR transcribe the line amounts shown.',
-      opts.webAccessCode
-        ? 'Use the Web Access Code stored in your tax credentials.'
-        : 'You may need a Web Access Code (WAC) from CRA to use NETFILE.',
-      'After CRA confirms, paste the confirmation number back into efinsuite to mark the submission acknowledged.',
+      'eFinsuite calculates this GST34. It does not send the return to CRA.',
+      'Sign in to GST/HST NETFILE or CRA My Business Account and enter these line amounts.',
+      'Type the Web Access Code on CRA’s own site. It is not included in this packet.',
+      'When CRA shows a confirmation number, paste it here. Until then this return is not filed.',
     ],
     form,
   };
