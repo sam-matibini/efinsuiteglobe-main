@@ -16,6 +16,7 @@ import { useReportFilters } from '@/hooks/useReportFilters';
 import { usePopulateEquityMovements } from '@/hooks/useASPEEquityData';
 import { useNpoTerminology } from '@/hooks/useNpoTerminology';
 import { useZohoEquityData } from '@/hooks/useZohoEquityData';
+import { getFiscalYearForDate } from '@/lib/fiscalYearUtils';
 import { useRetainedEarningsStatement } from '@/hooks/useRetainedEarningsStatement';
 import { ZohoEquityTable } from '@/components/reports/ZohoEquityTable';
 import { toast } from 'sonner';
@@ -80,9 +81,9 @@ export default function ChangesInEquity() {
   const { npoTerms, isNpo } = useNpoTerminology();
   const soceTitle = isNpo ? 'Statement of Changes in Net Assets' : 'Statement of Changes in Equity';
 
-  // Determine fiscal years to display (based on comparison settings)
-  const currentYear = endDate.getFullYear();
-  const numberOfPeriods = compareSettings?.numberOfPeriods || 0;
+  // The statement is a fiscal-year rollforward. Compare With adds that many prior fiscal years.
+  const currentYear = getFiscalYearForDate(endDate, fiscalYearEndMonth || 12);
+  const numberOfPeriods = Math.max(0, Math.floor(Number(compareSettings?.numberOfPeriods) || 0));
   const years = useMemo(() => {
     const result = [currentYear];
     for (let i = 1; i <= numberOfPeriods; i++) {

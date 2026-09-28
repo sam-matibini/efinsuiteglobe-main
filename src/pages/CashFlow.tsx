@@ -15,6 +15,7 @@ import { DivisionFilter } from '@/components/reports/DivisionFilter';
 import { ExecutiveSignatureBlock } from '@/components/reports/ExecutiveSignatureBlock';
 import { useFinancialReports, DateRangeFilter } from '@/hooks/useFinancialReports';
 import { useComparativeFinancialReports } from '@/hooks/useComparativeFinancialReports';
+import { buildComparisonPeriods } from '@/lib/financialCompare';
 import { useCurrentOrganization } from '@/hooks/useOrganization';
 import { CreateOrganizationDialog } from '@/components/accounts/CreateOrganizationDialog';
 import { 
@@ -24,7 +25,6 @@ import {
   startOfQuarter, 
   endOfQuarter, 
   subMonths,
-  subYears,
   subQuarters
 } from 'date-fns';
 import { getFiscalYearStart, getFiscalYearEnd, getFiscalYearForDate } from '@/lib/fiscalYearUtils';
@@ -244,43 +244,19 @@ export default function CashFlow() {
     }
   };
 
-  // Generate comparison period labels
+  // Column headers use the same dates the comparative query reads.
   const getComparisonLabels = useMemo(() => {
     if (!comparison.enabled) return [];
-    
-    const labels: { label: string; dateFrom: Date; dateTo: Date }[] = [];
-    const periodDiff = dateTo.getTime() - dateFrom.getTime();
-    
-    for (let i = 1; i <= comparison.count; i++) {
-      let compFrom: Date, compTo: Date;
-      
-      if (comparison.type === 'years') {
-        compFrom = subYears(dateFrom, i);
-        compTo = subYears(dateTo, i);
-      } else {
-        // Previous periods - calculate based on current period length
-        if (datePreset === 'this-month' || datePreset === 'last-month') {
-          compFrom = subMonths(dateFrom, i);
-          compTo = endOfMonth(compFrom);
-        } else if (datePreset === 'this-quarter' || datePreset === 'last-quarter') {
-          compFrom = subQuarters(dateFrom, i);
-          compTo = endOfQuarter(compFrom);
-        } else {
-          // Default: shift by period length
-          compFrom = new Date(dateFrom.getTime() - periodDiff * i);
-          compTo = new Date(dateTo.getTime() - periodDiff * i);
-        }
-      }
-      
-      labels.push({
-        label: format(compFrom, 'MMM d, yyyy') + ' - ' + format(compTo, 'MMM d, yyyy'),
-        dateFrom: compFrom,
-        dateTo: compTo,
-      });
-    }
-    
-    return comparison.latestToOldest ? labels : labels.reverse();
-  }, [comparison, dateFrom, dateTo, datePreset]);
+    return buildComparisonPeriods(dateFrom, dateTo, {
+      compareType: comparison.type === 'years' ? 'year' : 'period',
+      numberOfPeriods: comparison.count,
+      latestToOldest: comparison.latestToOldest,
+    }).map((period) => ({
+      label: format(period.startDate, 'MMM d, yyyy') + ' - ' + format(period.endDate, 'MMM d, yyyy'),
+      dateFrom: period.startDate,
+      dateTo: period.endDate,
+    }));
+  }, [comparison, dateFrom, dateTo]);
 
   // Build comparison periods for comparative data (must be after getComparisonLabels)
   const comparisonPeriods = useMemo(() => {
@@ -296,9 +272,11 @@ export default function CashFlow() {
   const {
     data: comparativeData,
     isLoading: isLoadingComparative,
+    error: comparativeError,
   } = useComparativeFinancialReports(
     { startDate: dateFrom, endDate: dateTo },
-    comparisonPeriods
+    comparisonPeriods,
+    { departmentIds: divisionIds },
   );
 
   // Open compare dialog
@@ -1258,6 +1236,11 @@ export default function CashFlow() {
         <ReportsTabs />
         <RealtimeIndicator lastEventAt={realtimeLastEventAt} />
       </div>
+      {comparison.enabled && comparativeError && (
+        <p className="text-sm text-destructive">
+          Earlier periods could not be loaded. Run the report again.
+        </p>
+      )}
 
       {/* Show Zero Balances Toggle */}
       <div className="flex items-center gap-2 text-sm text-muted-foreground print:hidden">
@@ -1606,7 +1589,9 @@ export default function CashFlow() {
                         (item.comparisonAmounts?.[idx] ?? 0) < 0 && "text-foreground"
                       )}
                     >
-                      {item.isSection && item.amount === 0 ? '' : formatCurrency(item.comparisonAmounts?.[idx] ?? 0)}
+                      {comparativeError
+                        ? '—'
+                        : (item.isSection && item.amount === 0 ? '' : formatCurrency(item.comparisonAmounts?.[idx] ?? 0))}
                     </TableCell>
                   ))}
                 </TableRow>

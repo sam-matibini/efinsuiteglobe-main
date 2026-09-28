@@ -11,9 +11,10 @@ import { CreateOrganizationDialog } from '@/components/accounts/CreateOrganizati
 import { ReportFilters } from '@/components/reports/ReportFilters';
 import { DivisionFilter } from '@/components/reports/DivisionFilter';
 import { ReportActions, ReportData } from '@/components/reports/ReportActions';
-import { format, subMonths, subYears } from 'date-fns';
+import { format } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { parseLocalDate } from '@/lib/utils';
+import { buildComparisonPeriods, reportLineAmount } from '@/lib/financialCompare';
 import { getFiscalYearStart, getFiscalYearForDate } from '@/lib/fiscalYearUtils';
 import { useQuery } from '@tanstack/react-query';
 import { useCurrencyFormatter } from '@/hooks/useCurrencyFormatter';
@@ -109,35 +110,16 @@ export default function TrialBalance() {
     setCompareSettings(settings);
   }, [setCompareSettings]);
 
-  // Generate comparison periods based on settings
+  // The column header is formatted from the same dates the trial balance queries.
   const getComparisonPeriods = useCallback((): ComparisonPeriod[] => {
     if (!compareSettings) return [];
-    
-    const periods: ComparisonPeriod[] = [];
-    const periodLength = endDate.getTime() - startDate.getTime();
-    const periodDays = Math.round(periodLength / (1000 * 60 * 60 * 24));
-    
-    for (let i = 1; i <= compareSettings.numberOfPeriods; i++) {
-      if (compareSettings.compareType === 'year') {
-        const periodStart = subYears(startDate, i);
-        const periodEnd = subYears(endDate, i);
-        periods.push({
-          label: format(periodEnd, 'yyyy'),
-          startDate: periodStart,
-          endDate: periodEnd,
-        });
-      } else {
-        const periodEnd = subMonths(startDate, (i - 1) * Math.max(1, Math.round(periodDays / 30)));
-        const periodStart = subMonths(periodEnd, Math.max(1, Math.round(periodDays / 30)));
-        periods.push({
-          label: `${format(periodStart, 'MMM yyyy')} - ${format(periodEnd, 'MMM yyyy')}`,
-          startDate: new Date(periodStart.getTime() - periodLength),
-          endDate: periodStart,
-        });
-      }
-    }
-    
-    return compareSettings.latestToOldest ? periods : periods.reverse();
+    return buildComparisonPeriods(startDate, endDate, compareSettings).map((period) => ({
+      label: compareSettings.compareType === 'year'
+        ? format(period.endDate, 'yyyy')
+        : `${format(period.startDate, 'MMM d, yyyy')} - ${format(period.endDate, 'MMM d, yyyy')}`,
+      startDate: period.startDate,
+      endDate: period.endDate,
+    }));
   }, [compareSettings, startDate, endDate]);
 
   const comparisonPeriods = getComparisonPeriods();
@@ -188,7 +170,7 @@ export default function TrialBalance() {
     const entryDeptMap = new Map(journalEntries?.map(e => [e.id, e.department_id]) ?? []);
 
     // IMPORTANT: paginate line fetches (REST default limit is 1000 rows)
-    let journalLines: Array<{ id: string; account_id: string; debit: number; credit: number; base_currency_debit: number | null; base_currency_credit: number | null; journal_entry_id: string; department_id: string | null }> = [];
+    let journalLines: Array<{ id: string; account_id: string; debit: number; credit: number; base_currency_debit: number | null; base_currency_credit: number | null; exchange_rate: number | null; journal_entry_id: string; department_id: string | null }> = [];
 
     const fetchAllLinesForEntries = async (entryIds: string[]) => {
       const chunkSize = 200;
@@ -202,7 +184,7 @@ export default function TrialBalance() {
         while (true) {
           const { data, error } = await supabase
             .from('journal_entry_lines')
-            .select('id, account_id, debit, credit, base_currency_debit, base_currency_credit, journal_entry_id, department_id')
+            .select('id, account_id, debit, credit, base_currency_debit, base_currency_credit, exchange_rate, journal_entry_id, department_id')
             .in('journal_entry_id', chunk)
             .order('id', { ascending: true })
             .range(offset, offset + pageSize - 1);
@@ -296,8 +278,8 @@ export default function TrialBalance() {
         if (!entryDate) continue;
         
         const lineDate = parseLocalDate(entryDate);
-        const debitCents = toCents(Number(line.base_currency_debit ?? line.debit) || 0);
-        const creditCents = toCents(Number(line.base_currency_credit ?? line.credit) || 0);
+        const debitCents = toCents(reportLineAmount(line.base_currency_debit, line.debit, line.exchange_rate));
+        const creditCents = toCents(reportLineAmount(line.base_currency_credit, line.credit, line.exchange_rate));
         
         if (lineDate < periodStart) {
           if (isTemp) {

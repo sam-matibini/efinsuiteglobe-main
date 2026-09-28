@@ -15,6 +15,7 @@ import { ReportFilters } from '@/components/reports/ReportFilters';
 import { ReportActions, ReportData } from '@/components/reports/ReportActions';
 import { useFinancialReports } from '@/hooks/useFinancialReports';
 import { useComparativeFinancialReports } from '@/hooks/useComparativeFinancialReports';
+import { buildComparisonPeriods } from '@/lib/financialCompare';
 import { useCurrentOrganization } from '@/hooks/useOrganization';
 import { CreateOrganizationDialog } from '@/components/accounts/CreateOrganizationDialog';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -388,52 +389,30 @@ export default function BalanceSheet() {
 
   const handleRunReport = () => {
     refetch();
+    refetchComparative();
     reRefetch?.();
   };
 
-  // Generate comparison periods based on settings
+  // Point-in-time columns. The header date is the as-of date that was queried.
   const comparisonPeriods = useMemo((): { label: string; startDate: Date; endDate: Date }[] => {
     if (!compareSettings) return [];
-    
-    const periods: { label: string; startDate: Date; endDate: Date }[] = [];
-    const count = compareSettings.numberOfPeriods;
-    
-    for (let i = 1; i <= count; i++) {
-      let periodStart: Date;
-      let periodEnd: Date;
-      let label: string;
-      
-      if (compareSettings.compareType === 'year') {
-        // Previous years (same date, different year)
-        periodStart = new Date(startDate.getFullYear() - i, startDate.getMonth(), startDate.getDate());
-        periodEnd = new Date(endDate.getFullYear() - i, endDate.getMonth(), endDate.getDate());
-        label = formatLocalDate(periodEnd);
-      } else {
-        // Previous periods (same duration)
-        const durationMs = endDate.getTime() - startDate.getTime();
-        periodEnd = new Date(startDate.getTime() - (i - 1) * durationMs - 1);
-        periodStart = new Date(periodEnd.getTime() - durationMs);
-        label = formatLocalDate(periodEnd);
-      }
-      
-      periods.push({ label, startDate: periodStart, endDate: periodEnd });
-    }
-    
-    // Sort based on latestToOldest setting
-    if (!compareSettings.latestToOldest) {
-      periods.reverse();
-    }
-    
-    return periods;
+    return buildComparisonPeriods(startDate, endDate, compareSettings).map((period) => ({
+      ...period,
+      label: formatLocalDate(period.endDate),
+    }));
   }, [compareSettings, startDate, endDate]);
 
   // Fetch comparative data for all periods
   const { 
     data: comparativeData, 
-    getComparativeTotals 
+    getComparativeTotals,
+    isLoading: comparativeLoading,
+    error: comparativeError,
+    refetch: refetchComparative,
   } = useComparativeFinancialReports(
     { startDate, endDate },
-    comparisonPeriods
+    comparisonPeriods,
+    { departmentIds: divisionIds },
   );
 
   const rawComparativeTotals = getComparativeTotals();
@@ -606,6 +585,12 @@ export default function BalanceSheet() {
   const formatCurrencyOrDash = (value: number) => {
     if (value === 0) return '-';
     return formatCurrencyBase(value);
+  };
+
+  const formatComparativeAmount = (value: number) => {
+    if (comparativeLoading) return '…';
+    if (comparativeError) return '—';
+    return formatCurrencyOrDash(value);
   };
 
   /**
@@ -1245,8 +1230,8 @@ export default function BalanceSheet() {
             >
               {/* Show comparative subtotal when header is collapsed */}
               {row.isHeader && !isExpanded 
-                ? formatCurrencyOrDash(headerCompAmount)
-                : (showAmount && !row.isHeader ? formatCurrencyOrDash(compAmount) : '')}
+                ? formatComparativeAmount(headerCompAmount)
+                : (showAmount && !row.isHeader ? formatComparativeAmount(compAmount) : '')}
             </td>
           );
         })}
@@ -1472,6 +1457,11 @@ export default function BalanceSheet() {
           <p className="text-sm text-muted-foreground uppercase tracking-wide">{organization?.name}</p>
           <h1 className="text-xl font-semibold mt-1">{bsTitle}</h1>
           <p className="text-sm text-muted-foreground mt-1">Basis: Accrual</p>
+          {comparisonPeriods.length > 0 && comparativeError && (
+            <p className="text-sm text-destructive mt-2">
+              Earlier periods could not be loaded. Run the report again.
+            </p>
+          )}
         </div>
 
         {/* Report Table */}

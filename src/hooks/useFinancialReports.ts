@@ -83,6 +83,7 @@ import { useCurrentOrganization } from './useOrganization';
 import { useFinancialReportsRealtime } from './useFinancialReportsRealtime';
 import { startOfMonth, endOfMonth, startOfYear, endOfYear, subMonths } from 'date-fns';
 import { getFiscalYearForDate, getFiscalYearStart } from '@/lib/fiscalYearUtils';
+import { journalDateKey, reportLineAmount } from '@/lib/financialCompare';
 
 interface AccountBalance {
   id: string;
@@ -318,7 +319,11 @@ export function useFinancialReports(dateFilter?: DateRangeFilter) {
       const journalEntries = await fetchAllJournalEntries();
 
       const journalEntryIds = journalEntries?.map(je => je.id) ?? [];
-      const entryDateMap = new Map(journalEntries?.map(e => [e.id, e.entry_date]) ?? []);
+      const entryDateMap = new Map<string, string>();
+      for (const entry of journalEntries ?? []) {
+        const key = journalDateKey(entry.entry_date);
+        if (key) entryDateMap.set(entry.id, key);
+      }
       // Phase 4 — header-level division (used as fallback when line has no override).
       const entryDeptMap = new Map(journalEntries?.map(e => [e.id, e.department_id]) ?? []);
 
@@ -329,7 +334,7 @@ export function useFinancialReports(dateFilter?: DateRangeFilter) {
       );
 
       // Fetch journal entry lines (IMPORTANT: paginate; REST has a default 1000 row limit)
-      let journalLines: Array<{ id: string; account_id: string; debit: number; credit: number; base_currency_debit: number | null; base_currency_credit: number | null; journal_entry_id: string; department_id: string | null }> = [];
+      let journalLines: Array<{ id: string; account_id: string; debit: number; credit: number; base_currency_debit: number | null; base_currency_credit: number | null; exchange_rate: number | null; journal_entry_id: string; department_id: string | null }> = [];
 
       const fetchAllLinesForEntries = async (entryIds: string[]) => {
         const chunkSize = 200; // keep URL length manageable
@@ -343,7 +348,7 @@ export function useFinancialReports(dateFilter?: DateRangeFilter) {
           while (true) {
             const { data, error } = await supabase
               .from('journal_entry_lines')
-              .select('id, account_id, debit, credit, base_currency_debit, base_currency_credit, journal_entry_id, department_id')
+              .select('id, account_id, debit, credit, base_currency_debit, base_currency_credit, exchange_rate, journal_entry_id, department_id')
               .in('journal_entry_id', chunk)
               .order('id', { ascending: true })
               .range(offset, offset + pageSize - 1);
@@ -459,8 +464,8 @@ export function useFinancialReports(dateFilter?: DateRangeFilter) {
             // Compare date strings directly to avoid timezone issues
             // entryDate is already YYYY-MM-DD format from the database
             if (entryDate < startDateStr) {
-              const debitCents = toCents(line.base_currency_debit ?? line.debit ?? 0);
-              const creditCents = toCents(line.base_currency_credit ?? line.credit ?? 0);
+              const debitCents = toCents(reportLineAmount(line.base_currency_debit, line.debit, line.exchange_rate));
+              const creditCents = toCents(reportLineAmount(line.base_currency_credit, line.credit, line.exchange_rate));
               if (account.normal_balance === 'debit') {
                 periodOpeningBalanceCents += debitCents - creditCents;
               } else {
@@ -501,8 +506,8 @@ export function useFinancialReports(dateFilter?: DateRangeFilter) {
               // Only apply current fiscal year's RE movements
               if (entryDate < fiscalYearStartStr || entryDate > endDateStr) continue;
 
-              const debitCents = toCents(line.base_currency_debit ?? line.debit ?? 0);
-              const creditCents = toCents(line.base_currency_credit ?? line.credit ?? 0);
+              const debitCents = toCents(reportLineAmount(line.base_currency_debit, line.debit, line.exchange_rate));
+              const creditCents = toCents(reportLineAmount(line.base_currency_credit, line.credit, line.exchange_rate));
 
               // Period opening: include movements from fiscal year start up to period start
               if (entryDate < startDateStr) {
@@ -537,8 +542,8 @@ export function useFinancialReports(dateFilter?: DateRangeFilter) {
               }
               
               if (entryDate <= endDateStr) {
-                const debitCents = toCents(line.base_currency_debit ?? line.debit ?? 0);
-                const creditCents = toCents(line.base_currency_credit ?? line.credit ?? 0);
+                const debitCents = toCents(reportLineAmount(line.base_currency_debit, line.debit, line.exchange_rate));
+                const creditCents = toCents(reportLineAmount(line.base_currency_credit, line.credit, line.exchange_rate));
                 if (account.normal_balance === 'debit') {
                   calculatedBalanceCents += debitCents - creditCents;
                 } else {
@@ -568,8 +573,8 @@ export function useFinancialReports(dateFilter?: DateRangeFilter) {
             
             // Compare date strings directly to avoid timezone issues
             if (entryDate >= startDateStr && entryDate <= endDateStr) {
-              const debitCents = toCents(line.base_currency_debit ?? line.debit ?? 0);
-              const creditCents = toCents(line.base_currency_credit ?? line.credit ?? 0);
+              const debitCents = toCents(reportLineAmount(line.base_currency_debit, line.debit, line.exchange_rate));
+              const creditCents = toCents(reportLineAmount(line.base_currency_credit, line.credit, line.exchange_rate));
               if (account.normal_balance === 'debit') {
                 calculatedBalanceCents += debitCents - creditCents;
               } else {
@@ -593,8 +598,8 @@ export function useFinancialReports(dateFilter?: DateRangeFilter) {
 
             // Include all activity up to and including the report end date
             if (entryDate <= endDateStr) {
-              const debitCents = toCents(line.base_currency_debit ?? line.debit ?? 0);
-              const creditCents = toCents(line.base_currency_credit ?? line.credit ?? 0);
+              const debitCents = toCents(reportLineAmount(line.base_currency_debit, line.debit, line.exchange_rate));
+              const creditCents = toCents(reportLineAmount(line.base_currency_credit, line.credit, line.exchange_rate));
               if (account.normal_balance === 'debit') {
                 ytdBalanceCents += debitCents - creditCents;
               } else {

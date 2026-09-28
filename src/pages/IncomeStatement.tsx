@@ -9,6 +9,7 @@ import { ReportActions, ReportData } from '@/components/reports/ReportActions';
 import { useFinancialReports } from '@/hooks/useFinancialReports';
 import { RealtimeIndicator } from '@/components/reports/RealtimeIndicator';
 import { useComparativeFinancialReports } from '@/hooks/useComparativeFinancialReports';
+import { buildComparisonPeriods } from '@/lib/financialCompare';
 import { useCurrentOrganization } from '@/hooks/useOrganization';
 import { CreateOrganizationDialog } from '@/components/accounts/CreateOrganizationDialog';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -148,6 +149,7 @@ export default function IncomeStatement() {
 
   const handleRunReport = () => {
     refetch();
+    refetchComparative();
   };
 
   const { formatCurrency } = useCurrencyFormatter();
@@ -164,49 +166,25 @@ export default function IncomeStatement() {
   const grossProfitLabel = isNpo ? '' : 'Gross Profit';
   const operatingProfitLabel = isNpo ? '' : 'Operating Profit';
 
-  // Generate comparison periods based on settings
+  // Generate comparison periods based on settings. The label is the range that is queried.
   const comparisonPeriods = useMemo((): { label: string; startDate: Date; endDate: Date }[] => {
     if (!compareSettings) return [];
-    
-    const periods: { label: string; startDate: Date; endDate: Date }[] = [];
-    const count = compareSettings.numberOfPeriods;
-    
-    for (let i = 1; i <= count; i++) {
-      let periodStart: Date;
-      let periodEnd: Date;
-      let label: string;
-      
-      if (compareSettings.compareType === 'year') {
-        // Previous years
-        periodStart = new Date(startDate.getFullYear() - i, startDate.getMonth(), startDate.getDate());
-        periodEnd = new Date(endDate.getFullYear() - i, endDate.getMonth(), endDate.getDate());
-        label = `${formatLocalMonthYear(periodStart)} - ${formatLocalMonthYear(periodEnd)}`;
-      } else {
-        // Previous periods (same duration)
-        const durationMs = endDate.getTime() - startDate.getTime();
-        periodEnd = new Date(startDate.getTime() - (i - 1) * durationMs - 1);
-        periodStart = new Date(periodEnd.getTime() - durationMs);
-        label = `${formatLocalMonthYear(periodStart)} - ${formatLocalMonthYear(periodEnd)}`;
-      }
-      
-      periods.push({ label, startDate: periodStart, endDate: periodEnd });
-    }
-    
-    // Sort based on latestToOldest setting
-    if (!compareSettings.latestToOldest) {
-      periods.reverse();
-    }
-    
-    return periods;
+    return buildComparisonPeriods(startDate, endDate, compareSettings).map((period) => ({
+      ...period,
+      label: `${formatLocalMonthYear(period.startDate)} - ${formatLocalMonthYear(period.endDate)}`,
+    }));
   }, [compareSettings, startDate, endDate]);
 
   // Fetch comparative data for all periods
   const { 
     getComparativeIncomeStatement,
-    isLoading: comparativeLoading 
+    isLoading: comparativeLoading,
+    error: comparativeError,
+    refetch: refetchComparative,
   } = useComparativeFinancialReports(
     { startDate, endDate },
-    comparisonPeriods
+    comparisonPeriods,
+    { departmentIds: divisionIds },
   );
 
   // Get comparative income statement data
@@ -471,6 +449,12 @@ export default function IncomeStatement() {
     );
   }
 
+  const formatComparativeAmount = (amount: number | undefined) => {
+    if (comparativeLoading) return '…';
+    if (comparativeError) return '—';
+    return formatCurrency(amount ?? 0);
+  };
+
   // Render a collapsible section header row
   const renderSectionHeader = (title: string, sectionKey: string, totalAmount: number, compTotals: number[] = []) => (
     <tr 
@@ -494,7 +478,7 @@ export default function IncomeStatement() {
           <td className="py-3 px-4 text-right font-mono font-semibold">{formatCurrency(totalAmount)}</td>
           {compTotals.map((amt, i) => (
             <td key={i} className="py-3 px-4 text-right font-mono font-semibold">
-              {formatCurrency(amt)}
+              {formatComparativeAmount(amt)}
             </td>
           ))}
         </>
@@ -541,7 +525,7 @@ export default function IncomeStatement() {
           
           return (
             <td key={i} className="py-2 px-4 text-right font-mono text-primary">
-              {formatCurrency(compAmount)}
+              {formatComparativeAmount(compAmount)}
             </td>
           );
         })}
@@ -556,7 +540,7 @@ export default function IncomeStatement() {
       <td className="py-2 px-4 text-right font-mono font-semibold">{formatCurrency(amount)}</td>
       {comparisonPeriods.map((_, i) => (
         <td key={i} className="py-2 px-4 text-right font-mono font-semibold">
-          {formatCurrency(compAmounts[i] ?? 0)}
+          {formatComparativeAmount(compAmounts[i])}
         </td>
       ))}
     </tr>
@@ -577,9 +561,9 @@ export default function IncomeStatement() {
         return (
           <td key={i} className={cn(
             "py-3 px-4 text-right font-mono font-bold",
-            compAmt < 0 ? "text-destructive" : ""
+            compAmt < 0 && !comparativeLoading && !comparativeError ? "text-destructive" : ""
           )}>
-            {formatCurrency(compAmt)}
+            {formatComparativeAmount(compAmt)}
           </td>
         );
       })}
@@ -639,6 +623,11 @@ export default function IncomeStatement() {
           </p>
           <h1 className="text-xl font-bold text-foreground mb-1">{reportTitle}</h1>
           <p className="text-sm text-muted-foreground">Basis : Accrual</p>
+          {comparisonPeriods.length > 0 && comparativeError && (
+            <p className="text-sm text-destructive mt-2">
+              Earlier periods could not be loaded. Run the report again.
+            </p>
+          )}
         </div>
 
         {/* Table */}

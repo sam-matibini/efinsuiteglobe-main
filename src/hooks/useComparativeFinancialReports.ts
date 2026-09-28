@@ -19,6 +19,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrganization } from './useOrganization';
 import { getFiscalYearForDate, getFiscalYearStart } from '@/lib/fiscalYearUtils';
+import { journalDateKey, reportLineAmount } from '@/lib/financialCompare';
 
 interface ComparativePeriod {
   label: string;
@@ -62,6 +63,107 @@ const formatLocalDate = (date: Date): string => {
   return `${year}-${month}-${day}`;
 };
 
+interface LoadedLedgerLine {
+  id: string;
+  account_id: string;
+  debit: number;
+  credit: number;
+  base_currency_debit: number | null;
+  base_currency_credit: number | null;
+  exchange_rate: number | null;
+  journal_entry_id: string;
+  department_id: string | null;
+}
+
+interface LoadedLedgerEntry {
+  id: string;
+  entry_date: string;
+  reference: string | null;
+  department_id: string | null;
+}
+
+interface LoadedLedger {
+  accounts: Array<Record<string, any>>;
+  journalEntries: LoadedLedgerEntry[];
+  journalLines: LoadedLedgerLine[];
+}
+
+/**
+ * One read of the ledger through the latest column date.
+ * Each comparison column then filters this snapshot, instead of repeating
+ * the full history query once per column.
+ */
+async function loadLedger(
+  organizationId: string,
+  throughDate: Date,
+  departmentIds: string[],
+): Promise<LoadedLedger> {
+  const throughDateStr = formatLocalDate(throughDate);
+
+  const { data: accounts, error: accountsError } = await supabase
+    .from('accounts')
+    .select('*')
+    .eq('organization_id', organizationId)
+    .order('code');
+  if (accountsError) throw accountsError;
+
+  const pageSize = 1000;
+  const journalEntries: LoadedLedgerEntry[] = [];
+  let entryOffset = 0;
+  while (true) {
+    const { data, error } = await supabase
+      .from('journal_entries')
+      .select('id, entry_date, reference, department_id')
+      .eq('organization_id', organizationId)
+      .in('status', ['posted', 'reversed'])
+      .lte('entry_date', throughDateStr)
+      .order('id', { ascending: true })
+      .range(entryOffset, entryOffset + pageSize - 1);
+    if (error) throw error;
+    const rows = (data ?? []) as LoadedLedgerEntry[];
+    journalEntries.push(...rows);
+    if (rows.length < pageSize) break;
+    entryOffset += pageSize;
+  }
+
+  const journalLines: LoadedLedgerLine[] = [];
+  const entryIds = journalEntries.map((entry) => entry.id);
+  const chunkSize = 200;
+  for (let i = 0; i < entryIds.length; i += chunkSize) {
+    const chunk = entryIds.slice(i, i + chunkSize);
+    let lineOffset = 0;
+    while (true) {
+      const { data, error } = await supabase
+        .from('journal_entry_lines')
+        .select('id, account_id, debit, credit, base_currency_debit, base_currency_credit, exchange_rate, journal_entry_id, department_id')
+        .in('journal_entry_id', chunk)
+        .order('id', { ascending: true })
+        .range(lineOffset, lineOffset + pageSize - 1);
+      if (error) throw error;
+      const rows = (data ?? []) as LoadedLedgerLine[];
+      journalLines.push(...rows);
+      if (rows.length < pageSize) break;
+      lineOffset += pageSize;
+    }
+  }
+
+  let lines = journalLines;
+  if (departmentIds.length > 0) {
+    const allowed = new Set(departmentIds);
+    const entryDept = new Map(journalEntries.map((entry) => [entry.id, entry.department_id]));
+    lines = journalLines.filter((line) => {
+      const division = line.department_id ?? entryDept.get(line.journal_entry_id) ?? null;
+      return division !== null && allowed.has(division);
+    });
+  }
+
+  return {
+    accounts: accounts ?? [],
+    journalEntries,
+    journalLines: lines,
+  };
+}
+
 /**
  * Fetches account balances for a specific date range.
  * Reuses the same calculation logic as useFinancialReports for consistency.
@@ -70,7 +172,8 @@ async function fetchPeriodBalances(
   organizationId: string,
   startDate: Date,
   endDate: Date,
-  fiscalYearEndMonth: number = 12
+  fiscalYearEndMonth: number = 12,
+  ledger?: LoadedLedger,
 ): Promise<AccountBalance[]> {
   const startDateStr = formatLocalDate(startDate);
   const endDateStr = formatLocalDate(endDate);
@@ -84,87 +187,27 @@ async function fetchPeriodBalances(
   // For Balance Sheet YTD net income, we need CUMULATIVE earnings from ALL unclosed years.
   // This ensures the accounting equation balances even when prior years haven't been closed.
 
-  // Get all accounts
-  const { data: accounts, error: accountsError } = await supabase
-    .from('accounts')
-    .select('*')
-    .eq('organization_id', organizationId)
-    .order('code');
+  const loaded = ledger ?? await loadLedger(organizationId, endDate, []);
+  const accounts = loaded.accounts;
+  if (accounts.length === 0) return [];
 
-  if (accountsError) throw accountsError;
-  if (!accounts) return [];
+  const journalEntries = loaded.journalEntries.filter((entry) => {
+    const key = journalDateKey(entry.entry_date);
+    return key !== null && key <= endDateStr;
+  });
+  const entryDateMap = new Map<string, string>();
+  for (const entry of journalEntries) {
+    const key = journalDateKey(entry.entry_date);
+    if (key) entryDateMap.set(entry.id, key);
+  }
 
-  // Get all posted/reversed journal entries up to the report end date.
-  // CRITICAL: Supabase REST has a default 1000-row cap; paginate explicitly so
-  // comparative reports don't silently exclude later entries.
-  const fetchAllJournalEntries = async () => {
-    const pageSize = 1000;
-    const all: Array<{ id: string; entry_date: string; reference: string | null }> = [];
-    let offset = 0;
-    while (true) {
-      const { data, error } = await supabase
-        .from('journal_entries')
-        .select('id, entry_date, reference')
-        .eq('organization_id', organizationId)
-        .in('status', ['posted', 'reversed'])
-        .lte('entry_date', endDateStr)
-        .order('id', { ascending: true })
-        .range(offset, offset + pageSize - 1);
-      if (error) throw error;
-      const rows = data ?? [];
-      all.push(...rows);
-      if (rows.length < pageSize) break;
-      offset += pageSize;
-    }
-    return all;
-  };
-
-  const journalEntries = await fetchAllJournalEntries();
-
-  const journalEntryIds = journalEntries?.map(je => je.id) ?? [];
-  const entryDateMap = new Map(journalEntries?.map(e => [e.id, e.entry_date]) ?? []);
-  
   // Track fiscal year closing entries (CLOSE-YYYY format) to exclude from net income calculations
   // This ensures comparative periods show the actual period P&L, not zeroed-out closed amounts
   const closingEntryIds = new Set(
-    journalEntries?.filter(e => e.reference?.startsWith('CLOSE-')).map(e => e.id) ?? []
+    journalEntries.filter(e => e.reference?.startsWith('CLOSE-')).map(e => e.id)
   );
 
-  // Fetch journal entry lines with pagination
-  let journalLines: Array<{ id: string; account_id: string; debit: number; credit: number; base_currency_debit: number | null; base_currency_credit: number | null; journal_entry_id: string }> = [];
-
-  const fetchAllLinesForEntries = async (entryIds: string[]) => {
-    const chunkSize = 200;
-    const pageSize = 1000;
-    const all: typeof journalLines = [];
-
-    for (let i = 0; i < entryIds.length; i += chunkSize) {
-      const chunk = entryIds.slice(i, i + chunkSize);
-      let offset = 0;
-
-      while (true) {
-        const { data, error } = await supabase
-          .from('journal_entry_lines')
-          .select('id, account_id, debit, credit, base_currency_debit, base_currency_credit, journal_entry_id')
-          .in('journal_entry_id', chunk)
-          .order('id', { ascending: true })
-          .range(offset, offset + pageSize - 1);
-
-        if (error) throw error;
-        const rows = data ?? [];
-        all.push(...rows);
-
-        if (rows.length < pageSize) break;
-        offset += pageSize;
-      }
-    }
-
-    return all;
-  };
-
-  if (journalEntryIds.length > 0) {
-    journalLines = await fetchAllLinesForEntries(journalEntryIds);
-  }
+  const journalLines = loaded.journalLines;
 
   // ----------------------------------------------------------------------
   // Retained Earnings rollforward (reporting-layer computation)
@@ -226,8 +269,8 @@ async function fetchPeriodBalances(
         if (!entryDate) continue;
         
         if (entryDate < startDateStr) {
-          const debitCents = toCents(line.base_currency_debit ?? line.debit ?? 0);
-          const creditCents = toCents(line.base_currency_credit ?? line.credit ?? 0);
+          const debitCents = toCents(reportLineAmount(line.base_currency_debit, line.debit, line.exchange_rate));
+          const creditCents = toCents(reportLineAmount(line.base_currency_credit, line.credit, line.exchange_rate));
           if (account.normal_balance === 'debit') {
             periodOpeningBalanceCents += debitCents - creditCents;
           } else {
@@ -260,8 +303,8 @@ async function fetchPeriodBalances(
           // Only apply current fiscal year's RE movements
           if (entryDate < fiscalYearStartStr || entryDate > endDateStr) continue;
 
-          const debitCents = toCents(line.base_currency_debit ?? line.debit ?? 0);
-          const creditCents = toCents(line.base_currency_credit ?? line.credit ?? 0);
+          const debitCents = toCents(reportLineAmount(line.base_currency_debit, line.debit, line.exchange_rate));
+          const creditCents = toCents(reportLineAmount(line.base_currency_credit, line.credit, line.exchange_rate));
 
           // Period opening: include movements from fiscal year start up to period start
           if (entryDate < startDateStr) {
@@ -294,8 +337,8 @@ async function fetchPeriodBalances(
           }
           
           if (entryDate <= endDateStr) {
-            const debitCents = toCents(line.base_currency_debit ?? line.debit ?? 0);
-            const creditCents = toCents(line.base_currency_credit ?? line.credit ?? 0);
+            const debitCents = toCents(reportLineAmount(line.base_currency_debit, line.debit, line.exchange_rate));
+            const creditCents = toCents(reportLineAmount(line.base_currency_credit, line.credit, line.exchange_rate));
             if (account.normal_balance === 'debit') {
               calculatedBalanceCents += debitCents - creditCents;
             } else {
@@ -319,8 +362,8 @@ async function fetchPeriodBalances(
         if (closingEntryIds.has(line.journal_entry_id)) continue;
         
         if (entryDate >= startDateStr && entryDate <= endDateStr) {
-          const debitCents = toCents(line.base_currency_debit ?? line.debit ?? 0);
-          const creditCents = toCents(line.base_currency_credit ?? line.credit ?? 0);
+          const debitCents = toCents(reportLineAmount(line.base_currency_debit, line.debit, line.exchange_rate));
+          const creditCents = toCents(reportLineAmount(line.base_currency_credit, line.credit, line.exchange_rate));
           if (account.normal_balance === 'debit') {
             calculatedBalanceCents += debitCents - creditCents;
           } else {
@@ -335,8 +378,8 @@ async function fetchPeriodBalances(
         if (!entryDate) continue;
 
         if (entryDate <= endDateStr) {
-          const debitCents = toCents(line.base_currency_debit ?? line.debit ?? 0);
-          const creditCents = toCents(line.base_currency_credit ?? line.credit ?? 0);
+          const debitCents = toCents(reportLineAmount(line.base_currency_debit, line.debit, line.exchange_rate));
+          const creditCents = toCents(reportLineAmount(line.base_currency_credit, line.credit, line.exchange_rate));
           if (account.normal_balance === 'debit') {
             ytdBalanceCents += debitCents - creditCents;
           } else {
@@ -456,14 +499,20 @@ function calculateTotals(balances: AccountBalance[]) {
   };
 }
 
+export interface ComparativeReportOptions {
+  departmentIds?: string[];
+}
+
 /**
  * Hook to fetch comparative financial data for multiple periods
  */
 export function useComparativeFinancialReports(
   currentPeriod: { startDate: Date; endDate: Date },
-  comparisonPeriods: ComparativePeriod[]
+  comparisonPeriods: ComparativePeriod[],
+  options?: ComparativeReportOptions,
 ) {
   const { organization: currentOrganization } = useCurrentOrganization();
+  const departmentIds = options?.departmentIds ?? [];
 
   const allPeriods = [
     { label: 'Current', startDate: currentPeriod.startDate, endDate: currentPeriod.endDate },
@@ -477,22 +526,28 @@ export function useComparativeFinancialReports(
       currentOrganization?.fiscal_year_end_month ?? 12,
       formatLocalDate(currentPeriod.startDate),
       formatLocalDate(currentPeriod.endDate),
-      comparisonPeriods.map(p => `${formatLocalDate(p.startDate)}-${formatLocalDate(p.endDate)}`).join(',')
+      comparisonPeriods.map(p => `${formatLocalDate(p.startDate)}-${formatLocalDate(p.endDate)}`).join(','),
+      [...departmentIds].sort().join(','),
     ],
     queryFn: async (): Promise<PeriodData[]> => {
       if (!currentOrganization?.id) return [];
 
       // Get organization's fiscal year end month (default to December/calendar year)
       const fiscalYearEndMonth = currentOrganization.fiscal_year_end_month ?? 12;
+      const throughDate = allPeriods.reduce(
+        (latest, period) => (period.endDate > latest ? period.endDate : latest),
+        allPeriods[0].endDate,
+      );
+      const ledger = await loadLedger(currentOrganization.id, throughDate, departmentIds);
 
-      // Fetch all periods in parallel
       const results = await Promise.all(
         allPeriods.map(async (period) => {
           const balances = await fetchPeriodBalances(
             currentOrganization.id,
             period.startDate,
             period.endDate,
-            fiscalYearEndMonth
+            fiscalYearEndMonth,
+            ledger,
           );
           const totals = calculateTotals(balances);
           return {
@@ -646,6 +701,7 @@ export function useComparativeFinancialReports(
 
   return {
     isLoading: query.isLoading,
+    isFetching: query.isFetching,
     error: query.error,
     data: query.data,
     refetch: query.refetch,
