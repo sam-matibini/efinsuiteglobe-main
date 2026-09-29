@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { cn, parseLocalDate } from '@/lib/utils';
 import { signedBankAmount } from '@/lib/plaidBankAmount';
+import { downloadPayee } from '@/lib/transactionDownload';
 import { isBankTransactionLocked } from '@/lib/bankTransactionLock';
 import {
   Select,
@@ -1073,15 +1074,12 @@ export default function BankTransactions() {
         // Map transactions to the export row shape
         const toRows = (arr: Tx[]) =>
           arr.map(t => ({
-            date: String(t.transaction_date ?? ''),
+            date: String(t.transaction_date ?? '').slice(0, 10),
             description: String(t.description ?? ''),
-            payee: String((t as any).payee_payor ?? ''),
-            category: String(t.category ?? ''),
-            reference: String((t as any).reference ?? ''),
-            amount: accountType === 'bank'
-              ? signedBankAmount(Number(t.amount) || 0, t.transaction_type)
-              : Number(t.amount) || 0,
-            status: String(t.status ?? (isReconciled(t) ? 'reconciled' : hasMatch(t) ? 'matched' : 'unmatched')),
+            amount: Number(t.amount) || 0,
+            type: String(t.transaction_type ?? ''),
+            payee_payor: downloadPayee(t),
+            reference: String(t.reference ?? ''),
           }));
 
         const orgName = organization?.name;
@@ -1095,6 +1093,7 @@ export default function BankTransactions() {
                   title="Total Transactions"
                   snapshot={`Count: ${transactions.length}\nVolume (abs): ${formatCurrency(sumAbs(transactions))}`}
                   rows={toRows(txs)}
+                  accountKind={accountType}
                   organizationName={orgName}
                   formatCurrency={formatCurrency}
                 />
@@ -1112,6 +1111,7 @@ export default function BankTransactions() {
                   title="Unmatched Transactions"
                   snapshot={`Count: ${unmatchedTx.length}\nValue (abs): ${formatCurrency(sumAbs(unmatchedTx))}`}
                   rows={toRows(unmatchedTx)}
+                  accountKind={accountType}
                   organizationName={orgName}
                   formatCurrency={formatCurrency}
                 />
@@ -1129,6 +1129,7 @@ export default function BankTransactions() {
                   title="Matched Transactions"
                   snapshot={`Total matched: ${matchedTx.length} · ${formatCurrency(sumAbs(matchedTx))}\nNot posted: ${matchedNotPostedTx.length} · ${formatCurrency(sumAbs(matchedNotPostedTx))}`}
                   rows={toRows(matchedTx)}
+                  accountKind={accountType}
                   organizationName={orgName}
                   formatCurrency={formatCurrency}
                 />
@@ -1151,6 +1152,7 @@ export default function BankTransactions() {
                   title="Reconciled Transactions"
                   snapshot={`Count: ${reconciledTx.length}\nValue (abs): ${formatCurrency(sumAbs(reconciledTx))}`}
                   rows={toRows(reconciledTx)}
+                  accountKind={accountType}
                   organizationName={orgName}
                   formatCurrency={formatCurrency}
                 />
@@ -1167,6 +1169,7 @@ export default function BankTransactions() {
                   title={inflowLabel}
                   snapshot={`Count: ${inflowTx.length}\nTotal: ${formatCurrency(inflow)}`}
                   rows={toRows(inflowTx)}
+                  accountKind={accountType}
                   organizationName={orgName}
                   formatCurrency={formatCurrency}
                 />
@@ -1179,6 +1182,7 @@ export default function BankTransactions() {
                   title={outflowLabel}
                   snapshot={`Count: ${outflowTx.length}\nTotal: ${formatCurrency(outflow)}`}
                   rows={toRows(outflowTx)}
+                  accountKind={accountType}
                   organizationName={orgName}
                   formatCurrency={formatCurrency}
                 />
@@ -1190,6 +1194,7 @@ export default function BankTransactions() {
                 <BankTxCardActions
                   title="Net Activity"
                   snapshot={`${inflowLabel}: ${formatCurrency(inflow)}\n${outflowLabel}: ${formatCurrency(outflow)}\nNet: ${net >= 0 ? '+' : '-'}${formatCurrency(Math.abs(net))}`}
+                  accountKind={accountType}
                   organizationName={orgName}
                   formatCurrency={formatCurrency}
                 />
@@ -1209,6 +1214,7 @@ export default function BankTransactions() {
                   title="Posted to GL"
                   snapshot={`Posted: ${postedTx.length} of ${transactions.length} (${postedPct}%)\nValue: ${formatCurrency(sumAbs(postedTx))}`}
                   rows={toRows(postedTx)}
+                  accountKind={accountType}
                   organizationName={orgName}
                   formatCurrency={formatCurrency}
                 />
@@ -1801,6 +1807,7 @@ export default function BankTransactions() {
       <TransactionExportDialog
         open={exportDialogOpen}
         onOpenChange={setExportDialogOpen}
+        accountKind={accountType}
         transactions={transactions.map(t => ({
           id: t.id,
           date: parseLocalDate(t.transaction_date),
@@ -1812,7 +1819,8 @@ export default function BankTransactions() {
           journal_entry_id: t.journal_entry_id,
           gl_account_id: t.gl_account_id,
           category: t.category || undefined,
-          matchedTo: t.reference || undefined,
+          payee_payor: downloadPayee(t) || undefined,
+          reference: t.reference || undefined,
         }))}
 
         accountName={

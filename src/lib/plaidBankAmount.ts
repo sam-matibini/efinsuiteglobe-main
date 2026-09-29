@@ -29,6 +29,7 @@ export interface PlaidBankRow {
   status: string;
   reference: string;
   category: string | null;
+  payee_payor: string | null;
   memo: string | null;
   is_cleared: boolean;
   imported_at: string;
@@ -63,6 +64,7 @@ export function mapPlaidBankRow(txn: PlaidGatewayTransaction, bankAccountId: str
     status: txn.pending ? 'pending' : 'unmatched',
     reference: `PLAID-${txn.id}`,
     category: txn.category || null,
+    payee_payor: txn.merchantName || null,
     memo: txn.merchantName || null,
     // A posted download is not reconciled. Stay editable until it is categorized.
     is_cleared: false,

@@ -20,15 +20,27 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
-import { signedBankAmount } from '@/lib/plaidBankAmount';
 import { isBankTransactionLocked } from '@/lib/bankTransactionLock';
+import {
+  buildTransactionDownloadCsv,
+  transactionDownloadCells,
+  type TransactionDownloadKind,
+} from '@/lib/transactionDownload';
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
 
 interface Transaction {
   id: string;
   date: Date;
   description: string;
   amount: number;
-  type: 'deposit' | 'withdrawal' | 'transfer';
+  type: string;
   status: string;
   is_cleared?: boolean | null;
   journal_entry_id?: string | null;
@@ -44,6 +56,7 @@ interface TransactionExportDialogProps {
   onOpenChange: (open: boolean) => void;
   transactions: Transaction[];
   accountName?: string;
+  accountKind?: TransactionDownloadKind;
 }
 
 type LifecycleKey = 'pending' | 'unmatched' | 'matched' | 'reconciled';
@@ -59,6 +72,7 @@ export default function TransactionExportDialog({
   onOpenChange,
   transactions,
   accountName = 'Bank Account',
+  accountKind = 'bank',
 }: TransactionExportDialogProps) {
   const [exportFormat, setExportFormat] = useState<'pdf' | 'excel'>('excel');
   const [dateRange, setDateRange] = useState('all');
@@ -113,44 +127,53 @@ export default function TransactionExportDialog({
   };
 
   const exportToExcel = () => {
-    // Generate CSV content (Excel-compatible)
-    const headers = ['Date', 'Description', 'Payee/Payor', 'Reference', 'Amount', 'Type', 'Status', 'Category', 'Matched To'];
-    const rows = filteredTransactions.map((t) => [
-      format(t.date, 'yyyy-MM-dd'),
-      `"${t.description.replace(/"/g, '""')}"`,
-      `"${(t.payee_payor || '').replace(/"/g, '""')}"`,
-      `"${(t.reference || '').replace(/"/g, '""')}"`,
-      signedBankAmount(t.amount, t.type).toFixed(2),
-      t.type,
-      t.status,
-      t.category || '',
-      t.matchedTo || '',
-    ]);
-
-    const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+    const csvContent = buildTransactionDownloadCsv(
+      accountKind,
+      filteredTransactions.map((t) => ({
+        date: format(t.date, 'yyyy-MM-dd'),
+        description: t.description,
+        amount: t.amount,
+        type: t.type,
+        payee_payor: t.payee_payor,
+        reference: t.reference,
+      })),
+    );
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `bank_transactions_${format(new Date(), 'yyyy-MM-dd')}.csv`;
+    const prefix = accountKind === 'credit-card' ? 'credit_card_transactions' : 'bank_transactions';
+    link.download = `${prefix}_${format(new Date(), 'yyyy-MM-dd')}.csv`;
     link.click();
     URL.revokeObjectURL(link.href);
     toast.success('Exported to Excel (CSV) successfully');
   };
 
   const exportToPDF = () => {
-    // Create a printable HTML document
-    const totalDeposits = filteredTransactions
-      .filter((t) => t.type === 'deposit')
-      .reduce((sum, t) => sum + signedBankAmount(t.amount, t.type), 0);
-    const totalWithdrawals = filteredTransactions
-      .filter((t) => t.type === 'withdrawal')
-      .reduce((sum, t) => sum + signedBankAmount(t.amount, t.type), 0);
+    const inflowLabel = accountKind === 'credit-card' ? 'Payments & credits' : 'Total Deposits';
+    const outflowLabel = accountKind === 'credit-card' ? 'Charges, fees & interest' : 'Total Withdrawals';
+    const reportTitle = accountKind === 'credit-card' ? 'Credit Card Transactions Report' : 'Bank Transactions Report';
+    const inflowTypes = accountKind === 'credit-card' ? ['payment', 'credit'] : ['deposit'];
+    const outflowTypes = accountKind === 'credit-card' ? ['charge', 'fee', 'interest'] : ['withdrawal'];
+    const totalIn = filteredTransactions
+      .filter((t) => inflowTypes.includes(t.type))
+      .reduce((sum, t) => sum + Math.abs(Number(t.amount) || 0), 0);
+    const totalOut = filteredTransactions
+      .filter((t) => outflowTypes.includes(t.type))
+      .reduce((sum, t) => sum + Math.abs(Number(t.amount) || 0), 0);
+    const downloadRows = filteredTransactions.map((t) => transactionDownloadCells(accountKind, {
+      date: format(t.date, 'yyyy-MM-dd'),
+      description: t.description,
+      amount: t.amount,
+      type: t.type,
+      payee_payor: t.payee_payor,
+      reference: t.reference,
+    }));
 
     const htmlContent = `
       <!DOCTYPE html>
       <html>
       <head>
-        <title>Bank Transactions Report</title>
+        <title>${reportTitle}</title>
         <style>
           body { font-family: Arial, sans-serif; padding: 40px; color: #333; }
           h1 { color: #1a1a1a; margin-bottom: 5px; }
@@ -175,7 +198,7 @@ export default function TransactionExportDialog({
         </style>
       </head>
       <body>
-        <h1>Bank Transactions Report</h1>
+        <h1>${reportTitle}</h1>
         <p class="subtitle">${accountName} • Generated on ${format(new Date(), 'MMMM d, yyyy')}</p>
         
         <div class="summary">
@@ -184,12 +207,12 @@ export default function TransactionExportDialog({
             <div class="summary-value">${filteredTransactions.length}</div>
           </div>
           <div class="summary-item">
-            <div class="summary-label">Total Deposits</div>
-            <div class="summary-value deposits">+${formatCurrency(totalDeposits)}</div>
+            <div class="summary-label">${inflowLabel}</div>
+            <div class="summary-value deposits">+${formatCurrency(totalIn)}</div>
           </div>
           <div class="summary-item">
-            <div class="summary-label">Total Withdrawals</div>
-            <div class="summary-value withdrawals">-${formatCurrency(Math.abs(totalWithdrawals))}</div>
+            <div class="summary-label">${outflowLabel}</div>
+            <div class="summary-value withdrawals">-${formatCurrency(totalOut)}</div>
           </div>
         </div>
 
@@ -198,25 +221,23 @@ export default function TransactionExportDialog({
             <tr>
               <th>Date</th>
               <th>Description</th>
-              <th>Payee/Payor</th>
-              <th>Reference</th>
-              <th>Category</th>
               <th style="text-align: right;">Amount</th>
-              <th>Status</th>
+              <th>Type</th>
+              <th>Payee_Payor</th>
+              <th>Reference</th>
             </tr>
           </thead>
           <tbody>
-            ${filteredTransactions
+            ${downloadRows
               .map(
-                (t) => `
+                (cells) => `
               <tr>
-                <td>${format(t.date, 'MMM d, yyyy')}</td>
-                <td>${t.description}</td>
-                <td>${t.payee_payor || '-'}</td>
-                <td style="font-family: monospace; font-size: 11px;">${t.reference || '-'}</td>
-                <td>${t.category || '-'}</td>
-                <td class="amount ${t.type === 'deposit' ? 'deposit-amount' : ''}">${t.type === 'deposit' ? '+' : '-'}${formatCurrency(t.amount)}</td>
-                <td><span class="status status-${t.status}">${t.status.charAt(0).toUpperCase() + t.status.slice(1)}</span></td>
+                <td>${escapeHtml(cells[0])}</td>
+                <td>${escapeHtml(cells[1])}</td>
+                <td class="amount">${escapeHtml(cells[2])}</td>
+                <td>${escapeHtml(cells[3])}</td>
+                <td>${escapeHtml(cells[4] || '-')}</td>
+                <td style="font-family: monospace; font-size: 11px;">${escapeHtml(cells[5] || '-')}</td>
               </tr>
             `
               )
