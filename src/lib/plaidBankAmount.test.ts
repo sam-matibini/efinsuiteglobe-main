@@ -13,7 +13,21 @@ describe('Plaid bank amount sign', () => {
     expect(row.transaction_type).toBe('deposit');
     expect(row.amount).toBe(14842.8);
     expect(row.reference).toBe('PLAID-in-1');
+    expect(row.payee_payor).toBeNull();
     expect(row.imported_at).toBeTruthy();
+  });
+
+  it('stores the Plaid merchant as Payee_Payor', () => {
+    const row = mapPlaidBankRow({
+      id: 'out-2',
+      date: '2026-09-21',
+      description: 'Credit Memo eFinMoney',
+      amount: 3,
+      type: 'deposit',
+      merchantName: 'Flovide Account',
+    }, 'acct');
+    expect(row.payee_payor).toBe('Flovide Account');
+    expect(row.transaction_type).toBe('deposit');
   });
 
   it('stores a gateway withdrawal as a negative amount', () => {

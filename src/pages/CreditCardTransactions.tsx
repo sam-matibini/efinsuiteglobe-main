@@ -52,6 +52,8 @@ import {
 } from '@/components/ui/table';
 import { useLocalizedCurrency } from '@/hooks/useLocalizedCurrency';
 import { classifyCreditCardType, normalizeCreditCardAmount } from '@/lib/creditCardImportNormalizer';
+import TransactionExportDialog from '@/components/banking/TransactionExportDialog';
+import { downloadPayee } from '@/lib/transactionDownload';
 
 type SortField = 'transaction_date' | 'description' | 'payee_payor' | 'reference' | 'category' | 'amount' | 'status';
 type SortDirection = 'asc' | 'desc';
@@ -81,6 +83,7 @@ export default function CreditCardTransactions() {
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   
   const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [extractionDialogOpen, setExtractionDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<ExtendedCreditCardTransaction | null>(null);
@@ -527,7 +530,7 @@ export default function CreditCardTransactions() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button variant="outline" size="sm">
+          <Button variant="outline" size="sm" onClick={() => setExportDialogOpen(true)}>
             <Download className="w-4 h-4 mr-2" />
             Export
           </Button>
@@ -912,6 +915,27 @@ export default function CreditCardTransactions() {
           </TableBody>
         </Table>
       </Card>
+
+      <TransactionExportDialog
+        open={exportDialogOpen}
+        onOpenChange={setExportDialogOpen}
+        accountKind="credit-card"
+        accountName={currentCard.name}
+        transactions={filteredTransactions.map((t) => ({
+          id: t.id,
+          date: parseLocalDate(t.transaction_date),
+          description: t.description,
+          amount: Number(t.amount),
+          type: t.transaction_type,
+          status: t.status,
+          is_cleared: t.is_cleared,
+          journal_entry_id: t.journal_entry_id,
+          gl_account_id: t.gl_account_id,
+          category: t.category || undefined,
+          payee_payor: downloadPayee(t) || undefined,
+          reference: t.reference || undefined,
+        }))}
+      />
 
       {/* Import Dialog */}
       <CreditCardImportDialog

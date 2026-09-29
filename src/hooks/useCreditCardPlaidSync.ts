@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
+import { mapPlaidCreditCardRow } from '@/lib/plaidCreditCard';
 import { CreditCard } from './useCreditCards';
 
 interface SyncResult {
@@ -13,8 +14,8 @@ interface SyncResult {
 
 /**
  * Sync transactions for a Plaid-connected credit card. Mirrors usePlaidSync
- * but writes to credit_card_transactions and uses Plaid sign convention:
- * Plaid amount > 0 => purchase (charge); < 0 => refund/payment (credit).
+ * but writes to credit_card_transactions. Type is charge, payment, credit,
+ * fee, or interest, and the merchant is stored as payee_payor.
  */
 export function useCreditCardPlaidSync() {
   const [syncingCardId, setSyncingCardId] = useState<string | null>(null);
@@ -62,24 +63,8 @@ export function useCreditCardPlaidSync() {
       return { cardId: card.id, synced: 0, skipped: plaidTransactions.length, errors: 0 };
     }
 
-    // ai-bank-connect already inverts Plaid sign:
-    // - Plaid raw positive (purchase) becomes amount < 0 here -> 'withdrawal'
-    // - Plaid raw negative (refund) becomes amount > 0 here -> 'deposit'
-    // For credit cards: withdrawal = charge, deposit = payment/credit
-    const rows = newTransactions.map((txn) => ({
-      credit_card_id: card.id,
-      transaction_date: txn.date,
-      description: txn.description || txn.merchantName || 'Unnamed transaction',
-      amount: Math.abs(txn.amount),
-      transaction_type: txn.amount < 0 ? 'charge' : 'payment',
-      status: txn.pending ? 'pending' : 'pending',
-      reference: `PLAID-${txn.id}`,
-      category: txn.category || null,
-      payee_payor: txn.merchantName || null,
-      // A posted download is not reconciled. Stay editable until it is categorized.
-      is_cleared: false,
-      imported_at: new Date().toISOString(),
-    }));
+    const importedAt = new Date().toISOString();
+    const rows = newTransactions.map((txn) => mapPlaidCreditCardRow(txn, card.id, importedAt));
 
     let errors = 0;
     for (let i = 0; i < rows.length; i += 100) {

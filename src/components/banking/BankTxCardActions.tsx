@@ -10,15 +10,20 @@ import {
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { exportToFormattedExcel } from '@/lib/excelExport';
+import {
+  TRANSACTION_DOWNLOAD_HEADERS,
+  transactionDownloadCells,
+  transactionDownloadMatrix,
+  type TransactionDownloadKind,
+} from '@/lib/transactionDownload';
 
 export interface CardActionRow {
   date: string;
   description: string;
-  payee: string;
-  category: string;
-  reference: string;
   amount: number;
-  status: string;
+  type: string;
+  payee_payor: string;
+  reference: string;
 }
 
 interface Props {
@@ -27,34 +32,39 @@ interface Props {
   snapshot: string;
   /** Rows for export. If undefined or empty, row exports are hidden. */
   rows?: CardActionRow[];
+  accountKind?: TransactionDownloadKind;
   organizationName?: string;
   /** Currency formatter (matches page's localized formatter) */
   formatCurrency: (n: number) => string;
 }
 
-const ROW_HEADERS = ['Date', 'Description', 'Payee/Payor', 'Category', 'Reference', 'Amount', 'Status'];
-
-function rowsToMatrix(rows: CardActionRow[]): (string | number)[][] {
-  return rows.map(r => [r.date, r.description, r.payee, r.category, r.reference, r.amount, r.status]);
+function rowsToMatrix(kind: TransactionDownloadKind, rows: CardActionRow[]): (string | number)[][] {
+  return transactionDownloadMatrix(kind, rows);
 }
 
-function openPdfPrintWindow(title: string, snapshot: string, rows: CardActionRow[] | undefined, fmt: (n: number) => string) {
+function openPdfPrintWindow(
+  title: string,
+  snapshot: string,
+  rows: CardActionRow[] | undefined,
+  kind: TransactionDownloadKind,
+  fmt: (n: number) => string,
+) {
   const w = window.open('', '_blank', 'noopener,noreferrer,width=900,height=700');
   if (!w) {
     toast.error('Popup blocked — allow popups to export PDF');
     return;
   }
-  const total = rows?.reduce((s, r) => s + Math.abs(Number(r.amount) || 0), 0) ?? 0;
-  const rowsHtml = (rows ?? [])
+  const rendered = (rows ?? []).map((row) => transactionDownloadCells(kind, row));
+  const total = rendered.reduce((s, cells) => s + Math.abs(Number(cells[2]) || 0), 0);
+  const rowsHtml = rendered
     .map(
-      r => `<tr>
-        <td>${escapeHtml(r.date)}</td>
-        <td>${escapeHtml(r.description)}</td>
-        <td>${escapeHtml(r.payee)}</td>
-        <td>${escapeHtml(r.category)}</td>
-        <td>${escapeHtml(r.reference)}</td>
-        <td style="text-align:right;font-variant-numeric:tabular-nums">${Number(r.amount) < 0 ? '-' : ''}${fmt(Number(r.amount) || 0)}</td>
-        <td>${escapeHtml(r.status)}</td>
+      cells => `<tr>
+        <td>${escapeHtml(cells[0])}</td>
+        <td>${escapeHtml(cells[1])}</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums">${Number(cells[2]) < 0 ? '-' : ''}${fmt(Number(cells[2]) || 0)}</td>
+        <td>${escapeHtml(cells[3])}</td>
+        <td>${escapeHtml(cells[4])}</td>
+        <td>${escapeHtml(cells[5])}</td>
       </tr>`,
     )
     .join('');
@@ -73,9 +83,9 @@ function openPdfPrintWindow(title: string, snapshot: string, rows: CardActionRow
     <div class="snapshot">${escapeHtml(snapshot)}</div>
     ${
       rows && rows.length
-        ? `<table><thead><tr>${ROW_HEADERS.map(h => `<th${h === 'Amount' ? ' style="text-align:right"' : ''}>${h}</th>`).join('')}</tr></thead>
+        ? `<table><thead><tr>${TRANSACTION_DOWNLOAD_HEADERS.map(h => `<th${h === 'Amount' ? ' style="text-align:right"' : ''}>${h}</th>`).join('')}</tr></thead>
             <tbody>${rowsHtml}</tbody>
-            <tfoot><tr><td colspan="5">Total (absolute)</td><td style="text-align:right">${fmt(total)}</td><td></td></tr></tfoot>
+            <tfoot><tr><td colspan="2">Total (absolute)</td><td style="text-align:right">${fmt(total)}</td><td colspan="3"></td></tr></tfoot>
             </table>`
         : ''
     }
@@ -93,7 +103,7 @@ function escapeHtml(s: string) {
     .replace(/"/g, '&quot;');
 }
 
-export function BankTxCardActions({ title, snapshot, rows, organizationName, formatCurrency }: Props) {
+export function BankTxCardActions({ title, snapshot, rows, accountKind = 'bank', organizationName, formatCurrency }: Props) {
   const hasRows = !!rows && rows.length > 0;
 
   const onExcel = (e: React.MouseEvent) => {
@@ -103,15 +113,15 @@ export function BankTxCardActions({ title, snapshot, rows, organizationName, for
       title,
       subtitle: snapshot,
       organizationName,
-      headers: ROW_HEADERS,
-      rows: rowsToMatrix(rows!),
+      headers: [...TRANSACTION_DOWNLOAD_HEADERS],
+      rows: rowsToMatrix(accountKind, rows!),
     });
     toast.success('Excel downloaded');
   };
 
   const onPdf = (e: React.MouseEvent) => {
     e.stopPropagation();
-    openPdfPrintWindow(title, snapshot, rows, formatCurrency);
+    openPdfPrintWindow(title, snapshot, rows, accountKind, formatCurrency);
   };
 
   const body = encodeURIComponent(`${title}\n\n${snapshot}`);
