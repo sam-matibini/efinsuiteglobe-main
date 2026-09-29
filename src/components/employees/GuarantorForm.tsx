@@ -1,12 +1,15 @@
+import { useId, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Textarea } from '@/components/ui/textarea';
 import { UserPlus, ShieldCheck, ShieldAlert } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import type { EmployeeGuarantor } from '@/hooks/useEmployeeGuarantors';
+import { guarantorConfirmationCopy, type GuarantorRequirement } from '@/lib/addEmployee';
 
 export type GuarantorDraft = Omit<EmployeeGuarantor, 'employee_id' | 'organization_id' | 'id'>;
 
@@ -38,13 +41,56 @@ export function isGuarantorComplete(g: GuarantorDraft): boolean {
   return !!(g.full_name && g.full_name.trim().length > 0 && g.confirmed);
 }
 
+export function GuarantorRequirementToggle({
+  requirement,
+  onChange,
+  className,
+  compact = false,
+}: {
+  requirement: GuarantorRequirement;
+  onChange: (requirement: GuarantorRequirement) => void;
+  className?: string;
+  compact?: boolean;
+}) {
+  const switchId = useId();
+  const required = requirement === 'mandatory';
+
+  return (
+    <div
+      className={cn(
+        'flex items-start gap-3',
+        !compact && 'rounded-lg border bg-muted/40 p-3',
+        className,
+      )}
+    >
+      <Switch
+        id={switchId}
+        checked={required}
+        onCheckedChange={(checked) => onChange(checked ? 'mandatory' : 'optional')}
+        aria-label="Require guarantors"
+      />
+      <div className="space-y-1">
+        <Label htmlFor={switchId} className="text-sm font-semibold cursor-pointer">
+          Require guarantors
+        </Label>
+        <p className="text-xs text-muted-foreground">
+          {required
+            ? 'Both guarantors must be named and confirmed before this employee can be added.'
+            : 'Off by default. Leave this off if your company or region does not require guarantors.'}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 interface Props {
   value: GuarantorDraft;
   onChange: (next: GuarantorDraft) => void;
   title: string;
+  required: boolean;
 }
 
-function GuarantorFields({ value, onChange, title }: Props) {
+function GuarantorFields({ value, onChange, title, required }: Props) {
   const set = <K extends keyof GuarantorDraft>(k: K, v: GuarantorDraft[K]) =>
     onChange({ ...value, [k]: v });
 
@@ -57,7 +103,7 @@ function GuarantorFields({ value, onChange, title }: Props) {
 
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5 col-span-2">
-          <Label>Full Name *</Label>
+          <Label>Full Name{required ? ' *' : ''}</Label>
           <Input
             value={value.full_name ?? ''}
             onChange={(e) => set('full_name', e.target.value)}
@@ -241,8 +287,8 @@ function GuarantorFields({ value, onChange, title }: Props) {
         />
       </div>
 
-      {/* Mandatory confirmation */}
-      <div className={`rounded-md border p-3 ${value.confirmed ? 'border-emerald-300 bg-emerald-50/40' : 'border-amber-300 bg-amber-50/40'}`}>
+      {(required || !!value.full_name?.trim() || value.confirmed) && (
+      <div className={`rounded-md border p-3 ${value.confirmed ? 'border-emerald-300 bg-emerald-50/40' : required ? 'border-amber-300 bg-amber-50/40' : 'border-muted bg-muted/30'}`}>
         <div className="flex items-start gap-3">
           <Checkbox
             id={`confirm-${value.guarantor_order}`}
@@ -253,14 +299,16 @@ function GuarantorFields({ value, onChange, title }: Props) {
             <Label htmlFor={`confirm-${value.guarantor_order}`} className="flex items-center gap-1.5 font-medium">
               {value.confirmed ? (
                 <ShieldCheck className="w-4 h-4 text-emerald-600" />
-              ) : (
+              ) : required ? (
                 <ShieldAlert className="w-4 h-4 text-amber-600" />
+              ) : (
+                <ShieldCheck className="w-4 h-4 text-muted-foreground" />
               )}
-              Guarantor confirmation (required) *
+              {guarantorConfirmationCopy(required).label}
             </Label>
             <p className="text-xs text-muted-foreground">
-              I confirm this guarantor has agreed to act as surety for the employee. This confirmation is
-              mandatory before the employee can be marked as fully onboarded / active.
+              I confirm this guarantor has agreed to act as surety for the employee.{' '}
+              {guarantorConfirmationCopy(required).help}
             </p>
             {value.confirmed && (
               <div className="space-y-1.5">
@@ -283,6 +331,7 @@ function GuarantorFields({ value, onChange, title }: Props) {
           </div>
         </div>
       </div>
+      )}
     </Card>
   );
 }
@@ -292,21 +341,42 @@ interface GuarantorsFormProps {
   second: GuarantorDraft;
   onChangeFirst: (g: GuarantorDraft) => void;
   onChangeSecond: (g: GuarantorDraft) => void;
+  requirement?: GuarantorRequirement;
+  onRequirementChange?: (requirement: GuarantorRequirement) => void;
 }
 
-export function GuarantorsForm({ first, second, onChangeFirst, onChangeSecond }: GuarantorsFormProps) {
+export function GuarantorsForm({
+  first,
+  second,
+  onChangeFirst,
+  onChangeSecond,
+  requirement = 'optional',
+  onRequirementChange,
+}: GuarantorsFormProps) {
+  const [localRequirement, setLocalRequirement] = useState<GuarantorRequirement>(requirement);
+  const currentRequirement = onRequirementChange ? requirement : localRequirement;
+  const required = currentRequirement === 'mandatory';
   const bothOk = isGuarantorComplete(first) && isGuarantorComplete(second);
+
+  const setRequirement = (next: GuarantorRequirement) => {
+    setLocalRequirement(next);
+    onRequirementChange?.(next);
+  };
+
   return (
     <div className="space-y-4">
-      <div className={`rounded-md border p-3 text-sm ${bothOk ? 'border-emerald-300 bg-emerald-50/40 text-emerald-800' : 'border-amber-300 bg-amber-50/40 text-amber-900'}`}>
+      <GuarantorRequirementToggle requirement={currentRequirement} onChange={setRequirement} />
+      <div className={`rounded-md border p-3 text-sm ${bothOk ? 'border-emerald-300 bg-emerald-50/40 text-emerald-800' : required ? 'border-amber-300 bg-amber-50/40 text-amber-900' : 'border-muted bg-muted/40 text-muted-foreground'}`}>
         {bothOk ? (
           <span className="flex items-center gap-1.5"><ShieldCheck className="w-4 h-4" /> Both guarantors provided and confirmed — employee can be fully onboarded.</span>
+        ) : required ? (
+          <span className="flex items-center gap-1.5"><ShieldAlert className="w-4 h-4" /> Both guarantors (name + confirmation checkbox) are required before this employee can be added.</span>
         ) : (
-          <span className="flex items-center gap-1.5"><ShieldAlert className="w-4 h-4" /> Both guarantors (name + confirmation checkbox) are required before this employee can be marked active.</span>
+          <span className="flex items-center gap-1.5"><ShieldCheck className="w-4 h-4" /> Guarantors are optional. You can add this employee now and skip guarantors if your company or region does not require them.</span>
         )}
       </div>
-      <GuarantorFields title="1st Guarantor" value={first} onChange={onChangeFirst} />
-      <GuarantorFields title="2nd Guarantor" value={second} onChange={onChangeSecond} />
+      <GuarantorFields title="1st Guarantor" value={first} onChange={onChangeFirst} required={required} />
+      <GuarantorFields title="2nd Guarantor" value={second} onChange={onChangeSecond} required={required} />
     </div>
   );
 }
