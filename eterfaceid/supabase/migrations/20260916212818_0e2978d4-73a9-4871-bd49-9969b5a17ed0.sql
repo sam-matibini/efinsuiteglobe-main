@@ -1,0 +1,1 @@
+revoke execute on function public.sync_user_roles_from_membership() from public, anon, authenticated;
