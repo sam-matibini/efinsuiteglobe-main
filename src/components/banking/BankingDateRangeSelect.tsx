@@ -31,7 +31,7 @@ export function BankingDateRangeSelect({
       <SelectTrigger className={triggerClassName}>
         <SelectValue placeholder="All Time" />
       </SelectTrigger>
-      <SelectContent className="max-h-80">
+      <SelectContent className="max-h-[var(--radix-select-content-available-height)]">
         <SelectItem value="all">All Time</SelectItem>
         <SelectGroup>
           <SelectLabel>Current</SelectLabel>
