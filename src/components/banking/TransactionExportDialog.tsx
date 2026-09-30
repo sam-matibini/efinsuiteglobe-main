@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { FileSpreadsheet, FileText, Download, Calendar } from 'lucide-react';
+import { FileSpreadsheet, FileText, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -8,18 +8,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
+import { bankingDateBounds, isWithinBankingDateRange } from '@/lib/bankingDateRange';
+import { BankingDateRangeSelect } from '@/components/banking/BankingDateRangeSelect';
 import { signedBankAmount } from '@/lib/plaidBankAmount';
 import { isBankTransactionLocked } from '@/lib/bankTransactionLock';
 
@@ -101,7 +96,7 @@ export default function TransactionExportDialog({
     const posted = !!t.journal_entry_id;
     if (posted && !includeGlPosted) return false;
     if (!posted && !includeGlNotPosted) return false;
-    return true;
+    return isWithinBankingDateRange(format(t.date, 'yyyy-MM-dd'), bankingDateBounds(dateRange));
   });
 
   const formatCurrency = (value: number) => {
@@ -306,19 +301,7 @@ export default function TransactionExportDialog({
           {/* Date Range */}
           <div className="space-y-2">
             <Label>Date Range</Label>
-            <Select value={dateRange} onValueChange={setDateRange}>
-              <SelectTrigger>
-                <Calendar className="w-4 h-4 mr-2 text-muted-foreground" />
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Transactions</SelectItem>
-                <SelectItem value="this-month">This Month</SelectItem>
-                <SelectItem value="last-month">Last Month</SelectItem>
-                <SelectItem value="this-quarter">This Quarter</SelectItem>
-                <SelectItem value="this-year">This Year</SelectItem>
-              </SelectContent>
-            </Select>
+            <BankingDateRangeSelect value={dateRange} onValueChange={setDateRange} includeCustom={false} />
           </div>
 
           {/* Status Filter */}
