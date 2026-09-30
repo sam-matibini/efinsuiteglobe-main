@@ -31,6 +31,8 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useCreateOrganization } from '@/hooks/useOrganization';
 import { supabase } from '@/integrations/supabase/client';
+import { organizationLogoObjectPath } from '@/lib/invoiceLogoStorage';
+import { logoFileAllowed, logoUploadErrorMessage, prepareLogoUpload } from '@/lib/logoUpload';
 import { Building2, Upload, X, Loader2, Sparkles, Globe } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
@@ -139,13 +141,9 @@ export function CreateOrganizationDialog({
     const file = event.target.files?.[0];
     if (!file) return;
 
-    if (!file.type.startsWith('image/')) {
-      toast.error('Please select an image file');
-      return;
-    }
-
-    if (file.size > 2 * 1024 * 1024) {
-      toast.error('Image must be smaller than 2MB');
+    const allowed = logoFileAllowed(file);
+    if (!allowed.ok) {
+      toast.error(allowed.reason === 'size' ? 'Image must be smaller than 2MB' : 'Please select an image file');
       return;
     }
 
@@ -227,17 +225,20 @@ export function CreateOrganizationDialog({
       
       // Upload logo if selected
       if (logoFile && org) {
-        const fileExt = logoFile.name.split('.').pop();
-        const fileName = `${org.id}/logo-${Date.now()}.${fileExt}`;
-        
-        const { error: uploadError } = await supabase.storage
-          .from('organization-logos')
-          .upload(fileName, logoFile, { upsert: true });
+        try {
+          const prepared = await prepareLogoUpload(logoFile);
+          const fileName = organizationLogoObjectPath(org.id, `logo.${prepared.extension}`);
 
-        if (uploadError) {
-          console.error('Logo upload error:', uploadError);
-          toast.error('Organization created, but logo upload failed');
-        } else {
+          const { error: uploadError } = await supabase.storage
+            .from('organization-logos')
+            .upload(fileName, prepared.body, {
+              contentType: prepared.contentType,
+              cacheControl: '3600',
+              upsert: false,
+            });
+
+          if (uploadError) throw uploadError;
+
           const { data: { publicUrl } } = supabase.storage
             .from('organization-logos')
             .getPublicUrl(fileName);
@@ -246,6 +247,9 @@ export function CreateOrganizationDialog({
             .from('organizations')
             .update({ logo_url: publicUrl })
             .eq('id', org.id);
+        } catch (error) {
+          console.error('Logo upload error:', error);
+          toast.error(logoUploadErrorMessage(error));
         }
       }
 

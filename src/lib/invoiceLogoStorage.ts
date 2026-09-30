@@ -1,11 +1,32 @@
 /**
- * Object path inside the organization-logos bucket.
+ * Object paths inside the organization-logos bucket.
  *
  * Storage policies allow a member to write only when the first folder is
  * their organization id. A path that starts with "invoice-logos" is rejected.
  */
+function safeExtension(fileNameOrExt: string): string {
+  const raw = fileNameOrExt.includes('.') ? fileNameOrExt.split('.').pop() || '' : '';
+  return raw.toLowerCase().replace(/[^a-z0-9]/g, '') || 'png';
+}
+
 export function invoiceLogoObjectPath(organizationId: string, fileName: string, now = Date.now()): string {
-  const rawExt = fileName.includes('.') ? fileName.split('.').pop() || '' : '';
-  const ext = rawExt.toLowerCase().replace(/[^a-z0-9]/g, '') || 'png';
-  return `${organizationId}/invoice-logos/logo-${now}.${ext}`;
+  return `${organizationId}/invoice-logos/logo-${now}.${safeExtension(fileName)}`;
+}
+
+export function organizationLogoObjectPath(organizationId: string, fileName: string, now = Date.now()): string {
+  return `${organizationId}/logo-${now}.${safeExtension(fileName)}`;
+}
+
+/** Path of an existing object, taken from its public URL. Query strings are ignored. */
+export function logoObjectPathFromPublicUrl(url: string): string | null {
+  const marker = '/organization-logos/';
+  const index = url.indexOf(marker);
+  if (index === -1) return null;
+  const raw = url.slice(index + marker.length).split('?')[0].split('#')[0];
+  if (!raw) return null;
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
 }

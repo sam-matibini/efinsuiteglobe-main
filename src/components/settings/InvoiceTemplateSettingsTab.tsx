@@ -373,8 +373,9 @@ export function InvoiceTemplateSettingsTab() {
                   .from('organizations')
                   .update({ invoice_logo_url: url } as Record<string, unknown>)
                   .eq('id', organization.id)
-                  .then(({ error }) => {
-                    if (error) {
+                  .select('id')
+                  .then(({ data, error }) => {
+                    if (error || !data?.length) {
                       console.error('Error saving logo URL:', error);
                       toast.error('Failed to save logo');
                     } else {

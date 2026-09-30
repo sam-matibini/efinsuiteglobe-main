@@ -3,7 +3,8 @@ import { Upload, X, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { supabase } from '@/integrations/supabase/client';
-import { invoiceLogoObjectPath } from '@/lib/invoiceLogoStorage';
+import { invoiceLogoObjectPath, logoObjectPathFromPublicUrl } from '@/lib/invoiceLogoStorage';
+import { logoFileAllowed, logoUploadErrorMessage, prepareLogoUpload } from '@/lib/logoUpload';
 import { toast } from 'sonner';
 
 interface InvoiceLogoUploadProps {
@@ -24,44 +25,38 @@ export function InvoiceLogoUpload({
     const file = event.target.files?.[0];
     if (!file) return;
 
-    // Validate file type
-    if (!file.type.startsWith('image/')) {
-      toast.error('Please select an image file');
-      return;
-    }
-
-    // Validate file size (max 2MB)
-    if (file.size > 2 * 1024 * 1024) {
-      toast.error('Image must be smaller than 2MB');
+    const allowed = logoFileAllowed(file);
+    if (!allowed.ok) {
+      toast.error(allowed.reason === 'size' ? 'Image must be smaller than 2MB' : 'Please select an image file');
+      if (fileInputRef.current) fileInputRef.current.value = '';
       return;
     }
 
     setUploading(true);
 
     try {
+      const prepared = await prepareLogoUpload(file);
       // First folder must be the organization id. Storage policies reject
       // paths that start with "invoice-logos".
-      const fileName = invoiceLogoObjectPath(organizationId, file.name);
+      const fileName = invoiceLogoObjectPath(organizationId, `logo.${prepared.extension}`);
 
-      // Delete old logo if exists
-      if (currentLogoUrl) {
-        const oldPath = currentLogoUrl.split('/organization-logos/')[1];
-        if (oldPath) {
-          await supabase.storage.from('organization-logos').remove([oldPath]);
-        }
-      }
-
-      // Upload new logo
       const { error: uploadError } = await supabase.storage
         .from('organization-logos')
-        .upload(fileName, file, {
-          upsert: true,
-          contentType: file.type || 'image/png',
+        .upload(fileName, prepared.body, {
+          contentType: prepared.contentType,
+          cacheControl: '3600',
+          upsert: false,
         });
 
       if (uploadError) throw uploadError;
 
-      // Get public URL
+      if (currentLogoUrl) {
+        const oldPath = logoObjectPathFromPublicUrl(currentLogoUrl);
+        if (oldPath && oldPath !== fileName) {
+          await supabase.storage.from('organization-logos').remove([oldPath]);
+        }
+      }
+
       const { data: { publicUrl } } = supabase.storage
         .from('organization-logos')
         .getPublicUrl(fileName);
@@ -70,7 +65,7 @@ export function InvoiceLogoUpload({
       toast.success('Invoice logo uploaded successfully');
     } catch (error) {
       console.error('Error uploading logo:', error);
-      toast.error('Failed to upload logo');
+      toast.error(logoUploadErrorMessage(error));
     } finally {
       setUploading(false);
       if (fileInputRef.current) {
@@ -86,7 +81,7 @@ export function InvoiceLogoUpload({
 
     try {
       // Extract path from URL
-      const path = currentLogoUrl.split('/organization-logos/')[1];
+      const path = logoObjectPathFromPublicUrl(currentLogoUrl);
       if (path) {
         await supabase.storage.from('organization-logos').remove([path]);
       }

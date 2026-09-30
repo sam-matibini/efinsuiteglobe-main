@@ -3,6 +3,8 @@ import { Upload, X, Building2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { supabase } from '@/integrations/supabase/client';
+import { logoObjectPathFromPublicUrl, organizationLogoObjectPath } from '@/lib/invoiceLogoStorage';
+import { logoFileAllowed, logoUploadErrorMessage, prepareLogoUpload } from '@/lib/logoUpload';
 import { toast } from 'sonner';
 
 interface OrganizationLogoUploadProps {
@@ -23,58 +25,54 @@ export function OrganizationLogoUpload({
     const file = event.target.files?.[0];
     if (!file) return;
 
-    // Validate file type
-    if (!file.type.startsWith('image/')) {
-      toast.error('Please select an image file');
-      return;
-    }
-
-    // Validate file size (max 2MB)
-    if (file.size > 2 * 1024 * 1024) {
-      toast.error('Image must be smaller than 2MB');
+    const allowed = logoFileAllowed(file);
+    if (!allowed.ok) {
+      toast.error(allowed.reason === 'size' ? 'Image must be smaller than 2MB' : 'Please select an image file');
+      if (fileInputRef.current) fileInputRef.current.value = '';
       return;
     }
 
     setUploading(true);
 
     try {
-      // Generate unique filename
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${organizationId}/logo-${Date.now()}.${fileExt}`;
+      const prepared = await prepareLogoUpload(file);
+      const fileName = organizationLogoObjectPath(organizationId, `logo.${prepared.extension}`);
 
-      // Delete old logo if exists
+      const { error: uploadError } = await supabase.storage
+        .from('organization-logos')
+        .upload(fileName, prepared.body, {
+          contentType: prepared.contentType,
+          cacheControl: '3600',
+          upsert: false,
+        });
+
+      if (uploadError) throw uploadError;
+
       if (currentLogoUrl) {
-        const oldPath = currentLogoUrl.split('/organization-logos/')[1];
-        if (oldPath) {
+        const oldPath = logoObjectPathFromPublicUrl(currentLogoUrl);
+        if (oldPath && oldPath !== fileName) {
           await supabase.storage.from('organization-logos').remove([oldPath]);
         }
       }
 
-      // Upload new logo
-      const { error: uploadError } = await supabase.storage
-        .from('organization-logos')
-        .upload(fileName, file, { upsert: true });
-
-      if (uploadError) throw uploadError;
-
-      // Get public URL
       const { data: { publicUrl } } = supabase.storage
         .from('organization-logos')
         .getPublicUrl(fileName);
 
-      // Update organization
-      const { error: updateError } = await supabase
+      const { data: updated, error: updateError } = await supabase
         .from('organizations')
         .update({ logo_url: publicUrl })
-        .eq('id', organizationId);
+        .eq('id', organizationId)
+        .select('id');
 
       if (updateError) throw updateError;
+      if (!updated?.length) throw new Error('You do not have permission to upload a logo for this organization');
 
       onLogoChange(publicUrl);
       toast.success('Logo uploaded successfully');
     } catch (error) {
       console.error('Error uploading logo:', error);
-      toast.error('Failed to upload logo');
+      toast.error(logoUploadErrorMessage(error));
     } finally {
       setUploading(false);
       if (fileInputRef.current) {
@@ -90,7 +88,7 @@ export function OrganizationLogoUpload({
 
     try {
       // Extract path from URL
-      const path = currentLogoUrl.split('/organization-logos/')[1];
+      const path = logoObjectPathFromPublicUrl(currentLogoUrl);
       if (path) {
         await supabase.storage.from('organization-logos').remove([path]);
       }
