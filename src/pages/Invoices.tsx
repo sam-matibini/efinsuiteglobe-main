@@ -187,6 +187,7 @@ export default function Invoices() {
         organizationCountry: organization?.country || undefined,
         organizationPhone: organization?.phone || undefined,
         organizationEmail: organization?.email || undefined,
+        primaryColor: organization?.invoice_primary_color ?? '#7c3aed',
         organizationWebsite: organization?.website || undefined,
         logoUrl: resolvedLogoUrl || undefined,
         logoBase64: logoBase64 || undefined,
