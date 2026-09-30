@@ -724,8 +724,7 @@ async function generateStandardInvoicePdf(
   // ==================== HEADER ROW (Logo + Title + Org Info) ====================
   const headerStartY = yPos;
   
-  // Logo on left (smaller)
-  let logoEndX = margin;
+  // Logo stays on the left. The title sits in the horizontal center of the page.
   if (invoice.logoBase64 || invoice.logoUrl) {
     try {
       const logoData = invoice.logoBase64 || await loadImageAsBase64(invoice.logoUrl!);
@@ -737,24 +736,23 @@ async function generateStandardInvoicePdf(
         const logoWidth = dims.width * scale;
         const logoHeight = dims.height * scale;
         doc.addImage(logoData, 'PNG', margin, yPos, logoWidth, logoHeight);
-        logoEndX = margin + logoWidth + 5;
       }
     } catch (e) {
       console.warn('Failed to load logo:', e);
     }
   }
 
-  // Document title and invoice number (center-left)
   const docTitle = invoice.documentTitle || 'INVOICE';
+  const titleX = pageWidth / 2;
   doc.setFontSize(16);
   doc.setFont('helvetica', 'bold');
-  doc.text(docTitle.toUpperCase(), logoEndX, yPos + 5);
-  
+  doc.text(docTitle.toUpperCase(), titleX, yPos + 5, { align: 'center' });
+
   doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
-  doc.text(`#${invoice.invoiceNumber}`, logoEndX, yPos + 10);
+  doc.text(`#${invoice.invoiceNumber}`, titleX, yPos + 10, { align: 'center' });
 
-  // Organization info (right side, compact) - rendered FIRST so we know height
+  // Organization info (right side, compact). BN sits under the phone line and above the status.
   let orgBlockBottom = yPos;
   if (invoice.organizationName) {
     let orgY = yPos;
@@ -762,21 +760,21 @@ async function generateStandardInvoicePdf(
     doc.setFont('helvetica', 'bold');
     doc.text(invoice.organizationName, pageWidth - margin, orgY, { align: 'right' });
     orgY += 3.5;
-    
+
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7);
     doc.setTextColor(80, 80, 80);
-    
+
     const orgAddressParts = [
       invoice.organizationAddress,
       [invoice.organizationCity, invoice.organizationProvince, invoice.organizationPostalCode].filter(Boolean).join(', ')
     ].filter(Boolean);
-    
+
     orgAddressParts.forEach(part => {
       doc.text(part!, pageWidth - margin, orgY, { align: 'right' });
       orgY += 3;
     });
-    
+
     const contactParts: string[] = [];
     if (invoice.organizationPhone) contactParts.push(`Tel: ${invoice.organizationPhone}`);
     if (invoice.organizationEmail) contactParts.push(`Email: ${invoice.organizationEmail}`);
@@ -785,11 +783,22 @@ async function generateStandardInvoicePdf(
       doc.text(contactLine, pageWidth - margin, orgY, { align: 'right' });
       orgY += 3;
     }
+    if (invoice.charityBn) {
+      doc.text(`BN: ${invoice.charityBn}`, pageWidth - margin, orgY, { align: 'right' });
+      orgY += 3;
+    }
     doc.setTextColor(0, 0, 0);
     orgBlockBottom = orgY;
+  } else if (invoice.charityBn) {
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    doc.setTextColor(80, 80, 80);
+    doc.text(`BN: ${invoice.charityBn}`, pageWidth - margin, orgBlockBottom, { align: 'right' });
+    doc.setTextColor(0, 0, 0);
+    orgBlockBottom += 3;
   }
 
-  // Status badge - placed BELOW org info block to avoid overlap
+  // Status badge sits under the BN.
   doc.setFontSize(8);
   doc.setTextColor(100, 100, 100);
   doc.text(invoice.status.toUpperCase(), pageWidth - margin, orgBlockBottom + 1, { align: 'right' });
@@ -799,7 +808,6 @@ async function generateStandardInvoicePdf(
 
   // ==================== TAX REGISTRATION NUMBERS ====================
   const taxRegParts: string[] = [];
-  if (invoice.charityBn) taxRegParts.push(`BN: ${invoice.charityBn}`);
   if (invoice.dealerPermitNumber) taxRegParts.push(`Dealer Permit#: ${invoice.dealerPermitNumber}`);
   if (invoice.gstHstNumber) taxRegParts.push(`GST/HST#: ${invoice.gstHstNumber}`);
   if (invoice.pstNumber) taxRegParts.push(`PST#: ${invoice.pstNumber}`);
