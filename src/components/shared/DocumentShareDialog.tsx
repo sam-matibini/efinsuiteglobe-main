@@ -209,6 +209,8 @@ ${organization.name}`;
       organizationCountry: organization?.country || undefined,
       organizationPhone: organization?.phone || undefined,
       organizationEmail: organization?.email || undefined,
+      primaryColor: organization?.invoice_primary_color ?? '#7c3aed',
+      showLineNumbers: organization?.invoice_show_line_numbers ?? false,
       organizationWebsite: organization?.website || undefined,
       logoUrl: getDocumentLogoUrl(organization, 'invoice') || undefined,
       currency: localization.currency,
