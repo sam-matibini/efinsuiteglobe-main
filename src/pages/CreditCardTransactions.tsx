@@ -41,7 +41,9 @@ import { useTransactionRules } from '@/hooks/useTransactionRules';
 import { useApplyCCRules } from '@/hooks/useCreditCardRuleAnalysis';
 import { CreateOrganizationDialog } from '@/components/accounts/CreateOrganizationDialog';
 import { Skeleton } from '@/components/ui/skeleton';
-import { format, startOfMonth, endOfMonth, subMonths, startOfYear, endOfYear } from 'date-fns';
+import { format } from 'date-fns';
+import { bankingDateBounds, isWithinBankingDateRange } from '@/lib/bankingDateRange';
+import { BankingDateRangeSelect } from '@/components/banking/BankingDateRangeSelect';
 import {
   Table,
   TableBody,
@@ -116,29 +118,8 @@ export default function CreditCardTransactions() {
     return Array.from(cats).sort();
   }, [transactions]);
 
-  // Date range helper - uses string comparisons to avoid timezone issues
   const getDateRangeFilter = useCallback(() => {
-    const now = new Date();
-    const formatLocalDate = (d: Date) => format(d, 'yyyy-MM-dd');
-    
-    switch (dateRange) {
-      case 'this-month':
-        return { start: formatLocalDate(startOfMonth(now)), end: formatLocalDate(endOfMonth(now)) };
-      case 'last-month':
-        const lastMonth = subMonths(now, 1);
-        return { start: formatLocalDate(startOfMonth(lastMonth)), end: formatLocalDate(endOfMonth(lastMonth)) };
-      case 'last-3-months':
-        return { start: formatLocalDate(startOfMonth(subMonths(now, 2))), end: formatLocalDate(endOfMonth(now)) };
-      case 'this-year':
-        return { start: formatLocalDate(startOfYear(now)), end: formatLocalDate(endOfYear(now)) };
-      case 'custom':
-        return { 
-          start: customStartDate ? formatLocalDate(customStartDate) : null, 
-          end: customEndDate ? formatLocalDate(customEndDate) : null 
-        };
-      default:
-        return null;
-    }
+    return bankingDateBounds(dateRange, new Date(), { start: customStartDate, end: customEndDate });
   }, [dateRange, customStartDate, customEndDate]);
 
   const filteredTransactions = useMemo(() => {
@@ -165,12 +146,7 @@ export default function CreditCardTransactions() {
       // Category filter
       const matchesCategory = categoryFilter === 'all' || t.category === categoryFilter;
       
-      // Date range filter - use string comparison to avoid timezone issues
-      let matchesDate = true;
-      if (dateFilter && dateFilter.start && dateFilter.end) {
-        const txDateStr = t.transaction_date.substring(0, 10); // Extract YYYY-MM-DD
-        matchesDate = txDateStr >= dateFilter.start && txDateStr <= dateFilter.end;
-      }
+      const matchesDate = isWithinBankingDateRange(t.transaction_date, dateFilter);
       
       // Amount filter
       let matchesAmount = true;
@@ -622,19 +598,11 @@ export default function CreditCardTransactions() {
                 </SelectContent>
               </Select>
 
-              <Select value={dateRange} onValueChange={setDateRange}>
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="Date Range" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Time</SelectItem>
-                  <SelectItem value="this-month">This Month</SelectItem>
-                  <SelectItem value="last-month">Last Month</SelectItem>
-                  <SelectItem value="last-3-months">Last 3 Months</SelectItem>
-                  <SelectItem value="this-year">This Year</SelectItem>
-                  <SelectItem value="custom">Custom Range</SelectItem>
-                </SelectContent>
-              </Select>
+              <BankingDateRangeSelect
+                value={dateRange}
+                onValueChange={setDateRange}
+                triggerClassName="w-[180px]"
+              />
 
               {dateRange === 'custom' && (
                 <div className="flex items-center gap-2">
