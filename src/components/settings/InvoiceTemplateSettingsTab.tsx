@@ -376,6 +376,7 @@ export function InvoiceTemplateSettingsTab() {
                   .then(({ error }) => {
                     if (error) {
                       console.error('Error saving logo URL:', error);
+                      toast.error('Failed to save logo');
                     } else {
                       queryClient.invalidateQueries({ queryKey: ['organizations'] });
                     }

@@ -3,6 +3,7 @@ import { Upload, X, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { supabase } from '@/integrations/supabase/client';
+import { invoiceLogoObjectPath } from '@/lib/invoiceLogoStorage';
 import { toast } from 'sonner';
 
 interface InvoiceLogoUploadProps {
@@ -38,9 +39,9 @@ export function InvoiceLogoUpload({
     setUploading(true);
 
     try {
-      // Generate unique filename
-      const fileExt = file.name.split('.').pop();
-      const fileName = `invoice-logos/${organizationId}/logo-${Date.now()}.${fileExt}`;
+      // First folder must be the organization id. Storage policies reject
+      // paths that start with "invoice-logos".
+      const fileName = invoiceLogoObjectPath(organizationId, file.name);
 
       // Delete old logo if exists
       if (currentLogoUrl) {
@@ -53,7 +54,10 @@ export function InvoiceLogoUpload({
       // Upload new logo
       const { error: uploadError } = await supabase.storage
         .from('organization-logos')
-        .upload(fileName, file, { upsert: true });
+        .upload(fileName, file, {
+          upsert: true,
+          contentType: file.type || 'image/png',
+        });
 
       if (uploadError) throw uploadError;
 
