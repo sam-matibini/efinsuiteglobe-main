@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { supabase } from '@/integrations/supabase/client';
 import { logoObjectPathFromPublicUrl, organizationLogoObjectPath } from '@/lib/invoiceLogoStorage';
-import { logoFileAllowed, logoUploadErrorMessage, prepareLogoUpload } from '@/lib/logoUpload';
+import { logoFileAllowed, logoUploadErrorMessage, logoUploadFile, prepareLogoUpload } from '@/lib/logoUpload';
 import { toast } from 'sonner';
 
 interface OrganizationLogoUploadProps {
@@ -36,14 +36,13 @@ export function OrganizationLogoUpload({
 
     try {
       const prepared = await prepareLogoUpload(file);
-      const fileName = organizationLogoObjectPath(organizationId, `logo.${prepared.extension}`);
+      const uploadFile = logoUploadFile(prepared);
+      const fileName = organizationLogoObjectPath(organizationId, uploadFile.name);
 
       const { error: uploadError } = await supabase.storage
         .from('organization-logos')
-        .upload(fileName, prepared.body, {
-          contentType: prepared.contentType,
-          cacheControl: '3600',
-          upsert: false,
+        .upload(fileName, uploadFile, {
+          upsert: true,
         });
 
       if (uploadError) throw uploadError;

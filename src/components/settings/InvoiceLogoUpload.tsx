@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { supabase } from '@/integrations/supabase/client';
 import { invoiceLogoObjectPath, logoObjectPathFromPublicUrl } from '@/lib/invoiceLogoStorage';
-import { logoFileAllowed, logoUploadErrorMessage, prepareLogoUpload } from '@/lib/logoUpload';
+import { logoFileAllowed, logoUploadErrorMessage, logoUploadFile, prepareLogoUpload } from '@/lib/logoUpload';
 import { toast } from 'sonner';
 
 interface InvoiceLogoUploadProps {
@@ -36,16 +36,15 @@ export function InvoiceLogoUpload({
 
     try {
       const prepared = await prepareLogoUpload(file);
-      // First folder must be the organization id. Storage policies reject
-      // paths that start with "invoice-logos".
-      const fileName = invoiceLogoObjectPath(organizationId, `logo.${prepared.extension}`);
+      const uploadFile = logoUploadFile(prepared);
+      // First folder must be the organization id. The live uploader used
+      // invoice-logos/{organizationId}, and storage rejects that path.
+      const fileName = invoiceLogoObjectPath(organizationId, uploadFile.name);
 
       const { error: uploadError } = await supabase.storage
         .from('organization-logos')
-        .upload(fileName, prepared.body, {
-          contentType: prepared.contentType,
-          cacheControl: '3600',
-          upsert: false,
+        .upload(fileName, uploadFile, {
+          upsert: true,
         });
 
       if (uploadError) throw uploadError;

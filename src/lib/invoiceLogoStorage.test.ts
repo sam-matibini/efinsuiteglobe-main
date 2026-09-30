@@ -7,13 +7,13 @@ describe('invoice logo storage path', () => {
 
   it('puts the organization id in the first folder so members can upload', () => {
     const path = invoiceLogoObjectPath(organizationId, 'brand.png', 1710000000000);
-    expect(path).toBe(`${organizationId}/invoice-logos/logo-1710000000000.png`);
-    expect(path.split('/')[0]).toBe(organizationId);
+    expect(path).toBe(`${organizationId}/invoice-logo-1710000000000.png`);
+    expect(path.split('/')).toEqual([organizationId, 'invoice-logo-1710000000000.png']);
     expect(path.startsWith('invoice-logos/')).toBe(false);
   });
 
   it('keeps a safe extension when the file name has none', () => {
-    expect(invoiceLogoObjectPath(organizationId, 'logo', 1)).toBe(`${organizationId}/invoice-logos/logo-1.png`);
+    expect(invoiceLogoObjectPath(organizationId, 'logo', 1)).toBe(`${organizationId}/invoice-logo-1.png`);
   });
 
   it('stores the organization logo beside the invoice logo, still under the organization id', () => {
@@ -50,6 +50,9 @@ describe('logo file rules', () => {
   it('explains a storage size or permission failure', () => {
     expect(logoUploadErrorMessage({ message: 'The object exceeded the maximum allowed size' })).toBe('Image must be smaller than 2MB');
     expect(logoUploadErrorMessage({ message: 'new row violates row-level security policy' })).toBe(
+      'You do not have permission to upload a logo for this organization',
+    );
+    expect(logoUploadErrorMessage({ message: 'invalid input syntax for type uuid: "invoice-logos"' })).toBe(
       'You do not have permission to upload a logo for this organization',
     );
   });

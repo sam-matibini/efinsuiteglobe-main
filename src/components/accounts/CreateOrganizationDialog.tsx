@@ -32,7 +32,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useCreateOrganization } from '@/hooks/useOrganization';
 import { supabase } from '@/integrations/supabase/client';
 import { organizationLogoObjectPath } from '@/lib/invoiceLogoStorage';
-import { logoFileAllowed, logoUploadErrorMessage, prepareLogoUpload } from '@/lib/logoUpload';
+import { logoFileAllowed, logoUploadErrorMessage, logoUploadFile, prepareLogoUpload } from '@/lib/logoUpload';
 import { Building2, Upload, X, Loader2, Sparkles, Globe } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
@@ -227,14 +227,13 @@ export function CreateOrganizationDialog({
       if (logoFile && org) {
         try {
           const prepared = await prepareLogoUpload(logoFile);
-          const fileName = organizationLogoObjectPath(org.id, `logo.${prepared.extension}`);
+          const uploadFile = logoUploadFile(prepared);
+          const fileName = organizationLogoObjectPath(org.id, uploadFile.name);
 
           const { error: uploadError } = await supabase.storage
             .from('organization-logos')
-            .upload(fileName, prepared.body, {
-              contentType: prepared.contentType,
-              cacheControl: '3600',
-              upsert: false,
+            .upload(fileName, uploadFile, {
+              upsert: true,
             });
 
           if (uploadError) throw uploadError;

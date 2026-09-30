@@ -81,6 +81,14 @@ async function renderLogo(bitmap: ImageBitmap, maxEdge: number): Promise<Blob> {
   return blob;
 }
 
+/** File with a name and image type. Storage reads the type from the file, not the upload option. */
+export function logoUploadFile(prepared: PreparedLogo): File {
+  if (prepared.body instanceof File && prepared.body.type === prepared.contentType) {
+    return prepared.body;
+  }
+  return new File([prepared.body], `logo.${prepared.extension}`, { type: prepared.contentType });
+}
+
 export function logoUploadErrorMessage(error: unknown): string {
   const message =
     error && typeof error === 'object' && 'message' in error && typeof (error as { message: unknown }).message === 'string'
@@ -104,5 +112,8 @@ export function logoUploadErrorMessage(error: unknown): string {
   if (lower.includes('mime') || lower.includes('invalid file type')) {
     return 'Upload a PNG or JPG image';
   }
-  return 'Failed to upload logo';
+  if (lower.includes('invalid input syntax for type uuid')) {
+    return 'You do not have permission to upload a logo for this organization';
+  }
+  return message ? `Failed to upload logo: ${message}` : 'Failed to upload logo';
 }

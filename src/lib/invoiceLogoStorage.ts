@@ -10,7 +10,10 @@ function safeExtension(fileNameOrExt: string): string {
 }
 
 export function invoiceLogoObjectPath(organizationId: string, fileName: string, now = Date.now()): string {
-  return `${organizationId}/invoice-logos/logo-${now}.${safeExtension(fileName)}`;
+  // One folder only, and it is the organization id. The same shape as the
+  // organization logo uploads that already succeed. A path that starts with
+  // "invoice-logos" makes a storage policy cast fail and the upload is rejected.
+  return `${organizationId}/invoice-logo-${now}.${safeExtension(fileName)}`;
 }
 
 export function organizationLogoObjectPath(organizationId: string, fileName: string, now = Date.now()): string {
