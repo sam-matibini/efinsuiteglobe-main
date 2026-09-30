@@ -63,6 +63,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 import { TransactionRule as UITransactionRule, RuleCondition, RuleAction } from '@/types/bankingRules';
 import { useConfirmDelete } from '@/hooks/useConfirmDelete';
+import { isEligibleForTransactionRules } from '@/lib/transactionRuleEligibility';
 
 type AnalysisSource = 'bank' | 'credit-card';
 
@@ -111,17 +112,12 @@ export default function TransactionRules() {
     creditCards.find(c => c.id === selectedCreditCardId)?.gl_account_id
   );
   
-  // Calculate eligible transactions for analysis (pending/unmatched without category)
+  // Unmatched and pending lines, including those with a feed category and no GL posting.
   const eligibleBankTransactions = useMemo(() => 
-    bankTransactions.filter(t => 
-      (t.status === 'unmatched' || t.status === 'pending') && !t.category
-    ), [bankTransactions]);
+    bankTransactions.filter(isEligibleForTransactionRules), [bankTransactions]);
     
   const eligibleCCTransactions = useMemo(() => 
-    ccTransactions.filter(t => 
-      (t.status === 'pending' || t.status === 'unmatched' || !t.status) && 
-      !t.category && t.status !== 'reconciled'
-    ), [ccTransactions]);
+    ccTransactions.filter(isEligibleForTransactionRules), [ccTransactions]);
   
   const currentEligibleCount = analysisSource === 'bank' 
     ? eligibleBankTransactions.length 
@@ -409,7 +405,7 @@ export default function TransactionRules() {
           {currentEligibleCount > 0 && (
             <Badge variant="secondary" className="gap-1">
               <AlertCircle className="w-3 h-3" />
-              {currentEligibleCount} pending
+              {currentEligibleCount} to analyze
             </Badge>
           )}
           <Button 

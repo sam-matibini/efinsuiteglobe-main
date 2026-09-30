@@ -4,6 +4,7 @@ import { createJournalEntry } from './useJournalEntryCreation';
 import { TransactionRule } from './useTransactionRules';
 import { CreditCardTransaction } from './useCreditCards';
 import { allowUnreconciledBankUpdate } from '@/lib/bankTransactionLock';
+import { isEligibleForTransactionRules } from '@/lib/transactionRuleEligibility';
 import { toast } from 'sonner';
 import { 
   matchText, 
@@ -175,19 +176,15 @@ export function calculateCCMatchConfidence(
 }
 
 /**
- * Analyze credit card transactions against rules without applying
- * Includes pending and uncategorized transactions
+ * Analyze credit card transactions against rules without applying.
+ * Unmatched and pending lines stay eligible when a feed category is set
+ * and nothing has been posted to the ledger.
  */
 export function analyzeCCTransactions(
   transactions: CreditCardTransaction[],
   rules: TransactionRule[]
 ): CCAnalysisResult[] {
-  // Include pending and uncategorized transactions (not reconciled)
-  const eligibleTxs = transactions.filter(t => 
-    !t.category && 
-    (t.status === 'pending' || t.status === 'unmatched' || !t.status) &&
-    t.status !== 'reconciled'
-  );
+  const eligibleTxs = transactions.filter(isEligibleForTransactionRules);
   const activeRules = rules.filter(r => r.is_active).sort((a, b) => b.priority - a.priority);
 
   return eligibleTxs.map(tx => {

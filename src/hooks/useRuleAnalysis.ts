@@ -5,6 +5,7 @@ import { reverseLinkedJournalEntry, recalculateAndInvalidate } from './useGLProp
 import { TransactionRule } from './useTransactionRules';
 import { BankTransaction } from './useBankTransactions';
 import { allowUnreconciledBankUpdate } from '@/lib/bankTransactionLock';
+import { isEligibleForTransactionRules } from '@/lib/transactionRuleEligibility';
 import { toast } from 'sonner';
 import { 
   matchText, 
@@ -181,18 +182,15 @@ export function calculateMatchConfidence(
 }
 
 /**
- * Analyze transactions against rules without applying
- * Includes both 'pending' and 'unmatched' transactions that don't have a category
+ * Analyze transactions against rules without applying.
+ * Unmatched and pending lines are included even when a feed category
+ * such as "Transfer" is already present, until they are posted.
  */
 export function analyzeTransactions(
   transactions: BankTransaction[],
   rules: TransactionRule[]
 ): AnalysisResult[] {
-  // Include pending and unmatched transactions without categories
-  const eligibleTxs = transactions.filter(t => 
-    (t.status === 'unmatched' || t.status === 'pending') && 
-    !t.category
-  );
+  const eligibleTxs = transactions.filter(isEligibleForTransactionRules);
   const activeRules = rules.filter(r => r.is_active).sort((a, b) => b.priority - a.priority);
 
   return eligibleTxs.map(tx => {
