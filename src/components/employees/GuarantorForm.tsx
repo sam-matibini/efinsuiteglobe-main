@@ -7,6 +7,9 @@ import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Textarea } from '@/components/ui/textarea';
 import { UserPlus, ShieldCheck, ShieldAlert } from 'lucide-react';
 import type { EmployeeGuarantor } from '@/hooks/useEmployeeGuarantors';
+import { namedGuarantors } from '@/lib/employeeGuarantors';
+
+export { namedGuarantors };
 
 export type GuarantorDraft = Omit<EmployeeGuarantor, 'employee_id' | 'organization_id' | 'id'>;
 
@@ -57,7 +60,7 @@ function GuarantorFields({ value, onChange, title }: Props) {
 
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5 col-span-2">
-          <Label>Full Name *</Label>
+          <Label>Full Name</Label>
           <Input
             value={value.full_name ?? ''}
             onChange={(e) => set('full_name', e.target.value)}
@@ -241,8 +244,7 @@ function GuarantorFields({ value, onChange, title }: Props) {
         />
       </div>
 
-      {/* Mandatory confirmation */}
-      <div className={`rounded-md border p-3 ${value.confirmed ? 'border-emerald-300 bg-emerald-50/40' : 'border-amber-300 bg-amber-50/40'}`}>
+      <div className={`rounded-md border p-3 ${value.confirmed ? 'border-emerald-300 bg-emerald-50/40' : 'border-border bg-muted/30'}`}>
         <div className="flex items-start gap-3">
           <Checkbox
             id={`confirm-${value.guarantor_order}`}
@@ -254,13 +256,12 @@ function GuarantorFields({ value, onChange, title }: Props) {
               {value.confirmed ? (
                 <ShieldCheck className="w-4 h-4 text-emerald-600" />
               ) : (
-                <ShieldAlert className="w-4 h-4 text-amber-600" />
+                <ShieldAlert className="w-4 h-4 text-muted-foreground" />
               )}
-              Guarantor confirmation (required) *
+              Guarantor confirmation (optional)
             </Label>
             <p className="text-xs text-muted-foreground">
-              I confirm this guarantor has agreed to act as surety for the employee. This confirmation is
-              mandatory before the employee can be marked as fully onboarded / active.
+              Check this if the guarantor has agreed to act as surety. You can finish onboarding without a guarantor and add this later.
             </p>
             {value.confirmed && (
               <div className="space-y-1.5">
@@ -298,11 +299,11 @@ export function GuarantorsForm({ first, second, onChangeFirst, onChangeSecond }:
   const bothOk = isGuarantorComplete(first) && isGuarantorComplete(second);
   return (
     <div className="space-y-4">
-      <div className={`rounded-md border p-3 text-sm ${bothOk ? 'border-emerald-300 bg-emerald-50/40 text-emerald-800' : 'border-amber-300 bg-amber-50/40 text-amber-900'}`}>
+      <div className={`rounded-md border p-3 text-sm ${bothOk ? 'border-emerald-300 bg-emerald-50/40 text-emerald-800' : 'border-border bg-muted/40 text-muted-foreground'}`}>
         {bothOk ? (
-          <span className="flex items-center gap-1.5"><ShieldCheck className="w-4 h-4" /> Both guarantors provided and confirmed — employee can be fully onboarded.</span>
+          <span className="flex items-center gap-1.5"><ShieldCheck className="w-4 h-4" /> Both guarantors are on file. You can still finish onboarding without them.</span>
         ) : (
-          <span className="flex items-center gap-1.5"><ShieldAlert className="w-4 h-4" /> Both guarantors (name + confirmation checkbox) are required before this employee can be marked active.</span>
+          <span className="flex items-center gap-1.5"><ShieldAlert className="w-4 h-4" /> Guarantors are optional. Finish onboarding now and add them later if you need them.</span>
         )}
       </div>
       <GuarantorFields title="1st Guarantor" value={first} onChange={onChangeFirst} />

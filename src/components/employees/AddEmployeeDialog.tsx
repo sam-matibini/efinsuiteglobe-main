@@ -1,10 +1,12 @@
-import { useState, useMemo } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { FileText, User, Sparkles, UserPlus } from 'lucide-react';
-import { GuarantorsForm, EMPTY_GUARANTOR, isGuarantorComplete, type GuarantorDraft } from './GuarantorForm';
+import { GuarantorsForm, EMPTY_GUARANTOR, namedGuarantors, type GuarantorDraft } from './GuarantorForm';
 import { saveGuarantorsForEmployee } from '@/hooks/useEmployeeGuarantors';
+import { employeeFormErrorTarget } from '@/lib/employeeFormNavigation';
+import type { FieldErrors } from 'react-hook-form';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -113,6 +115,7 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
   const [selectedJurisdiction, setSelectedJurisdiction] = useState<string>('');
   const [guarantor1, setGuarantor1] = useState<GuarantorDraft>(EMPTY_GUARANTOR(1));
   const [guarantor2, setGuarantor2] = useState<GuarantorDraft>(EMPTY_GUARANTOR(2));
+  const formScrollRef = useRef<HTMLDivElement>(null);
 
   // Determine country from organization
   const countryCode = useMemo(() => {
@@ -279,13 +282,18 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
     return `${prefix}${timestamp}`;
   };
 
+  const onInvalid = (errors: FieldErrors<EmployeeFormData>) => {
+    const target = employeeFormErrorTarget(errors as Record<string, { message?: string } | undefined>);
+    if (!target) return;
+    setActiveTab(target.tab);
+    toast.error(target.message);
+    window.setTimeout(() => {
+      const message = formScrollRef.current?.querySelector('p[id$="-form-item-message"]');
+      message?.scrollIntoView({ block: 'center' });
+    }, 50);
+  };
+
   const onSubmit = async (data: EmployeeFormData) => {
-    // Mandatory: both guarantors must be provided AND confirmed
-    if (!isGuarantorComplete(guarantor1) || !isGuarantorComplete(guarantor2)) {
-      setActiveTab('guarantors');
-      toast.error('Both guarantors are required and each must be confirmed before onboarding.');
-      return;
-    }
     setIsSubmitting(true);
     try {
       // For non-Canadian employees, we still store the jurisdiction in province field
@@ -371,20 +379,23 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
       }
       // For other countries, we could store in a generic payroll_deductions table
 
-      // Save guarantors (any provided)
-      if (organization?.id) {
+      const guarantorsToSave = namedGuarantors([
+        { ...guarantor1, guarantor_order: 1 as const, full_name: guarantor1.full_name?.trim() ?? '' },
+        { ...guarantor2, guarantor_order: 2 as const, full_name: guarantor2.full_name?.trim() ?? '' },
+      ]);
+      if (organization?.id && guarantorsToSave.length > 0) {
         try {
-          await saveGuarantorsForEmployee(employee.id, organization.id, [
-            { ...guarantor1, guarantor_order: 1, full_name: guarantor1.full_name?.trim() ?? '' },
-            { ...guarantor2, guarantor_order: 2, full_name: guarantor2.full_name?.trim() ?? '' },
-          ]);
+          await saveGuarantorsForEmployee(employee.id, organization.id, guarantorsToSave);
         } catch (gErr: any) {
           console.warn('Guarantor save warning:', gErr?.message);
+          toast.warning('Employee was added. Guarantors could not be saved and can be added later.');
         }
       }
 
       toast.success(`Employee ${data.firstName} ${data.lastName} added successfully!`);
       form.reset();
+      setGuarantor1(EMPTY_GUARANTOR(1));
+      setGuarantor2(EMPTY_GUARANTOR(2));
       onOpenChange(false);
       onSuccess?.();
     } catch (error: any) {
@@ -613,7 +624,7 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="flex max-h-[90vh] flex-col gap-4 overflow-hidden sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <User className="w-5 h-5" />
@@ -623,7 +634,8 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)}>
+          <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="flex min-h-0 flex-1 flex-col gap-4">
+            <div ref={formScrollRef} className="min-h-0 flex-1 overflow-y-auto pr-1">
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
               <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="personal" className="flex items-center gap-2">
@@ -1094,8 +1106,9 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
                 />
               </TabsContent>
             </Tabs>
+            </div>
 
-            <div className="flex justify-between pt-6 border-t mt-6">
+            <div className="flex shrink-0 justify-between border-t pt-4">
               <Button
                 type="button"
                 variant="outline"
@@ -1115,20 +1128,18 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
                   </Button>
                 )}
                 {activeTab === 'personal' && (
-                  <Button type="button" onClick={() => setActiveTab('tax')}>
+                  <Button type="button" variant="outline" onClick={() => setActiveTab('tax')}>
                     Next
                   </Button>
                 )}
                 {activeTab === 'tax' && (
-                  <Button type="button" onClick={() => setActiveTab('guarantors')}>
-                    Next
+                  <Button type="button" variant="outline" onClick={() => setActiveTab('guarantors')}>
+                    Guarantors
                   </Button>
                 )}
-                {activeTab === 'guarantors' && (
-                  <Button type="submit" disabled={isSubmitting}>
-                    {isSubmitting ? 'Adding...' : 'Add Employee'}
-                  </Button>
-                )}
+                <Button type="submit" disabled={isSubmitting}>
+                  {isSubmitting ? 'Adding...' : 'Add Employee'}
+                </Button>
               </div>
             </div>
           </form>

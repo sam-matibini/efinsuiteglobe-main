@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrganization } from './useOrganization';
 import { toast } from 'sonner';
+import { namedGuarantors } from '@/lib/employeeGuarantors';
 
 export interface EmployeeGuarantor {
   id?: string;
@@ -86,9 +87,8 @@ export async function saveGuarantorsForEmployee(
   organizationId: string,
   guarantors: Array<Partial<EmployeeGuarantor> & { guarantor_order: 1 | 2; full_name: string }>,
 ) {
-  const rows = guarantors
-    .filter((g) => g.full_name && g.full_name.trim().length > 0)
-    .map((g) => ({ ...g, employee_id: employeeId, organization_id: organizationId }));
+  const rows = namedGuarantors(guarantors)
+    .map((g) => ({ ...g, employee_id: employeeId, organization_id: organizationId, full_name: g.full_name.trim() }));
   if (rows.length === 0) return;
   const { error } = await (supabase as any)
     .from('employee_guarantors')
