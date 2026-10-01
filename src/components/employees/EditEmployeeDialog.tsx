@@ -839,7 +839,7 @@ function GuarantorsTabContent({ employeeId }: { employeeId: string }) {
   const save = async (which: 1 | 2) => {
     const draft = which === 1 ? g1 : g2;
     if (!draft.full_name?.trim()) {
-      toast.error('Full name is required');
+      toast.message('No name entered, so this guarantor was left blank.');
       return;
     }
     await upsert.mutateAsync({ ...draft, employee_id: employeeId });

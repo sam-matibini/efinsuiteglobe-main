@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { FileText, User, Sparkles, UserPlus } from 'lucide-react';
-import { GuarantorsForm, EMPTY_GUARANTOR, isGuarantorComplete, type GuarantorDraft } from './GuarantorForm';
+import { GuarantorsForm, EMPTY_GUARANTOR, namedGuarantors, type GuarantorDraft } from './GuarantorForm';
 import { saveGuarantorsForEmployee } from '@/hooks/useEmployeeGuarantors';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
@@ -280,12 +280,6 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
   };
 
   const onSubmit = async (data: EmployeeFormData) => {
-    // Mandatory: both guarantors must be provided AND confirmed
-    if (!isGuarantorComplete(guarantor1) || !isGuarantorComplete(guarantor2)) {
-      setActiveTab('guarantors');
-      toast.error('Both guarantors are required and each must be confirmed before onboarding.');
-      return;
-    }
     setIsSubmitting(true);
     try {
       // For non-Canadian employees, we still store the jurisdiction in province field
@@ -371,20 +365,23 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
       }
       // For other countries, we could store in a generic payroll_deductions table
 
-      // Save guarantors (any provided)
-      if (organization?.id) {
+      const guarantorsToSave = namedGuarantors([
+        { ...guarantor1, guarantor_order: 1 as const, full_name: guarantor1.full_name?.trim() ?? '' },
+        { ...guarantor2, guarantor_order: 2 as const, full_name: guarantor2.full_name?.trim() ?? '' },
+      ]);
+      if (organization?.id && guarantorsToSave.length > 0) {
         try {
-          await saveGuarantorsForEmployee(employee.id, organization.id, [
-            { ...guarantor1, guarantor_order: 1, full_name: guarantor1.full_name?.trim() ?? '' },
-            { ...guarantor2, guarantor_order: 2, full_name: guarantor2.full_name?.trim() ?? '' },
-          ]);
+          await saveGuarantorsForEmployee(employee.id, organization.id, guarantorsToSave);
         } catch (gErr: any) {
           console.warn('Guarantor save warning:', gErr?.message);
+          toast.warning('Employee was added. Guarantors could not be saved and can be added later.');
         }
       }
 
       toast.success(`Employee ${data.firstName} ${data.lastName} added successfully!`);
       form.reset();
+      setGuarantor1(EMPTY_GUARANTOR(1));
+      setGuarantor2(EMPTY_GUARANTOR(2));
       onOpenChange(false);
       onSuccess?.();
     } catch (error: any) {
@@ -1115,20 +1112,18 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
                   </Button>
                 )}
                 {activeTab === 'personal' && (
-                  <Button type="button" onClick={() => setActiveTab('tax')}>
+                  <Button type="button" variant="outline" onClick={() => setActiveTab('tax')}>
                     Next
                   </Button>
                 )}
                 {activeTab === 'tax' && (
-                  <Button type="button" onClick={() => setActiveTab('guarantors')}>
-                    Next
+                  <Button type="button" variant="outline" onClick={() => setActiveTab('guarantors')}>
+                    Guarantors
                   </Button>
                 )}
-                {activeTab === 'guarantors' && (
-                  <Button type="submit" disabled={isSubmitting}>
-                    {isSubmitting ? 'Adding...' : 'Add Employee'}
-                  </Button>
-                )}
+                <Button type="submit" disabled={isSubmitting}>
+                  {isSubmitting ? 'Adding...' : 'Add Employee'}
+                </Button>
               </div>
             </div>
           </form>
