@@ -287,7 +287,10 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
     if (!target) return;
     setActiveTab(target.tab);
     toast.error(target.message);
-    requestAnimationFrame(() => formScrollRef.current?.scrollTo({ top: 0 }));
+    window.setTimeout(() => {
+      const message = formScrollRef.current?.querySelector('p[id$="-form-item-message"]');
+      message?.scrollIntoView({ block: 'center' });
+    }, 50);
   };
 
   const onSubmit = async (data: EmployeeFormData) => {
