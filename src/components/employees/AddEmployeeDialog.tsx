@@ -1,10 +1,12 @@
-import { useState, useMemo } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { FileText, User, Sparkles, UserPlus } from 'lucide-react';
 import { GuarantorsForm, EMPTY_GUARANTOR, namedGuarantors, type GuarantorDraft } from './GuarantorForm';
 import { saveGuarantorsForEmployee } from '@/hooks/useEmployeeGuarantors';
+import { employeeFormErrorTarget } from '@/lib/employeeFormNavigation';
+import type { FieldErrors } from 'react-hook-form';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -113,6 +115,7 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
   const [selectedJurisdiction, setSelectedJurisdiction] = useState<string>('');
   const [guarantor1, setGuarantor1] = useState<GuarantorDraft>(EMPTY_GUARANTOR(1));
   const [guarantor2, setGuarantor2] = useState<GuarantorDraft>(EMPTY_GUARANTOR(2));
+  const formScrollRef = useRef<HTMLDivElement>(null);
 
   // Determine country from organization
   const countryCode = useMemo(() => {
@@ -277,6 +280,14 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
     const prefix = 'EMP';
     const timestamp = Date.now().toString().slice(-6);
     return `${prefix}${timestamp}`;
+  };
+
+  const onInvalid = (errors: FieldErrors<EmployeeFormData>) => {
+    const target = employeeFormErrorTarget(errors as Record<string, { message?: string } | undefined>);
+    if (!target) return;
+    setActiveTab(target.tab);
+    toast.error(target.message);
+    requestAnimationFrame(() => formScrollRef.current?.scrollTo({ top: 0 }));
   };
 
   const onSubmit = async (data: EmployeeFormData) => {
@@ -610,7 +621,7 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="flex max-h-[90vh] flex-col gap-4 overflow-hidden sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <User className="w-5 h-5" />
@@ -620,7 +631,8 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)}>
+          <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="flex min-h-0 flex-1 flex-col gap-4">
+            <div ref={formScrollRef} className="min-h-0 flex-1 overflow-y-auto pr-1">
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
               <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="personal" className="flex items-center gap-2">
@@ -1091,8 +1103,9 @@ export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployee
                 />
               </TabsContent>
             </Tabs>
+            </div>
 
-            <div className="flex justify-between pt-6 border-t mt-6">
+            <div className="flex shrink-0 justify-between border-t pt-4">
               <Button
                 type="button"
                 variant="outline"
