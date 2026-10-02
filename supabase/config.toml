@@ -49,6 +49,9 @@ verify_jwt = false
 [functions.voice-transcribe]
 verify_jwt = false
 
+[functions.elevenlabs-tts]
+verify_jwt = false
+
 [functions.twilio-inbound-voice]
 verify_jwt = false
 
