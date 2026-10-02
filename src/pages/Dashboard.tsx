@@ -1,4 +1,4 @@
-import { DollarSign, TrendingUp, Wallet, CreditCard, Building2, Calendar } from 'lucide-react';
+import { DollarSign, TrendingUp, ArrowDownCircle, ArrowUpCircle, Building2, Calendar } from 'lucide-react';
 import { StatCard } from '@/components/dashboard/StatCard';
 import { RevenueChart } from '@/components/dashboard/RevenueChart';
 import { ExpensesPieChart } from '@/components/dashboard/ExpensesPieChart';
@@ -125,7 +125,7 @@ export default function Dashboard() {
           value={formatCurrency(incomeStatement.totalRevenue)}
           change={revenueGrowth}
           changeLabel="vs last year"
-          icon={<DollarSign className="w-6 h-6" />}
+          icon={<TrendingUp className="w-6 h-6" />}
           variant="accent"
         />
         <StatCard
@@ -133,19 +133,20 @@ export default function Dashboard() {
           value={formatCurrency(incomeStatement.netIncome)}
           change={incomeStatement.netMargin}
           changeLabel="net margin"
-          icon={<TrendingUp className="w-6 h-6" />}
-          variant="success"
+          icon={<DollarSign className="w-6 h-6" />}
+          variant="cyan"
         />
         <StatCard
           title={terminology.accountsReceivable}
           value={formatCurrency(accountsReceivable)}
-          icon={<Wallet className="w-6 h-6" />}
+          icon={<ArrowDownCircle className="w-6 h-6" />}
+          variant="gold"
         />
         <StatCard
           title={terminology.accountsPayable}
           value={formatCurrency(accountsPayable)}
-          icon={<CreditCard className="w-6 h-6" />}
-          variant="warning"
+          icon={<ArrowUpCircle className="w-6 h-6" />}
+          variant="danger"
         />
       </div>
 
