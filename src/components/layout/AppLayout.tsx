@@ -180,8 +180,8 @@ export function AppLayout({ children }: AppLayoutProps) {
       {/* Main Content */}
       <div className={`transition-all duration-300 ${isMobile ? 'ml-0' : sidebarCollapsedEffective ? 'ml-[60px]' : 'ml-[220px]'}`}>
         {/* Top Header */}
-        <header className="sticky top-0 z-30 flex h-[68px] items-center justify-between border-b border-[rgba(99,102,241,0.15)] bg-white px-4 shadow-[0_1px_0_rgba(99,102,241,0.1),0_2px_8px_rgba(0,0,0,0.04)] md:px-8">
-          <div className="flex min-w-0 items-center gap-2 md:gap-4">
+        <header className="sticky top-0 z-30 flex h-[68px] items-center justify-between gap-3 overflow-hidden border-b border-[rgba(99,102,241,0.15)] bg-white px-3 shadow-[0_1px_0_rgba(99,102,241,0.1),0_2px_8px_rgba(0,0,0,0.04)] md:px-6">
+          <div className="flex min-w-0 flex-1 items-center gap-2 md:gap-3">
             {/* Mobile menu button */}
             <Button 
               variant="ghost" 
@@ -193,28 +193,28 @@ export function AppLayout({ children }: AppLayoutProps) {
             </Button>
 
             <div className="hidden min-w-0 md:block">
-              <p className="truncate text-xl font-extrabold text-[#0f172a]">
+              <p className="truncate text-lg font-extrabold leading-tight text-[#0f172a] xl:text-xl">
                 {greeting}, {displayName.split(' ')[0]} {greetingMark}
               </p>
-              <p className="text-[13px] text-[#64748b]">{headerDate}</p>
+              <p className="truncate text-[13px] text-[#64748b]">{headerDate}</p>
             </div>
 
             {/* Country selector (MS Dynamics-style, top-left) */}
-            <CountrySelector />
+            <div className="hidden sm:block">
+              <CountrySelector />
+            </div>
 
-            {/* Search - hidden on mobile, shown on tablet+ */}
-            <div className="relative hidden lg:block">
+            <div className="relative hidden xl:block">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input 
                 placeholder="Search..." 
-                className="w-40 md:w-64 pl-10 bg-muted/50 border-0 focus-visible:ring-1 focus-visible:ring-accent"
+                className="h-9 w-48 pl-10 bg-muted/50 border-0 focus-visible:ring-1 focus-visible:ring-accent"
               />
             </div>
           </div>
 
-          <div className="flex items-center gap-3 flex-shrink-0">
-            {/* Country Flag & Economic Indicators - Fixed width to prevent layout shifts */}
-            <div className="hidden lg:flex items-center gap-3 flex-shrink-0">
+          <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+            <div className="hidden xl:flex items-center gap-2">
               <CountryFlagBadge />
               <EconomicIndicatorsTicker />
             </div>
@@ -295,7 +295,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             <TooltipTrigger asChild>
               <button
                 onClick={() => setAliceOpen(true)}
-                className="fixed top-36 right-6 z-40 flex flex-col items-center gap-1 group cursor-pointer"
+                className="fixed bottom-20 right-4 z-30 flex flex-col items-center gap-1 group cursor-pointer md:bottom-6 md:right-6"
               >
                 <div className="relative">
                   <div className="h-16 w-16 overflow-hidden rounded-2xl bg-gradient-to-br from-[#6366f1] to-[#4f46e5] shadow-[0_8px_30px_-5px_rgba(99,102,241,0.45)] transition-all duration-300 hover:scale-110">
@@ -321,7 +321,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         <AIAccountingAssistant isOpen={aliceOpen} onOpenChange={setAliceOpen} />
 
         {/* Page Content - responsive padding */}
-        <main className="flex flex-col gap-6 px-4 pb-20 pt-7 md:px-8 md:pb-12">
+        <main className="flex flex-col gap-6 px-4 pb-24 pt-6 md:px-8 md:pb-12">
           <ReadOnlyProvider>
             {isReadOnly && <ReadOnlyBanner />}
             {children}
@@ -331,7 +331,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       
       {/* Mobile Bottom Navigation - Quick Access */}
       {isMobile && (
-        <nav className="fixed bottom-0 left-0 right-0 z-40 bg-card/95 backdrop-blur-sm border-t border-border safe-area-inset-bottom">
+        <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-[rgba(99,102,241,0.15)] bg-white/95 backdrop-blur-sm safe-area-inset-bottom">
           <div className="flex items-center justify-around h-14">
             <Button variant="ghost" size="sm" className="h-auto flex-col gap-0.5 py-2 text-[#6366f1]" onClick={() => navigate('/')}>
               <LayoutDashboard className="w-5 h-5" />

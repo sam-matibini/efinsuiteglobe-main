@@ -463,8 +463,8 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
 
   return (
     <aside className={cn(
-      "sidebar-aurora fixed left-0 top-0 z-40 flex h-screen flex-col transition-all duration-300",
-      collapsed ? "w-[60px]" : "w-[220px]"
+      "sidebar-aurora fixed left-0 top-0 z-40 flex h-screen flex-col overflow-hidden transition-all duration-300",
+      collapsed ? "w-[60px] sidebar-collapsed" : "w-[220px]"
     )}>
       {/* Logo stays the existing system brand mark. */}
       <div className="flex min-h-0 flex-1 flex-col">
@@ -567,7 +567,7 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <item.icon className="h-[17px] w-[17px] flex-shrink-0" style={{ color: presentation.iconColor }} />
-                      {!collapsed && <span className="whitespace-nowrap">{item.label}</span>}
+                      {!collapsed && <span className="truncate">{item.label}</span>}
                     </div>
                     {!collapsed && (
                       locked ? (

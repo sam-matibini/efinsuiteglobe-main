@@ -132,7 +132,7 @@ export function EconomicIndicatorsTicker() {
   const currentIndicator = indicators[activeIndex];
 
   return (
-    <div className="flex w-[320px] flex-shrink-0 items-center gap-3 overflow-hidden rounded-full border border-[#a5f3fc] bg-[#cffafe] px-4 py-2 text-[#0891b2]">
+    <div className="flex w-[240px] max-w-full flex-shrink-0 items-center gap-2 overflow-hidden rounded-full border border-[#a5f3fc] bg-[#cffafe] px-3 py-1.5 text-[#0891b2]">
       <div className="flex items-center gap-1 text-[#0891b2]">
         <Sparkles className="w-3 h-3 animate-pulse" />
         <span className="text-[10px] font-semibold uppercase tracking-wider">AI Live</span>
