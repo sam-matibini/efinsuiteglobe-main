@@ -26,9 +26,7 @@ export function agentOverrides(surface: AgentSurface) {
       firstMessage: landing
         ? "Hi, I'm Alice. I can walk you through efinsuite Globe. What would you like to know?"
         : "Hi, I'm Alice. Ask me about your books, tax, or how to get something done in efinsuite.",
-      prompt: { prompt: landing ? LANDING_PROMPT : APP_PROMPT },
     },
-    tts: { voiceId: ALICE_VOICE_ID },
   };
 }
 
