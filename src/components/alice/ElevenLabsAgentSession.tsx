@@ -29,13 +29,11 @@ async function loadLocalSession(surface: "landing" | "app"): Promise<AgentSessio
 }
 
 async function loadAgentSession(surface: "landing" | "app"): Promise<AgentSession> {
-  if (import.meta.env.DEV) {
-    try {
-      return await loadLocalSession(surface);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "";
-      if (!(err instanceof SyntaxError) && message && !unavailable(message)) throw err;
-    }
+  try {
+    return await loadLocalSession(surface);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "";
+    if (!(err instanceof SyntaxError) && message && !unavailable(message)) throw err;
   }
 
   let remoteError = "";
@@ -69,16 +67,7 @@ async function loadAgentSession(surface: "landing" | "app"): Promise<AgentSessio
   }
 
   if (remoteError && !unavailable(remoteError)) throw new Error(remoteError);
-
-  try {
-    return await loadLocalSession(surface);
-  } catch (err) {
-    if (err instanceof SyntaxError) {
-      throw new Error(remoteError || "ElevenLabs Agents is not available on this server yet.");
-    }
-    const message = err instanceof Error ? err.message : "";
-    throw new Error(message || remoteError || "Could not start Alice.");
-  }
+  throw new Error(remoteError || "ElevenLabs Agents is not available on this server yet.");
 }
 
 function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {

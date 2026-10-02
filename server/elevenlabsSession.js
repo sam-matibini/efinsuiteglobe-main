@@ -1,7 +1,6 @@
 import fs from "fs";
 import os from "os";
 import path from "path";
-import { elevenLabsKeyFromText, explainElevenLabsFailure, pickAgentId, type ListedAgent } from "../src/lib/elevenlabsAgent";
 
 const ALICE_AGENT = {
   name: "Alice — efinsuite Globe",
@@ -29,20 +28,62 @@ const ALICE_AGENT = {
   },
 };
 
-export function readElevenLabsApiKey(env: Record<string, string>): string {
-  const fromEnv = (env.ELEVENLABS_API_KEY || process.env.ELEVENLABS_API_KEY || "").trim();
+function keyFromText(text) {
+  const named = text.match(/^ELEVENLABS_API_KEY=(.*)$/m);
+  const namedValue = (named?.[1] || "").trim().replace(/^["']|["']$/g, "");
+  if (/^sk_[A-Za-z0-9]+$/.test(namedValue)) return namedValue;
+  const line = text
+    .split(/\r?\n/)
+    .map((item) => item.trim().replace(/^["']|["']$/g, ""))
+    .find((item) => /^sk_[A-Za-z0-9]+$/.test(item));
+  return line || "";
+}
+
+export function readElevenLabsApiKey(env = process.env) {
+  const fromEnv = String(env.ELEVENLABS_API_KEY || process.env.ELEVENLABS_API_KEY || "").trim();
   if (fromEnv) return fromEnv;
   try {
     const file = path.join(os.homedir(), "Desktop", "efinmoney-token.txt");
-    return elevenLabsKeyFromText(fs.readFileSync(file, "utf8"));
+    return keyFromText(fs.readFileSync(file, "utf8"));
   } catch {
     return "";
   }
 }
 
-type FetchLike = typeof fetch;
+function explainFailure(body) {
+  const detail = body && typeof body === "object" ? body.detail : undefined;
+  const nested = detail && typeof detail === "object" ? detail : null;
+  const message = typeof detail === "string"
+    ? detail
+    : typeof nested?.message === "string"
+      ? nested.message
+      : typeof body?.message === "string"
+        ? body.message
+        : nested?.status === "missing_permissions" || body?.status === "missing_permissions"
+          ? "missing_permissions"
+          : "";
+  if (/convai_write|missing_permissions|missing the permission/i.test(message)) {
+    return "This ElevenLabs API key can see agents but cannot start a conversation. In ElevenLabs, create a key with the Conversational AI write permission and save it again.";
+  }
+  return message || "Could not start an ElevenLabs session.";
+}
 
-async function elevenFetch(apiKey: string, requestPath: string, fetchImpl: FetchLike, init?: RequestInit) {
+function pickAgentId(agents, configured) {
+  const explicit = String(configured || "").trim();
+  if (explicit) return explicit;
+  const listed = (agents || [])
+    .map((agent) => ({
+      id: String(agent.agent_id || agent.agentId || "").trim(),
+      name: agent.name || "",
+    }))
+    .filter((agent) => agent.id);
+  const globe = listed.find((agent) => /efinsuite|globe/i.test(agent.name));
+  if (globe) return globe.id;
+  const alice = listed.find((agent) => /alice/i.test(agent.name));
+  return alice?.id || listed[0]?.id || "";
+}
+
+async function elevenFetch(apiKey, requestPath, fetchImpl, init) {
   const response = await fetchImpl(`https://api.elevenlabs.io${requestPath}`, {
     ...init,
     headers: {
@@ -52,27 +93,22 @@ async function elevenFetch(apiKey: string, requestPath: string, fetchImpl: Fetch
     },
   });
   const text = await response.text();
-  let body: Record<string, unknown> = {};
+  let body = {};
   try {
-    body = text ? JSON.parse(text) as Record<string, unknown> : {};
+    body = text ? JSON.parse(text) : {};
   } catch {
     body = { message: text.slice(0, 180) };
   }
   return { ok: response.ok, status: response.status, body };
 }
 
-async function resolveAgentId(apiKey: string, configured: string | undefined, fetchImpl: FetchLike): Promise<string> {
+async function resolveAgentId(apiKey, configured, fetchImpl) {
   const explicit = pickAgentId([], configured);
   if (explicit) return explicit;
-
   const listed = await elevenFetch(apiKey, "/v1/convai/agents?page_size=30", fetchImpl);
-  if (!listed.ok) {
-    throw new Error(explainElevenLabsFailure(listed.body));
-  }
-  const agents = Array.isArray(listed.body.agents) ? listed.body.agents as ListedAgent[] : [];
-  const existing = pickAgentId(agents);
+  if (!listed.ok) throw new Error(explainFailure(listed.body));
+  const existing = pickAgentId(Array.isArray(listed.body.agents) ? listed.body.agents : []);
   if (existing) return existing;
-
   let created = await elevenFetch(apiKey, "/v1/convai/agents/create", fetchImpl, {
     method: "POST",
     body: JSON.stringify(ALICE_AGENT),
@@ -84,18 +120,11 @@ async function resolveAgentId(apiKey: string, configured: string | undefined, fe
     });
   }
   const agentId = String(created.body.agent_id || "");
-  if (!created.ok || !agentId) {
-    throw new Error(explainElevenLabsFailure(created.body));
-  }
+  if (!created.ok || !agentId) throw new Error(explainFailure(created.body));
   return agentId;
 }
 
-export async function createElevenLabsSession(
-  apiKey: string,
-  surface: string,
-  configuredAgentId: string | undefined,
-  fetchImpl: FetchLike = fetch,
-): Promise<{ status: number; body: Record<string, unknown> }> {
+export async function createElevenLabsSession(apiKey, surface, configuredAgentId, fetchImpl = fetch) {
   const safeSurface = surface === "landing" ? "landing" : "app";
   if (!apiKey) {
     return { status: 500, body: { error: "ElevenLabs API key is not configured." } };
@@ -118,8 +147,7 @@ export async function createElevenLabsSession(
     if (signed.ok && typeof signed.body.signed_url === "string") {
       return { status: 200, body: { signedUrl: signed.body.signed_url, agentId, surface: safeSurface } };
     }
-    const detail = explainElevenLabsFailure(token.ok ? signed.body : token.body);
-    return { status: token.status || 502, body: { error: detail } };
+    return { status: token.status || 502, body: { error: explainFailure(token.ok ? signed.body : token.body) } };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not start an ElevenLabs session.";
     return { status: 502, body: { error: message } };

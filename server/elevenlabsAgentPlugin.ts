@@ -1,6 +1,6 @@
 import type { Plugin } from "vite";
 import { loadEnv } from "vite";
-import { createElevenLabsSession, readElevenLabsApiKey } from "./elevenlabsAgentRoute";
+import { createElevenLabsSession, readElevenLabsApiKey } from "./elevenlabsSession.js";
 
 /**
  * Dev-server route POST /api/elevenlabs-agent.
