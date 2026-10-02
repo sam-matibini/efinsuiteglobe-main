@@ -41,8 +41,46 @@ export function pickAgentId(agents: ListedAgent[], configured?: string | null): 
       name: agent.name || "",
     }))
     .filter((agent) => agent.id);
-  const preferred = listed.find((agent) => /alice|efinsuite/i.test(agent.name));
-  return preferred?.id || listed[0]?.id || "";
+  const globe = listed.find((agent) => /efinsuite|globe/i.test(agent.name));
+  if (globe) return globe.id;
+  const alice = listed.find((agent) => /alice/i.test(agent.name));
+  return alice?.id || listed[0]?.id || "";
+}
+
+/** Pull an ElevenLabs API key out of a local notes file. Never log the result. */
+export function elevenLabsKeyFromText(text: string): string {
+  const named = text.match(/^ELEVENLABS_API_KEY=(.*)$/m);
+  const namedValue = (named?.[1] || "").trim().replace(/^["']|["']$/g, "");
+  if (/^sk_[A-Za-z0-9]+$/.test(namedValue)) return namedValue;
+  const line = text
+    .split(/\r?\n/)
+    .map((item) => item.trim().replace(/^["']|["']$/g, ""))
+    .find((item) => /^sk_[A-Za-z0-9]+$/.test(item));
+  return line || "";
+}
+
+function elevenLabsDetail(body: unknown): string {
+  if (!body || typeof body !== "object") return "";
+  const record = body as Record<string, unknown>;
+  const detail = record.detail;
+  if (typeof detail === "string") return detail;
+  if (detail && typeof detail === "object") {
+    const nested = detail as Record<string, unknown>;
+    if (typeof nested.message === "string") return nested.message;
+    if (nested.status === "missing_permissions") return "missing_permissions";
+  }
+  if (typeof record.message === "string") return record.message;
+  if (record.status === "missing_permissions") return "missing_permissions";
+  return "";
+}
+
+/** Turn an ElevenLabs error into a sentence the user can act on. */
+export function explainElevenLabsFailure(body: unknown): string {
+  const message = elevenLabsDetail(body);
+  if (/convai_write|missing_permissions|missing the permission/i.test(message)) {
+    return "This ElevenLabs API key can see agents but cannot start a conversation. In ElevenLabs, create a key with the Conversational AI write permission and save it again.";
+  }
+  return message || "Could not start an ElevenLabs session.";
 }
 
 export function readAgentUtterance(message: { source?: string; role?: string; message?: string }): {

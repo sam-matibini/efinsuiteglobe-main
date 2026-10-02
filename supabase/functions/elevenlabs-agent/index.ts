@@ -8,8 +8,10 @@ function pickAgentId(agents: ListedAgent[], configured?: string | null): string 
   const listed = agents
     .map((agent) => ({ id: (agent.agent_id || "").trim(), name: agent.name || "" }))
     .filter((agent) => agent.id);
-  const preferred = listed.find((agent) => /alice|efinsuite/i.test(agent.name));
-  return preferred?.id || listed[0]?.id || "";
+  const globe = listed.find((agent) => /efinsuite|globe/i.test(agent.name));
+  if (globe) return globe.id;
+  const alice = listed.find((agent) => /alice/i.test(agent.name));
+  return alice?.id || listed[0]?.id || "";
 }
 
 const corsHeaders = {
@@ -30,6 +32,24 @@ const ALICE_AGENT = {
     tts: { voice_id: "EXAVITQu4vr4xnSDxMaL" },
   },
 };
+
+function explainFailure(body: Record<string, unknown>): string {
+  const detail = body.detail;
+  const nested = detail && typeof detail === "object" ? detail as Record<string, unknown> : null;
+  const message = typeof detail === "string"
+    ? detail
+    : typeof nested?.message === "string"
+      ? nested.message
+      : typeof body.message === "string"
+        ? body.message
+        : nested?.status === "missing_permissions" || body.status === "missing_permissions"
+          ? "missing_permissions"
+          : "";
+  if (/convai_write|missing_permissions|missing the permission/i.test(message)) {
+    return "This ElevenLabs API key can see agents but cannot start a conversation. In ElevenLabs, create a key with the Conversational AI write permission and save it again.";
+  }
+  return message || "Could not start an ElevenLabs session.";
+}
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -63,8 +83,7 @@ async function resolveAgentId(apiKey: string): Promise<string> {
 
   const listed = await elevenFetch(apiKey, "/v1/convai/agents?page_size=30");
   if (!listed.ok) {
-    const detail = String(listed.body.detail || listed.body.message || "Could not list ElevenLabs agents.");
-    throw new Error(detail);
+    throw new Error(explainFailure(listed.body));
   }
   const agents = Array.isArray(listed.body.agents) ? listed.body.agents as ListedAgent[] : [];
   const existing = pickAgentId(agents);
@@ -76,7 +95,7 @@ async function resolveAgentId(apiKey: string): Promise<string> {
   });
   const agentId = String(created.body.agent_id || "");
   if (!created.ok || !agentId) {
-    throw new Error(String(created.body.detail || created.body.message || "Could not create the Alice agent."));
+    throw new Error(explainFailure(created.body));
   }
   return agentId;
 }
@@ -106,8 +125,7 @@ serve(async (req) => {
     if (signed.ok && typeof signed.body.signed_url === "string") {
       return json({ signedUrl: signed.body.signed_url, agentId, surface });
     }
-    const detail = String(token.body.detail || token.body.message || signed.body.detail || signed.body.message || "Could not start an ElevenLabs session.");
-    return json({ error: detail }, token.status || 502);
+    return json({ error: explainFailure(token.ok ? signed.body : token.body) }, token.status || 502);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not start an ElevenLabs session.";
     return json({ error: message }, 502);

@@ -8,6 +8,79 @@ import { toast } from "sonner";
 
 type TranscriptHandler = (role: "user" | "assistant", text: string) => void;
 
+type AgentSession = { token?: string; signedUrl?: string };
+
+function unavailable(detail: string): boolean {
+  return /not found|failed to send|failed to fetch|network|not available|did not respond/i.test(detail);
+}
+
+async function loadLocalSession(surface: "landing" | "app"): Promise<AgentSession> {
+  const response = await fetch("/api/elevenlabs-agent", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ surface }),
+  });
+  const body = await response.json() as AgentSession & { error?: string };
+  if (!response.ok || body.error) {
+    throw new Error(body.error || "ElevenLabs Agents is not available on this server yet.");
+  }
+  if (body.token || body.signedUrl) return body;
+  throw new Error("ElevenLabs did not return a session.");
+}
+
+async function loadAgentSession(surface: "landing" | "app"): Promise<AgentSession> {
+  if (import.meta.env.DEV) {
+    try {
+      return await loadLocalSession(surface);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "";
+      if (!(err instanceof SyntaxError) && message && !unavailable(message)) throw err;
+    }
+  }
+
+  let remoteError = "";
+  try {
+    const { data, error } = await withTimeout(
+      supabase.functions.invoke("elevenlabs-agent", { body: { surface } }),
+      12000,
+      "ElevenLabs Agents did not respond.",
+    );
+    if (error) {
+      let detail = error.message || "Could not start Alice.";
+      const context = (error as { context?: { json?: () => Promise<{ error?: string }> } }).context;
+      if (context && typeof context.json === "function") {
+        try {
+          const body = await context.json();
+          if (body?.error) detail = body.error;
+        } catch {
+          /* body already read */
+        }
+      }
+      if (unavailable(detail)) detail = "ElevenLabs Agents is not available on this server yet.";
+      remoteError = detail;
+    } else {
+      const payload = data as AgentSession & { error?: string };
+      if (payload?.error) remoteError = payload.error;
+      else if (payload?.token || payload?.signedUrl) return payload;
+      else remoteError = "ElevenLabs did not return a session.";
+    }
+  } catch (err) {
+    remoteError = err instanceof Error ? err.message : "Could not start Alice.";
+  }
+
+  if (remoteError && !unavailable(remoteError)) throw new Error(remoteError);
+
+  try {
+    return await loadLocalSession(surface);
+  } catch (err) {
+    if (err instanceof SyntaxError) {
+      throw new Error(remoteError || "ElevenLabs Agents is not available on this server yet.");
+    }
+    const message = err instanceof Error ? err.message : "";
+    throw new Error(message || remoteError || "Could not start Alice.");
+  }
+}
+
 function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error(message)), ms);
@@ -47,33 +120,11 @@ function SessionControls({
 
     const begin = async () => {
       try {
-        const { data, error } = await withTimeout(
-          supabase.functions.invoke("elevenlabs-agent", { body: { surface } }),
-          12000,
-          "ElevenLabs Agents did not respond.",
-        );
+        const payload = await loadAgentSession(surface);
         if (cancelled) return;
-        if (error) {
-          let detail = error.message || "Could not start Alice.";
-          const context = (error as { context?: { json?: () => Promise<{ error?: string }> } }).context;
-          if (context && typeof context.json === "function") {
-            try {
-              const body = await context.json();
-              if (body?.error) detail = body.error;
-            } catch {
-              /* body already read */
-            }
-          }
-          if (/not found|failed to send|failed to fetch|network/i.test(detail)) {
-            detail = "ElevenLabs Agents is not available on this server yet.";
-          }
-          throw new Error(detail);
-        }
-        const payload = data as { token?: string; signedUrl?: string; error?: string };
-        if (payload?.error) throw new Error(payload.error);
         const overrides = agentOverrides(surface);
-        if (payload?.token) startRef.current({ conversationToken: payload.token, overrides });
-        else if (payload?.signedUrl) startRef.current({ signedUrl: payload.signedUrl, overrides });
+        if (payload.token) startRef.current({ conversationToken: payload.token, overrides });
+        else if (payload.signedUrl) startRef.current({ signedUrl: payload.signedUrl, overrides });
         else throw new Error("ElevenLabs did not return a session.");
       } catch (err) {
         if (cancelled) return;
