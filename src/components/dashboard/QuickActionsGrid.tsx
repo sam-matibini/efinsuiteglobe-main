@@ -118,17 +118,16 @@ export function QuickActionsGrid() {
   return (
     <div className="stat-card animate-slide-in">
       <h3 className="text-lg font-semibold text-foreground mb-4">Quick Actions</h3>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {filteredActions.map((action) => (
           <button
             key={action.label}
             onClick={() => navigate(action.path)}
-            className={cn(
-              "flex flex-col items-center gap-2 p-4 rounded-xl transition-all duration-200 group",
-              action.color
-            )}
+            className="group flex flex-col items-center gap-2 rounded-xl border border-[rgba(148,163,184,0.15)] bg-white p-4 shadow-[0_1px_4px_rgba(0,0,0,0.05)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_4px_14px_rgba(99,102,241,0.15)]"
           >
-            <action.icon className="w-6 h-6 group-hover:scale-110 transition-transform" />
+            <span className={cn("flex h-10 w-10 items-center justify-center rounded-full", action.color)}>
+              <action.icon className="h-5 w-5 transition-transform group-hover:scale-110" />
+            </span>
             <span className="font-medium text-sm">{action.label}</span>
             {action.description && (
               <span className="text-xs opacity-70">{action.description}</span>

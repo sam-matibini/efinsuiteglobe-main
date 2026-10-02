@@ -227,6 +227,10 @@
     padding-left: 11px;
   }
 
+  .sidebar-collapsed .nav-item-active {
+    padding-left: 0;
+  }
+
   .sidebar-aurora {
     background: linear-gradient(160deg, #1e1b4b 0%, #2d2a6e 55%, #1a3560 100%);
     border-right: 1px solid rgba(255, 255, 255, 0.08);

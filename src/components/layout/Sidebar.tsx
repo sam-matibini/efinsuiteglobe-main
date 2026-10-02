@@ -33,7 +33,6 @@ import {
   Layers,
   Wallet,
   Factory,
-  Heart,
   Briefcase,
   CalendarDays,
   AlertTriangle,
@@ -49,6 +48,12 @@ import {
   Globe2,
   LogOut,
   Network,
+  Key,
+  Target,
+  Boxes,
+  Bot,
+  HeartHandshake,
+  PieChart,
 } from 'lucide-react';
 import { SubscriptionUpgradeModal } from '@/components/SubscriptionUpgradeModal';
 import type { PlanTier } from '@/config/planModuleAccess';
@@ -78,6 +83,8 @@ interface NavItem {
   hideForNonCA?: boolean;
   /** Restrict this nav item to specific roles only */
   allowedRoles?: string[];
+  /** Opens an in-app panel instead of navigating */
+  action?: 'open-alice';
 }
 
 // Navigation items with module requirements
@@ -115,7 +122,7 @@ const getNavigation = (payrollLabels: { taxSlips: string; separationDoc: string;
   },
   { 
     label: 'Inventory', 
-    icon: Package, 
+    icon: Boxes, 
     href: '/inventory',
     requiredModules: ['inventory'],
   },
@@ -174,7 +181,7 @@ const getNavigation = (payrollLabels: { taxSlips: string; separationDoc: string;
   },
   { 
     label: 'Financial Reports', 
-    icon: TrendingUp,
+    icon: BarChart3,
     requiredModules: ['reporting'],
     children: [
       { label: 'Balance Sheet', href: '/reports/balance-sheet', icon: FileSpreadsheet },
@@ -196,7 +203,7 @@ const getNavigation = (payrollLabels: { taxSlips: string; separationDoc: string;
   },
   { 
     label: 'Leases', 
-    icon: Landmark, 
+    icon: Key, 
     href: '/leases',
     requiredModules: ['leases'],
   },
@@ -222,7 +229,7 @@ const getNavigation = (payrollLabels: { taxSlips: string; separationDoc: string;
   },
   { 
     label: 'Budgets', 
-    icon: Wallet,
+    icon: Target,
     requiredModules: ['budgeting'],
     children: [
       { label: 'Budget Management', href: '/budgets', icon: Wallet },
@@ -249,7 +256,7 @@ const getNavigation = (payrollLabels: { taxSlips: string; separationDoc: string;
   },
   {
     label: 'Tax & CRA',
-    icon: Landmark,
+    icon: Shield,
     requiredModules: ['cra_tax'],
     hideForNonCA: true,
     children: [
@@ -267,13 +274,13 @@ const getNavigation = (payrollLabels: { taxSlips: string; separationDoc: string;
   },
   { 
     label: 'Donations', 
-    icon: Heart, 
+    icon: HeartHandshake, 
     href: '/donations',
     requiredModules: ['donations'],
   },
   { 
     label: 'Accountant Dashboard', 
-    icon: Calculator, 
+    icon: PieChart, 
     requiredModules: ['accountant_dashboard'],
     children: [
       { label: 'Dashboard', href: '/reports/accountant', icon: Calculator },
@@ -291,6 +298,11 @@ const getNavigation = (payrollLabels: { taxSlips: string; separationDoc: string;
     icon: MessageSquare, 
     href: '/communication',
     requiredModules: ['communication'],
+  },
+  {
+    label: 'Alice AI',
+    icon: Bot,
+    action: 'open-alice',
   },
   {
     label: 'Treasury Mgmt',
@@ -485,7 +497,7 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
             <div className="mb-2 flex items-center gap-2 rounded-[10px] border border-white/[0.07] bg-white/[0.06] px-3 py-2">
               <span className="h-1.5 w-1.5 rounded-full bg-[#22c55e]" />
               <span className="truncate text-[10.5px] font-bold text-white">{currentOrg.name}</span>
-              <span className="ml-auto shrink-0 text-[10px] text-[#86efac]">Active</span>
+              <span className="ml-auto shrink-0 text-[10px] text-[#86efac]">Active Account</span>
             </div>
           )}
           {!collapsed && (
@@ -527,12 +539,22 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
                   {GROUP_LABELS[presentation.group]?.label}
                 </p>
               )}
-              {item.href ? (
+              {item.action === 'open-alice' ? (
+                <button
+                  type="button"
+                  className="nav-item w-full"
+                  title={collapsed ? item.label : 'Open Alice'}
+                  onClick={() => window.dispatchEvent(new Event('efinsuite:open-alice'))}
+                >
+                  <item.icon className="h-[17px] w-[17px] flex-shrink-0" style={{ color: presentation.iconColor }} />
+                  {!collapsed && <span className="truncate">{item.label}</span>}
+                </button>
+              ) : item.href ? (
                 locked ? (
                   <button
                     onClick={openUpgrade}
                     className={cn("nav-item w-full opacity-70 hover:opacity-100")}
-                    title={`Upgrade to unlock ${item.label}`}
+                    title={collapsed ? item.label : `Upgrade to unlock ${item.label}`}
                   >
                     <item.icon className="h-[17px] w-[17px] flex-shrink-0" style={{ color: presentation.iconColor }} />
                     {!collapsed && (
@@ -545,6 +567,7 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
                 ) : (
                   <Link
                     to={item.href}
+                    title={collapsed ? item.label : undefined}
                     className={cn(
                       "nav-item",
                       isActive(item.href) && "nav-item-active"
@@ -560,10 +583,10 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
                     onClick={locked ? openUpgrade : () => toggleExpand(item.label)}
                     className={cn(
                       "nav-item w-full justify-between",
-                      isActive(undefined, item.children) && "text-sidebar-primary",
+                      isActive(undefined, item.children) && "nav-item-active",
                       locked && "opacity-70 hover:opacity-100"
                     )}
-                    title={locked ? `Upgrade to unlock ${item.label}` : undefined}
+                    title={collapsed ? item.label : locked ? `Upgrade to unlock ${item.label}` : undefined}
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <item.icon className="h-[17px] w-[17px] flex-shrink-0" style={{ color: presentation.iconColor }} />
@@ -642,7 +665,9 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
                   <p className="truncate text-xs font-semibold text-white">
                     {(user?.user_metadata?.full_name as string | undefined)?.split(' ')[0] || user?.email?.split('@')[0] || 'Account'}
                   </p>
-                  <p className="text-[10px] text-[#c7d2fe]">{isAdmin ? 'Owner' : 'Member'}</p>
+                  <p className="text-[10px] text-[#c7d2fe]">
+                    {isAdmin || userRole === 'owner' ? 'Owner' : userRole ? userRole.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()) : 'Member'}
+                  </p>
                 </div>
                 <button
                   type="button"

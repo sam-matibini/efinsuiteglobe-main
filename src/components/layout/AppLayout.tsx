@@ -61,6 +61,12 @@ export function AppLayout({ children }: AppLayoutProps) {
     return () => window.removeEventListener('sw-updated', handler);
   }, []);
 
+  useEffect(() => {
+    const openAlice = () => setAliceOpen(true);
+    window.addEventListener('efinsuite:open-alice', openAlice);
+    return () => window.removeEventListener('efinsuite:open-alice', openAlice);
+  }, []);
+
   // Fetch user profile
   const { data: profile } = useQuery({
     queryKey: ['user-profile', user?.id],
@@ -290,6 +296,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         </header>
 
         {/* Alice AI Assistant - Floating HD Avatar */}
+        {!aliceOpen && (
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -317,6 +324,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
+        )}
 
         <AIAccountingAssistant isOpen={aliceOpen} onOpenChange={setAliceOpen} />
 
