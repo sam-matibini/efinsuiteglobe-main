@@ -1,8 +1,14 @@
-import { useState, useRef, useCallback } from "react";
+import { useCallback, useRef, useState } from "react";
 import { toast } from "sonner";
+import {
+  ALICE_VOICE_ID,
+  cleanTextForTTS,
+  getAliceFunctionHeaders,
+  shortenForSpeech,
+} from "@/lib/aliceVoice";
 
-// Alice's ElevenLabs voice ID - professional female voice
-const ALICE_VOICE_ID = "EXAVITQu4vr4xnSDxMaL"; // Sarah - clear, professional female voice
+const SILENT_WAV =
+  "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";
 
 export function useAliceTTS() {
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -10,182 +16,196 @@ export function useAliceTTS() {
   const [isLoading, setIsLoading] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioUrlRef = useRef<string | null>(null);
-  const lastTextRef = useRef<string>("");
-  const abortControllerRef = useRef<AbortController | null>(null);
+  const lastTextRef = useRef("");
+  const abortRef = useRef<AbortController | null>(null);
+  const requestRef = useRef(0);
 
-  const cleanTextForTTS = (text: string): string => {
-    return text
-      .replace(/\*\*/g, "") // Remove bold markers
-      .replace(/\*/g, "") // Remove italic markers
-      .replace(/#{1,6}\s/g, "") // Remove heading markers
-      .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1") // Convert links to just text
-      .replace(/`[^`]+`/g, "") // Remove inline code
-      .replace(/```[\s\S]*?```/g, "") // Remove code blocks
-      .replace(/•/g, "") // Remove bullet points
-      .replace(/\n{3,}/g, "\n\n") // Reduce excessive newlines
-      .trim();
+  const ensureAudio = () => {
+    if (!audioRef.current) {
+      const audio = new Audio();
+      audio.preload = "auto";
+      audioRef.current = audio;
+    }
+    return audioRef.current;
   };
 
-  const speak = useCallback(async (text: string): Promise<void> => {
-    // Stop any current speech first
-    stop();
-
-    if (!text.trim()) return;
-
-    const cleanText = cleanTextForTTS(text);
-    if (!cleanText) return;
-
-    // Keep TTS short to avoid provider quota errors
-    const TTS_MAX_CHARS = 1200;
-    let speechText = cleanText;
-    if (speechText.length > TTS_MAX_CHARS) {
-      const slice = speechText.slice(0, TTS_MAX_CHARS);
-      const lastStop = Math.max(slice.lastIndexOf("."), slice.lastIndexOf("!"), slice.lastIndexOf("?"));
-      speechText = (lastStop > 300 ? slice.slice(0, lastStop + 1) : slice).trim() + " …";
-      toast.message("Reading a shortened version to fit voice limits.");
-    }
-
-    lastTextRef.current = text;
-    setIsLoading(true);
-    setIsPaused(false);
-    abortControllerRef.current = new AbortController();
-
-    try {
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/elevenlabs-tts`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-        },
-        body: JSON.stringify({
-          text: speechText,
-          voiceId: ALICE_VOICE_ID,
-        }),
-        signal: abortControllerRef.current.signal,
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({} as any));
-        const providerDetail = errorData?.provider_error?.detail;
-
-        if (providerDetail?.status === "quota_exceeded") {
-          throw new Error(providerDetail?.message || "Voice quota exceeded. Please shorten the text or top up credits.");
-        }
-
-        throw new Error(errorData?.error || `Failed to generate speech (${response.status})`);
-      }
-
-      const audioBlob = await response.blob();
-
-      if (audioBlob.size === 0) {
-        throw new Error("No audio data received");
-      }
-
-      // Clean up previous audio URL
-      if (audioUrlRef.current) {
-        URL.revokeObjectURL(audioUrlRef.current);
-      }
-
-      const audioUrl = URL.createObjectURL(audioBlob);
-      audioUrlRef.current = audioUrl;
-
-      audioRef.current = new Audio(audioUrl);
-      audioRef.current.onended = () => {
-        setIsSpeaking(false);
-        setIsPaused(false);
-      };
-      audioRef.current.onerror = (e) => {
-        console.error("Audio playback error:", e);
-        setIsSpeaking(false);
-        setIsPaused(false);
-        toast.error("Audio playback failed");
-      };
-
-      setIsLoading(false);
-      setIsSpeaking(true);
-
-      try {
-        await audioRef.current.play();
-      } catch (playError: any) {
-        console.error("Play error:", playError);
-        if (playError.name === "NotAllowedError") {
-          toast.error("Please click again to enable audio playback");
-        } else {
-          toast.error("Could not play audio");
-        }
-        setIsSpeaking(false);
-      }
-    } catch (err: any) {
-      if (err.name === "AbortError") {
-        return;
-      }
-      console.error("TTS error:", err);
-      toast.error(err.message || "Failed to generate speech");
-      setIsLoading(false);
-      setIsSpeaking(false);
+  // Browsers only allow playback that begins in the click. Prime the element
+  // before any network wait so the later play() is allowed.
+  const prime = useCallback(() => {
+    const audio = ensureAudio();
+    if (audio.src && !audio.src.startsWith("data:audio/wav")) return;
+    if (!audio.src) audio.src = SILENT_WAV;
+    audio.muted = true;
+    const attempt = audio.play();
+    if (attempt) {
+      attempt
+        .then(() => {
+          if (audio.muted) {
+            audio.pause();
+            audio.currentTime = 0;
+            audio.muted = false;
+          }
+        })
+        .catch(() => {
+          audio.muted = false;
+        });
     }
   }, []);
 
-  const pause = useCallback(() => {
-    if (audioRef.current && isSpeaking && !isPaused) {
-      audioRef.current.pause();
-      setIsPaused(true);
-    }
-  }, [isSpeaking, isPaused]);
-
-  const resume = useCallback(() => {
-    if (audioRef.current && isPaused) {
-      audioRef.current.play().catch((err) => {
-        console.error("Resume error:", err);
-        toast.error("Could not resume audio");
-      });
-      setIsPaused(false);
-    }
-  }, [isPaused]);
-
   const stop = useCallback(() => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      abortControllerRef.current = null;
-    }
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
-      audioRef.current = null;
+    requestRef.current += 1;
+    abortRef.current?.abort();
+    abortRef.current = null;
+    const audio = audioRef.current;
+    if (audio) {
+      audio.pause();
+      audio.currentTime = 0;
     }
     setIsSpeaking(false);
     setIsPaused(false);
     setIsLoading(false);
   }, []);
 
+  const speak = useCallback(async (text: string): Promise<void> => {
+    prime();
+    const requestId = requestRef.current + 1;
+    requestRef.current = requestId;
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    const audio = ensureAudio();
+    audio.pause();
+
+    const cleanText = cleanTextForTTS(text);
+    if (!cleanText) return;
+
+    const shortened = shortenForSpeech(cleanText);
+    if (shortened.shortened) {
+      toast.message("Reading a shortened version to fit voice limits.");
+    }
+
+    lastTextRef.current = text;
+    setIsLoading(true);
+    setIsPaused(false);
+    setIsSpeaking(false);
+
+    try {
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/elevenlabs-tts`, {
+        method: "POST",
+        headers: await getAliceFunctionHeaders(true),
+        body: JSON.stringify({
+          text: shortened.text,
+          voiceId: ALICE_VOICE_ID,
+        }),
+        signal: controller.signal,
+      });
+
+      if (requestId !== requestRef.current) return;
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({} as {
+          error?: string;
+          provider_error?: { detail?: { status?: string; message?: string } };
+        }));
+        const providerDetail = errorData?.provider_error?.detail;
+        if (providerDetail?.status === "quota_exceeded") {
+          throw new Error(providerDetail.message || "Voice quota exceeded. Please shorten the text or top up credits.");
+        }
+        throw new Error(errorData?.error || `Failed to generate speech (${response.status})`);
+      }
+
+      const audioBlob = await response.blob();
+      if (requestId !== requestRef.current) return;
+      if (audioBlob.size === 0) throw new Error("No audio data received");
+      if (audioBlob.type.includes("json") || audioBlob.type.startsWith("text/")) {
+        throw new Error("Voice service returned an unexpected response");
+      }
+
+      if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current);
+      const playable = audioBlob.type
+        ? audioBlob
+        : new Blob([audioBlob], { type: "audio/mpeg" });
+      const audioUrl = URL.createObjectURL(playable);
+      audioUrlRef.current = audioUrl;
+
+      audio.onended = () => {
+        if (requestId !== requestRef.current) return;
+        setIsSpeaking(false);
+        setIsPaused(false);
+      };
+      audio.onerror = () => {
+        if (requestId !== requestRef.current) return;
+        setIsSpeaking(false);
+        setIsPaused(false);
+        toast.error("Audio playback failed");
+      };
+
+      audio.muted = false;
+      audio.src = audioUrl;
+      audio.currentTime = 0;
+      setIsLoading(false);
+      setIsSpeaking(true);
+      try {
+        await audio.play();
+      } catch (playError: unknown) {
+        const name = playError instanceof DOMException ? playError.name : "";
+        toast.error(name === "NotAllowedError" ? "Tap Listen again to allow audio playback" : "Could not play audio");
+        setIsSpeaking(false);
+      }
+    } catch (err: unknown) {
+      if (requestId !== requestRef.current) return;
+      if (err instanceof DOMException && err.name === "AbortError") return;
+      const message = err instanceof Error ? err.message : "Failed to generate speech";
+      console.error("TTS error:", message);
+      toast.error(message);
+      setIsLoading(false);
+      setIsSpeaking(false);
+    }
+  }, [prime]);
+
+  const pause = useCallback(() => {
+    const audio = audioRef.current;
+    if (audio && !audio.paused && !audio.ended) {
+      audio.pause();
+      setIsPaused(true);
+      setIsSpeaking(true);
+    }
+  }, []);
+
+  const resume = useCallback(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.play().then(() => {
+      setIsPaused(false);
+      setIsSpeaking(true);
+    }).catch(() => {
+      toast.error("Could not resume audio");
+    });
+  }, []);
+
   const replay = useCallback(async () => {
-    if (audioRef.current && audioUrlRef.current) {
-      // Replay from the beginning using existing audio
-      audioRef.current.currentTime = 0;
+    const audio = audioRef.current;
+    if (audio && audioUrlRef.current) {
+      audio.currentTime = 0;
+      audio.muted = false;
       setIsPaused(false);
       setIsSpeaking(true);
       try {
-        await audioRef.current.play();
-      } catch (err) {
-        console.error("Replay error:", err);
+        await audio.play();
+      } catch {
         toast.error("Could not replay audio");
         setIsSpeaking(false);
       }
-    } else if (lastTextRef.current) {
-      // Re-generate audio if not available
-      await speak(lastTextRef.current);
+      return;
     }
+    if (lastTextRef.current) await speak(lastTextRef.current);
   }, [speak]);
 
   const toggle = useCallback(async (text: string) => {
-    if (isSpeaking && !isPaused) {
-      pause();
-    } else if (isPaused) {
-      resume();
-    } else {
-      await speak(text);
-    }
+    if (isSpeaking && !isPaused) pause();
+    else if (isPaused) resume();
+    else await speak(text);
   }, [isSpeaking, isPaused, pause, resume, speak]);
 
   return {
@@ -195,6 +215,7 @@ export function useAliceTTS() {
     stop,
     replay,
     toggle,
+    prime,
     isSpeaking,
     isPaused,
     isLoading,

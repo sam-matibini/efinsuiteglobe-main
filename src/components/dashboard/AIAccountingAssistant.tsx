@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { X, Send, Loader2, Minimize2, Maximize2, Paperclip, Download, FileText, FileSpreadsheet, File, Table, Building2, CreditCard, Sparkles, FileUp, RefreshCw, FolderCog, Volume2, Pause, Play, RotateCcw, Square, Share2, Mail, MessageSquare, MessageCircle, Copy, FileDown, FileType, Sheet, FileType2, Calculator } from 'lucide-react';
+import { X, Send, Loader2, Minimize2, Maximize2, Paperclip, Download, FileText, FileSpreadsheet, File, Table, Building2, CreditCard, Sparkles, FileUp, RefreshCw, FolderCog, Volume2, VolumeX, Mic, Pause, Play, RotateCcw, Square, Share2, Mail, MessageSquare, MessageCircle, Copy, FileDown, FileType, Sheet, FileType2, Calculator } from 'lucide-react';
 import aliceAvatar from '@/assets/alice-avatar.png';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -40,6 +40,8 @@ import { useBankTransactions } from '@/hooks/useBankTransactions';
 import { useCreditCardTransactions, useCreditCards } from '@/hooks/useCreditCards';
 import { useBankAccounts } from '@/hooks/useBankAccounts';
 import { useAliceTTS } from '@/hooks/useAliceTTS';
+import { useAliceDictation } from '@/hooks/useAliceDictation';
+import { ALICE_INTRO } from '@/lib/aliceVoice';
 import { useAliceShare } from '@/hooks/useAliceShare';
 import { AISheets } from './AISheets';
 import { AIFinancialToolkit } from './AIFinancialToolkit';
@@ -243,7 +245,17 @@ export function AIAccountingAssistant({
   
   const { convertFile, isConverting } = useFileConvert();
   const { convertPdfToSpreadsheet, isConverting: isPdfConverting, progress, error: pdfError } = usePdfToSpreadsheet();
-  const { speak, pause, resume, stop, replay, isSpeaking, isPaused, isLoading: isTTSLoading } = useAliceTTS();
+  const { speak, pause, resume, stop, replay, prime, isSpeaking, isPaused, isLoading: isTTSLoading } = useAliceTTS();
+  const { isRecording, isTranscribing, duration: recordingSeconds, start: startDictation, stop: stopDictation, transcribe } = useAliceDictation();
+  const [voiceEnabled, setVoiceEnabled] = useState(() => {
+    try {
+      return localStorage.getItem('alice-voice') === 'on';
+    } catch {
+      return false;
+    }
+  });
+  const voiceEnabledRef = useRef(voiceEnabled);
+  const nextAssistantIndexRef = useRef(0);
   const { 
     shareViaEmail, 
     shareViaSMS, 
@@ -358,6 +370,15 @@ export function AIAccountingAssistant({
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages]);
+
+  useEffect(() => {
+    voiceEnabledRef.current = voiceEnabled;
+    try {
+      localStorage.setItem('alice-voice', voiceEnabled ? 'on' : 'off');
+    } catch {
+      /* preference is optional */
+    }
+  }, [voiceEnabled]);
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -524,13 +545,15 @@ export function AIAccountingAssistant({
     }
   };
 
-  const sendMessage = useCallback(async () => {
-    if ((!input.trim() && pendingFiles.length === 0) || isLoading) return;
+  const sendMessage = useCallback(async (overrideText?: string) => {
+    const fromVoice = typeof overrideText === 'string';
+    const typed = fromVoice ? overrideText : input;
+    if ((!typed.trim() && pendingFiles.length === 0) || isLoading) return;
 
     setIsUploading(true);
     let attachments: MessageAttachment[] = [];
     
-    if (pendingFiles.length > 0) {
+    if (!fromVoice && pendingFiles.length > 0) {
       attachments = await processFiles(pendingFiles);
       setPendingFiles([]);
     }
@@ -538,7 +561,7 @@ export function AIAccountingAssistant({
     setIsUploading(false);
 
     // Build user message content including file context
-    let userContent = input.trim();
+    let userContent = typed.trim();
     if (attachments.length > 0) {
       const fileContext = attachments.map(a => {
         let ctx = `[File: ${a.fileName}]`;
@@ -563,12 +586,15 @@ export function AIAccountingAssistant({
 
     const userMsg: Message = { 
       role: 'user', 
-      content: input.trim() || 'Analyzing uploaded files...',
+      content: typed.trim() || 'Analyzing uploaded files...',
       attachments: attachments.length > 0 ? attachments : undefined,
     };
     
-    setMessages(prev => [...prev, userMsg]);
-    setInput('');
+    setMessages(prev => {
+      nextAssistantIndexRef.current = prev.length + 1;
+      return [...prev, userMsg];
+    });
+    if (!fromVoice) setInput('');
     setIsLoading(true);
 
     let assistantSoFar = "";
@@ -617,13 +643,19 @@ export function AIAccountingAssistant({
       messages: apiMessages,
       taskHint,
       onDelta: (chunk) => upsertAssistant(chunk),
-      onDone: () => setIsLoading(false),
+      onDone: () => {
+        setIsLoading(false);
+        if (voiceEnabledRef.current && assistantSoFar.trim()) {
+          setSpeakingMessageIndex(nextAssistantIndexRef.current);
+          void speak(assistantSoFar);
+        }
+      },
       onError: (error) => {
         setMessages(prev => [...prev, { role: 'assistant', content: `Sorry, I encountered an error: ${error}` }]);
         setIsLoading(false);
       },
     });
-  }, [input, isLoading, messages, pendingFiles]);
+  }, [input, isLoading, messages, pendingFiles, speak]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -672,6 +704,66 @@ export function AIAccountingAssistant({
     replay();
   }, [replay]);
 
+  const hearAlice = () => {
+    prime();
+    setSpeakingMessageIndex(null);
+    void speak(ALICE_INTRO);
+  };
+
+  const toggleVoiceReplies = () => {
+    prime();
+    const next = !voiceEnabled;
+    setVoiceEnabled(next);
+    if (!next) {
+      stop();
+      setSpeakingMessageIndex(null);
+      return;
+    }
+    let idx = -1;
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      if (messages[i].role === 'assistant' && messages[i].content.trim()) {
+        idx = i;
+        break;
+      }
+    }
+    if (idx >= 0) {
+      setSpeakingMessageIndex(idx);
+      void speak(messages[idx].content);
+    } else {
+      void speak(ALICE_INTRO);
+    }
+  };
+
+  const handleMic = async () => {
+    prime();
+    if (isTranscribing) return;
+    if (isRecording) {
+      try {
+        const audio = await stopDictation();
+        if (!audio) {
+          toast.message("I didn't catch that. Try again.");
+          return;
+        }
+        const text = await transcribe(audio);
+        if (!text) {
+          toast.message("I didn't catch that. Try again.");
+          return;
+        }
+        await sendMessage(text);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Could not transcribe audio.';
+        toast.error(message);
+      }
+      return;
+    }
+    try {
+      await startDictation();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not access the microphone.';
+      toast.error(message.includes('browser') ? message : 'Could not access the microphone. Check the browser permission.');
+    }
+  };
+
   // Handle email share
   const handleEmailShare = async () => {
     if (!emailRecipient.trim()) {
@@ -701,13 +793,13 @@ export function AIAccountingAssistant({
     <>
       <div
         className={cn(
-          "fixed z-50 rounded-2xl flex flex-col transition-all duration-300",
+          "fixed z-[60] rounded-2xl flex flex-col transition-all duration-300",
           "bg-gradient-to-br from-blue-600 via-blue-700 to-blue-900",
           "shadow-[0_20px_60px_-15px_rgba(37,99,235,0.5),0_10px_30px_-10px_rgba(30,64,175,0.4),inset_0_1px_0_rgba(255,255,255,0.1)]",
           "before:absolute before:inset-0 before:rounded-2xl before:bg-gradient-to-b before:from-white/10 before:to-transparent before:pointer-events-none",
           isExpanded 
-            ? "bottom-4 right-4 left-4 top-4 md:left-auto md:w-[600px] md:h-[80vh]" 
-            : "bottom-6 right-6 w-[400px] h-[560px]"
+            ? "bottom-20 right-3 left-3 top-16 md:bottom-4 md:right-4 md:left-auto md:top-4 md:w-[600px] md:h-[80vh]" 
+            : "bottom-20 right-3 w-[min(400px,calc(100vw-1.5rem))] h-[min(560px,calc(100dvh-7.5rem))] md:bottom-6 md:right-6 md:h-[min(560px,calc(100dvh-3rem))]"
         )}
       >
         {/* Header */}
@@ -721,7 +813,7 @@ export function AIAccountingAssistant({
               <p className="text-xs text-blue-100/80">Your AI Business Advisor</p>
             </div>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex flex-wrap items-center justify-end gap-1">
             {sheetsData.rows.length > 0 && (
               <Button
                 variant="ghost"
@@ -741,6 +833,17 @@ export function AIAccountingAssistant({
               title="Financial Toolkit"
             >
               <Calculator className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className={cn("h-8 w-8 hover:bg-white/10", voiceEnabled ? "text-white" : "text-white/80 hover:text-white")}
+              onClick={toggleVoiceReplies}
+              title={voiceEnabled ? "Voice replies on" : "Turn on voice replies"}
+              aria-pressed={voiceEnabled}
+              aria-label={voiceEnabled ? "Voice replies on" : "Turn on voice replies"}
+            >
+              {voiceEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
             </Button>
             <Button
               variant="ghost"
@@ -797,6 +900,38 @@ export function AIAccountingAssistant({
                 <h4 className="font-medium mb-1 text-white">Hello! I'm Alice, your AI Business Advisor</h4>
                 <p className="text-sm text-blue-100/70">
                   Expert in accounting, finance, marketing, legal, HR, taxation, strategy, operations, and more across Canada, USA, Zambia, Kenya & Burundi.
+                </p>
+              </div>
+
+              <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 shadow-lg">
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                  <div className="flex items-center gap-2">
+                    <Volume2 className="h-5 w-5 text-blue-200" />
+                    <span className="font-medium text-sm text-white">Voice</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={hearAlice}
+                      className="h-7 text-xs bg-white/10 border-white/20 text-white hover:bg-white/20"
+                    >
+                      <Volume2 className="h-3 w-3 mr-1" />
+                      Hear Alice
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={toggleVoiceReplies}
+                      aria-pressed={voiceEnabled}
+                      className="h-7 text-xs bg-white/10 border-white/20 text-white hover:bg-white/20"
+                    >
+                      {voiceEnabled ? "Voice on" : "Read replies"}
+                    </Button>
+                  </div>
+                </div>
+                <p className="text-xs text-blue-100/80">
+                  Talk with the microphone. Alice answers with ElevenLabs voice.
                 </p>
               </div>
 
@@ -1206,6 +1341,28 @@ export function AIAccountingAssistant({
             >
               <Paperclip className="h-4 w-4" />
             </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className={cn(
+                "h-11 w-11 shrink-0 text-white/80 hover:text-white hover:bg-white/10",
+                isRecording && "bg-red-500/40 text-white"
+              )}
+              onClick={() => { void handleMic(); }}
+              disabled={isTranscribing || isLoading || isUploading || isPdfConverting}
+              aria-label={isRecording ? "Stop and transcribe" : "Talk to Alice"}
+              aria-pressed={isRecording}
+              title={isRecording ? `Listening ${recordingSeconds}s` : "Talk to Alice"}
+            >
+              {isTranscribing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : isRecording ? (
+                <Square className="h-4 w-4" />
+              ) : (
+                <Mic className="h-4 w-4" />
+              )}
+            </Button>
             <Textarea
               ref={textareaRef}
               value={input}
@@ -1229,7 +1386,11 @@ export function AIAccountingAssistant({
             </Button>
           </div>
           <p className="text-[10px] text-blue-100/60 text-center mt-2">
-            📄 Attach PDFs for AI Sheets extraction • Up to 500 pages supported
+            {isRecording
+              ? `Listening ${recordingSeconds}s • tap the mic to send`
+              : isTranscribing
+                ? "Transcribing with ElevenLabs…"
+                : "Attach a PDF, or tap the mic to talk • Up to 500 pages"}
           </p>
         </div>
       </div>

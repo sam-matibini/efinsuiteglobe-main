@@ -269,6 +269,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         </header>
 
         {/* Alice AI Assistant - Floating HD Avatar */}
+        {!aliceOpen && (
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -296,6 +297,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
+        )}
 
         <AIAccountingAssistant isOpen={aliceOpen} onOpenChange={setAliceOpen} />
 
