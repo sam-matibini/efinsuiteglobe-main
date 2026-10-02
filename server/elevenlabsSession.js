@@ -9,7 +9,7 @@ const ALICE_AGENT = {
       first_message: "Hi, I'm Alice. How can I help you with efinsuite Globe?",
       language: "en",
       prompt: {
-        prompt: "You are Alice, the AI business advisor for efinsuite Globe. Help with accounting, finance, tax, and operations. Do not invent balances or filings. For pricing or demos, point visitors to info@efintax.biz.",
+        prompt: "You are Alice, the AI business advisor for efinsuite Globe, the accounting, payroll, tax, and treasury platform. Help with accounting, bookkeeping, finance, tax, payroll, and operations in Canada, the USA, Zambia, Kenya, Burundi, and Uganda. You cannot change the books, send payments, or file a return. Do not invent balances, dates, or filings. For pricing, demos, or migrations, invite them to email info@efintax.biz.",
       },
     },
     tts: { voice_id: "EXAVITQu4vr4xnSDxMaL" },
@@ -19,10 +19,7 @@ const ALICE_AGENT = {
       conversation_config_override: {
         agent: {
           first_message: true,
-          language: true,
-          prompt: { prompt: true },
         },
-        tts: { voice_id: true },
       },
     },
   },
@@ -107,8 +104,9 @@ async function resolveAgentId(apiKey, configured, fetchImpl) {
   if (explicit) return explicit;
   const listed = await elevenFetch(apiKey, "/v1/convai/agents?page_size=30", fetchImpl);
   if (!listed.ok) throw new Error(explainFailure(listed.body));
-  const existing = pickAgentId(Array.isArray(listed.body.agents) ? listed.body.agents : []);
-  if (existing) return existing;
+  const agents = Array.isArray(listed.body.agents) ? listed.body.agents : [];
+  const globe = pickAgentId(agents.filter((agent) => /efinsuite|globe/i.test(agent.name || "")));
+  if (globe) return globe;
   let created = await elevenFetch(apiKey, "/v1/convai/agents/create", fetchImpl, {
     method: "POST",
     body: JSON.stringify(ALICE_AGENT),

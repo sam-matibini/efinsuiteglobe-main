@@ -13,6 +13,12 @@ describe("elevenlabs agent selection", () => {
     ])).toBe("agent_globe");
   });
 
+  it("does not treat the eFinMoney agent as efinsuite", () => {
+    const agents = [{ agent_id: "agent_alice", name: "Alice · EfinMoney" }];
+    const globe = pickAgentId(agents.filter((agent) => /efinsuite|globe/i.test(agent.name || "")));
+    expect(globe).toBe("");
+  });
+
   it("uses Alice when no efinsuite agent exists", () => {
     expect(pickAgentId([
       { agent_id: "agent_other", name: "Support" },
