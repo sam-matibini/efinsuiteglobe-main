@@ -127,7 +127,7 @@ async function resolveAgentId(apiKey, configured, fetchImpl) {
 export async function createElevenLabsSession(apiKey, surface, configuredAgentId, fetchImpl = fetch) {
   const safeSurface = surface === "landing" ? "landing" : "app";
   if (!apiKey) {
-    return { status: 500, body: { error: "ElevenLabs API key is not configured." } };
+    return { status: 500, body: { error: "ElevenLabs API key is not configured on the server. Add a key with Conversational AI write permission." } };
   }
   try {
     const agentId = await resolveAgentId(apiKey, configuredAgentId, fetchImpl);
