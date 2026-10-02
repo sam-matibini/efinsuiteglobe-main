@@ -5,6 +5,7 @@ import fs from "fs";
 import { componentTagger } from "lovable-tagger";
 import { VitePWA } from "vite-plugin-pwa";
 import { craGatewayPlugin } from "./server/craGatewayPlugin";
+import { elevenlabsAgentPlugin } from "./server/elevenlabsAgentPlugin";
 
 const buildTimestamp = Date.now().toString();
 
@@ -36,6 +37,7 @@ export default defineConfig(({ mode }) => ({
   },
   plugins: [
     craGatewayPlugin(),
+    elevenlabsAgentPlugin(),
     react(),
     mode === "development" && componentTagger(),
     VitePWA({

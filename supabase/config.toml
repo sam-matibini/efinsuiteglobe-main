@@ -206,3 +206,6 @@ verify_jwt = false
 
 [functions.cra-gateway]
 verify_jwt = false
+
+[functions.elevenlabs-agent]
+verify_jwt = false
