@@ -1,10 +1,14 @@
-import { useState, useRef, useEffect } from 'react';
-import { X, Send, Mail, Loader2 } from 'lucide-react';
+import { lazy, Suspense, useState, useRef, useEffect } from 'react';
+import { X, Send, Mail, Loader2, Phone } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { supabase } from '@/integrations/supabase/client';
 import aliceAvatar from '@/assets/alice-avatar.png';
+
+const ElevenLabsAgentSession = lazy(() =>
+  import("@/components/alice/ElevenLabsAgentSession").then((mod) => ({ default: mod.ElevenLabsAgentSession })),
+);
 
 interface Message {
   id: string;
@@ -36,6 +40,7 @@ export const LandingChatWidget = () => {
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [agentOpen, setAgentOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -202,15 +207,44 @@ Countries supported: Canada, USA, Zambia, Kenya, Burundi, Uganda.`;
             <h3 className="font-semibold text-foreground">Alice</h3>
             <p className="text-xs text-muted-foreground">AI Assistant • Online</p>
           </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setAgentOpen(true)}
+            disabled={agentOpen}
+            className="h-8"
+          >
+            <Phone className="w-4 h-4 mr-1" />
+            Talk
+          </Button>
           <Button 
             variant="ghost" 
             size="icon" 
-            onClick={() => setIsOpen(false)}
+            onClick={() => {
+              setAgentOpen(false);
+              setIsOpen(false);
+            }}
             className="h-8 w-8"
           >
             <X className="w-4 h-4" />
           </Button>
         </div>
+
+        {agentOpen && (
+          <Suspense fallback={<div className="px-4 py-2 text-xs text-muted-foreground">Connecting to Alice…</div>}>
+            <ElevenLabsAgentSession
+              surface="landing"
+              onClose={() => setAgentOpen(false)}
+              onTranscript={(role, text) => {
+                setMessages((prev) => {
+                  const last = prev[prev.length - 1];
+                  if (last && last.role === role && last.content === text) return prev;
+                  return [...prev, { id: `agent-${Date.now()}`, role, content: text }];
+                });
+              }}
+            />
+          </Suspense>
+        )}
 
         {/* Messages */}
         <ScrollArea className="h-[350px] p-4" ref={scrollRef}>

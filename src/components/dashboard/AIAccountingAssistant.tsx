@@ -1,6 +1,6 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { lazy, Suspense, useState, useCallback, useRef, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { X, Send, Loader2, Minimize2, Maximize2, Paperclip, Download, FileText, FileSpreadsheet, File, Table, Building2, CreditCard, Sparkles, FileUp, RefreshCw, FolderCog, Volume2, Pause, Play, RotateCcw, Square, Share2, Mail, MessageSquare, MessageCircle, Copy, FileDown, FileType, Sheet, FileType2, Calculator } from 'lucide-react';
+import { X, Send, Loader2, Minimize2, Maximize2, Paperclip, Download, FileText, FileSpreadsheet, File, Table, Building2, CreditCard, Sparkles, FileUp, RefreshCw, FolderCog, Volume2, Pause, Play, RotateCcw, Square, Share2, Mail, MessageSquare, MessageCircle, Copy, FileDown, FileType, Sheet, FileType2, Calculator, Phone } from 'lucide-react';
 import aliceAvatar from '@/assets/alice-avatar.png';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -47,6 +47,10 @@ import { StatementExtractionDialog } from '@/components/banking/StatementExtract
 import { classifyCreditCardType, normalizeCreditCardAmount } from '@/lib/creditCardImportNormalizer';
 import { TemplateManagementPanel } from '@/components/banking/TemplateManagementPanel';
 import { toast } from 'sonner';
+
+const ElevenLabsAgentSession = lazy(() =>
+  import("@/components/alice/ElevenLabsAgentSession").then((mod) => ({ default: mod.ElevenLabsAgentSession })),
+);
 
 type MessageAttachment = {
   fileName: string;
@@ -237,6 +241,7 @@ export function AIAccountingAssistant({
   const [emailSubject, setEmailSubject] = useState('');
   const [pendingShareContent, setPendingShareContent] = useState('');
   const [speakingMessageIndex, setSpeakingMessageIndex] = useState<number | null>(null);
+  const [agentOpen, setAgentOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -722,6 +727,16 @@ export function AIAccountingAssistant({
             </div>
           </div>
           <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-white/80 hover:text-white hover:bg-white/10"
+              onClick={() => setAgentOpen(true)}
+              disabled={agentOpen}
+              title="Talk with Alice"
+            >
+              <Phone className="h-4 w-4" />
+            </Button>
             {sheetsData.rows.length > 0 && (
               <Button
                 variant="ghost"
@@ -774,6 +789,23 @@ export function AIAccountingAssistant({
             </Button>
           </div>
         </div>
+
+        {agentOpen && (
+          <Suspense fallback={<div className="px-4 py-2 text-xs text-blue-100">Connecting to Alice…</div>}>
+            <ElevenLabsAgentSession
+              surface="app"
+              tone="dark"
+              onClose={() => setAgentOpen(false)}
+              onTranscript={(role, text) => {
+                setMessages((prev) => {
+                  const last = prev[prev.length - 1];
+                  if (last && last.role === role && last.content === text) return prev;
+                  return [...prev, { role, content: text }];
+                });
+              }}
+            />
+          </Suspense>
+        )}
 
         {/* Progress Bar for PDF Conversion */}
         {(isPdfConverting && progress) && (
