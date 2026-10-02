@@ -813,7 +813,7 @@ export function AIAccountingAssistant({
               <p className="text-xs text-blue-100/80">Your AI Business Advisor</p>
             </div>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex flex-wrap items-center justify-end gap-1">
             {sheetsData.rows.length > 0 && (
               <Button
                 variant="ghost"
@@ -904,12 +904,12 @@ export function AIAccountingAssistant({
               </div>
 
               <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 shadow-lg">
-                <div className="flex items-center justify-between gap-2 mb-2">
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                   <div className="flex items-center gap-2">
                     <Volume2 className="h-5 w-5 text-blue-200" />
                     <span className="font-medium text-sm text-white">Voice</span>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
                     <Button
                       size="sm"
                       variant="outline"
