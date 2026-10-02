@@ -1,4 +1,4 @@
-import { DollarSign, TrendingUp, Wallet, CreditCard, Building2, Calendar } from 'lucide-react';
+import { DollarSign, TrendingUp, ArrowDownCircle, ArrowUpCircle, Building2, Calendar } from 'lucide-react';
 import { StatCard } from '@/components/dashboard/StatCard';
 import { RevenueChart } from '@/components/dashboard/RevenueChart';
 import { ExpensesPieChart } from '@/components/dashboard/ExpensesPieChart';
@@ -123,53 +123,61 @@ export default function Dashboard() {
         <StatCard
           title="Total Revenue"
           value={formatCurrency(incomeStatement.totalRevenue)}
+          amount={incomeStatement.totalRevenue}
+          formatAmount={formatCurrency}
           change={revenueGrowth}
           changeLabel="vs last year"
-          icon={<DollarSign className="w-6 h-6" />}
+          icon={<TrendingUp className="w-6 h-6" />}
           variant="accent"
         />
         <StatCard
           title="Net Income"
           value={formatCurrency(incomeStatement.netIncome)}
+          amount={incomeStatement.netIncome}
+          formatAmount={formatCurrency}
           change={incomeStatement.netMargin}
           changeLabel="net margin"
-          icon={<TrendingUp className="w-6 h-6" />}
-          variant="success"
+          icon={<DollarSign className="w-6 h-6" />}
+          variant="cyan"
         />
         <StatCard
           title={terminology.accountsReceivable}
           value={formatCurrency(accountsReceivable)}
-          icon={<Wallet className="w-6 h-6" />}
+          amount={accountsReceivable}
+          formatAmount={formatCurrency}
+          icon={<ArrowDownCircle className="w-6 h-6" />}
+          variant="gold"
         />
         <StatCard
           title={terminology.accountsPayable}
           value={formatCurrency(accountsPayable)}
-          icon={<CreditCard className="w-6 h-6" />}
-          variant="warning"
+          amount={accountsPayable}
+          formatAmount={formatCurrency}
+          icon={<ArrowUpCircle className="w-6 h-6" />}
+          variant="danger"
         />
       </div>
 
-      {/* Main Content Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column - Charts */}
-        <div className="lg:col-span-2 space-y-6">
-          <RevenueChart />
-          <RecentTransactions />
-        </div>
-        
-        {/* Right Column - Insights */}
-        <div className="space-y-6">
-          <ProfitMarginIndicator 
-            revenue={incomeStatement.totalRevenue}
-            expenses={incomeStatement.totalExpenses}
-            netIncome={incomeStatement.netIncome}
-          />
-          <FxImpactWidget />
-          <TaxDashboardWidget />
-          <AlertsCard />
-          <CashPositionCard />
-        </div>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,65fr)_minmax(0,35fr)]">
+        <RevenueChart />
+        <ProfitMarginIndicator
+          revenue={incomeStatement.totalRevenue}
+          expenses={incomeStatement.totalExpenses}
+          netIncome={incomeStatement.netIncome}
+        />
       </div>
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <TaxDashboardWidget />
+        <RecentTransactions />
+      </div>
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,60fr)_minmax(0,40fr)]">
+        <CashPositionCard />
+        <FxImpactWidget />
+      </div>
+
+      <AlertsCard />
 
       {/* Secondary Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

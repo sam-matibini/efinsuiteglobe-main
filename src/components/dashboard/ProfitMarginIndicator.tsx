@@ -1,4 +1,5 @@
-import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { TrendingUp, TrendingDown } from 'lucide-react';
+import { Cell, Pie, PieChart, ResponsiveContainer } from 'recharts';
 import { cn } from '@/lib/utils';
 import { useCurrentOrganization } from '@/hooks/useOrganization';
 import { getCountryLocalization } from '@/data/countryLocalizations';
@@ -30,6 +31,11 @@ export function ProfitMarginIndicator({ revenue, expenses, netIncome }: ProfitMa
   const netMarginStatus = getMarginStatus(netMargin);
   const grossMarginStatus = getMarginStatus(grossMargin);
 
+  const marginSlices = [
+    { name: 'Net income', value: Math.max(netIncome, 0), fill: '#6366f1' },
+    { name: 'Expenses', value: Math.max(expenses, 0), fill: '#06b6d4' },
+  ].filter((slice) => slice.value > 0);
+
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat(locale, {
       style: 'currency',
@@ -52,15 +58,33 @@ export function ProfitMarginIndicator({ revenue, expenses, netIncome }: ProfitMa
         </div>
       </div>
 
-      {/* Net Income Highlight */}
-      <div className="text-center mb-6">
-        <p className="text-sm text-muted-foreground mb-1">Net Income</p>
-        <p className={cn(
-          "text-4xl font-bold tracking-tight",
-          netIncome >= 0 ? "text-success" : "text-destructive"
-        )}>
-          {formatCurrency(netIncome)}
-        </p>
+      <div className="relative mx-auto mb-6 h-[220px] max-w-[220px]">
+        {revenue <= 0 && expenses <= 0 ? (
+          <div className="flex h-full items-center justify-center text-center text-sm text-[#64748b]">
+            No activity this period
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie
+                data={marginSlices}
+                dataKey="value"
+                innerRadius={68}
+                outerRadius={92}
+                stroke="none"
+                paddingAngle={2}
+              >
+                {marginSlices.map((slice) => (
+                  <Cell key={slice.name} fill={slice.fill} />
+                ))}
+              </Pie>
+            </PieChart>
+          </ResponsiveContainer>
+        )}
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+          <p className="text-xl font-black text-[#0f172a]">{netMargin.toFixed(1)}%</p>
+          <p className="text-xs text-[#64748b]">Net Margin</p>
+        </div>
       </div>
 
       {/* Margin Bars */}
