@@ -11,7 +11,7 @@ type TranscriptHandler = (role: "user" | "assistant", text: string) => void;
 type AgentSession = { token?: string; signedUrl?: string };
 
 function unavailable(detail: string): boolean {
-  return /not found|failed to send|failed to fetch|network|not available|did not respond/i.test(detail);
+  return /not found|failed to send|failed to fetch|network|not available|did not respond|not configured/i.test(detail);
 }
 
 async function loadLocalSession(surface: "landing" | "app"): Promise<AgentSession> {
