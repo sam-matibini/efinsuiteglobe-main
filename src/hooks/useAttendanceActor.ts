@@ -28,7 +28,7 @@ function mapRole(role?: string | null): AttendanceRole {
 export function useAttendanceActor(explicitEmployeeId?: string | null): Actor {
   const { user } = useAuth();
   const { organization } = useCurrentOrganization();
-  const { memberships } = useMyOrganizationMemberships();
+  const { data: memberships = [] } = useMyOrganizationMemberships();
   const { employees } = useEmployees();
   const membership = memberships.find((item) => item.organization_id === organization?.id);
   const email = user?.email?.toLowerCase();

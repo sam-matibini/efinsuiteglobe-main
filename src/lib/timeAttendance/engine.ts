@@ -112,9 +112,18 @@ export function resolveTracking(
   return payType === 'hourly';
 }
 
+function safeTimeZone(timeZone: string): string {
+  try {
+    Intl.DateTimeFormat('en-CA', { timeZone }).format(new Date());
+    return timeZone;
+  } catch {
+    return 'America/Toronto';
+  }
+}
+
 export function calendarDate(iso: string, timeZone: string): string {
   const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone,
+    timeZone: safeTimeZone(timeZone),
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -126,7 +135,7 @@ export function calendarDate(iso: string, timeZone: string): string {
 export function formatClock(iso: string | null, timeZone: string): string {
   if (!iso) return '—';
   return new Intl.DateTimeFormat('en-US', {
-    timeZone,
+    timeZone: safeTimeZone(timeZone),
     hour: 'numeric',
     minute: '2-digit',
     hour12: true,
@@ -135,7 +144,7 @@ export function formatClock(iso: string | null, timeZone: string): string {
 
 export function formatLongDate(iso: string, timeZone: string): string {
   return new Intl.DateTimeFormat('en-US', {
-    timeZone,
+    timeZone: safeTimeZone(timeZone),
     weekday: 'long',
     month: 'long',
     day: 'numeric',
@@ -963,7 +972,7 @@ function wallMinutes(hhmm: string): number {
 
 function minutesOfDay(iso: string, timeZone: string): number {
   const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone,
+    timeZone: safeTimeZone(timeZone),
     hour: '2-digit',
     minute: '2-digit',
     hourCycle: 'h23',

@@ -5,6 +5,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { PageErrorBoundary } from "@/components/layout/PageErrorBoundary";
 import { AdminRoute } from "@/components/AdminRoute";
 import { RouteAccessGuard } from "@/components/auth/RouteAccessGuard";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
@@ -208,9 +209,14 @@ const LoanCalculatorPage = lazy(() => import("./pages/toolkit/LoanCalculatorPage
 
 const queryClient = new QueryClient();
 
-const PageWrapper = ({ children }: { children: React.ReactNode }) => (
-  <AppLayout>{children}</AppLayout>
-);
+const PageWrapper = ({ children }: { children: React.ReactNode }) => {
+  const location = useLocation();
+  return (
+    <AppLayout>
+      <PageErrorBoundary key={location.pathname}>{children}</PageErrorBoundary>
+    </AppLayout>
+  );
+};
 
 // Suspense fallback shown while a lazy route chunk downloads.
 const RouteFallback = () => (

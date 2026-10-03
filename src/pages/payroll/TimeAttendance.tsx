@@ -29,7 +29,8 @@ export default function TimeAttendance() {
   const [reason, setReason] = useState('Employee forgot to clock out.');
   const [clockOut, setClockOut] = useState('');
 
-  const today = org ? calendarDate(new Date().toISOString(), org.company.timezone) : '';
+  const timezone = org?.company?.timezone || 'America/Toronto';
+  const today = org?.company ? calendarDate(new Date().toISOString(), timezone) : '';
   const monthStart = today ? `${today.slice(0, 7)}-01` : '';
   const teamIds = employees.map((employee) => employee.id);
   const manager = org && today ? dashboardForManager(org, today, teamIds) : null;
@@ -89,9 +90,9 @@ export default function TimeAttendance() {
         </Button>
       </div>
 
-      {org && <ServicesCheckoutPanel company={org.company} busy={busy} onSave={saveCompany} />}
+      {org?.company && <ServicesCheckoutPanel company={org.company} busy={busy} onSave={saveCompany} />}
 
-      {org?.company.enabled && manager && readiness && (
+      {org?.company?.enabled && manager && readiness && (
         <div className="grid gap-4 lg:grid-cols-2">
           <Card>
             <CardHeader><CardTitle>Team attendance</CardTitle></CardHeader>
@@ -118,7 +119,7 @@ export default function TimeAttendance() {
         </div>
       )}
 
-      {org?.company.enabled && (
+      {org?.company?.enabled && (
         <Card>
           <CardHeader><CardTitle>Manager review</CardTitle></CardHeader>
           <CardContent className="space-y-3">
@@ -136,7 +137,7 @@ export default function TimeAttendance() {
         </Card>
       )}
 
-      {org?.company.enabled && (
+      {org?.company?.enabled && (
         <Card>
           <CardHeader><CardTitle>Attendance exceptions</CardTitle></CardHeader>
           <CardContent className="space-y-4">
@@ -148,7 +149,7 @@ export default function TimeAttendance() {
                   <p className="font-medium">Attendance exception</p>
                   <p>Employee: {item.employeeName || (person ? `${person.first_name} ${person.last_name}` : item.employeeId)}</p>
                   <p>Date: {item.workDate}</p>
-                  <p>Clock in: {formatClock(item.clockIn, org.company.timezone)}</p>
+                  <p>Clock in: {formatClock(item.clockIn, timezone)}</p>
                   <p>Clock out: Missing</p>
                   <div className="flex flex-wrap items-center gap-2">
                     <Input type="datetime-local" value={clockOut} onChange={(event) => setClockOut(event.target.value)} className="max-w-xs" />
