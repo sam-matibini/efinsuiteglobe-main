@@ -43,7 +43,10 @@ import { CreateOrganizationDialog } from '@/components/accounts/CreateOrganizati
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
 import { DateRangePresetSelect } from '@/components/filters/DateRangePresetSelect';
-import { BANKING_DATE_PRESETS, dateInIsoRange, resolveDateRangeISO, type DateRangePresetId } from '@/lib/dateRangePresets';
+import { BANKING_DATE_PRESETS, dateInIsoRange, resolveDateRangeISO, toLocalISO, type DateRangePresetId } from '@/lib/dateRangePresets';
+import { SavedFilterMenu } from '@/components/filters/SavedFilterMenu';
+import { useSavedFilters } from '@/hooks/useSavedFilters';
+import type { BankingSavedFilter } from '@/lib/savedFilters';
 import {
   Table,
   TableBody,
@@ -229,6 +232,32 @@ export default function CreditCardTransactions() {
     amountMin !== '',
     amountMax !== '',
   ].filter(Boolean).length;
+
+  const savedFilters = useSavedFilters<BankingSavedFilter>('banking-transactions', organization?.id);
+  const currentBankingFilter = (): BankingSavedFilter => ({
+    searchQuery,
+    statusFilter,
+    typeFilter,
+    categoryFilter,
+    glPostedFilter: 'all',
+    dateRange,
+    customStartDate: customStartDate ? toLocalISO(customStartDate) : null,
+    customEndDate: customEndDate ? toLocalISO(customEndDate) : null,
+    amountMin,
+    amountMax,
+  });
+  const applyBankingFilter = (value: BankingSavedFilter) => {
+    setSearchQuery(value.searchQuery ?? '');
+    setStatusFilter(value.statusFilter || 'all');
+    setTypeFilter(value.typeFilter || 'all');
+    setCategoryFilter(value.categoryFilter || 'all');
+    setDateRange(value.dateRange || 'all');
+    setCustomStartDate(value.customStartDate ? parseLocalDate(value.customStartDate) : undefined);
+    setCustomEndDate(value.customEndDate ? parseLocalDate(value.customEndDate) : undefined);
+    setAmountMin(value.amountMin ?? '');
+    setAmountMax(value.amountMax ?? '');
+    setShowAdvancedFilters(true);
+  };
 
   const clearAllFilters = () => {
     setStatusFilter('all');
@@ -578,6 +607,13 @@ export default function CreditCardTransactions() {
               </Button>
             </CollapsibleTrigger>
           </Collapsible>
+
+          <SavedFilterMenu
+            items={savedFilters.items}
+            onSave={(filterName) => savedFilters.save(filterName, currentBankingFilter())}
+            onApply={(filter) => applyBankingFilter(filter.value)}
+            onDelete={savedFilters.remove}
+          />
 
           {activeFiltersCount > 0 && (
             <Button variant="ghost" size="sm" onClick={clearAllFilters}>

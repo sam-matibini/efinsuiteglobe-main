@@ -8,7 +8,7 @@ import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { cn } from '@/lib/utils';
+import { cn, parseLocalDate } from '@/lib/utils';
 import { ReportsTabs } from '@/components/reports/ReportsTabs';
 import { RealtimeIndicator } from '@/components/reports/RealtimeIndicator';
 import { DivisionFilter } from '@/components/reports/DivisionFilter';
@@ -21,7 +21,10 @@ import { CreateOrganizationDialog } from '@/components/accounts/CreateOrganizati
 import { format } from 'date-fns';
 import { getFiscalYearStart, getFiscalYearForDate } from '@/lib/fiscalYearUtils';
 import { DateRangePresetSelect } from '@/components/filters/DateRangePresetSelect';
-import { resolveDateRangePreset, STATEMENT_DATE_PRESETS, type DateRangePresetId } from '@/lib/dateRangePresets';
+import { detectDateRangePreset, resolveDateRangePreset, STATEMENT_DATE_PRESETS, STATEMENT_PRESET_IDS, toLocalISO, type DateRangePresetId } from '@/lib/dateRangePresets';
+import { SavedFilterMenu } from '@/components/filters/SavedFilterMenu';
+import { useSavedFilters } from '@/hooks/useSavedFilters';
+import type { FinancialReportSavedFilter } from '@/lib/savedFilters';
 import {
   Select,
   SelectContent,
@@ -197,6 +200,49 @@ export default function CashFlow() {
   const { getCashFlowData, isLoading, error, realtimeLastEventAt } = useFinancialReports(dateFilter);
 
   // Handle date preset changes - uses org's fiscal year settings
+  const savedReportFilters = useSavedFilters<FinancialReportSavedFilter>('financial-reports', organization?.id);
+  const currentReportFilter = (): FinancialReportSavedFilter => ({
+    startDate: toLocalISO(dateFrom),
+    endDate: toLocalISO(dateTo),
+    datePreset,
+    showZeroBalances,
+    compare: comparison.enabled
+      ? {
+          type: comparison.type === 'years' ? 'year' : 'period',
+          count: comparison.count,
+          latestToOldest: comparison.latestToOldest,
+        }
+      : null,
+    divisionIds,
+  });
+  const applyReportFilter = (value: FinancialReportSavedFilter) => {
+    const preset = value.datePreset;
+    const rolling = preset && preset !== 'custom'
+      ? resolveDateRangePreset(preset as DateRangePresetId, new Date(), fiscalYearEndMonth)
+      : null;
+    if (rolling) {
+      setDateFrom(rolling.start);
+      setDateTo(rolling.end);
+      setDatePreset(preset as DateRangePresetId);
+    } else if (value.startDate && value.endDate) {
+      const start = parseLocalDate(value.startDate);
+      const end = parseLocalDate(value.endDate);
+      setDateFrom(start);
+      setDateTo(end);
+      setDatePreset(detectDateRangePreset(start, end, STATEMENT_PRESET_IDS, new Date(), fiscalYearEndMonth));
+    }
+    setShowZeroBalances(!!value.showZeroBalances);
+    const nextComparison: ComparisonSettings = {
+      enabled: !!value.compare,
+      type: value.compare?.type === 'year' ? 'years' : 'periods',
+      count: value.compare?.count || 2,
+      latestToOldest: value.compare?.latestToOldest ?? true,
+    };
+    setComparison(nextComparison);
+    setTempComparison(nextComparison);
+    setDivisionIds(value.divisionIds ?? []);
+  };
+
   const handlePresetChange = (preset: DateRangePresetId) => {
     setDatePreset(preset);
     const bounds = resolveDateRangePreset(preset, new Date(), organization?.fiscal_year_end_month || 12);
@@ -1215,6 +1261,12 @@ export default function CashFlow() {
 
       {/* Filter Bar - Zoho Style */}
       <div className="flex flex-wrap items-center gap-3 print:hidden">
+        <SavedFilterMenu
+          items={savedReportFilters.items}
+          onSave={(filterName) => savedReportFilters.save(filterName, currentReportFilter())}
+          onApply={(filter) => applyReportFilter(filter.value)}
+          onDelete={savedReportFilters.remove}
+        />
         {/* Date Preset Dropdown */}
         <DateRangePresetSelect
           value={datePreset}

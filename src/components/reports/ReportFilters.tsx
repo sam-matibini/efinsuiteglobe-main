@@ -21,7 +21,11 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { format } from 'date-fns';
-import { cn } from '@/lib/utils';
+import { cn, parseLocalDate } from '@/lib/utils';
+import { useCurrentOrganization } from '@/hooks/useOrganization';
+import { useSavedFilters } from '@/hooks/useSavedFilters';
+import { SavedFilterMenu } from '@/components/filters/SavedFilterMenu';
+import type { FinancialReportSavedFilter } from '@/lib/savedFilters';
 import { getFiscalYearStart, getFiscalYearEnd, getFiscalYearForDate } from '@/lib/fiscalYearUtils';
 import { DateRangePresetSelect } from '@/components/filters/DateRangePresetSelect';
 import {
@@ -29,6 +33,7 @@ import {
   resolveDateRangePreset,
   STATEMENT_DATE_PRESETS,
   STATEMENT_PRESET_IDS,
+  toLocalISO,
   type DateRangePresetId,
 } from '@/lib/dateRangePresets';
 
@@ -95,6 +100,48 @@ export const ReportFilters = React.forwardRef<HTMLDivElement, ReportFiltersProps
   const [tempCompareType, setTempCompareType] = useState<'period' | 'year'>('period');
   const [tempNumberOfPeriods, setTempNumberOfPeriods] = useState('1');
   const [tempLatestToOldest, setTempLatestToOldest] = useState(true);
+  const { organization } = useCurrentOrganization();
+  const savedReportFilters = useSavedFilters<FinancialReportSavedFilter>('financial-reports', organization?.id);
+
+  const currentReportFilter = (): FinancialReportSavedFilter => ({
+    startDate: toLocalISO(startDate),
+    endDate: toLocalISO(endDate),
+    datePreset,
+    showZeroBalances,
+    compare: compareSettings
+      ? {
+          type: compareSettings.compareType,
+          count: compareSettings.numberOfPeriods,
+          latestToOldest: compareSettings.latestToOldest,
+        }
+      : null,
+    divisionIds: [],
+  });
+
+  const applyReportFilter = (value: FinancialReportSavedFilter) => {
+    const preset = value.datePreset;
+    const rolling = preset && preset !== 'custom'
+      ? resolveDateRangePreset(preset as DateRangePresetId, new Date(), fiscalYearEndMonth)
+      : null;
+    if (rolling) {
+      onDateRangeChange?.(rolling.start, rolling.end);
+    } else if (value.startDate && value.endDate) {
+      onDateRangeChange?.(parseLocalDate(value.startDate), parseLocalDate(value.endDate));
+    }
+    onShowZeroBalancesChange?.(!!value.showZeroBalances);
+    if (value.compare && (value.compare.type === 'period' || value.compare.type === 'year')) {
+      const settings: CompareSettings = {
+        compareType: value.compare.type,
+        numberOfPeriods: value.compare.count || 1,
+        latestToOldest: value.compare.latestToOldest ?? true,
+      };
+      setCompareSettings(settings);
+      onCompareChange?.(settings);
+    } else {
+      setCompareSettings(null);
+      onCompareChange?.(null);
+    }
+  };
 
   const handlePresetChange = (preset: DatePreset) => {
     const bounds = resolveDateRangePreset(preset, new Date(), fiscalYearEndMonth);
@@ -172,6 +219,12 @@ export const ReportFilters = React.forwardRef<HTMLDivElement, ReportFiltersProps
       </div>
 
       <div className="flex items-center gap-3">
+        <SavedFilterMenu
+          items={savedReportFilters.items}
+          onSave={(filterName) => savedReportFilters.save(filterName, currentReportFilter())}
+          onApply={(filter) => applyReportFilter(filter.value)}
+          onDelete={savedReportFilters.remove}
+        />
         {/* Date Preset Selector */}
         <DateRangePresetSelect
           value={datePreset}
