@@ -72,4 +72,53 @@ describe('AI Receptionist page', () => {
     expect(screen.queryByText(/2026-10-15/)).not.toBeInTheDocument();
     expect(screen.getByText(/Jane Doe called about payroll/)).toBeInTheDocument();
   });
+
+  it('shows the receptionist name while the organization is still loading', () => {
+    state.useReceptionist.mockReturnValue({
+      organization: null,
+      orgLoading: true,
+      isLoading: true,
+      org: null,
+      voiceReady: false,
+      analytics: null,
+      pending: false,
+      talk: vi.fn(),
+      saveSettings: vi.fn(),
+      saveLists: vi.fn(),
+      runTool: vi.fn(),
+      syncAgent: vi.fn(),
+      startSession: vi.fn(),
+      refresh: vi.fn(),
+      directory,
+    } as never);
+
+    render(<Receptionist />);
+    expect(screen.getByRole('heading', { name: 'AI Receptionist' })).toBeInTheDocument();
+    expect(screen.getByText('Loading the receptionist desk…')).toBeInTheDocument();
+  });
+
+  it('shows the desk when the organization has no stored receptionist', () => {
+    state.useReceptionist.mockReturnValue({
+      organization: { id: 'org-1', name: 'Acme' },
+      orgLoading: false,
+      isLoading: false,
+      org: emptyReceptionOrg('org-1'),
+      voiceReady: false,
+      analytics: { calls: 0, resolved: 0, handedOff: 0, blocked: 0, bookings: 0, messages: 0, tickets: 0, leads: 0, byDepartment: {}, byChannel: {} },
+      pending: false,
+      talk: vi.fn(),
+      saveSettings: vi.fn(),
+      saveLists: vi.fn(),
+      runTool: vi.fn(),
+      syncAgent: vi.fn(),
+      startSession: vi.fn(),
+      refresh: vi.fn(),
+      directory,
+    } as never);
+
+    render(<Receptionist />);
+    expect(screen.getByRole('heading', { name: 'AI Receptionist' })).toBeInTheDocument();
+    expect(screen.getByText('Text desk')).toBeInTheDocument();
+    expect(screen.getByText('No calls yet.')).toBeInTheDocument();
+  });
 });

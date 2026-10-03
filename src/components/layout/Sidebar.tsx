@@ -343,6 +343,7 @@ const NAV_PRESENTATION: Record<string, { group: NavGroupId; iconColor: string }>
   Investments: { group: 'treasury', iconColor: '#fbbf24' },
   'FX Management': { group: 'treasury', iconColor: '#fca5a5' },
   eFinconnect: { group: 'treasury', iconColor: '#67e8f9' },
+  'AI Receptionist': { group: 'tools', iconColor: '#67e8f9' },
   'Accountant Dashboard': { group: 'tools', iconColor: '#a5b4fc' },
   'Alice AI': { group: 'tools', iconColor: '#6ee7b7' },
   DocSign: { group: 'tools', iconColor: '#93c5fd' },

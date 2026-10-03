@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrganization } from '@/hooks/useOrganization';
 import { useCustomers } from '@/hooks/useCustomers';
 import { receptionistRequest } from '@/lib/receptionist/client';
-import { emptyDirectory, receptionAnalytics } from '@/lib/receptionist/engine';
+import { emptyDirectory, emptyReceptionOrg, receptionAnalytics } from '@/lib/receptionist/engine';
 import type { Directory, ReceptionOrg } from '@/lib/receptionist/types';
 import { toast } from 'sonner';
 
@@ -76,7 +76,12 @@ export function useReceptionist() {
     };
   }, [customers, invoices.data, payDate.data]);
 
-  const org = (state.data?.org as ReceptionOrg | undefined) ?? null;
+  const loadedOrg = (state.data?.org as ReceptionOrg | undefined) ?? null;
+  const org = useMemo(() => {
+    if (loadedOrg) return loadedOrg;
+    if (organizationId) return emptyReceptionOrg(organizationId);
+    return null;
+  }, [loadedOrg, organizationId]);
   const voiceReady = state.data?.voiceReady === true;
 
   const refresh = async () => {

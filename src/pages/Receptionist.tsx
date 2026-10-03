@@ -43,12 +43,37 @@ export default function Receptionist() {
     );
   }
 
-  if (desk.isLoading || !desk.org || !desk.analytics) {
-    return <div className="space-y-4"><div className="h-8 w-56 animate-pulse rounded bg-muted" /><div className="h-64 animate-pulse rounded bg-muted" /></div>;
+  if (desk.isLoading && !desk.org) {
+    return (
+      <div className="space-y-3">
+        <h1 className="text-2xl font-bold text-foreground">AI Receptionist</h1>
+        <p className="text-muted-foreground">Loading the receptionist desk…</p>
+      </div>
+    );
+  }
+
+  if (!desk.org) {
+    return (
+      <div className="space-y-3">
+        <h1 className="text-2xl font-bold text-foreground">AI Receptionist</h1>
+        <p className="text-muted-foreground">The receptionist desk could not be loaded. Refresh the page to try again.</p>
+      </div>
+    );
   }
 
   const org = live ?? desk.org;
-  const analytics = desk.analytics;
+  const analytics = desk.analytics ?? {
+    calls: org.calls.length,
+    resolved: 0,
+    handedOff: org.calls.filter((call) => call.status === 'handed_off').length,
+    blocked: 0,
+    bookings: org.appointments.length,
+    messages: org.messages.length,
+    tickets: org.tickets.length,
+    leads: org.leads.length,
+    byDepartment: {},
+    byChannel: {},
+  };
 
   const send = async () => {
     const text = draft.trim();
