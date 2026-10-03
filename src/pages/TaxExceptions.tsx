@@ -13,6 +13,15 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useCurrentOrganization } from '@/hooks/useOrganization';
 import { useTaxExceptions, type TaxExceptionSeverity, type TaxExceptionCategory } from '@/hooks/useTaxExceptions';
 import { format, startOfYear, endOfMonth } from 'date-fns';
+import { parseLocalDate } from '@/lib/utils';
+import { DateRangePresetSelect } from '@/components/filters/DateRangePresetSelect';
+import {
+  detectDateRangePreset,
+  resolveDateRangeISO,
+  STATEMENT_DATE_PRESETS,
+  STATEMENT_PRESET_IDS,
+  type DateRangePresetId,
+} from '@/lib/dateRangePresets';
 
 const SEVERITY_VARIANT: Record<TaxExceptionSeverity, 'destructive' | 'secondary' | 'outline'> = {
   critical: 'destructive',
@@ -91,6 +100,19 @@ export default function TaxExceptions() {
 
       <Card className="p-4">
         <div className="flex flex-wrap gap-4 items-end">
+          <div>
+            <Label>Date Range</Label>
+            <DateRangePresetSelect
+              value={detectDateRangePreset(parseLocalDate(startDate), parseLocalDate(endDate), STATEMENT_PRESET_IDS)}
+              presets={STATEMENT_DATE_PRESETS}
+              onValueChange={(preset: DateRangePresetId) => {
+                const next = resolveDateRangeISO(preset);
+                if (!next) return;
+                setStartDate(next.start);
+                setEndDate(next.end);
+              }}
+            />
+          </div>
           <div>
             <Label htmlFor="start">From</Label>
             <Input id="start" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />

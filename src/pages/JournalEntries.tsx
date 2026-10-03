@@ -1,6 +1,8 @@
 import { useState, useMemo, useDeferredValue, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { format, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear, subMonths, subYears } from 'date-fns';
+import { format } from 'date-fns';
+import { DateRangePresetSelect } from '@/components/filters/DateRangePresetSelect';
+import { JOURNAL_DATE_PRESETS, resolveDateRangeISO, type DateRangePresetId } from '@/lib/dateRangePresets';
 import { Plus, Search, Download, Building2, Eye, Pencil, Trash2, RotateCcw, Send, ListChecks, X, ChevronLeft, ChevronRight, Upload, Sparkles } from 'lucide-react';
 import { parseLocalDate } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -342,26 +344,18 @@ export default function JournalEntries() {
   };
 
   // Quick date presets
-  const applyPreset = (preset: string) => {
-    const today = new Date();
+  const applyPreset = (preset: DateRangePresetId) => {
     setFiscalYearFilter('all');
     setPeriodFilter('all');
-    let from = '', to = '';
-    switch (preset) {
-      case 'this_month': from = format(startOfMonth(today), 'yyyy-MM-dd'); to = format(endOfMonth(today), 'yyyy-MM-dd'); break;
-      case 'last_month': {
-        const lm = subMonths(today, 1);
-        from = format(startOfMonth(lm), 'yyyy-MM-dd'); to = format(endOfMonth(lm), 'yyyy-MM-dd'); break;
-      }
-      case 'this_quarter': from = format(startOfQuarter(today), 'yyyy-MM-dd'); to = format(endOfQuarter(today), 'yyyy-MM-dd'); break;
-      case 'ytd': from = format(startOfYear(today), 'yyyy-MM-dd'); to = format(today, 'yyyy-MM-dd'); break;
-      case 'last_year': {
-        const ly = subYears(today, 1);
-        from = format(startOfYear(ly), 'yyyy-MM-dd'); to = format(new Date(ly.getFullYear(), 11, 31), 'yyyy-MM-dd'); break;
-      }
-      case 'all': from = ''; to = ''; break;
+    if (preset === 'all') {
+      setStartDate('');
+      setEndDate('');
+      return;
     }
-    setStartDate(from); setEndDate(to);
+    const range = resolveDateRangeISO(preset, new Date(), fyEndMonth);
+    if (!range) return;
+    setStartDate(range.start);
+    setEndDate(range.end);
   };
 
 
@@ -507,17 +501,11 @@ export default function JournalEntries() {
           </div>
 
           {/* Quick presets */}
-          <Select onValueChange={applyPreset}>
-            <SelectTrigger className="w-36"><SelectValue placeholder="Quick range" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="this_month">This month</SelectItem>
-              <SelectItem value="last_month">Last month</SelectItem>
-              <SelectItem value="this_quarter">This quarter</SelectItem>
-              <SelectItem value="ytd">Year to date</SelectItem>
-              <SelectItem value="last_year">Last calendar year</SelectItem>
-              <SelectItem value="all">All time</SelectItem>
-            </SelectContent>
-          </Select>
+          <DateRangePresetSelect
+            presets={JOURNAL_DATE_PRESETS}
+            onValueChange={applyPreset}
+            placeholder="Date range"
+          />
 
           {/* Fiscal year */}
           <Select value={fiscalYearFilter} onValueChange={(v) => { setFiscalYearFilter(v); if (v !== 'all') { setStartDate(''); setEndDate(''); } }}>

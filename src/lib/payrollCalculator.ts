@@ -27,6 +27,10 @@ export interface EmployeePayInfo {
   overtimeHours: number;
   vacationHours: number;
   sickHours: number;
+  /** Paid at the hourly rate. Omitted hours stay at zero so existing payroll is unchanged. */
+  holidayHours?: number;
+  /** Employer overtime policy. Defaults to 1.5 when the clock module does not supply one. */
+  overtimeMultiplier?: number;
   bonus: number;
   commission: number;
   otherEarnings: number;
@@ -47,6 +51,7 @@ export interface PayStubCalculation {
   regularEarnings: number;
   overtimeEarnings: number;
   vacationPay: number;
+  holidayEarnings: number;
   bonus: number;
   commission: number;
   otherEarnings: number;
@@ -94,10 +99,12 @@ function calculateEarnings(info: EmployeePayInfo): {
   regularEarnings: number;
   overtimeEarnings: number;
   vacationPay: number;
+  holidayEarnings: number;
   grossPay: number;
 } {
   let regularEarnings = 0;
   let overtimeEarnings = 0;
+  const overtimeMultiplier = info.overtimeMultiplier ?? 1.5;
   
   if (info.annualSalary && info.annualSalary > 0) {
     // Salaried employee
@@ -105,12 +112,12 @@ function calculateEarnings(info: EmployeePayInfo): {
     regularEarnings = info.annualSalary / periodsPerYear;
     // For salaried, overtime might be calculated differently or not at all
     if (info.hourlyRate && info.overtimeHours > 0) {
-      overtimeEarnings = info.overtimeHours * info.hourlyRate * 1.5;
+      overtimeEarnings = info.overtimeHours * info.hourlyRate * overtimeMultiplier;
     }
   } else if (info.hourlyRate && info.hourlyRate > 0) {
     // Hourly employee
     regularEarnings = info.regularHours * info.hourlyRate;
-    overtimeEarnings = info.overtimeHours * info.hourlyRate * 1.5;
+    overtimeEarnings = info.overtimeHours * info.hourlyRate * overtimeMultiplier;
   }
   
   // Vacation pay (4% minimum in most provinces, or paid at hourly rate if taking time)
@@ -118,11 +125,15 @@ function calculateEarnings(info: EmployeePayInfo): {
   if (info.vacationHours > 0 && info.hourlyRate) {
     vacationPay = info.vacationHours * info.hourlyRate;
   }
+
+  const holidayEarnings = info.hourlyRate && info.holidayHours
+    ? info.holidayHours * info.hourlyRate
+    : 0;
   
-  const grossPay = regularEarnings + overtimeEarnings + vacationPay + 
+  const grossPay = regularEarnings + overtimeEarnings + vacationPay + holidayEarnings +
                    info.bonus + info.commission + info.otherEarnings;
   
-  return { regularEarnings, overtimeEarnings, vacationPay, grossPay };
+  return { regularEarnings, overtimeEarnings, vacationPay, holidayEarnings, grossPay };
 }
 
 // Calculate annualized income for tax purposes
@@ -147,7 +158,7 @@ function calculatePeriodTax(annualTax: number, payFrequency: PayFrequency): numb
 // Main calculation function
 export function calculatePayStub(info: EmployeePayInfo): PayStubCalculation {
   // Step 1: Calculate earnings
-  const { regularEarnings, overtimeEarnings, vacationPay, grossPay } = calculateEarnings(info);
+  const { regularEarnings, overtimeEarnings, vacationPay, holidayEarnings, grossPay } = calculateEarnings(info);
   
   // Step 2: Calculate CPP (skip if exempt)
   // Pass pay frequency so CPP basic exemption is divided by the correct number of periods
@@ -228,6 +239,7 @@ export function calculatePayStub(info: EmployeePayInfo): PayStubCalculation {
     regularEarnings: Math.round(regularEarnings * 100) / 100,
     overtimeEarnings: Math.round(overtimeEarnings * 100) / 100,
     vacationPay: Math.round(vacationPay * 100) / 100,
+    holidayEarnings: Math.round(holidayEarnings * 100) / 100,
     bonus: info.bonus,
     commission: info.commission,
     otherEarnings: info.otherEarnings,
