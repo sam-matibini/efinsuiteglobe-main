@@ -145,6 +145,22 @@ const reports: ReportItem[] = [
   { id: 'employee-list', name: 'Employee List', description: 'Active & inactive employees', category: 'Payroll', module: 'Payroll', icon: <UserCheck className="w-5 h-5" />, href: '/payroll/employees' },
   { id: 'vacation-accrual', name: 'Vacation Accrual', description: 'Vacation pay owing by employee', category: 'Payroll', module: 'Payroll', icon: <CalendarDays className="w-5 h-5" />, href: '/payroll/reports' },
   { id: 'benefits-report', name: 'Benefits Report', description: 'Employee benefits summary', category: 'Payroll', module: 'Payroll', icon: <Shield className="w-5 h-5" />, href: '/payroll/reports' },
+
+  { id: 'ta-employee-hours', name: 'Employee Hours Report', description: 'Paid, regular, and overtime hours by employee', category: 'Time & Attendance', module: 'Payroll', icon: <Clock className="w-5 h-5" />, href: '/payroll/time-attendance/reports?report=employee-hours', isNew: true },
+  { id: 'ta-daily-clock', name: 'Daily Clock-In/Out Report', description: 'Clock in and clock out for each day', category: 'Time & Attendance', module: 'Payroll', icon: <Clock className="w-5 h-5" />, href: '/payroll/time-attendance/reports?report=daily-clock', isNew: true },
+  { id: 'ta-weekly-hours', name: 'Weekly Hours Report', description: 'Hours grouped inside the selected week', category: 'Time & Attendance', module: 'Payroll', icon: <CalendarDays className="w-5 h-5" />, href: '/payroll/time-attendance/reports?report=weekly-hours', isNew: true },
+  { id: 'ta-pay-period', name: 'Pay-Period Hours Report', description: 'Hours inside the selected pay period', category: 'Time & Attendance', module: 'Payroll', icon: <CalendarDays className="w-5 h-5" />, href: '/payroll/time-attendance/reports?report=pay-period-hours', isNew: true },
+  { id: 'ta-overtime', name: 'Overtime Report', description: 'Shifts with overtime hours', category: 'Time & Attendance', module: 'Payroll', icon: <Clock className="w-5 h-5" />, href: '/payroll/time-attendance/reports?report=overtime', isNew: true },
+  { id: 'ta-late', name: 'Late Arrival Report', description: 'Clock-ins after the scheduled start', category: 'Time & Attendance', module: 'Payroll', icon: <AlertTriangle className="w-5 h-5" />, href: '/payroll/time-attendance/reports?report=late-arrival', isNew: true },
+  { id: 'ta-early', name: 'Early Departure Report', description: 'Shifts shorter than a standard day', category: 'Time & Attendance', module: 'Payroll', icon: <AlertTriangle className="w-5 h-5" />, href: '/payroll/time-attendance/reports?report=early-departure', isNew: true },
+  { id: 'ta-missing', name: 'Missing Clock-Out Report', description: 'Open shifts from a previous day', category: 'Time & Attendance', module: 'Payroll', icon: <AlertTriangle className="w-5 h-5" />, href: '/payroll/time-attendance/reports?report=missing-clock-out', isNew: true },
+  { id: 'ta-breaks', name: 'Break Report', description: 'Recorded break minutes', category: 'Time & Attendance', module: 'Payroll', icon: <Clock className="w-5 h-5" />, href: '/payroll/time-attendance/reports?report=breaks', isNew: true },
+  { id: 'ta-exceptions', name: 'Attendance Exceptions Report', description: 'Missing clock-outs and other exceptions', category: 'Time & Attendance', module: 'Payroll', icon: <AlertTriangle className="w-5 h-5" />, href: '/payroll/time-attendance/reports?report=exceptions', isNew: true },
+  { id: 'ta-approvals', name: 'Manager Approval Report', description: 'Records waiting for or finished with approval', category: 'Time & Attendance', module: 'Payroll', icon: <UserCheck className="w-5 h-5" />, href: '/payroll/time-attendance/reports?report=approvals', isNew: true },
+  { id: 'ta-payroll-summary', name: 'Payroll Time Summary', description: 'Approved hours ready for payroll', category: 'Time & Attendance', module: 'Payroll', icon: <FileSpreadsheet className="w-5 h-5" />, href: '/payroll/time-attendance/reports?report=payroll-time-summary', isNew: true },
+  { id: 'ta-timesheet', name: 'Employee Timesheet', description: 'One employee’s clock records', category: 'Time & Attendance', module: 'Payroll', icon: <ClipboardList className="w-5 h-5" />, href: '/payroll/time-attendance/reports?report=employee-timesheet', isNew: true },
+  { id: 'ta-department', name: 'Department Hours Report', description: 'Hours by department', category: 'Time & Attendance', module: 'Payroll', icon: <Users className="w-5 h-5" />, href: '/payroll/time-attendance/reports?report=department-hours', isNew: true },
+  { id: 'ta-job', name: 'Job/Project Hours Report', description: 'Hours by job or department', category: 'Time & Attendance', module: 'Payroll', icon: <ClipboardList className="w-5 h-5" />, href: '/payroll/time-attendance/reports?report=job-hours', isNew: true },
   
   // Management Reports
   { id: 'executive-summary', name: 'Executive Summary', description: 'KPIs & financial highlights', category: 'Management', module: 'Dashboard', icon: <BarChart3 className="w-5 h-5" />, href: '/' },
@@ -167,6 +183,7 @@ const categories = [
   'Leases',
   'Tax',
   'Payroll',
+  'Time & Attendance',
   'Management'
 ];
 

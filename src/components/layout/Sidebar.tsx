@@ -234,6 +234,7 @@ const getNavigation = (payrollLabels: { taxSlips: string; separationDoc: string;
       { label: 'Employees', href: '/payroll/employees', icon: UserCheck },
       { label: 'Onboarding', href: '/payroll/employees/onboarding', icon: UserPlus, hideForReadOnly: true },
       { label: 'Timesheets', href: '/payroll/timesheets', icon: Clock },
+      { label: 'Time & Attendance', href: '/payroll/time-attendance', icon: CalendarDays },
       { label: 'Self-Service', href: '/payroll/self-service', icon: Users, hideForReadOnly: true },
       { label: 'Pay Runs', href: '/payroll/runs', icon: DollarSign },
       { label: payrollLabels.remittances, href: '/payroll/remittances', icon: Receipt },

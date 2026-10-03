@@ -154,6 +154,8 @@ const EmployeeProfile = lazy(() => import("./pages/payroll/EmployeeProfile"));
 const EmployeeTimesheets = lazy(() => import("./pages/payroll/EmployeeTimesheets"));
 const TimesheetDetail = lazy(() => import("./pages/payroll/TimesheetDetail"));
 const EmployeeSelfService = lazy(() => import("./pages/payroll/EmployeeSelfService"));
+const TimeAttendance = lazy(() => import("./pages/payroll/TimeAttendance"));
+const TimeAttendanceReports = lazy(() => import("./pages/payroll/TimeAttendanceReports"));
 const Settings = lazy(() => import("./pages/Settings"));
 const ExchangeRates = lazy(() => import("./pages/ExchangeRates"));
 const CurrencyRevaluation = lazy(() => import("./pages/CurrencyRevaluation"));
@@ -468,6 +470,8 @@ const AppRoutes = () => {
     <Route path="/payroll/timesheets" element={<ProtectedRoute><PageWrapper><EmployeeTimesheets /></PageWrapper></ProtectedRoute>} />
     <Route path="/payroll/timesheets/:id" element={<ProtectedRoute><PageWrapper><TimesheetDetail /></PageWrapper></ProtectedRoute>} />
     <Route path="/payroll/self-service" element={<ProtectedRoute><PageWrapper><EmployeeSelfService /></PageWrapper></ProtectedRoute>} />
+    <Route path="/payroll/time-attendance" element={<ProtectedRoute><PageWrapper><TimeAttendance /></PageWrapper></ProtectedRoute>} />
+    <Route path="/payroll/time-attendance/reports" element={<ProtectedRoute><PageWrapper><TimeAttendanceReports /></PageWrapper></ProtectedRoute>} />
     <Route path="/payroll/runs" element={<ProtectedRoute><PageWrapper><PayRuns /></PageWrapper></ProtectedRoute>} />
     <Route path="/payroll/reports" element={<ProtectedRoute><PageWrapper><PayrollReports /></PageWrapper></ProtectedRoute>} />
     <Route path="/payroll/remittances" element={<ProtectedRoute><PageWrapper><Remittances /></PageWrapper></ProtectedRoute>} />
