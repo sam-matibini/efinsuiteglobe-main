@@ -18,6 +18,14 @@ import { Button } from '@/components/ui/button';
 import { useState } from 'react';
 import { useLocalizedCurrency } from '@/hooks/useLocalizedCurrency';
 import { CountryFlagBadge } from '@/components/dashboard/CountryFlagBadge';
+import { DateRangePresetSelect } from '@/components/filters/DateRangePresetSelect';
+import {
+  detectDateRangePreset,
+  resolveDateRangePreset,
+  STATEMENT_DATE_PRESETS,
+  STATEMENT_PRESET_IDS,
+  type DateRangePresetId,
+} from '@/lib/dateRangePresets';
 import { FxImpactWidget } from '@/components/dashboard/FxImpactWidget';
 import { TaxDashboardWidget } from '@/components/dashboard/TaxDashboardWidget';
 
@@ -107,6 +115,21 @@ export default function Dashboard() {
           {/* Economic Indicators Ticker */}
           <EconomicIndicatorsTicker />
           
+          <DateRangePresetSelect
+            value={detectDateRangePreset(
+              reportFilters.startDate,
+              reportFilters.endDate,
+              STATEMENT_PRESET_IDS,
+              new Date(),
+              reportFilters.fiscalYearEndMonth,
+            )}
+            presets={STATEMENT_DATE_PRESETS}
+            onValueChange={(preset: DateRangePresetId) => {
+              const bounds = resolveDateRangePreset(preset, new Date(), reportFilters.fiscalYearEndMonth);
+              if (bounds) reportFilters.setDateRange(bounds.start, bounds.end);
+            }}
+            triggerClassName="w-56 bg-background"
+          />
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted/50 text-sm">
             <Calendar className="w-4 h-4 text-muted-foreground" />
             <span className="text-muted-foreground">{periodStart} - {periodEnd}</span>

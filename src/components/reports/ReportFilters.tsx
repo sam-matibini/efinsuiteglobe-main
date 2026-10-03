@@ -20,11 +20,19 @@ import {
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
-import { format, startOfMonth, startOfQuarter } from 'date-fns';
+import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { getFiscalYearStart, getFiscalYearEnd, getFiscalYearForDate } from '@/lib/fiscalYearUtils';
+import { DateRangePresetSelect } from '@/components/filters/DateRangePresetSelect';
+import {
+  detectDateRangePreset,
+  resolveDateRangePreset,
+  STATEMENT_DATE_PRESETS,
+  STATEMENT_PRESET_IDS,
+  type DateRangePresetId,
+} from '@/lib/dateRangePresets';
 
-export type DatePreset = 'today' | 'this-month' | 'this-quarter' | 'fiscal-year-to-date' | 'last-fiscal-year' | 'custom';
+export type DatePreset = DateRangePresetId;
 
 export interface CompareSettings {
   compareType: 'period' | 'year';
@@ -52,56 +60,6 @@ interface ReportFiltersProps {
   fiscalYearEndMonth?: number;
 }
 
-// Helper to format date in local timezone (avoids UTC conversion issues)
-const formatLocalDate = (date: Date): string => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
-
-// Detect preset from dates - fiscal year aware
-const detectPresetFromDates = (start: Date, end: Date, fiscalYearEndMonth: number = 12): DatePreset => {
-  const now = new Date();
-  const todayStr = formatLocalDate(now);
-  const startStr = formatLocalDate(start);
-  const endStr = formatLocalDate(end);
-  
-  // Today
-  if (startStr === todayStr && endStr === todayStr) {
-    return 'today';
-  }
-  
-  // This Month
-  const monthStart = startOfMonth(now);
-  if (startStr === formatLocalDate(monthStart) && endStr === todayStr) {
-    return 'this-month';
-  }
-  
-  // This Quarter
-  const quarterStart = startOfQuarter(now);
-  if (startStr === formatLocalDate(quarterStart) && endStr === todayStr) {
-    return 'this-quarter';
-  }
-  
-  // Fiscal Year to Date (start of current fiscal year to today)
-  const currentFY = getFiscalYearForDate(now, fiscalYearEndMonth);
-  const fyStart = getFiscalYearStart(currentFY, fiscalYearEndMonth);
-  if (startStr === formatLocalDate(fyStart) && endStr === todayStr) {
-    return 'fiscal-year-to-date';
-  }
-  
-  // Last Fiscal Year (full previous fiscal year)
-  const lastFY = currentFY - 1;
-  const lastFYStart = getFiscalYearStart(lastFY, fiscalYearEndMonth);
-  const lastFYEnd = getFiscalYearEnd(lastFY, fiscalYearEndMonth);
-  if (startStr === formatLocalDate(lastFYStart) && endStr === formatLocalDate(lastFYEnd)) {
-    return 'last-fiscal-year';
-  }
-  
-  return 'custom';
-};
-
 export const ReportFilters = React.forwardRef<HTMLDivElement, ReportFiltersProps>(function ReportFilters({
   onDateRangeChange,
   onRunReport,
@@ -127,7 +85,7 @@ export const ReportFilters = React.forwardRef<HTMLDivElement, ReportFiltersProps
   const endDate = initialEndDate ?? getFiscalYearEnd(lastFY, fiscalYearEndMonth);
   
   // Detect preset from current dates (always derived, not stored)
-  const datePreset = detectPresetFromDates(startDate, endDate, fiscalYearEndMonth);
+  const datePreset = detectDateRangePreset(startDate, endDate, STATEMENT_PRESET_IDS, now, fiscalYearEndMonth);
   
   const [compareDialogOpen, setCompareDialogOpen] = useState(false);
   const [compareSettings, setCompareSettings] = useState<CompareSettings | null>(null);
@@ -139,35 +97,9 @@ export const ReportFilters = React.forwardRef<HTMLDivElement, ReportFiltersProps
   const [tempLatestToOldest, setTempLatestToOldest] = useState(true);
 
   const handlePresetChange = (preset: DatePreset) => {
-    const now = new Date();
-    const currentFY = getFiscalYearForDate(now, fiscalYearEndMonth);
-    let start: Date;
-    let end: Date = now;
-
-    switch (preset) {
-      case 'today':
-        start = now;
-        break;
-      case 'this-month':
-        start = startOfMonth(now);
-        break;
-      case 'this-quarter':
-        start = startOfQuarter(now);
-        break;
-      case 'fiscal-year-to-date':
-        start = getFiscalYearStart(currentFY, fiscalYearEndMonth);
-        break;
-      case 'last-fiscal-year':
-        const lastFY = currentFY - 1;
-        start = getFiscalYearStart(lastFY, fiscalYearEndMonth);
-        end = getFiscalYearEnd(lastFY, fiscalYearEndMonth);
-        break;
-      default:
-        start = startDate;
-    }
-
-    // Immediately notify parent of the date change (controlled component)
-    onDateRangeChange?.(start, end);
+    const bounds = resolveDateRangePreset(preset, new Date(), fiscalYearEndMonth);
+    if (!bounds) return;
+    onDateRangeChange?.(bounds.start, bounds.end);
   };
 
   const handleStartDateChange = (date: Date | undefined) => {
@@ -241,19 +173,12 @@ export const ReportFilters = React.forwardRef<HTMLDivElement, ReportFiltersProps
 
       <div className="flex items-center gap-3">
         {/* Date Preset Selector */}
-        <Select value={datePreset} onValueChange={(value) => handlePresetChange(value as DatePreset)}>
-          <SelectTrigger className="w-44 bg-background border-border">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent className="bg-popover border border-border z-50">
-            <SelectItem value="today">Today</SelectItem>
-            <SelectItem value="this-month">This Month</SelectItem>
-            <SelectItem value="this-quarter">This Quarter</SelectItem>
-            <SelectItem value="fiscal-year-to-date">Fiscal Year to Date</SelectItem>
-            <SelectItem value="last-fiscal-year">Last Fiscal Year</SelectItem>
-            <SelectItem value="custom">Custom</SelectItem>
-          </SelectContent>
-        </Select>
+        <DateRangePresetSelect
+          value={datePreset}
+          presets={STATEMENT_DATE_PRESETS}
+          onValueChange={handlePresetChange}
+          triggerClassName="w-56 bg-background border-border"
+        />
 
         {/* Date Range Display/Picker */}
         <Popover>

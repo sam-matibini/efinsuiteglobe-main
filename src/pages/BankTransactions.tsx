@@ -54,7 +54,9 @@ import { useCurrentOrganization } from '@/hooks/useOrganization';
 import { useAccounts } from '@/hooks/useAccounts';
 import { CreateOrganizationDialog } from '@/components/accounts/CreateOrganizationDialog';
 import { Skeleton } from '@/components/ui/skeleton';
-import { format, startOfMonth, endOfMonth, subMonths, startOfYear, endOfYear, isWithinInterval, parseISO } from 'date-fns';
+import { format } from 'date-fns';
+import { DateRangePresetSelect } from '@/components/filters/DateRangePresetSelect';
+import { BANKING_DATE_PRESETS, dateInIsoRange, resolveDateRangeISO, type DateRangePresetId } from '@/lib/dateRangePresets';
 import { useTransactionRules } from '@/hooks/useTransactionRules';
 import { analyzeTransactions, useProcessTransactions } from '@/hooks/useRuleAnalysis';
 import { analyzeCCTransactions, useProcessCCTransactions } from '@/hooks/useCreditCardRuleAnalysis';
@@ -214,24 +216,12 @@ export default function BankTransactions() {
     reconciled: { label: 'Reconciled', icon: Lock, color: 'bg-success/10 text-success' },
   };
 
-  // Date range helper
   const getDateRangeFilter = useCallback(() => {
-    const now = new Date();
-    switch (dateRange) {
-      case 'this-month':
-        return { start: startOfMonth(now), end: endOfMonth(now) };
-      case 'last-month':
-        const lastMonth = subMonths(now, 1);
-        return { start: startOfMonth(lastMonth), end: endOfMonth(lastMonth) };
-      case 'last-3-months':
-        return { start: startOfMonth(subMonths(now, 2)), end: endOfMonth(now) };
-      case 'this-year':
-        return { start: startOfYear(now), end: endOfYear(now) };
-      case 'custom':
-        return { start: customStartDate, end: customEndDate };
-      default:
-        return null;
+    if (dateRange === 'custom') {
+      if (!customStartDate || !customEndDate) return null;
+      return { start: format(customStartDate, 'yyyy-MM-dd'), end: format(customEndDate, 'yyyy-MM-dd') };
     }
+    return resolveDateRangeISO(dateRange as DateRangePresetId);
   }, [dateRange, customStartDate, customEndDate]);
 
   const filteredTransactions = useMemo(() => {
@@ -293,12 +283,7 @@ export default function BankTransactions() {
         (glPostedFilter === 'posted' && t.journal_entry_id) ||
         (glPostedFilter === 'not-posted' && !t.journal_entry_id);
       
-      // Date range filter
-      let matchesDate = true;
-      if (dateFilter && dateFilter.start && dateFilter.end) {
-        const txDate = parseISO(t.transaction_date);
-        matchesDate = isWithinInterval(txDate, { start: dateFilter.start, end: dateFilter.end });
-      }
+      const matchesDate = dateInIsoRange(t.transaction_date, dateFilter);
       
       // Amount filter
       let matchesAmount = true;
@@ -1361,19 +1346,12 @@ export default function BankTransactions() {
                 {/* Date Range Filter */}
                 <div>
                   <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Date Range</label>
-                  <Select value={dateRange} onValueChange={setDateRange}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="All Time" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Time</SelectItem>
-                      <SelectItem value="this-month">This Month</SelectItem>
-                      <SelectItem value="last-month">Last Month</SelectItem>
-                      <SelectItem value="last-3-months">Last 3 Months</SelectItem>
-                      <SelectItem value="this-year">This Year</SelectItem>
-                      <SelectItem value="custom">Custom Range</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <DateRangePresetSelect
+                    value={dateRange}
+                    presets={BANKING_DATE_PRESETS}
+                    onValueChange={setDateRange}
+                    triggerClassName="w-full"
+                  />
                 </div>
 
                 {/* Amount Min */}

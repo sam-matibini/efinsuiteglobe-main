@@ -18,16 +18,10 @@ import { useComparativeFinancialReports } from '@/hooks/useComparativeFinancialR
 import { buildComparisonPeriods } from '@/lib/financialCompare';
 import { useCurrentOrganization } from '@/hooks/useOrganization';
 import { CreateOrganizationDialog } from '@/components/accounts/CreateOrganizationDialog';
-import { 
-  format, 
-  startOfMonth, 
-  endOfMonth, 
-  startOfQuarter, 
-  endOfQuarter, 
-  subMonths,
-  subQuarters
-} from 'date-fns';
-import { getFiscalYearStart, getFiscalYearEnd, getFiscalYearForDate } from '@/lib/fiscalYearUtils';
+import { format } from 'date-fns';
+import { getFiscalYearStart, getFiscalYearForDate } from '@/lib/fiscalYearUtils';
+import { DateRangePresetSelect } from '@/components/filters/DateRangePresetSelect';
+import { resolveDateRangePreset, STATEMENT_DATE_PRESETS, type DateRangePresetId } from '@/lib/dateRangePresets';
 import {
   Select,
   SelectContent,
@@ -67,7 +61,6 @@ import { useCurrencyFormatter } from '@/hooks/useCurrencyFormatter';
 import { exportToFormattedExcel } from '@/lib/excelExport';
 import { useNpoTerminology } from '@/hooks/useNpoTerminology';
 
-type DatePreset = 'this-month' | 'last-month' | 'this-quarter' | 'last-quarter' | 'fiscal-year-to-date' | 'last-fiscal-year' | 'custom';
 type CompareType = 'periods' | 'years';
 
 /**
@@ -150,7 +143,7 @@ export default function CashFlow() {
   const fiscalYearEndMonth = organization?.fiscal_year_end_month || 12;
   
   const [showOrgDialog, setShowOrgDialog] = useState(false);
-  const [datePreset, setDatePreset] = useState<DatePreset>('fiscal-year-to-date');
+  const [datePreset, setDatePreset] = useState<DateRangePresetId>('fiscal-year-to-date');
   
   // Initialize dates based on fiscal year settings
   const now = new Date();
@@ -204,44 +197,12 @@ export default function CashFlow() {
   const { getCashFlowData, isLoading, error, realtimeLastEventAt } = useFinancialReports(dateFilter);
 
   // Handle date preset changes - uses org's fiscal year settings
-  const handlePresetChange = (preset: DatePreset) => {
+  const handlePresetChange = (preset: DateRangePresetId) => {
     setDatePreset(preset);
-    const now = new Date();
-    const fyMonth = organization?.fiscal_year_end_month || 12;
-    const currentFiscalYear = getFiscalYearForDate(now, fyMonth);
-    
-    switch (preset) {
-      case 'this-month':
-        setDateFrom(startOfMonth(now));
-        setDateTo(endOfMonth(now));
-        break;
-      case 'last-month':
-        const lastMonth = subMonths(now, 1);
-        setDateFrom(startOfMonth(lastMonth));
-        setDateTo(endOfMonth(lastMonth));
-        break;
-      case 'this-quarter':
-        setDateFrom(startOfQuarter(now));
-        setDateTo(endOfQuarter(now));
-        break;
-      case 'last-quarter':
-        const lastQuarter = subQuarters(now, 1);
-        setDateFrom(startOfQuarter(lastQuarter));
-        setDateTo(endOfQuarter(lastQuarter));
-        break;
-      case 'fiscal-year-to-date':
-        setDateFrom(getFiscalYearStart(currentFiscalYear, fyMonth));
-        setDateTo(now);
-        break;
-      case 'last-fiscal-year':
-        const lastFY = currentFiscalYear - 1;
-        setDateFrom(getFiscalYearStart(lastFY, fyMonth));
-        setDateTo(getFiscalYearEnd(lastFY, fyMonth));
-        break;
-      case 'custom':
-        // Keep current dates
-        break;
-    }
+    const bounds = resolveDateRangePreset(preset, new Date(), organization?.fiscal_year_end_month || 12);
+    if (!bounds) return;
+    setDateFrom(bounds.start);
+    setDateTo(bounds.end);
   };
 
   // Column headers use the same dates the comparative query reads.
@@ -1255,20 +1216,12 @@ export default function CashFlow() {
       {/* Filter Bar - Zoho Style */}
       <div className="flex flex-wrap items-center gap-3 print:hidden">
         {/* Date Preset Dropdown */}
-        <Select value={datePreset} onValueChange={(v) => handlePresetChange(v as DatePreset)}>
-          <SelectTrigger className="w-36 h-9 bg-background border-border rounded-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="fiscal-year-to-date">Fiscal Year to Date</SelectItem>
-            <SelectItem value="last-fiscal-year">Last Fiscal Year</SelectItem>
-            <SelectItem value="this-month">This Month</SelectItem>
-            <SelectItem value="last-month">Last Month</SelectItem>
-            <SelectItem value="this-quarter">This Quarter</SelectItem>
-            <SelectItem value="last-quarter">Last Quarter</SelectItem>
-            <SelectItem value="custom">Custom</SelectItem>
-          </SelectContent>
-        </Select>
+        <DateRangePresetSelect
+          value={datePreset}
+          presets={STATEMENT_DATE_PRESETS}
+          onValueChange={handlePresetChange}
+          triggerClassName="w-56 h-9 bg-background border-border rounded-full"
+        />
 
         {/* Date Range Button */}
         <Popover>

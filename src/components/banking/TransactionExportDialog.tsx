@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { FileSpreadsheet, FileText, Download, Calendar } from 'lucide-react';
+import { FileSpreadsheet, FileText, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -8,13 +8,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -22,6 +15,8 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { signedBankAmount } from '@/lib/plaidBankAmount';
 import { isBankTransactionLocked } from '@/lib/bankTransactionLock';
+import { DateRangePresetSelect } from '@/components/filters/DateRangePresetSelect';
+import { BANKING_DATE_PRESETS, dateInIsoRange, resolveDateRangeISO, toLocalISO, type DateRangePresetId } from '@/lib/dateRangePresets';
 
 interface Transaction {
   id: string;
@@ -93,6 +88,8 @@ export default function TransactionExportDialog({
     return 'unmatched';
   };
 
+  const exportPresets = BANKING_DATE_PRESETS.filter((preset) => preset.id !== 'custom');
+
   const filteredTransactions = transactions.filter((t) => {
     if (!lifecycle[effectiveLifecycle(t)]) return false;
     const hasCategory = !!t.category;
@@ -101,6 +98,8 @@ export default function TransactionExportDialog({
     const posted = !!t.journal_entry_id;
     if (posted && !includeGlPosted) return false;
     if (!posted && !includeGlNotPosted) return false;
+    const range = resolveDateRangeISO(dateRange as DateRangePresetId);
+    if (!dateInIsoRange(toLocalISO(t.date), range)) return false;
     return true;
   });
 
@@ -306,19 +305,12 @@ export default function TransactionExportDialog({
           {/* Date Range */}
           <div className="space-y-2">
             <Label>Date Range</Label>
-            <Select value={dateRange} onValueChange={setDateRange}>
-              <SelectTrigger>
-                <Calendar className="w-4 h-4 mr-2 text-muted-foreground" />
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Transactions</SelectItem>
-                <SelectItem value="this-month">This Month</SelectItem>
-                <SelectItem value="last-month">Last Month</SelectItem>
-                <SelectItem value="this-quarter">This Quarter</SelectItem>
-                <SelectItem value="this-year">This Year</SelectItem>
-              </SelectContent>
-            </Select>
+            <DateRangePresetSelect
+              value={dateRange}
+              presets={exportPresets.map((preset) => preset.id === 'all' ? { ...preset, label: 'All Transactions' } : preset)}
+              onValueChange={setDateRange}
+              triggerClassName="w-full"
+            />
           </div>
 
           {/* Status Filter */}
