@@ -88,7 +88,7 @@ export async function receptionistRequest(action: string, body: Record<string, u
       const { data } = await supabase.functions.invoke('ai-receptionist', { body: { action, organizationId } });
       if (data) return data as Record<string, unknown>;
     } catch {
-      return { ok: true, org: publicOrg(result.org ?? current), voiceReady: false, error: 'Add ELEVENLABS_API_KEY on the server to connect the voice receptionist.' };
+      return { ok: true, org: publicOrg(result.org ?? current), voiceReady: false, error: 'Add the ElevenLabs API key in Platform Settings to connect the voice receptionist.' };
     }
   }
   return remember(result, 'database');

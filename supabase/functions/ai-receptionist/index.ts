@@ -2,6 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { handleReceptionVoice } from "../../../src/lib/receptionist/api.ts";
 import { emptyReceptionOrg } from "../../../src/lib/receptionist/engine.ts";
 import type { ReceptionOrg } from "../../../src/lib/receptionist/types.ts";
+import { resolvePlatformSecret } from "../_shared/platformApiKey.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -28,7 +29,7 @@ Deno.serve(async (req) => {
     const org = { ...emptyReceptionOrg(organizationId), ...(existing.data?.state ?? {}), organizationId } as ReceptionOrg;
     const toolBaseUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/ai-receptionist?organizationId=${organizationId}`;
     const voice = await handleReceptionVoice(action, org, {
-      apiKey: Deno.env.get("ELEVENLABS_API_KEY") ?? "",
+      apiKey: await resolvePlatformSecret("ELEVENLABS_API_KEY"),
       toolBaseUrl,
     });
     if (voice.org !== org) {

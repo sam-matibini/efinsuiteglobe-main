@@ -2,6 +2,7 @@ import fs from 'fs';
 import type { Plugin } from 'vite';
 import { handleReceptionApi, handleReceptionVoice } from '../src/lib/receptionist/api';
 import type { ReceptionOrg } from '../src/lib/receptionist/types';
+import { elevenLabsKeyFromStore } from './platformApiStore';
 
 const storePath = '/tmp/efinsuite-receptionist.json';
 
@@ -43,7 +44,7 @@ export function receptionistPlugin(): Plugin {
           const action = String(body.action ?? 'state');
           const store = readStore();
           const context = {
-            apiKey: process.env.ELEVENLABS_API_KEY || '',
+            apiKey: process.env.ELEVENLABS_API_KEY || elevenLabsKeyFromStore(),
             toolBaseUrl: process.env.RECEPTIONIST_TOOL_URL || '',
           };
           const result = handleReceptionApi({ method: req.method || 'POST', action, body }, store, context);

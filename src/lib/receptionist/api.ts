@@ -125,7 +125,7 @@ export function handleReceptionApi(
 
   if (request.action === 'sync' || request.action === 'session') {
     if (!context.apiKey) {
-      return { status: 200, body: { ok: true, org: publicOrg(current), voiceReady: false, error: 'Add ELEVENLABS_API_KEY on the server to connect the voice receptionist.' } };
+      return { status: 200, body: { ok: true, org: publicOrg(current), voiceReady: false, error: 'Add the ElevenLabs API key in Platform Settings to connect the voice receptionist.' } };
     }
     return { status: 202, body: { ok: true, pending: request.action }, org: current };
   }
@@ -139,7 +139,7 @@ export async function handleReceptionVoice(
   context: ReceptionContext,
 ): Promise<{ org: ReceptionOrg; body: Record<string, unknown> }> {
   if (!context.apiKey) {
-    return { org, body: { ok: true, org: publicOrg(org), voiceReady: false, error: 'Add ELEVENLABS_API_KEY on the server to connect the voice receptionist.' } };
+    return { org, body: { ok: true, org: publicOrg(org), voiceReady: false, error: 'Add the ElevenLabs API key in Platform Settings to connect the voice receptionist.' } };
   }
   const client = { apiKey: context.apiKey, fetchImpl: context.fetchImpl };
   if (action === 'sync') {

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Building2, CalendarDays, Loader2, MessageSquare, Phone, PhoneOff, Plus, ShieldBan, Sparkles } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -94,7 +95,7 @@ export default function Receptionist() {
     }
     const result = await desk.startSession();
     if (!result.conversationToken && !result.signedUrl) {
-      toast.message('Text desk is ready. Add ELEVENLABS_API_KEY on the server, then sync the agent, to answer by voice.');
+      toast.message('Text desk is ready. Add the ElevenLabs API key in Platform Settings, then sync the agent, to answer by voice.');
       return;
     }
     try {
@@ -348,9 +349,12 @@ export default function Receptionist() {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <div className="flex items-center gap-2"><Sparkles className="h-4 w-4" /><h2 className="font-medium">ElevenLabs voice agent</h2></div>
-                <p className="mt-1 text-sm text-muted-foreground">The API key stays on the server as ELEVENLABS_API_KEY, the same secret Alice uses for voice. Sync publishes this receptionist, its knowledge, and its eFinsuite tools.</p>
+                <p className="mt-1 text-sm text-muted-foreground">Add the ElevenLabs API key in Platform Settings. The key stays on the server, and Alice uses the same key for voice. Sync publishes this receptionist, its knowledge, and its eFinsuite tools.</p>
               </div>
-              <Button onClick={() => void desk.syncAgent().then((result) => result.org && setLive(result.org as ReceptionOrg))}>Sync agent</Button>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" asChild><Link to="/admin/settings">Add API key</Link></Button>
+                <Button onClick={() => void desk.syncAgent().then((result) => result.org && setLive(result.org as ReceptionOrg))}>Sync agent</Button>
+              </div>
             </div>
             <div className="mt-4 grid gap-2">
               {org.receptionists.map((item) => (
