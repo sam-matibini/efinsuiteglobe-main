@@ -109,6 +109,7 @@ const AICategorizationInsights = lazy(() => import("./pages/AICategorizationInsi
 const AICategorizationHistory = lazy(() => import("./pages/AICategorizationHistory"));
 const SettlementReconciliation = lazy(() => import("./pages/SettlementReconciliation"));
 const TransactionRules = lazy(() => import("./pages/TransactionRules"));
+const Receptionist = lazy(() => import("./pages/Receptionist"));
 const Reconciliation = lazy(() => import("./pages/Reconciliation"));
 const ReconciliationHistory = lazy(() => import("./pages/ReconciliationHistory"));
 const SalesTaxAudit = lazy(() => import("./pages/SalesTaxAudit"));
@@ -321,6 +322,7 @@ const AppRoutes = () => {
 
     {/* Protected app routes */}
     <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+    <Route path="/receptionist" element={<ProtectedRoute><PageWrapper><Receptionist /></PageWrapper></ProtectedRoute>} />
     <Route path="/toolkit/loan" element={<ProtectedRoute><LoanCalculatorPage /></ProtectedRoute>} />
     <Route path="/accounts" element={<ProtectedRoute><PageWrapper><ChartOfAccounts /></PageWrapper></ProtectedRoute>} />
     <Route path="/accounts/generator" element={<ProtectedRoute><PageWrapper><AccountGenerator /></PageWrapper></ProtectedRoute>} />

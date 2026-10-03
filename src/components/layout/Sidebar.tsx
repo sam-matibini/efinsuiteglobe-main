@@ -49,6 +49,7 @@ import {
   Globe2,
   LogOut,
   Network,
+  Phone,
 } from 'lucide-react';
 import { SubscriptionUpgradeModal } from '@/components/SubscriptionUpgradeModal';
 import type { PlanTier } from '@/config/planModuleAccess';
@@ -83,6 +84,7 @@ interface NavItem {
 // Navigation items with module requirements
 const getNavigation = (payrollLabels: { taxSlips: string; separationDoc: string; remittances: string }): NavItem[] => [
   { label: 'Dashboard', icon: LayoutDashboard, href: '/' },
+  { label: 'AI Receptionist', icon: Phone, href: '/receptionist' },
   { 
     label: 'Sales', 
     icon: ShoppingCart,

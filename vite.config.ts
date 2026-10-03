@@ -6,6 +6,7 @@ import { componentTagger } from "lovable-tagger";
 import { VitePWA } from "vite-plugin-pwa";
 import { craGatewayPlugin } from "./server/craGatewayPlugin";
 import { timeAttendancePlugin } from "./server/timeAttendancePlugin";
+import { receptionistPlugin } from "./server/receptionistPlugin";
 
 const buildTimestamp = Date.now().toString();
 
@@ -38,6 +39,7 @@ export default defineConfig(({ mode }) => ({
   plugins: [
     craGatewayPlugin(),
     timeAttendancePlugin(),
+    receptionistPlugin(),
     react(),
     mode === "development" && componentTagger(),
     VitePWA({
