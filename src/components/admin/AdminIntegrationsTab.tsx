@@ -26,6 +26,7 @@ import {
   PhoneCall
 } from 'lucide-react';
 import { VoiceSettingsPanel } from '@/components/communication/VoiceSettingsPanel';
+import { PlatformApiKeysCard } from '@/components/admin/PlatformApiKeysCard';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -706,13 +707,15 @@ export function AdminIntegrationsTab() {
             <div>
               <h3 className="font-medium text-foreground">API Keys & Secrets</h3>
               <p className="text-sm text-muted-foreground mt-1">
-                API keys and secrets must be configured in the backend environment. The input fields below 
-                are for reference only. Add secrets via the efinsuite Cloud secrets manager to enable integrations.
+                Add a new API and paste its key in Platform API keys. ElevenLabs powers the AI Receptionist and Alice voice.
+                The key is saved for admins and is not shown again. The cards below still name the server secret each built-in service uses.
               </p>
             </div>
           </div>
         </CardContent>
       </Card>
+
+      <PlatformApiKeysCard />
 
       {/* Twilio SMS Integration */}
       <IntegrationCard

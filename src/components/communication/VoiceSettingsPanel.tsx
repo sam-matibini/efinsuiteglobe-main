@@ -58,7 +58,6 @@ export function VoiceSettingsPanel() {
 
   useEffect(() => {
     checkVoiceHealth();
-    loadRecordings();
   }, []);
 
   const checkVoiceHealth = async () => {
@@ -74,7 +73,7 @@ export function VoiceSettingsPanel() {
 
   const loadRecordings = async () => {
     try {
-      const recs = await getRecordings();
+      const recs = await getRecordings({ silent: true });
       setRecordings(recs);
     } catch (err) {
       console.error("Load recordings error:", err);
@@ -136,7 +135,13 @@ export function VoiceSettingsPanel() {
         </CardHeader>
       </Card>
 
-      <Tabs defaultValue="hybrid-call" className="space-y-4">
+      <Tabs
+        defaultValue="hybrid-call"
+        className="space-y-4"
+        onValueChange={(value) => {
+          if (value === "voicemail") loadRecordings();
+        }}
+      >
         <TabsList className="grid grid-cols-6 w-full">
           <TabsTrigger value="hybrid-call" className="gap-2">
             <Globe className="h-4 w-4" />

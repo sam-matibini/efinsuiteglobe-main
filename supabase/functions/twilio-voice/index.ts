@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { encode as base64Encode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
+import { resolvePlatformSecret } from "../_shared/platformApiKey.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -30,7 +31,7 @@ interface VoiceRequest {
 
 // Generate audio using ElevenLabs TTS
 async function generateElevenLabsAudio(text: string, voiceId?: string): Promise<ArrayBuffer | null> {
-  const apiKey = Deno.env.get("ELEVENLABS_API_KEY");
+  const apiKey = await resolvePlatformSecret("ELEVENLABS_API_KEY");
   if (!apiKey) {
     console.log("ElevenLabs API key not configured, falling back to Polly");
     return null;
@@ -214,13 +215,6 @@ serve(async (req) => {
     const authToken = Deno.env.get("TWILIO_AUTH_TOKEN");
     const twilioPhone = Deno.env.get("TWILIO_PHONE_NUMBER");
 
-    if (!accountSid || !authToken || !twilioPhone) {
-      return new Response(
-        JSON.stringify({ success: false, error: "Twilio credentials not configured" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
     // Parse request - handle both JSON and form-urlencoded (Twilio webhooks)
     let body: VoiceRequest;
     const contentType = req.headers.get("content-type") || "";
@@ -247,16 +241,52 @@ serve(async (req) => {
 
     // Health check
     if (action === "health-check") {
-      const elevenLabsKey = Deno.env.get("ELEVENLABS_API_KEY");
+      const elevenLabsKey = await resolvePlatformSecret("ELEVENLABS_API_KEY");
+      const configured = Boolean(accountSid && authToken && twilioPhone);
       return new Response(
         JSON.stringify({ 
-          success: true, 
-          configured: true, 
-          message: `${BRAND_NAME} Voice is ready`, 
+          success: configured, 
+          configured, 
+          message: configured ? `${BRAND_NAME} Voice is ready` : "Twilio credentials not configured", 
           brand: BRAND_NAME,
           elevenLabsEnabled: !!elevenLabsKey,
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Listing recordings must not fail the settings page when Twilio is unreachable.
+    if (action === "get-recordings") {
+      if (!accountSid || !authToken) {
+        return new Response(
+          JSON.stringify({ success: true, recordings: [] }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Recordings.json?PageSize=50`;
+      const auth = btoa(`${accountSid}:${authToken}`);
+      const twilioRes = await fetch(twilioUrl, {
+        method: "GET",
+        headers: { Authorization: `Basic ${auth}` },
+      });
+      const twilioData = await twilioRes.json().catch(() => ({}));
+      if (!twilioRes.ok) {
+        console.error("Twilio recordings error:", twilioData);
+        return new Response(
+          JSON.stringify({ success: true, recordings: [] }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      return new Response(
+        JSON.stringify({ success: true, recordings: twilioData.recordings ?? [], brand: BRAND_NAME }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (!accountSid || !authToken || !twilioPhone) {
+      return new Response(
+        JSON.stringify({ success: false, error: "Twilio credentials not configured" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -361,33 +391,6 @@ serve(async (req) => {
 
       return new Response(
         JSON.stringify({ success: true, callSid: twilioData.sid, status: twilioData.status, brand: BRAND_NAME }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // Get call recordings
-    if (action === "get-recordings") {
-      const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Recordings.json?PageSize=50`;
-      const auth = btoa(`${accountSid}:${authToken}`);
-
-      const twilioRes = await fetch(twilioUrl, {
-        method: "GET",
-        headers: {
-          Authorization: `Basic ${auth}`,
-        },
-      });
-
-      const twilioData = await twilioRes.json();
-
-      if (!twilioRes.ok) {
-        return new Response(
-          JSON.stringify({ success: false, error: twilioData.message || "Failed to fetch recordings" }),
-          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-
-      return new Response(
-        JSON.stringify({ success: true, recordings: twilioData.recordings, brand: BRAND_NAME }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }

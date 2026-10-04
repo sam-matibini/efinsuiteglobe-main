@@ -27,6 +27,11 @@ import { useCurrentOrganization } from '@/hooks/useOrganization';
 import { getCountryLocalization } from '@/data/countryLocalizations';
 import { getLocaleForCountry } from '@/lib/localizedCurrencyFormatter';
 import { usePayrollLocalization } from '@/hooks/usePayrollLocalization';
+import { useAttendanceActor } from '@/hooks/useAttendanceActor';
+import { calendarDate, inferPayType, overlayApprovedHours, payrollReadiness, summarizeEmployee } from '@/lib/timeAttendance/engine';
+import { loadAttendanceOrg } from '@/lib/timeAttendance/readinessClient';
+import { timeRequest } from '@/lib/timeAttendance/persistence';
+import type { OrgAttendance } from '@/lib/timeAttendance/types';
 
 interface Employee {
   id: string;
@@ -54,6 +59,9 @@ interface TimesheetEntry {
   overtimeHours: number;
   vacationHours: number;
   sickHours: number;
+  holidayHours?: number;
+  attendanceLocked?: boolean;
+  attendanceEntryIds?: string[];
   bonus: number;
   commission: number;
   selected: boolean;
@@ -82,7 +90,9 @@ export function TimesheetEntryDialog({
   const [timesheets, setTimesheets] = useState<Record<string, TimesheetEntry>>({});
   const [approvedTimesheets, setApprovedTimesheets] = useState<ApprovedTimesheet[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [attendanceOrg, setAttendanceOrg] = useState<OrgAttendance | null>(null);
   const { organization } = useCurrentOrganization();
+  const attendanceActor = useAttendanceActor();
   
   const { processPayRun } = usePayrollProcessing();
   const { payrollConfig, countryCode } = usePayrollLocalization();
@@ -146,6 +156,9 @@ export function TimesheetEntryDialog({
 
       setEmployees(empData || []);
       setApprovedTimesheets(tsData || []);
+
+      const attendance = organization?.id ? await loadAttendanceOrg(organization.id) : null;
+      setAttendanceOrg(attendance);
       
       // Initialize timesheets for each employee, using approved timesheet data if available
       const initialTimesheets: Record<string, TimesheetEntry> = {};
@@ -158,6 +171,7 @@ export function TimesheetEntryDialog({
           overtimeHours: approvedTs?.total_overtime_hours ?? 0,
           vacationHours: 0,
           sickHours: 0,
+          holidayHours: 0,
           bonus: 0,
           commission: 0,
           selected: true,
@@ -165,6 +179,18 @@ export function TimesheetEntryDialog({
           timesheetId: approvedTs?.id,
         };
       });
+      if (attendance) {
+        const overlaid = overlayApprovedHours(
+          Object.values(initialTimesheets),
+          attendance,
+          periodStartStr,
+          periodEndStr,
+          (empData || []).map((emp) => ({ id: emp.id, payType: inferPayType(emp) })),
+        );
+        overlaid.forEach((entry) => {
+          initialTimesheets[entry.employeeId] = entry;
+        });
+      }
       setTimesheets(initialTimesheets);
     } catch (error: any) {
       console.error('Error fetching data:', error);
@@ -192,23 +218,27 @@ export function TimesheetEntryDialog({
         : employee.pay_frequency === 'semi_monthly' ? 24
         : 12;
       const basePay = employee.annual_salary / periodsPerYear;
+      const multiplier = attendanceOrg?.company.overtimePolicy.overtimeMultiplier ?? 1.5;
       const overtimePay = employee.hourly_rate 
-        ? entry.overtimeHours * employee.hourly_rate * 1.5 
+        ? entry.overtimeHours * employee.hourly_rate * multiplier
         : 0;
-      return basePay + overtimePay + entry.bonus + entry.commission;
+      const holidayPay = (entry.holidayHours ?? 0) * (employee.hourly_rate ?? 0);
+      return basePay + overtimePay + holidayPay + entry.bonus + entry.commission;
     } else if (employee.hourly_rate) {
       // Hourly employee
+      const multiplier = attendanceOrg?.company.overtimePolicy.overtimeMultiplier ?? 1.5;
       const regularPay = entry.regularHours * employee.hourly_rate;
-      const overtimePay = entry.overtimeHours * employee.hourly_rate * 1.5;
+      const overtimePay = entry.overtimeHours * employee.hourly_rate * multiplier;
       const vacationPay = entry.vacationHours * employee.hourly_rate;
       const sickPay = entry.sickHours * employee.hourly_rate;
-      return regularPay + overtimePay + vacationPay + sickPay + entry.bonus + entry.commission;
+      const holidayPay = (entry.holidayHours ?? 0) * employee.hourly_rate;
+      return regularPay + overtimePay + vacationPay + sickPay + holidayPay + entry.bonus + entry.commission;
     }
     return 0;
   };
 
   const getTotalHours = (entry: TimesheetEntry): number => {
-    return entry.regularHours + entry.overtimeHours + entry.vacationHours + entry.sickHours;
+    return entry.regularHours + entry.overtimeHours + entry.vacationHours + entry.sickHours + (entry.holidayHours ?? 0);
   };
 
   const selectedCount = Object.values(timesheets).filter(t => t.selected).length;
@@ -226,6 +256,39 @@ export function TimesheetEntryDialog({
       return;
     }
 
+    const periodStartStr = format(periodStart, 'yyyy-MM-dd');
+    const periodEndStr = format(periodEnd, 'yyyy-MM-dd');
+    if (attendanceOrg?.company.enabled && organization?.id) {
+      const readiness = payrollReadiness(attendanceOrg, {
+        periodStart: periodStartStr,
+        periodEnd: periodEndStr,
+        today: calendarDate(new Date().toISOString(), attendanceOrg.company.timezone),
+        employees: employees.map((emp) => ({ id: emp.id, payType: inferPayType(emp) })),
+      });
+      if (!readiness.canFinalize) {
+        toast.error(readiness.warning || 'Review time records before payroll can be finalized.');
+        return;
+      }
+    }
+
+    const trackedIds = employees
+      .filter((emp) => timesheets[emp.id]?.selected && timesheets[emp.id]?.attendanceLocked)
+      .map((emp) => emp.id);
+    if (trackedIds.length > 0 && organization?.id) {
+      const exportResult = await timeRequest('POST', '/api/time/export', {
+        organizationId: organization.id,
+        payrollRunId: payRunId,
+        periodStart: periodStartStr,
+        periodEnd: periodEndStr,
+        employeeIds: trackedIds,
+        actor: attendanceActor,
+      });
+      if (exportResult.status >= 400 || exportResult.body?.ok === false) {
+        toast.error(exportResult.body?.error || 'Approved time could not be linked to this pay run.');
+        return;
+      }
+    }
+
     // Build timesheet entries for processing
     const timesheetEntries: ProcessingTimesheetEntry[] = employees
       .filter(emp => timesheets[emp.id]?.selected)
@@ -237,6 +300,8 @@ export function TimesheetEntryDialog({
           overtimeHours: entry.overtimeHours,
           vacationHours: entry.vacationHours,
           sickHours: entry.sickHours,
+          holidayHours: entry.holidayHours ?? 0,
+          overtimeMultiplier: attendanceOrg?.company.overtimePolicy.overtimeMultiplier,
           bonus: entry.bonus,
           commission: entry.commission,
           otherEarnings: 0,
@@ -342,6 +407,7 @@ export function TimesheetEntryDialog({
                   <TableHead className="text-center w-24">OT Hrs</TableHead>
                   <TableHead className="text-center w-24">Vacation</TableHead>
                   <TableHead className="text-center w-24">Sick</TableHead>
+                  <TableHead className="text-center w-24">Holiday</TableHead>
                   <TableHead className="text-center w-28">Bonus ($)</TableHead>
                   <TableHead className="text-right w-28">Gross Pay</TableHead>
                 </TableRow>
@@ -376,8 +442,25 @@ export function TimesheetEntryDialog({
                             <p className="text-xs text-muted-foreground">
                               {employee.employee_number}
                             </p>
+                            {entry.attendanceLocked && attendanceOrg && (
+                              <div className="mt-1 text-xs text-muted-foreground">
+                                {summarizeEmployee(
+                                  attendanceOrg,
+                                  employee.id,
+                                  format(periodStart, 'yyyy-MM-dd'),
+                                  format(periodEnd, 'yyyy-MM-dd'),
+                                ).daily.map((day) => (
+                                  <p key={day.entryId}>{day.workDate}: {day.regularHours.toFixed(2)} regular</p>
+                                ))}
+                              </div>
+                            )}
                           </div>
-                          {entry.hasApprovedTimesheet ? (
+                          {entry.attendanceLocked ? (
+                            <Badge variant="outline" className="text-xs bg-success/10 text-success border-success/30">
+                              <FileCheck className="w-3 h-3 mr-1" />
+                              Approved time
+                            </Badge>
+                          ) : entry.hasApprovedTimesheet ? (
                             <Badge variant="outline" className="text-xs bg-success/10 text-success border-success/30">
                               <FileCheck className="w-3 h-3 mr-1" />
                               Timesheet
@@ -410,7 +493,7 @@ export function TimesheetEntryDialog({
                             updateTimesheet(employee.id, 'regularHours', parseFloat(e.target.value) || 0)
                           }
                           className="w-20 text-center h-8"
-                          disabled={!entry.selected}
+                          disabled={!entry.selected || entry.attendanceLocked}
                         />
                       </TableCell>
                       <TableCell>
@@ -423,7 +506,7 @@ export function TimesheetEntryDialog({
                             updateTimesheet(employee.id, 'overtimeHours', parseFloat(e.target.value) || 0)
                           }
                           className="w-20 text-center h-8"
-                          disabled={!entry.selected}
+                          disabled={!entry.selected || entry.attendanceLocked}
                         />
                       </TableCell>
                       <TableCell>
@@ -436,7 +519,7 @@ export function TimesheetEntryDialog({
                             updateTimesheet(employee.id, 'vacationHours', parseFloat(e.target.value) || 0)
                           }
                           className="w-20 text-center h-8"
-                          disabled={!entry.selected}
+                          disabled={!entry.selected || entry.attendanceLocked}
                         />
                       </TableCell>
                       <TableCell>
@@ -449,7 +532,20 @@ export function TimesheetEntryDialog({
                             updateTimesheet(employee.id, 'sickHours', parseFloat(e.target.value) || 0)
                           }
                           className="w-20 text-center h-8"
-                          disabled={!entry.selected}
+                          disabled={!entry.selected || entry.attendanceLocked}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.5"
+                          value={entry.holidayHours ?? 0}
+                          onChange={(e) => 
+                            updateTimesheet(employee.id, 'holidayHours', parseFloat(e.target.value) || 0)
+                          }
+                          className="w-20 text-center h-8"
+                          disabled={!entry.selected || entry.attendanceLocked}
                         />
                       </TableCell>
                       <TableCell>
