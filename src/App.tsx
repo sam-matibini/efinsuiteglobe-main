@@ -29,6 +29,7 @@ const E2ECompanySortHarness = lazy(() => import("./pages/__E2ECompanySortHarness
 const E2EReceptionistHarness = lazy(() => import("./pages/__E2EReceptionistHarness"));
 const E2EExpenseRefundHarness = lazy(() => import("./pages/__E2EExpenseRefundHarness"));
 const E2EDrilldownJournalHarness = lazy(() => import("./pages/__E2EDrilldownJournalHarness"));
+const E2EBankingTransactionsHarness = lazy(() => import("./pages/__E2EBankingTransactionsHarness"));
 const Index = lazy(() => import("./pages/Index"));
 const ChartOfAccounts = lazy(() => import("./pages/ChartOfAccounts"));
 const AccountGenerator = lazy(() => import("./pages/AccountGenerator"));
@@ -325,6 +326,7 @@ const AppRoutes = () => {
         <Route path="/__e2e__/receptionist" element={<E2EReceptionistHarness />} />
         <Route path="/__e2e__/expense-refund" element={<E2EExpenseRefundHarness />} />
         <Route path="/__e2e__/drilldown-journal" element={<E2EDrilldownJournalHarness />} />
+        <Route path="/__e2e__/banking-transactions" element={<E2EBankingTransactionsHarness />} />
       </>
     )}
 

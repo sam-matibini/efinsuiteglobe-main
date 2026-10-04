@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Search, Download, Upload, ArrowUpRight, ArrowDownLeft, Link2, Check, AlertCircle, Sparkles, Settings, MoreHorizontal, Wand2, Building2, Plus, Filter, Calendar, Edit, Send, X, CheckSquare, ArrowUpDown, ArrowUp, ArrowDown, CreditCard, Landmark, RefreshCw, Lock, Eye, FileSpreadsheet, Trash2, History } from 'lucide-react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
@@ -36,6 +36,7 @@ import TransactionRuleDialog from '@/components/banking/TransactionRuleDialog';
 import AICategorizationDialog from '@/components/banking/AICategorizationDialog';
 import TransactionExportDialog from '@/components/banking/TransactionExportDialog';
 import { EditTransactionDialog } from '@/components/banking/EditTransactionDialog';
+import { TransactionDetailPanel } from '@/components/banking/TransactionDetailPanel';
 import { EditCreditCardTransactionDialog } from '@/components/banking/EditCreditCardTransactionDialog';
 import { MatchPaymentDialog } from '@/components/banking/MatchPaymentDialog';
 import { UnifiedImportDialog, ParsedBankTransaction, ParsedCreditCardTransaction } from '@/components/banking/UnifiedImportDialog';
@@ -126,9 +127,9 @@ export default function BankTransactions() {
   const queryClient = useQueryClient();
   const [importHistoryOpen, setImportHistoryOpen] = useState(false);
   const [createRuleDialogOpen, setCreateRuleDialogOpen] = useState(false);
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editCCDialogOpen, setEditCCDialogOpen] = useState(false);
-  const [selectedTransaction, setSelectedTransaction] = useState<BankTransaction | null>(null);
+  const [detailId, setDetailId] = useState<string | null>(null);
+  const [detailEditing, setDetailEditing] = useState(false);
   const [selectedCCTransaction, setSelectedCCTransaction] = useState<CreditCardTransaction | null>(null);
   const [ruleInitialConditions, setRuleInitialConditions] = useState<RuleCondition[]>([]);
   const [ruleInitialName, setRuleInitialName] = useState('');
@@ -189,6 +190,13 @@ export default function BankTransactions() {
 
   // Unified transactions based on account type
   const transactions = accountType === 'bank' ? bankTransactions : ccTransactions;
+  const detailTransaction = transactions.find((item) => item.id === detailId) ?? null;
+
+  const activeAccountKey = accountType === 'bank' ? effectiveBankAccountId : effectiveCreditCardId;
+  useEffect(() => {
+    setDetailId(null);
+    setDetailEditing(false);
+  }, [activeAccountKey, accountType]);
   const isLoading = accountType === 'bank' ? bankTxLoading : ccTxLoading;
   const unmatchedTransactions = accountType === 'bank' ? bankUnmatched : ccUnmatched;
 
@@ -613,13 +621,14 @@ export default function BankTransactions() {
     setCreateRuleDialogOpen(true);
   };
 
-  const handleEditTransaction = (transaction: BankTransaction | CreditCardTransaction) => {
+  const handleEditTransaction = (transaction: BankTransaction | CreditCardTransaction, edit = true) => {
+    setDetailId(transaction.id);
     if (accountType === 'bank' && 'bank_account_id' in transaction) {
-      setSelectedTransaction(transaction as BankTransaction);
-      setEditDialogOpen(true);
+      setDetailEditing(edit);
     } else if (accountType === 'credit-card' && 'credit_card_id' in transaction) {
+      setDetailEditing(false);
       setSelectedCCTransaction(transaction as CreditCardTransaction);
-      setEditCCDialogOpen(true);
+      if (edit) setEditCCDialogOpen(true);
     }
   };
 
@@ -1542,7 +1551,8 @@ export default function BankTransactions() {
       )}
 
       {/* Transactions List */}
-      <Card className="overflow-hidden">
+      <div className="flex flex-col gap-3 xl:flex-row xl:items-start">
+      <Card className="min-w-0 flex-1 overflow-hidden">
         {isLoading ? (
           <div className="p-8 text-center text-muted-foreground">Loading transactions...</div>
         ) : filteredTransactions.length === 0 ? (
@@ -1550,8 +1560,9 @@ export default function BankTransactions() {
             {transactions.length === 0 ? 'No transactions yet. Import some to get started.' : 'No transactions match your filters.'}
           </div>
         ) : (
-          <table className="data-table">
-            <thead className="bg-muted/50">
+          <div className="banking-tx-scroll h-[min(72vh,860px)]" data-testid="banking-transaction-scroll">
+          <table className="data-table min-w-[960px]">
+            <thead>
               <tr>
                 <th className="w-10 px-3">
                   <Checkbox
@@ -1587,9 +1598,15 @@ export default function BankTransactions() {
                   <tr 
                     key={transaction.id} 
                     className={cn(
-                      "hover:bg-muted/20",
-                      isSelected && "bg-primary/5"
+                      "cursor-pointer hover:bg-indigo-50/60",
+                      isSelected && "bg-primary/5",
+                      detailId === transaction.id && "bg-indigo-50 shadow-[inset_3px_0_0_#6366f1]"
                     )}
+                    onClick={(event) => {
+                      const target = event.target as HTMLElement;
+                      if (target.closest('button, input, a, [role="checkbox"], [role="menuitem"]')) return;
+                      handleEditTransaction(transaction, false);
+                    }}
                   >
                     <td className="px-3">
                       <Checkbox
@@ -1780,8 +1797,57 @@ export default function BankTransactions() {
               })}
             </tbody>
           </table>
+          </div>
         )}
       </Card>
+      {detailTransaction && (
+        <TransactionDetailPanel
+          transaction={detailTransaction}
+          accountName={accountType === 'bank'
+            ? bankAccounts.find((account) => account.id === effectiveBankAccountId)?.name || 'Bank Account'
+            : currentCreditCard?.name || 'Credit Card'}
+          accountKind={accountType}
+          glAccountLabel={(() => {
+            const account = detailTransaction.gl_account_id
+              ? glAccounts.find((item) => item.id === detailTransaction.gl_account_id)
+              : null;
+            return account ? `${account.code} ${account.name}` : null;
+          })()}
+          formatCurrency={formatCurrency}
+          formatDate={formatDate}
+          locked={isBankTransactionLocked(detailTransaction)}
+          editing={detailEditing && accountType === 'bank' && 'bank_account_id' in detailTransaction}
+          onEdit={() => handleEditTransaction(detailTransaction, true)}
+          onClose={() => {
+            setDetailId(null);
+            setDetailEditing(false);
+          }}
+          onUncategorize={() => {
+            if (detailTransaction.journal_entry_id || isBankTransactionLocked(detailTransaction)) return;
+            if (accountType === 'bank') {
+              updateBankTx.mutate({ id: detailTransaction.id, category: null, gl_account_id: null });
+            } else {
+              updateCcTx.mutate({ id: detailTransaction.id, category: null, gl_account_id: null });
+            }
+          }}
+          onSaveMemo={(memo) => {
+            if (accountType === 'bank') updateBankTx.mutate({ id: detailTransaction.id, memo });
+            else updateCcTx.mutate({ id: detailTransaction.id, memo });
+          }}
+          editForm={'bank_account_id' in detailTransaction ? (
+            <EditTransactionDialog
+              embedded
+              open
+              onOpenChange={(open) => {
+                if (!open) setDetailEditing(false);
+              }}
+              transaction={detailTransaction as BankTransaction}
+              onSave={handleSaveTransaction}
+            />
+          ) : null}
+        />
+      )}
+      </div>
 
       {/* AI Categorization Dialog */}
       <AICategorizationDialog
@@ -1845,14 +1911,6 @@ export default function BankTransactions() {
         onSave={handleSaveRule}
         initialConditions={ruleInitialConditions}
         initialName={ruleInitialName}
-      />
-
-      {/* Edit Transaction Dialog */}
-      <EditTransactionDialog
-        open={editDialogOpen}
-        onOpenChange={setEditDialogOpen}
-        transaction={selectedTransaction}
-        onSave={handleSaveTransaction}
       />
 
       {/* Edit Credit Card Transaction Dialog */}

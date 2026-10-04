@@ -27,10 +27,28 @@ const DialogOverlay = React.forwardRef<
 ));
 DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 
+interface DialogContentProps extends React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> {
+  /** Render inside the parent instead of a centered modal. */
+  inline?: boolean;
+}
+
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, ...props }, ref) => (
+  DialogContentProps
+>(({ className, children, inline, ...props }, ref) => {
+  if (inline) {
+    return (
+      <DialogPrimitive.Content
+        ref={ref}
+        className={cn("relative flex h-full min-h-0 flex-col gap-4 bg-background p-4", className)}
+        {...props}
+      >
+        {children}
+      </DialogPrimitive.Content>
+    );
+  }
+
+  return (
   <DialogPortal>
     <DialogOverlay />
     <DialogPrimitive.Content
@@ -48,7 +66,8 @@ const DialogContent = React.forwardRef<
       </DialogPrimitive.Close>
     </DialogPrimitive.Content>
   </DialogPortal>
-));
+  );
+});
 DialogContent.displayName = DialogPrimitive.Content.displayName;
 
 function DialogHeader({

@@ -65,6 +65,8 @@ interface EditTransactionDialogProps {
   onOpenChange: (open: boolean) => void;
   transaction: BankTransaction | null;
   onSave: (updates: Partial<BankTransaction>) => void;
+  /** Keep the form in the transaction side panel instead of a modal. */
+  embedded?: boolean;
 }
 
 const transactionTypeOptions = [
@@ -179,6 +181,7 @@ export function EditTransactionDialog({
   onOpenChange,
   transaction,
   onSave,
+  embedded = false,
 }: EditTransactionDialogProps) {
   const { organization } = useCurrentOrganization();
   const postToGL = usePostTransactionToGL();
@@ -446,9 +449,22 @@ export function EditTransactionDialog({
   const isDeposit = transactionType === 'deposit';
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={cn('banking-edit-form max-h-[90vh]', splitEnabled ? 'max-w-2xl' : 'max-w-xl')}>
-        <DialogHeader>
+    <Dialog open={open} onOpenChange={onOpenChange} modal={!embedded}>
+      <DialogContent
+        inline={embedded}
+        onInteractOutside={(event) => {
+          if (embedded) event.preventDefault();
+        }}
+        onPointerDownOutside={(event) => {
+          if (embedded) event.preventDefault();
+        }}
+        className={cn(
+          'banking-edit-form',
+          embedded ? 'h-full max-h-full overflow-hidden border-0 p-4 shadow-none' : 'max-h-[90vh]',
+          !embedded && (splitEnabled ? 'max-w-2xl' : 'max-w-xl'),
+        )}
+      >
+        <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2">
             {isReconciled ? 'View Transaction' : 'Edit Transaction'}
             {isReconciled && (
@@ -476,7 +492,7 @@ export function EditTransactionDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="max-h-[65vh] pr-4">
+        <ScrollArea className={embedded ? 'min-h-0 flex-1 pr-3' : 'max-h-[65vh] pr-4'}>
           <div className="space-y-4 py-4">
           {/* Reconciled Lock Warning */}
           {isReconciled && (
@@ -895,7 +911,7 @@ export function EditTransactionDialog({
           </div>
         </ScrollArea>
 
-        <DialogFooter className="gap-2 border-t border-indigo-100 bg-indigo-50/40 px-1 pt-4 sm:gap-2">
+        <DialogFooter className="shrink-0 gap-2 border-t border-indigo-100 bg-indigo-50/40 px-1 pt-4 sm:gap-2">
           <Button variant="outline" className="h-10 border-slate-300 bg-white font-medium" onClick={() => onOpenChange(false)}>
             <X className="w-4 h-4 mr-2" />
             {isReconciled ? 'Close' : 'Cancel'}
