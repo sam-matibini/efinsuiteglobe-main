@@ -19,6 +19,9 @@ import { useNpoTerminology } from '@/hooks/useNpoTerminology';
 import { AmountDrilldownDialog } from '@/components/reports/AmountDrilldownDialog';
 import { DivisionFilter } from '@/components/reports/DivisionFilter';
 import { ExecutiveSignatureBlock } from '@/components/reports/ExecutiveSignatureBlock';
+import { StatementSortControls } from '@/components/reports/StatementSortControls';
+import { useStatementSort } from '@/hooks/useStatementSort';
+import { sortIncomeStatementSections } from '@/lib/reports/statementSort';
 
 // Helper to format date in local timezone (avoids UTC conversion issues)
 const formatLocalDate = (date: Date): string => {
@@ -117,6 +120,7 @@ export default function IncomeStatement() {
   };
   
   const { organization, isLoading: orgLoading } = useCurrentOrganization();
+  const lineSort = useStatementSort(organization?.id);
 
   // Drilldown state — double-click an amount to see underlying journal entries.
   const [drilldown, setDrilldown] = useState<{ accountId: string; name: string } | null>(null);
@@ -254,6 +258,11 @@ export default function IncomeStatement() {
     };
   }, [incomeData, comparativeIncomeData]);
 
+  const displayAccounts = useMemo(
+    () => sortIncomeStatementSections(mergedAccountLists, lineSort.criteria),
+    [mergedAccountLists, lineSort.criteria],
+  );
+
   /**
    * FORMULA: Operating Profit = Gross Profit - Operating Expenses
    * This represents income from core business operations before non-operating items.
@@ -261,12 +270,12 @@ export default function IncomeStatement() {
   const operatingProfit = incomeData.grossProfit - incomeData.totalExpenses;
 
   // Check if sections have data - check merged lists for comprehensive view
-  const hasOperatingIncome = mergedAccountLists.income.some(a => !a.is_header && (showZeroBalances || a.calculated_balance !== 0));
-  const hasCOGS = mergedAccountLists.cogs.some(a => !a.is_header && (showZeroBalances || a.calculated_balance !== 0));
-  const hasOperatingExpense = mergedAccountLists.expenses.some(a => !a.is_header && (showZeroBalances || a.calculated_balance !== 0));
-  const hasNonOperatingIncome = mergedAccountLists.otherIncome.some(a => !a.is_header && (showZeroBalances || a.calculated_balance !== 0));
-  const hasNonOperatingExpense = mergedAccountLists.nonOperatingExpenses.some(a => !a.is_header && (showZeroBalances || a.calculated_balance !== 0));
-  const hasIncomeTax = mergedAccountLists.incomeTaxExpenses.some(a => !a.is_header && (showZeroBalances || a.calculated_balance !== 0));
+  const hasOperatingIncome = displayAccounts.income.some(a => !a.is_header && (showZeroBalances || a.calculated_balance !== 0));
+  const hasCOGS = displayAccounts.cogs.some(a => !a.is_header && (showZeroBalances || a.calculated_balance !== 0));
+  const hasOperatingExpense = displayAccounts.expenses.some(a => !a.is_header && (showZeroBalances || a.calculated_balance !== 0));
+  const hasNonOperatingIncome = displayAccounts.otherIncome.some(a => !a.is_header && (showZeroBalances || a.calculated_balance !== 0));
+  const hasNonOperatingExpense = displayAccounts.nonOperatingExpenses.some(a => !a.is_header && (showZeroBalances || a.calculated_balance !== 0));
+  const hasIncomeTax = displayAccounts.incomeTaxExpenses.some(a => !a.is_header && (showZeroBalances || a.calculated_balance !== 0));
 
   // Build report data for export with comparative columns
   const reportData: ReportData = useMemo(() => {
@@ -289,7 +298,7 @@ export default function IncomeStatement() {
     
     // Operating Income - use merged account lists for comprehensive comparative view
     rows.push(['Operating Income', '', ...compData.map(() => '')]);
-    mergedAccountLists.income.filter(a => !a.is_header).forEach(account => {
+    displayAccounts.income.filter(a => !a.is_header).forEach(account => {
       const compAmounts = compData.map(cd => {
         const compAcc = cd.income.find(a => a.id === account.id);
         return formatAmount(compAcc?.calculated_balance ?? 0);
@@ -303,7 +312,7 @@ export default function IncomeStatement() {
     if (!isNpo) {
       rows.push(['', '', ...compData.map(() => '')]);
       rows.push(['Cost of Goods Sold', '', ...compData.map(() => '')]);
-      mergedAccountLists.cogs.filter(a => !a.is_header).forEach(account => {
+      displayAccounts.cogs.filter(a => !a.is_header).forEach(account => {
         const compAmounts = compData.map(cd => {
           const compAcc = cd.cogs.find(a => a.id === account.id);
           return formatAmount(compAcc?.calculated_balance ?? 0);
@@ -321,7 +330,7 @@ export default function IncomeStatement() {
     // Expense section (functional for NPO, operating for for-profit)
     rows.push(['', '', ...compData.map(() => '')]);
     rows.push([operatingExpenseLabel, '', ...compData.map(() => '')]);
-    mergedAccountLists.expenses.filter(a => !a.is_header).forEach(account => {
+    displayAccounts.expenses.filter(a => !a.is_header).forEach(account => {
       const compAmounts = compData.map(cd => {
         const compAcc = cd.expenses.find(a => a.id === account.id);
         return formatAmount(compAcc?.calculated_balance ?? 0);
@@ -340,7 +349,7 @@ export default function IncomeStatement() {
     // Non-operating Income - use merged account lists
     rows.push(['', '', ...compData.map(() => '')]);
     rows.push(['Non-operating Income', '', ...compData.map(() => '')]);
-    mergedAccountLists.otherIncome.filter(a => !a.is_header).forEach(account => {
+    displayAccounts.otherIncome.filter(a => !a.is_header).forEach(account => {
       const compAmounts = compData.map(cd => {
         const compAcc = cd.otherIncome.find(a => a.id === account.id);
         return formatAmount(compAcc?.calculated_balance ?? 0);
@@ -353,7 +362,7 @@ export default function IncomeStatement() {
     // Non-operating Expenses (7xxx-8xxx) - exclude income tax
     rows.push(['', '', ...compData.map(() => '')]);
     rows.push(['Non-operating Expenses', '', ...compData.map(() => '')]);
-    mergedAccountLists.nonOperatingExpenses.filter(a => !a.is_header).forEach(account => {
+    displayAccounts.nonOperatingExpenses.filter(a => !a.is_header).forEach(account => {
       const compAmounts = compData.map(cd => {
         const compAcc = ((cd as any).nonOperatingExpenses ?? []).find((a: any) => a.id === account.id);
         return formatAmount(compAcc?.calculated_balance ?? 0);
@@ -371,7 +380,7 @@ export default function IncomeStatement() {
     // Income Tax Expense (9xxx)
     rows.push(['', '', ...compData.map(() => '')]);
     rows.push(['Income Tax Expense', '', ...compData.map(() => '')]);
-    mergedAccountLists.incomeTaxExpenses.filter(a => !a.is_header).forEach(account => {
+    displayAccounts.incomeTaxExpenses.filter(a => !a.is_header).forEach(account => {
       const compAmounts = compData.map(cd => {
         const compAcc = ((cd as any).incomeTaxExpenses ?? []).find((a: any) => a.id === account.id);
         return formatAmount(compAcc?.calculated_balance ?? 0);
@@ -406,7 +415,7 @@ export default function IncomeStatement() {
             { label: netIncomeLabel, value: formatAmount(incomeData.netIncome) },
           ],
     };
-  }, [incomeData, organization, dateRange, operatingProfit, comparisonPeriods, comparativeIncomeData, formatCurrency, mergedAccountLists, isNpo, totalRevenueLabel, totalExpensesLabel, grossProfitLabel, netIncomeLabel, operatingExpenseLabel]);
+  }, [incomeData, organization, dateRange, operatingProfit, comparisonPeriods, comparativeIncomeData, formatCurrency, displayAccounts, isNpo, totalRevenueLabel, totalExpensesLabel, grossProfitLabel, netIncomeLabel, operatingExpenseLabel]);
 
   // Show loading only while checking org
   if (orgLoading) {
@@ -614,6 +623,8 @@ export default function IncomeStatement() {
         }
       />
 
+      <StatementSortControls organizationId={organization.id} model={lineSort} />
+
       {/* Report Card */}
       <Card className="overflow-hidden">
         {/* Report Header */}
@@ -653,7 +664,7 @@ export default function IncomeStatement() {
             <tbody>
               {/* Operating Income Section - Collapsible */}
               {renderSectionHeader(operatingIncomeLabel, 'operatingIncome', incomeData.totalRevenue, compTotalRevenue)}
-              {expandedSections.operatingIncome && mergedAccountLists.income
+              {expandedSections.operatingIncome && displayAccounts.income
                 .filter(a => !a.is_header && (showZeroBalances || a.calculated_balance !== 0 || 
                   comparativeIncomeData?.slice(1).some(cd => {
                     const compAcc = cd.income.find(ca => ca.id === a.id);
@@ -665,7 +676,7 @@ export default function IncomeStatement() {
 
               {/* Cost of Goods Sold Section - hidden for NPO (ASNPO classifies all costs as functional expenses) */}
               {!isNpo && renderSectionHeader('Cost of Goods Sold', 'cogs', incomeData.totalCOGS, compTotalCOGS)}
-              {!isNpo && expandedSections.cogs && mergedAccountLists.cogs
+              {!isNpo && expandedSections.cogs && displayAccounts.cogs
                 .filter(a => !a.is_header && (showZeroBalances || a.calculated_balance !== 0 || 
                   comparativeIncomeData?.slice(1).some(cd => {
                     const compAcc = cd.cogs.find(ca => ca.id === a.id);
@@ -680,7 +691,7 @@ export default function IncomeStatement() {
 
               {/* Expense Section — functional expenses for NPO, operating expenses for for-profit */}
               {renderSectionHeader(operatingExpenseLabel, 'operatingExpense', incomeData.totalExpenses, compTotalExpenses)}
-              {expandedSections.operatingExpense && mergedAccountLists.expenses
+              {expandedSections.operatingExpense && displayAccounts.expenses
                 .filter(a => !a.is_header && (showZeroBalances || a.calculated_balance !== 0 || 
                   comparativeIncomeData?.slice(1).some(cd => {
                     const compAcc = cd.expenses.find(ca => ca.id === a.id);
@@ -695,7 +706,7 @@ export default function IncomeStatement() {
 
               {/* Non-operating Income Section - Collapsible */}
               {renderSectionHeader('Non-operating Income', 'nonOperatingIncome', incomeData.totalOtherIncome, compTotalOtherIncome)}
-              {expandedSections.nonOperatingIncome && mergedAccountLists.otherIncome
+              {expandedSections.nonOperatingIncome && displayAccounts.otherIncome
                 .filter(a => !a.is_header && (showZeroBalances || a.calculated_balance !== 0 || 
                   comparativeIncomeData?.slice(1).some(cd => {
                     const compAcc = cd.otherIncome.find(ca => ca.id === a.id);
@@ -707,7 +718,7 @@ export default function IncomeStatement() {
 
               {/* Non-operating Expenses Section (7xxx-8xxx) - Collapsible */}
               {renderSectionHeader('Non-operating Expenses', 'nonOperatingExpense', incomeData.totalNonOperatingExpenses, compTotalNonOpEx)}
-              {expandedSections.nonOperatingExpense && mergedAccountLists.nonOperatingExpenses
+              {expandedSections.nonOperatingExpense && displayAccounts.nonOperatingExpenses
                 .filter(a => !a.is_header && (showZeroBalances || a.calculated_balance !== 0 || 
                   comparativeIncomeData?.slice(1).some(cd => {
                     const compAcc = ((cd as any).nonOperatingExpenses ?? []).find((ca: any) => ca.id === a.id);
@@ -722,7 +733,7 @@ export default function IncomeStatement() {
 
               {/* Income Tax Expense Section (9xxx) - Collapsible */}
               {renderSectionHeader('Income Tax Expense', 'incomeTax', incomeData.totalIncomeTax, compTotalIncomeTax)}
-              {expandedSections.incomeTax && mergedAccountLists.incomeTaxExpenses
+              {expandedSections.incomeTax && displayAccounts.incomeTaxExpenses
                 .filter(a => !a.is_header && (showZeroBalances || a.calculated_balance !== 0 || 
                   comparativeIncomeData?.slice(1).some(cd => {
                     const compAcc = ((cd as any).incomeTaxExpenses ?? []).find((ca: any) => ca.id === a.id);

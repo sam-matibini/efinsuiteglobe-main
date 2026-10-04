@@ -24,6 +24,7 @@ import NotFound from "./pages/NotFound";
 // initial JS bundle for landing / auth traffic.
 const Security = lazy(() => import("./pages/Security"));
 const E2EReportsHarness = lazy(() => import("./pages/__E2EReportsHarness"));
+const E2ECompanySortHarness = lazy(() => import("./pages/__E2ECompanySortHarness"));
 const Index = lazy(() => import("./pages/Index"));
 const ChartOfAccounts = lazy(() => import("./pages/ChartOfAccounts"));
 const AccountGenerator = lazy(() => import("./pages/AccountGenerator"));
@@ -307,7 +308,10 @@ const AppRoutes = () => {
 
     {/* E2E-only harness route — registered when built/served with VITE_E2E=1. */}
     {import.meta.env.VITE_E2E === '1' && (
-      <Route path="/__e2e__/income-statement" element={<E2EReportsHarness />} />
+      <>
+        <Route path="/__e2e__/income-statement" element={<E2EReportsHarness />} />
+        <Route path="/__e2e__/company-sort" element={<E2ECompanySortHarness />} />
+      </>
     )}
 
 
