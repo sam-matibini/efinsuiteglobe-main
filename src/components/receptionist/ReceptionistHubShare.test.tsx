@@ -34,13 +34,43 @@ describe('receptionist shared communication', () => {
     );
 
     expect(screen.getAllByText('Payroll question').length).toBeGreaterThan(0);
-    fireEvent.click(screen.getByRole('button', { name: 'Contact 17259484 Canada Inc.' }));
-    fireEvent.change(screen.getByLabelText('Message channel'), { target: { value: 'whatsapp' } });
+    fireEvent.change(screen.getByLabelText('Look up a contact'), { target: { value: 'nnamdi' } });
+    fireEvent.click(screen.getByRole('option', { name: /17259484 Canada Inc\./ }));
+    fireEvent.click(screen.getByRole('button', { name: 'WhatsApp' }));
     fireEvent.change(screen.getByLabelText('Message to the contact'), { target: { value: 'Your HST return is ready.' } });
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Send WhatsApp' }));
     });
     expect(onSend).toHaveBeenCalledWith('whatsapp', '4379088602', 'Your HST return is ready.', undefined);
+  });
+
+  it('saves a new contact with a name, cell number, and email', async () => {
+    const onCreate = vi.fn(async () => ({ id: 'new-1' }));
+    render(
+      <SharedCommunicationPanel
+        contacts={[]}
+        conversations={[]}
+        messages={[]}
+        selectedConversationId={null}
+        onOpenConversation={vi.fn()}
+        onSend={vi.fn()}
+        onCreateContact={onCreate}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add contact' }));
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Ngozi Ade' } });
+    fireEvent.change(screen.getByLabelText('Cell / phone'), { target: { value: '4165550199' } });
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'ngozi@example.com' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Save contact' }));
+    });
+    expect(onCreate).toHaveBeenCalledWith({
+      name: 'Ngozi Ade',
+      email: 'ngozi@example.com',
+      phone: '4165550199',
+      cell_phone: '4165550199',
+    });
   });
 
   it('sends a corporation tax reminder to the shared contact', async () => {

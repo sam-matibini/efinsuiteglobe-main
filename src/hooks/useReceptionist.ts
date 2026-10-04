@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrganization } from '@/hooks/useOrganization';
 import { useCustomers } from '@/hooks/useCustomers';
 import { useContacts } from '@/hooks/useContacts';
+import { useVendors } from '@/hooks/useVendors';
 import { receptionistRequest } from '@/lib/receptionist/client';
 import { mergeDirectoryContacts } from '@/lib/receptionist/sharedContacts';
 import { emptyDirectory, emptyReceptionOrg, receptionAnalytics } from '@/lib/receptionist/engine';
@@ -15,6 +16,7 @@ export function useReceptionist() {
   const organizationId = organization?.id ?? '';
   const queryClient = useQueryClient();
   const { customers } = useCustomers();
+  const { vendors } = useVendors();
   const { contacts: sharedContacts } = useContacts();
 
   const state = useQuery({
@@ -77,20 +79,31 @@ export function useReceptionist() {
     return {
       contacts: mergeDirectoryContacts(
         customerContacts,
-        sharedContacts
-          .filter((contact) => contact.is_active)
-          .map((contact) => ({
-            id: contact.id,
-            name: contact.name,
-            email: contact.email,
-            phone: contact.phone,
-            cell_phone: contact.cell_phone,
-            company: contact.company,
-          })),
+        [
+          ...sharedContacts
+            .filter((contact) => contact.is_active)
+            .map((contact) => ({
+              id: contact.id,
+              name: contact.name,
+              email: contact.email,
+              phone: contact.phone,
+              cell_phone: contact.cell_phone,
+              company: contact.company,
+            })),
+          ...vendors
+            .filter((vendor) => vendor.is_active)
+            .map((vendor) => ({
+              id: vendor.id,
+              name: vendor.name,
+              email: vendor.email,
+              phone: vendor.phone,
+              company: vendor.name,
+            })),
+        ],
       ),
       nextPayDate: payDate.data ?? null,
     };
-  }, [customers, invoices.data, payDate.data, sharedContacts]);
+  }, [customers, invoices.data, payDate.data, sharedContacts, vendors]);
 
   const loadedOrg = (state.data?.org as ReceptionOrg | undefined) ?? null;
   const org = useMemo(() => {

@@ -13,6 +13,9 @@ const state = vi.hoisted(() => ({
   useReceptionist: vi.fn(),
   talk: async (_text: string): Promise<{ reply: string; org: ReceptionOrg }> => ({ reply: '', org: {} as ReceptionOrg }),
   contacts: [] as Array<{ id: string; name: string; email: string | null; phone: string | null; cell_phone: string | null; company: string | null; is_active: boolean }>,
+  customers: [] as Array<{ id: string; name: string; email: string | null; phone: string | null; is_active: boolean }>,
+  vendors: [] as Array<{ id: string; name: string; email: string | null; phone: string | null; is_active: boolean }>,
+  createContact: vi.fn(async () => ({ id: 'created' })),
   conversations: [] as Array<{ id: string; contact_identifier: string; contact_name: string | null; channel: 'email' | 'sms' | 'whatsapp'; last_message_preview: string | null; last_message_at: string; unread_count: number; is_archived: boolean; organization_id: string; created_at: string; updated_at: string }>,
   messages: [] as Array<{ id: string; body: string; direction: 'inbound' | 'outbound'; created_at: string }>,
   sendMessage: vi.fn(async () => ({ id: 'sent' })),
@@ -24,11 +27,15 @@ vi.mock('@/hooks/useReceptionist', () => ({
 }));
 
 vi.mock('@/hooks/useCustomers', () => ({
-  useCustomers: () => ({ customers: [], createCustomer: { mutate: vi.fn() } }),
+  useCustomers: () => ({ customers: state.customers, createCustomer: { mutate: vi.fn() } }),
+}));
+
+vi.mock('@/hooks/useVendors', () => ({
+  useVendors: () => ({ vendors: state.vendors }),
 }));
 
 vi.mock('@/hooks/useContacts', () => ({
-  useContacts: () => ({ contacts: state.contacts }),
+  useContacts: () => ({ contacts: state.contacts, createContact: state.createContact }),
 }));
 
 vi.mock('@/hooks/useMessages', () => ({
@@ -63,6 +70,9 @@ beforeAll(() => {
 describe('AI Receptionist page', () => {
   beforeEach(() => {
     state.contacts = [];
+    state.customers = [];
+    state.vendors = [];
+    state.createContact.mockClear();
     state.conversations = [];
     state.messages = [];
     state.sendMessage.mockClear();
@@ -157,7 +167,45 @@ describe('AI Receptionist page', () => {
     expect(screen.getByRole('heading', { name: 'AI Receptionist' })).toBeInTheDocument();
     expect(screen.getByText('Text desk')).toBeInTheDocument();
     expect(screen.getByText('No calls yet.')).toBeInTheDocument();
-    expect(screen.getByText('Contacts added in Communication show up here.')).toBeInTheDocument();
+    expect(screen.getByText('Customers, vendors, and Communication contacts show up here.')).toBeInTheDocument();
+  });
+
+  it('looks up a CRM customer and sends an SMS', async () => {
+    state.customers = [{
+      id: 'cust-1',
+      name: 'Bank of Canada',
+      email: 'edalsan@gmail.com',
+      phone: '6135550100',
+      is_active: true,
+    }];
+    state.useReceptionist.mockReturnValue({
+      organization: { id: 'org-1', name: 'Acme' },
+      orgLoading: false,
+      isLoading: false,
+      org: emptyReceptionOrg('org-1'),
+      voiceReady: false,
+      analytics: { calls: 0, resolved: 0, handedOff: 0, blocked: 0, bookings: 0, messages: 0, tickets: 0, leads: 0, byDepartment: {}, byChannel: {} },
+      pending: false,
+      talk: vi.fn(),
+      saveSettings: vi.fn(),
+      saveLists: vi.fn(),
+      runTool: vi.fn(),
+      syncAgent: vi.fn(),
+      startSession: vi.fn(),
+      refresh: vi.fn(),
+      directory,
+    } as never);
+
+    render(<Receptionist />);
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Shared' }));
+    fireEvent.change(await screen.findByLabelText('Look up a contact'), { target: { value: 'bank' } });
+    fireEvent.click(screen.getByRole('option', { name: /Bank of Canada/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'SMS' }));
+    fireEvent.change(screen.getByLabelText('Message to the contact'), { target: { value: 'Your HST return is ready.' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Send SMS' }));
+    });
+    expect(state.sendMessage).toHaveBeenCalledWith('sms', '6135550100', 'Your HST return is ready.', undefined);
   });
 
   it('shares communication history and sends a GST/HST reminder on email', async () => {

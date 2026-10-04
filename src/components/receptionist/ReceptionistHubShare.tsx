@@ -13,6 +13,7 @@ import {
   type StoredComplianceDeadline,
   type StoredFilingPeriod,
 } from '@/lib/receptionist/filingReminders';
+import { crmKindLabel, filterCrmContacts, type CrmContact } from '@/lib/receptionist/crmContacts';
 import {
   channelDestination,
   conversationLabel,
@@ -20,8 +21,14 @@ import {
   type SharedChannel,
   type SharedConversationSummary,
 } from '@/lib/receptionist/sharedInbox';
-import type { SharedContact } from '@/lib/receptionist/sharedContacts';
 import { toast } from 'sonner';
+
+export interface NewReceptionistContact {
+  name: string;
+  email: string;
+  phone: string;
+  cell_phone: string;
+}
 
 type SendMessage = (
   channel: SharedChannel,
@@ -43,6 +50,60 @@ function when(value: string) {
   return new Intl.DateTimeFormat('en-CA', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(date);
 }
 
+function ContactLookup({
+  id,
+  label,
+  contacts,
+  query,
+  onQuery,
+  selectedId,
+  onSelect,
+}: {
+  id: string;
+  label: string;
+  contacts: CrmContact[];
+  query: string;
+  onQuery: (value: string) => void;
+  selectedId: string;
+  onSelect: (contact: CrmContact) => void;
+}) {
+  const matches = filterCrmContacts(contacts, query);
+  return (
+    <div>
+      <Label htmlFor={id}>{label}</Label>
+      <Input
+        id={id}
+        className="mt-1"
+        value={query}
+        onChange={(event) => onQuery(event.target.value)}
+        placeholder="Type a name, email, or phone"
+        aria-label={label}
+      />
+      <div className="mt-2 max-h-64 overflow-y-auto rounded-md border" role="listbox" aria-label="Matching contacts">
+        {matches.length === 0 && (
+          <p className="p-3 text-sm text-muted-foreground">{contacts.length === 0 ? 'No CRM contacts yet.' : 'No matching contacts.'}</p>
+        )}
+        {matches.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            role="option"
+            aria-selected={item.id === selectedId}
+            className={`block w-full border-b px-3 py-2 text-left text-sm last:border-b-0 hover:bg-muted ${item.id === selectedId ? 'bg-primary/10' : ''}`}
+            onClick={() => onSelect(item)}
+          >
+            <span className="flex flex-wrap items-center gap-2">
+              <span className="font-medium">{item.name}</span>
+              <Badge variant="outline">{crmKindLabel(item.kind)}</Badge>
+            </span>
+            <span className="mt-0.5 block text-muted-foreground">{item.email || item.cell_phone || item.phone || 'No email or phone'}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function SharedCommunicationPanel({
   contacts,
   conversations,
@@ -51,62 +112,125 @@ export function SharedCommunicationPanel({
   loadingMessages,
   onOpenConversation,
   onSend,
+  onCreateContact,
 }: {
-  contacts: SharedContact[];
+  contacts: CrmContact[];
   conversations: SharedConversationSummary[];
   messages: SharedMessage[];
   selectedConversationId: string | null;
   loadingMessages?: boolean;
   onOpenConversation: (id: string) => void;
   onSend: SendMessage;
+  onCreateContact?: (input: NewReceptionistContact) => Promise<unknown>;
 }) {
   const [contactId, setContactId] = useState(contacts[0]?.id ?? '');
+  const [lookup, setLookup] = useState('');
   const [channel, setChannel] = useState<SharedChannel>('email');
+  const [to, setTo] = useState('');
   const [body, setBody] = useState('');
   const [sending, setSending] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newPhone, setNewPhone] = useState('');
+  const [newEmail, setNewEmail] = useState('');
+  const [savingContact, setSavingContact] = useState(false);
   const contact = contacts.find((item) => item.id === contactId) ?? null;
 
   useEffect(() => {
     if (!contactId && contacts[0]) setContactId(contacts[0].id);
   }, [contactId, contacts]);
 
+  const chooseContact = (next: CrmContact, nextChannel = channel) => {
+    setContactId(next.id);
+    const destination = channelDestination(next, nextChannel) || next.email || next.phone || next.cell_phone || '';
+    setTo(destination);
+  };
+
+  const chooseChannel = (next: SharedChannel) => {
+    setChannel(next);
+    if (contact) {
+      const destination = channelDestination(contact, next);
+      if (destination) setTo(destination);
+    }
+  };
+
   const send = async () => {
     const text = body.trim();
-    if (!contact || !text) return;
-    const to = channelDestination(contact, channel);
-    if (!to) {
-      toast.error(channel === 'email' ? 'This contact has no email address.' : 'This contact has no phone number.');
+    const destination = to.trim();
+    if (!text || !destination) {
+      toast.error('Choose a contact or type an email or phone number.');
       return;
     }
     setSending(true);
     try {
-      await onSend(channel, to, text, channel === 'email' ? { subject: 'Message from AI Receptionist' } : undefined);
+      await onSend(channel, destination, text, channel === 'email' ? { subject: 'Message from AI Receptionist' } : undefined);
       setBody('');
     } finally {
       setSending(false);
     }
   };
 
+  const saveContact = async () => {
+    const name = newName.trim();
+    const phone = newPhone.trim();
+    const email = newEmail.trim();
+    if (!name) {
+      toast.error('Enter the contact name.');
+      return;
+    }
+    if (!phone && !email) {
+      toast.error('Enter a cell number or an email address.');
+      return;
+    }
+    setSavingContact(true);
+    try {
+      const created = await onCreateContact?.({ name, email, phone, cell_phone: phone });
+      if (created) {
+        setAdding(false);
+        setNewName('');
+        setNewPhone('');
+        setNewEmail('');
+      }
+    } finally {
+      setSavingContact(false);
+    }
+  };
+
   return (
     <div className="grid gap-4 lg:grid-cols-2" data-testid="shared-communication">
       <Card className="p-4">
-        <h2 className="font-medium">Contacts</h2>
-        <p className="mt-1 text-sm text-muted-foreground">The same customers, vendors, and people saved in Communication.</p>
-        <div className="mt-3 space-y-2">
-          {contacts.length === 0 && <p className="text-sm text-muted-foreground">No shared contacts yet.</p>}
-          {contacts.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              className="block w-full rounded-md border px-3 py-2 text-left text-sm hover:bg-muted"
-              aria-label={`Contact ${item.name}`}
-              onClick={() => setContactId(item.id)}
-            >
-              <span className="font-medium">{item.name}</span>
-              <span className="mt-0.5 block text-muted-foreground">{item.email || item.phone || item.cell_phone || 'No email or phone'}</span>
-            </button>
-          ))}
+        <h2 className="font-medium">CRM contacts</h2>
+        <p className="mt-1 text-sm text-muted-foreground">Customers, vendors, and people saved in Communication. Type to look someone up.</p>
+        <div className="mt-3">
+          <ContactLookup
+            id="crm-lookup"
+            label="Look up a contact"
+            contacts={contacts}
+            query={lookup}
+            onQuery={setLookup}
+            selectedId={contactId}
+            onSelect={(item) => chooseContact(item)}
+          />
         </div>
+        {onCreateContact && (
+          <div className="mt-4 border-t pt-3">
+            {!adding && <Button type="button" variant="outline" onClick={() => setAdding(true)}>Add contact</Button>}
+            {adding && (
+              <div className="space-y-2">
+                <Label htmlFor="new-contact-name">Name</Label>
+                <Input id="new-contact-name" value={newName} onChange={(event) => setNewName(event.target.value)} placeholder="Name" />
+                <Label htmlFor="new-contact-phone">Cell / phone</Label>
+                <Input id="new-contact-phone" value={newPhone} onChange={(event) => setNewPhone(event.target.value)} placeholder="Cell or phone number" />
+                <Label htmlFor="new-contact-email">Email</Label>
+                <Input id="new-contact-email" value={newEmail} onChange={(event) => setNewEmail(event.target.value)} placeholder="Email address" />
+                <div className="flex gap-2">
+                  <Button type="button" onClick={() => void saveContact()} disabled={savingContact}>Save contact</Button>
+                  <Button type="button" variant="outline" onClick={() => setAdding(false)}>Cancel</Button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </Card>
       <Card className="p-4" data-testid="shared-history">
         <h2 className="font-medium">Email, SMS, and WhatsApp</h2>
@@ -142,18 +266,19 @@ export function SharedCommunicationPanel({
           </div>
         )}
         <div className="mt-4 space-y-2 border-t pt-3">
-          <Label htmlFor="shared-contact">Send from the receptionist</Label>
-          <select id="shared-contact" className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={contactId} onChange={(event) => setContactId(event.target.value)}>
-            {contacts.length === 0 && <option value="">No contacts</option>}
-            {contacts.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-          </select>
-          <select aria-label="Message channel" className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={channel} onChange={(event) => setChannel(event.target.value as SharedChannel)}>
-            <option value="email">Email</option>
-            <option value="sms">SMS</option>
-            <option value="whatsapp">WhatsApp</option>
-          </select>
+          <p className="text-sm font-medium">Send email, SMS, or WhatsApp</p>
+          <p className="text-sm text-muted-foreground">Email uses the connected mail sender. SMS and WhatsApp use the connected Twilio number.</p>
+          <div className="flex flex-wrap gap-2">
+            {(['email', 'sms', 'whatsapp'] as const).map((item) => (
+              <Button key={item} type="button" size="sm" variant={channel === item ? 'default' : 'outline'} aria-pressed={channel === item} onClick={() => chooseChannel(item)}>
+                {sharedChannelLabel(item)}
+              </Button>
+            ))}
+          </div>
+          <Label htmlFor="message-to">To</Label>
+          <Input id="message-to" aria-label="Message recipient" value={to} onChange={(event) => setTo(event.target.value)} placeholder="Type an email or phone number" />
           <Input aria-label="Message to the contact" value={body} onChange={(event) => setBody(event.target.value)} placeholder="Write an email, SMS, or WhatsApp message" />
-          <Button type="button" onClick={() => void send()} disabled={sending || !body.trim() || !contact}>Send</Button>
+          <Button type="button" onClick={() => void send()} disabled={sending || !body.trim() || !to.trim()}>Send {sharedChannelLabel(channel)}</Button>
         </div>
       </Card>
     </div>
@@ -173,13 +298,14 @@ export function FilingRemindersPanel({
   fiscalYearEndMonth: number | null;
   deadlines: StoredComplianceDeadline[];
   periods: StoredFilingPeriod[];
-  contacts: SharedContact[];
+  contacts: CrmContact[];
   onSend: SendMessage;
   today?: string;
 }) {
   const [frequency, setFrequency] = useState<GstFilingFrequency>('quarterly');
   const [corporationKind, setCorporationKind] = useState<CorporationKind>('ccpc');
   const [contactId, setContactId] = useState(contacts[0]?.id ?? '');
+  const [lookup, setLookup] = useState('');
   const [channel, setChannel] = useState<SharedChannel>('email');
   const [sendingId, setSendingId] = useState<string | null>(null);
   const asOf = today ?? new Date().toISOString().slice(0, 10);
@@ -241,12 +367,16 @@ export function FilingRemindersPanel({
             <option value="other">Other corporation</option>
           </select>
         </div>
-        <div>
-          <Label htmlFor="reminder-contact">Send to</Label>
-          <select id="reminder-contact" className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm" value={contactId} onChange={(event) => setContactId(event.target.value)}>
-            {contacts.length === 0 && <option value="">No contacts</option>}
-            {contacts.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-          </select>
+        <div className="md:col-span-2">
+          <ContactLookup
+            id="reminder-lookup"
+            label="Look up who receives the reminder"
+            contacts={contacts}
+            query={lookup}
+            onQuery={setLookup}
+            selectedId={contactId}
+            onSelect={(item) => setContactId(item.id)}
+          />
         </div>
         <div>
           <Label htmlFor="reminder-channel">Channel</Label>

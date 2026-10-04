@@ -15,9 +15,10 @@ import { useCustomers } from '@/hooks/useCustomers';
 import { useFilingReminders } from '@/hooks/useFilingReminders';
 import { useMessages } from '@/hooks/useMessages';
 import { useReceptionist } from '@/hooks/useReceptionist';
+import { useVendors } from '@/hooks/useVendors';
+import { mergeCrmContacts } from '@/lib/receptionist/crmContacts';
 import { RECEPTION_LANGUAGES, RECEPTION_VOICES } from '@/lib/receptionist/engine';
 import { isSharedChannel } from '@/lib/receptionist/sharedInbox';
-import type { SharedContact } from '@/lib/receptionist/sharedContacts';
 import type { ReceptionOrg, TranscriptTurn } from '@/lib/receptionist/types';
 import { toast } from 'sonner';
 
@@ -29,8 +30,9 @@ function when(value: string) {
 
 export default function Receptionist() {
   const desk = useReceptionist();
-  const { createCustomer } = useCustomers();
-  const { contacts } = useContacts();
+  const { customers, createCustomer } = useCustomers();
+  const { vendors } = useVendors();
+  const { contacts, createContact } = useContacts();
   const hub = useMessages({ autoSubscribe: false });
   const filing = useFilingReminders();
   const [live, setLive] = useState<ReceptionOrg | null>(null);
@@ -71,16 +73,32 @@ export default function Receptionist() {
     );
   }
 
-  const sharedContacts: SharedContact[] = contacts
-    .filter((contact) => contact.is_active)
-    .map((contact) => ({
-      id: contact.id,
-      name: contact.name,
-      email: contact.email,
-      phone: contact.phone,
-      cell_phone: contact.cell_phone,
-      company: contact.company,
-    }));
+  const sharedContacts = mergeCrmContacts({
+    contacts: contacts
+      .filter((contact) => contact.is_active)
+      .map((contact) => ({
+        id: contact.id,
+        name: contact.name,
+        email: contact.email,
+        phone: contact.phone,
+        cell_phone: contact.cell_phone,
+        company: contact.company,
+      })),
+    customers: customers.map((customer) => ({
+      id: customer.id,
+      name: customer.name,
+      email: customer.email,
+      phone: customer.phone,
+      is_active: customer.is_active,
+    })),
+    vendors: vendors.map((vendor) => ({
+      id: vendor.id,
+      name: vendor.name,
+      email: vendor.email,
+      phone: vendor.phone,
+      is_active: vendor.is_active,
+    })),
+  });
   const sharedHistory = hub.conversations
     .filter((conversation) => isSharedChannel(conversation.channel))
     .map((conversation) => ({
@@ -232,7 +250,7 @@ export default function Receptionist() {
                 {sharedContacts.slice(0, 4).map((contact) => (
                   <p key={contact.id} className="text-sm">{contact.name}</p>
                 ))}
-                {sharedContacts.length === 0 && <p className="text-sm text-muted-foreground">Contacts added in Communication show up here.</p>}
+                {sharedContacts.length === 0 && <p className="text-sm text-muted-foreground">Customers, vendors, and Communication contacts show up here.</p>}
               </div>
             </Card>
             <Card className="p-4">
@@ -300,6 +318,12 @@ export default function Receptionist() {
               if (conversation) void hub.selectConversation(conversation);
             }}
             onSend={hub.sendMessage}
+            onCreateContact={async (input) => createContact({
+              name: input.name,
+              email: input.email,
+              phone: input.phone,
+              cell_phone: input.cell_phone,
+            })}
           />
         </TabsContent>
 

@@ -13,6 +13,10 @@ vi.mock('@/hooks/useCustomers', () => ({
   useCustomers: () => ({ customers: [] }),
 }));
 
+vi.mock('@/hooks/useVendors', () => ({
+  useVendors: () => ({ vendors: [] }),
+}));
+
 vi.mock('@/hooks/useContacts', () => ({
   useContacts: () => ({
     contacts: [
