@@ -77,7 +77,7 @@
  * ============================================================================
  */
 
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrganization } from './useOrganization';
 import { useFinancialReportsRealtime } from './useFinancialReportsRealtime';
@@ -262,6 +262,7 @@ export function useFinancialReports(dateFilter?: DateRangeFilter) {
       // Phase 4 — re-key when the division filter changes so reports re-compute.
       (dateFilter?.departmentIds ?? []).slice().sort().join(','),
     ],
+    placeholderData: keepPreviousData,
     queryFn: async () => {
       if (!currentOrganization?.id) return [];
 

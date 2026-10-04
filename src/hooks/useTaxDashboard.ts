@@ -9,7 +9,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrganization } from '@/hooks/useOrganization';
+import { useReportFilters } from '@/hooks/useReportFilters';
 import { useTaxExceptions } from '@/hooks/useTaxExceptions';
+import { toLocalISO } from '@/lib/dateRangePresets';
 import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 
 export interface TaxDashboardData {
@@ -45,16 +47,17 @@ async function fetchMovements(orgId: string, start: string, end: string): Promis
 
 export function useTaxDashboard() {
   const { organization } = useCurrentOrganization();
+  const { startDate, endDate } = useReportFilters();
   const orgId = organization?.id;
   const { data: exceptions = [] } = useTaxExceptions({ organizationId: orgId });
+  const periodStart = toLocalISO(startDate);
+  const periodEnd = toLocalISO(endDate);
 
   const query = useQuery<TaxDashboardData>({
-    queryKey: ['tax-dashboard', orgId],
+    queryKey: ['tax-dashboard', orgId, periodStart, periodEnd],
     enabled: Boolean(orgId),
     queryFn: async () => {
       const today = new Date();
-      const periodStart = format(startOfMonth(today), 'yyyy-MM-dd');
-      const periodEnd = format(endOfMonth(today), 'yyyy-MM-dd');
 
       // Current-period totals from the GL.
       const monthRows = await fetchMovements(orgId!, periodStart, periodEnd);
@@ -99,7 +102,7 @@ export function useTaxDashboard() {
       }
 
       return {
-        periodLabel: format(today, 'MMMM yyyy'),
+        periodLabel: `${format(startDate, 'MMM d, yyyy')} – ${format(endDate, 'MMM d, yyyy')}`,
         collected: round2(collected),
         itc: round2(itc),
         netPayable: round2(collected - itc),

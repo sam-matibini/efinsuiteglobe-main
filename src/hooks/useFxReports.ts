@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrganization } from './useOrganization';
 import { useReportFilters } from './useReportFilters';
+import { toLocalISO } from '@/lib/dateRangePresets';
 
 export interface FxLineItem {
   date: string;
@@ -32,8 +33,8 @@ export function useFxGainLossReport() {
   const { startDate, endDate } = useReportFilters();
   const orgId = organization?.id;
 
-  const startStr = startDate instanceof Date ? startDate.toISOString().slice(0, 10) : String(startDate);
-  const endStr = endDate instanceof Date ? endDate.toISOString().slice(0, 10) : String(endDate);
+  const startStr = toLocalISO(startDate instanceof Date ? startDate : new Date(startDate));
+  const endStr = toLocalISO(endDate instanceof Date ? endDate : new Date(endDate));
 
   return useQuery({
     queryKey: ['fx-gain-loss-report', orgId, startStr, endStr],

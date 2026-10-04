@@ -33,8 +33,11 @@ export default function Dashboard() {
   const [showOrgDialog, setShowOrgDialog] = useState(false);
   
   const { organization, isLoading: orgLoading } = useCurrentOrganization();
-  const { getBalanceSheetData, getIncomeStatementData, isLoading } = useFinancialReports();
   const reportFilters = useReportFilters();
+  const { getBalanceSheetData, getIncomeStatementData, isLoading } = useFinancialReports({
+    startDate: reportFilters.startDate,
+    endDate: reportFilters.endDate,
+  });
   const { formatCurrency: formatLocalizedCurrency, formatDate, terminology } = useLocalizedCurrency();
 
   const formatCurrency = (value: number) => {
@@ -60,7 +63,7 @@ export default function Dashboard() {
     );
   }
 
-  if (isLoading || orgLoading) {
+  if (orgLoading) {
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
@@ -89,9 +92,6 @@ export default function Dashboard() {
     a.name.toLowerCase().includes('payable') || a.code.startsWith('200') || a.code.startsWith('210')
   );
   const accountsPayable = apAccounts.reduce((sum, a) => sum + a.calculated_balance, 0);
-
-  // Calculate revenue growth (simplified - would need previous period data)
-  const revenueGrowth = incomeStatement.totalRevenue > 0 ? 12.5 : 0; // Placeholder
 
   // Format the reporting period
   const periodStart = formatDate(reportFilters.startDate, 'medium');
@@ -142,12 +142,18 @@ export default function Dashboard() {
       </div>
 
       {/* Top Row - KPIs */}
+      {isLoading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {[1, 2, 3, 4].map((i) => (
+            <Skeleton key={i} className="h-32" />
+          ))}
+        </div>
+      ) : (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard
           title="Total Revenue"
           value={formatCurrency(incomeStatement.totalRevenue)}
-          change={revenueGrowth}
-          changeLabel="vs last year"
+          changeLabel="Selected period"
           icon={<TrendingUp className="w-6 h-6" />}
           variant="accent"
         />
@@ -172,6 +178,7 @@ export default function Dashboard() {
           variant="danger"
         />
       </div>
+      )}
 
       {/* Main Content Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

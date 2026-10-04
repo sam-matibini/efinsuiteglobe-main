@@ -1,13 +1,21 @@
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { useFinancialReports } from '@/hooks/useFinancialReports';
+import { useJournalEntries } from '@/hooks/useJournalEntries';
+import { useReportFilters } from '@/hooks/useReportFilters';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useCurrentOrganization } from '@/hooks/useOrganization';
 import { getCountryLocalization } from '@/data/countryLocalizations';
 import { getLocaleForCountry } from '@/lib/localizedCurrencyFormatter';
+import { toLocalISO } from '@/lib/dateRangePresets';
+import { revenueExpenseByMonth } from '@/lib/dashboardPeriodSeries';
 
 export function RevenueChart() {
-  const { getIncomeStatementData, isLoading } = useFinancialReports();
   const { organization } = useCurrentOrganization();
+  const { startDate, endDate } = useReportFilters();
+  const { data: journalEntries, isLoading } = useJournalEntries(organization?.id, {
+    status: 'posted',
+    startDate: toLocalISO(startDate),
+    endDate: toLocalISO(endDate),
+  });
 
   const countryCode = organization?.country?.toUpperCase() || 'CA';
   const localization = getCountryLocalization(countryCode);
@@ -35,35 +43,33 @@ export function RevenueChart() {
       <div className="stat-card animate-slide-in">
         <div className="mb-6">
           <h3 className="text-lg font-semibold text-foreground">Revenue vs Expenses</h3>
-          <p className="text-sm text-muted-foreground">Monthly comparison</p>
+          <p className="text-sm text-muted-foreground">Selected period</p>
         </div>
         <Skeleton className="h-72" />
       </div>
     );
   }
 
-  // Get data AFTER loading check
-  const incomeData = getIncomeStatementData();
-
-  // Generate monthly data based on actual totals (simplified - divide by 12)
-  // In a real implementation, this would come from time-series journal entry data
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  
-  // Create a distribution pattern to make the chart more realistic
-  const distribution = [0.06, 0.07, 0.08, 0.08, 0.09, 0.09, 0.08, 0.08, 0.09, 0.09, 0.10, 0.09];
-  
-  const monthlyData = months.map((month, idx) => ({
-    month,
-    revenue: Math.round(incomeData.totalRevenue * distribution[idx]),
-    expenses: Math.round(incomeData.totalExpenses * distribution[idx]),
-  }));
+  const monthlyData = revenueExpenseByMonth(
+    (journalEntries ?? []).flatMap((entry) =>
+      (entry.lines ?? []).map((line) => ({
+        entryDate: entry.entry_date,
+        accountCode: line.account?.code ?? '',
+        accountType: line.account?.account_type,
+        debit: Number(line.debit) || 0,
+        credit: Number(line.credit) || 0,
+      })),
+    ),
+    startDate,
+    endDate,
+  );
 
   return (
     <div className="stat-card animate-slide-in">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h3 className="text-lg font-semibold text-foreground">Revenue vs Expenses</h3>
-          <p className="text-sm text-muted-foreground">Monthly comparison for fiscal year</p>
+          <p className="text-sm text-muted-foreground">Posted activity in the selected period</p>
         </div>
         <div className="flex gap-4">
           <div className="flex items-center gap-2">
