@@ -84,7 +84,7 @@ interface NavItem {
 // Navigation items with module requirements
 const getNavigation = (payrollLabels: { taxSlips: string; separationDoc: string; remittances: string }): NavItem[] => [
   { label: 'Dashboard', icon: LayoutDashboard, href: '/' },
-  { label: 'AI Receptionist', icon: Phone, href: '/receptionist' },
+  { label: 'AI Receptionist', icon: Phone, href: '/communication?tab=receptionist', requiredModules: ['communication'] },
   { 
     label: 'Sales', 
     icon: ShoppingCart,

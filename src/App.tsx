@@ -110,7 +110,6 @@ const AICategorizationInsights = lazy(() => import("./pages/AICategorizationInsi
 const AICategorizationHistory = lazy(() => import("./pages/AICategorizationHistory"));
 const SettlementReconciliation = lazy(() => import("./pages/SettlementReconciliation"));
 const TransactionRules = lazy(() => import("./pages/TransactionRules"));
-const Receptionist = lazy(() => import("./pages/Receptionist"));
 const Reconciliation = lazy(() => import("./pages/Reconciliation"));
 const ReconciliationHistory = lazy(() => import("./pages/ReconciliationHistory"));
 const SalesTaxAudit = lazy(() => import("./pages/SalesTaxAudit"));
@@ -326,7 +325,7 @@ const AppRoutes = () => {
 
     {/* Protected app routes */}
     <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
-    <Route path="/receptionist" element={<ProtectedRoute><PageWrapper><Receptionist /></PageWrapper></ProtectedRoute>} />
+    <Route path="/receptionist" element={<ProtectedRoute><Navigate to="/communication?tab=receptionist" replace /></ProtectedRoute>} />
     <Route path="/toolkit/loan" element={<ProtectedRoute><LoanCalculatorPage /></ProtectedRoute>} />
     <Route path="/accounts" element={<ProtectedRoute><PageWrapper><ChartOfAccounts /></PageWrapper></ProtectedRoute>} />
     <Route path="/accounts/generator" element={<ProtectedRoute><PageWrapper><AccountGenerator /></PageWrapper></ProtectedRoute>} />
@@ -492,7 +491,7 @@ const AppRoutes = () => {
     <Route path="/settings" element={<ProtectedRoute><PageWrapper><Settings /></PageWrapper></ProtectedRoute>} />
     <Route path="/docsign" element={<DocSignRoute />} />
     <Route path="/communication" element={<ProtectedRoute><PageWrapper><CommunicationHub /></PageWrapper></ProtectedRoute>} />
-    <Route path="/ai-receptionist" element={<ProtectedRoute><Navigate to="/receptionist" replace /></ProtectedRoute>} />
+    <Route path="/ai-receptionist" element={<ProtectedRoute><Navigate to="/communication?tab=receptionist" replace /></ProtectedRoute>} />
     
     {/* Budget routes - static routes must come before dynamic :id route */}
     <Route path="/budgets" element={<ProtectedRoute><Budgets /></ProtectedRoute>} />

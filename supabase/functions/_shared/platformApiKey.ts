@@ -23,5 +23,14 @@ export async function resolvePlatformSecret(secretName: string): Promise<string>
     .order("updated_at", { ascending: false })
     .limit(1)
     .maybeSingle();
-  return String(organizationKey.data?.api_key ?? "").trim();
+  const organizationSecret = String(organizationKey.data?.api_key ?? "").trim();
+  if (organizationSecret) return organizationSecret;
+  const stored = await supabase
+    .from("integration_settings")
+    .select("settings, is_enabled")
+    .eq("integration_name", `platform_api:${secretName}`)
+    .maybeSingle();
+  if (stored.data?.is_enabled === false) return "";
+  const settings = stored.data?.settings as { secretValue?: string } | null;
+  return String(settings?.secretValue ?? "").trim();
 }

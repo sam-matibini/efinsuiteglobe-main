@@ -45,6 +45,34 @@ export const PLATFORM_API_PRESETS: PlatformApiPreset[] = [
     docsUrl: 'https://elevenlabs.io/app/settings/api-keys',
     description: 'Voice for the AI Receptionist and Alice',
   },
+  {
+    provider: 'openai',
+    label: 'OpenAI',
+    secretName: 'OPENAI_API_KEY',
+    docsUrl: 'https://platform.openai.com/api-keys',
+    description: 'Alice and document assistants',
+  },
+  {
+    provider: 'twilio',
+    label: 'Twilio',
+    secretName: 'TWILIO_AUTH_TOKEN',
+    docsUrl: 'https://www.twilio.com/docs',
+    description: 'SMS and voice',
+  },
+  {
+    provider: 'stripe',
+    label: 'Stripe',
+    secretName: 'STRIPE_SECRET_KEY',
+    docsUrl: 'https://dashboard.stripe.com/apikeys',
+    description: 'Payments',
+  },
+  {
+    provider: 'resend',
+    label: 'Resend',
+    secretName: 'RESEND_API_KEY',
+    docsUrl: 'https://resend.com/api-keys',
+    description: 'Email',
+  },
 ];
 
 const SECRET_NAME = /^[A-Z][A-Z0-9_]{2,63}$/;

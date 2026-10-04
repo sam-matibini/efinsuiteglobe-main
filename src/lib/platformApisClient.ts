@@ -1,5 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
-import { formatApiSettingsError, keyHint } from '@/lib/receptionist/apiCredentials';
+import { errorText, formatApiSettingsError, keyHint } from '@/lib/receptionist/apiCredentials';
 import { canStoreApiKeyForOrganization, secretHint, type PlatformApiInput, type PlatformApiPublic } from './platformApis';
 
 interface RpcRow {
@@ -75,9 +75,17 @@ async function localRequest(body: Record<string, unknown>): Promise<Record<strin
     throw new Error('Platform API settings are unavailable.');
   }
   if (!response.ok || payload.ok === false) {
-    throw new Error(String(payload.error || 'Could not save the API key.'));
+    const message = errorText(payload.error) || errorText(payload.message);
+    if (response.status === 404 || response.status === 405 || !message || /not found|cannot (get|post)|404/i.test(message)) {
+      throw new Error('Platform API settings are unavailable.');
+    }
+    throw new Error(message);
   }
   return payload;
+}
+
+function storedProvider(provider: string): 'elevenlabs' | 'custom' {
+  return provider === 'elevenlabs' ? 'elevenlabs' : 'custom';
 }
 
 async function organizationIdForCurrentUser(): Promise<string | null> {
@@ -134,19 +142,18 @@ async function saveOrganizationApi(input: PlatformApiInput): Promise<PlatformApi
     body: {
       action: 'save',
       organizationId,
-      provider: input.provider === 'custom' ? 'custom' : 'elevenlabs',
+      provider: storedProvider(input.provider),
       name: input.label,
       secretName: input.secretName,
       apiKey: input.secretValue,
     },
   });
-  const functionMissing = /not found|Failed to send|FunctionsFetchError|404/i.test(invoked.error?.message ?? '');
   if (!invoked.error && invoked.data?.ok && !invoked.data?.error) return publicFromInput(input);
 
   const { error } = await db.from('organization_api_credentials').upsert(
     {
       organization_id: organizationId,
-      provider: input.provider === 'custom' ? 'custom' : 'elevenlabs',
+      provider: storedProvider(input.provider),
       name: input.label,
       secret_name: input.secretName,
       api_key: input.secretValue,
@@ -156,16 +163,85 @@ async function saveOrganizationApi(input: PlatformApiInput): Promise<PlatformApi
     },
     { onConflict: 'organization_id,secret_name' },
   );
-  if (error) {
-    if (functionMissing || missingRemote(error)) throw new Error(formatApiSettingsError(error));
-    throw new Error(formatApiSettingsError(error));
-  }
+  if (error) throw error;
   return publicFromInput(input);
+}
+
+async function saveIntegrationApi(input: PlatformApiInput): Promise<PlatformApiPublic> {
+  const hint = secretHint(input.secretValue) || keyHint(input.secretValue);
+  const { error } = await supabase.from('integration_settings').upsert({
+    integration_name: `platform_api:${input.secretName}`,
+    is_enabled: true,
+    settings: {
+      provider: input.provider,
+      label: input.label,
+      secretName: input.secretName,
+      hint,
+      secretValue: input.secretValue,
+    },
+    connection_status: 'connected',
+    updated_at: new Date().toISOString(),
+  }, { onConflict: 'integration_name' });
+  if (error) throw error;
+  return publicFromInput(input);
+}
+
+async function listIntegrationApis(): Promise<PlatformApiPublic[]> {
+  const { data, error } = await supabase
+    .from('integration_settings')
+    .select('id, integration_name, is_enabled, settings')
+    .like('integration_name', 'platform_api:%');
+  if (error || !data) return [];
+  return data.flatMap((row) => {
+    const settings = row.settings;
+    if (!settings || typeof settings !== 'object' || Array.isArray(settings)) return [];
+    const record = settings as Record<string, unknown>;
+    const secretName = typeof record.secretName === 'string' ? record.secretName : row.integration_name.replace(/^platform_api:/, '');
+    if (!secretName) return [];
+    return [{
+      id: row.id,
+      provider: typeof record.provider === 'string' ? record.provider : 'custom',
+      label: typeof record.label === 'string' ? record.label : secretName,
+      secretName,
+      hint: typeof record.hint === 'string' ? record.hint : '',
+      enabled: row.is_enabled,
+      docsUrl: null,
+      updatedAt: new Date().toISOString(),
+    }];
+  });
+}
+
+async function saveForOrganization(input: PlatformApiInput): Promise<PlatformApiPublic> {
+  try {
+    return await saveOrganizationApi(input);
+  } catch (orgError) {
+    try {
+      return await saveIntegrationApi(input);
+    } catch (storedError) {
+      const orgMessage = errorText(orgError);
+      const storedMessage = errorText(storedError);
+      const preferred = /does not exist|schema cache|42P01/i.test(orgMessage) ? storedError : orgError;
+      if (/does not exist|schema cache|42P01|row-level security|permission denied|42501/i.test(storedMessage) && /does not exist|schema cache|42P01/i.test(orgMessage)) {
+        throw new Error(formatApiSettingsError(preferred));
+      }
+      throw new Error(formatApiSettingsError(storedMessage ? storedError : preferred));
+    }
+  }
+}
+
+function mergeApis(groups: PlatformApiPublic[][]): PlatformApiPublic[] {
+  const byName = new Map<string, PlatformApiPublic>();
+  for (const group of groups) {
+    for (const item of group) {
+      if (item.secretName && !byName.has(item.secretName)) byName.set(item.secretName, item);
+    }
+  }
+  return [...byName.values()];
 }
 
 async function withOrganizationFallback<T>(remoteError: { code?: string; message?: string } | null, local: () => Promise<T>, organization: () => Promise<T>): Promise<T> {
   if (remoteError && !missingRemote(remoteError) && !canStoreApiKeyForOrganization(remoteError)) {
-    throw new Error(remoteError.message ?? 'Could not save the API key.');
+    throw new Error(errorText(remoteError) || 'Could not save the API key.');
   }
   try {
     return await local();
@@ -180,12 +256,18 @@ async function withOrganizationFallback<T>(remoteError: { code?: string; message
 }
 
 export async function listPlatformApis(): Promise<PlatformApiPublic[]> {
+  const groups: PlatformApiPublic[][] = [];
   const remote = await supabase.rpc('list_platform_api_keys' as never);
-  if (!remote.error && Array.isArray(remote.data)) return (remote.data as RpcRow[]).map(fromRpc);
-  return withOrganizationFallback(remote.error, async () => {
+  if (!remote.error && Array.isArray(remote.data)) groups.push((remote.data as RpcRow[]).map(fromRpc));
+  try {
     const payload = await localRequest({ action: 'list' });
-    return (payload.keys as PlatformApiPublic[]) ?? [];
-  }, listOrganizationApis);
+    if (Array.isArray(payload.keys)) groups.push(payload.keys as PlatformApiPublic[]);
+  } catch {
+    // The dev-only route is absent on the deployed site.
+  }
+  groups.push(await listOrganizationApis());
+  groups.push(await listIntegrationApis());
+  return mergeApis(groups);
 }
 
 export async function savePlatformApi(input: PlatformApiInput): Promise<PlatformApiPublic> {
@@ -203,7 +285,7 @@ export async function savePlatformApi(input: PlatformApiInput): Promise<Platform
   return withOrganizationFallback(remote.error, async () => {
     const payload = await localRequest({ action: 'save', ...input });
     return payload.key as PlatformApiPublic;
-  }, () => saveOrganizationApi(input));
+  }, () => saveForOrganization(input));
 }
 
 export async function setPlatformApiEnabled(id: string, enabled: boolean): Promise<void> {
@@ -233,7 +315,7 @@ export async function testPlatformApi(input: { secretName?: string; secretValue?
     const remote = await supabase.functions.invoke('platform-api-keys', { body: { action: 'test', ...input } });
     if (!remote.error && remote.data && typeof remote.data === 'object') {
       const data = remote.data as { ok?: boolean; message?: string; error?: string };
-      if (data.ok === false) throw new Error(data.error || data.message || 'The API key was rejected.');
+      if (data.ok === false) throw new Error(errorText(data.error) || errorText(data.message) || 'The API key was rejected.');
       if (data.message) return data.message;
     }
   } catch (error) {

@@ -17,7 +17,7 @@ export function PlatformApiKeysCard() {
   const [keys, setKeys] = useState<PlatformApiPublic[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
-  const [preset, setPreset] = useState<'elevenlabs' | 'custom'>('elevenlabs');
+  const [preset, setPreset] = useState<string>('elevenlabs');
   const [label, setLabel] = useState(elevenLabs.label);
   const [secretName, setSecretName] = useState(elevenLabs.secretName);
   const [secretValue, setSecretValue] = useState('');
@@ -41,13 +41,14 @@ export function PlatformApiKeysCard() {
     void refresh();
   }, []);
 
-  const choose = (next: 'elevenlabs' | 'custom') => {
+  const choose = (next: string) => {
     setPreset(next);
     setFormError('');
     setSecretValue('');
-    if (next === 'elevenlabs') {
-      setLabel(elevenLabs.label);
-      setSecretName(elevenLabs.secretName);
+    const selected = PLATFORM_API_PRESETS.find((item) => item.provider === next);
+    if (selected) {
+      setLabel(selected.label);
+      setSecretName(selected.secretName);
     } else {
       setLabel('');
       setSecretName('');
@@ -61,12 +62,13 @@ export function PlatformApiKeysCard() {
   };
 
   const onSave = async () => {
+    const selected = PLATFORM_API_PRESETS.find((item) => item.provider === preset);
     const input = {
       provider: preset,
       label: label.trim(),
-      secretName: preset === 'elevenlabs' ? elevenLabs.secretName : normalizeSecretName(secretName),
+      secretName: selected ? selected.secretName : normalizeSecretName(secretName),
       secretValue,
-      docsUrl: preset === 'elevenlabs' ? elevenLabs.docsUrl : null,
+      docsUrl: selected?.docsUrl ?? null,
     };
     const problem = validatePlatformApi(input);
     if (problem) {
@@ -93,7 +95,7 @@ export function PlatformApiKeysCard() {
     try {
       const message = await testPlatformApi({
         provider: preset,
-        secretName: preset === 'elevenlabs' ? elevenLabs.secretName : normalizeSecretName(secretName),
+        secretName: PLATFORM_API_PRESETS.find((item) => item.provider === preset)?.secretName ?? normalizeSecretName(secretName),
         secretValue,
       });
       toast.success(message);
@@ -174,8 +176,12 @@ export function PlatformApiKeysCard() {
             <DialogDescription>Choose ElevenLabs or another service, then paste the API key.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-2">
-              <Button type="button" variant={preset === 'elevenlabs' ? 'default' : 'outline'} onClick={() => choose('elevenlabs')}>ElevenLabs</Button>
+            <div className="flex flex-wrap gap-2">
+              {PLATFORM_API_PRESETS.map((item) => (
+                <Button key={item.provider} type="button" variant={preset === item.provider ? 'default' : 'outline'} onClick={() => choose(item.provider)}>
+                  {item.label}
+                </Button>
+              ))}
               <Button type="button" variant={preset === 'custom' ? 'default' : 'outline'} onClick={() => choose('custom')}>Custom API</Button>
             </div>
             <div className="space-y-2">
@@ -189,7 +195,7 @@ export function PlatformApiKeysCard() {
                 value={secretName}
                 onChange={(event) => setSecretName(normalizeSecretName(event.target.value))}
                 placeholder="ELEVENLABS_API_KEY"
-                disabled={preset === 'elevenlabs'}
+                disabled={preset !== 'custom'}
                 className="font-mono text-sm"
               />
             </div>

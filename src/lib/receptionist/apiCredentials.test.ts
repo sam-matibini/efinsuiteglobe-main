@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildApiCredentialDraft,
+  errorText,
   formatApiSettingsError,
   secretNameFor,
   usesOrganizationCredentialStore,
@@ -23,5 +24,12 @@ describe('organization API credentials', () => {
 
   it('builds a secret name for a custom provider', () => {
     expect(secretNameFor('custom', 'Payroll Voice')).toBe('PAYROLL_VOICE_API_KEY');
+  });
+
+  it('reads a nested API error instead of showing [object Object]', () => {
+    expect(errorText({ error: { message: 'The page could not be found' } })).toBe('The page could not be found');
+    expect(formatApiSettingsError({ message: { code: '42501', message: 'permission denied' } })).toMatch(/owner or admin/i);
+    expect(formatApiSettingsError({ unexpected: true })).toBe('Could not save the API key.');
+    expect(formatApiSettingsError({ unexpected: true })).not.toContain('[object Object]');
   });
 });

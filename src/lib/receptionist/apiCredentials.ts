@@ -19,6 +19,24 @@ export interface StoredApiCredential {
 
 const PLATFORM_SETTINGS_ERROR = /platform api settings are unavailable|platform_settings/i;
 
+/** Read a human message from an Error, a Supabase error, or a nested API payload. */
+export function errorText(error: unknown): string {
+  if (typeof error === 'string') return error === '[object Object]' ? '' : error.trim();
+  if (error instanceof Error) return error.message === '[object Object]' ? '' : error.message.trim();
+  if (error && typeof error === 'object') {
+    const record = error as Record<string, unknown>;
+    for (const key of ['message', 'error', 'details', 'hint', 'error_description', 'msg']) {
+      const value = record[key];
+      if (typeof value === 'string' && value.trim() && value !== '[object Object]') return value.trim();
+      if (value && typeof value === 'object') {
+        const nested = errorText(value);
+        if (nested) return nested;
+      }
+    }
+  }
+  return '';
+}
+
 export function secretNameFor(provider: ApiProvider, name: string): string {
   if (provider === 'elevenlabs') return 'ELEVENLABS_API_KEY';
   const slug = name
@@ -54,7 +72,7 @@ export function keyHint(apiKey: string): string {
  * platform_settings must not block saving a key for this organization.
  */
 export function formatApiSettingsError(error: unknown): string {
-  const raw = error instanceof Error ? error.message : String(error ?? '');
+  const raw = errorText(error);
   if (PLATFORM_SETTINGS_ERROR.test(raw)) {
     return 'Saving this key does not need platform-wide settings. Store it for the current organization and try again.';
   }
@@ -68,6 +86,5 @@ export function formatApiSettingsError(error: unknown): string {
 }
 
 export function usesOrganizationCredentialStore(error: unknown): boolean {
-  const raw = error instanceof Error ? error.message : String(error ?? '');
-  return PLATFORM_SETTINGS_ERROR.test(raw);
+  return PLATFORM_SETTINGS_ERROR.test(errorText(error));
 }

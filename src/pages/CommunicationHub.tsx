@@ -73,7 +73,7 @@ import { CommunicationTemplate } from '@/hooks/useCommunicationTemplates';
 import { TemplateSelector } from '@/components/communication/TemplateSelector';
 import { TemplateFormDialog } from '@/components/communication/TemplateFormDialog';
 import { AIComposeAssistant } from '@/components/communication/AIComposeAssistant';
-import { AIReceptionistPanel } from '@/components/receptionist/AIReceptionistPanel';
+import Receptionist from '@/pages/Receptionist';
 import efinsuiteGlobeLogo from '@/assets/efinsuite-globe-logo.png';
 
 // Default contact details for signature
@@ -1216,7 +1216,7 @@ export default function CommunicationHub() {
         </TabsContent>
 
         <TabsContent value="receptionist" className="space-y-6">
-          <AIReceptionistPanel onActivity={() => fetchConversations()} />
+          <Receptionist />
         </TabsContent>
       </Tabs>
 
