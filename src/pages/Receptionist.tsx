@@ -9,9 +9,15 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
+import { FilingRemindersPanel, SharedCommunicationPanel } from '@/components/receptionist/ReceptionistHubShare';
+import { useContacts } from '@/hooks/useContacts';
 import { useCustomers } from '@/hooks/useCustomers';
+import { useFilingReminders } from '@/hooks/useFilingReminders';
+import { useMessages } from '@/hooks/useMessages';
 import { useReceptionist } from '@/hooks/useReceptionist';
 import { RECEPTION_LANGUAGES, RECEPTION_VOICES } from '@/lib/receptionist/engine';
+import { isSharedChannel } from '@/lib/receptionist/sharedInbox';
+import type { SharedContact } from '@/lib/receptionist/sharedContacts';
 import type { ReceptionOrg, TranscriptTurn } from '@/lib/receptionist/types';
 import { toast } from 'sonner';
 
@@ -24,6 +30,9 @@ function when(value: string) {
 export default function Receptionist() {
   const desk = useReceptionist();
   const { createCustomer } = useCustomers();
+  const { contacts } = useContacts();
+  const hub = useMessages({ autoSubscribe: false });
+  const filing = useFilingReminders();
   const [live, setLive] = useState<ReceptionOrg | null>(null);
   const [draft, setDraft] = useState('');
   const [turns, setTurns] = useState<TranscriptTurn[]>([]);
@@ -61,6 +70,27 @@ export default function Receptionist() {
       </div>
     );
   }
+
+  const sharedContacts: SharedContact[] = contacts
+    .filter((contact) => contact.is_active)
+    .map((contact) => ({
+      id: contact.id,
+      name: contact.name,
+      email: contact.email,
+      phone: contact.phone,
+      cell_phone: contact.cell_phone,
+      company: contact.company,
+    }));
+  const sharedHistory = hub.conversations
+    .filter((conversation) => isSharedChannel(conversation.channel))
+    .map((conversation) => ({
+      id: conversation.id,
+      contactIdentifier: conversation.contact_identifier,
+      contactName: conversation.contact_name,
+      channel: conversation.channel,
+      preview: conversation.last_message_preview,
+      at: conversation.last_message_at,
+    }));
 
   const org = live ?? desk.org;
   const analytics = desk.analytics ?? {
@@ -128,7 +158,7 @@ export default function Receptionist() {
             <h1 className="text-2xl font-bold text-foreground">AI Receptionist</h1>
             <Badge variant="secondary">{desk.voiceReady ? 'Voice connected' : 'Text desk'}</Badge>
           </div>
-          <p className="text-muted-foreground">ElevenLabs holds the conversation. eFinsuite keeps the customers, invoices, payroll, tax requests, and appointments.</p>
+          <p className="text-muted-foreground">ElevenLabs holds the conversation. Communication shares contacts, email, SMS, and WhatsApp history, and the receptionist can send GST/HST, corporation tax, payroll, and T4 due-date reminders.</p>
         </div>
         <div className="flex items-center gap-3">
           <Label htmlFor="receptionist-enabled">Answering</Label>
@@ -162,6 +192,8 @@ export default function Receptionist() {
           <TabsTrigger value="desk">Desk</TabsTrigger>
           <TabsTrigger value="calls">Calls</TabsTrigger>
           <TabsTrigger value="schedule">Schedule</TabsTrigger>
+          <TabsTrigger value="shared">Shared</TabsTrigger>
+          <TabsTrigger value="reminders">Reminders</TabsTrigger>
           <TabsTrigger value="routing">Routing</TabsTrigger>
           <TabsTrigger value="knowledge">Knowledge</TabsTrigger>
           <TabsTrigger value="settings">Settings</TabsTrigger>
@@ -190,6 +222,18 @@ export default function Receptionist() {
             <Card className="p-4">
               <p className="text-sm font-medium">Latest call</p>
               <p className="mt-2 text-sm text-muted-foreground">{org.calls[0]?.summary || 'No calls yet.'}</p>
+            </Card>
+            <Card className="p-4" data-testid="shared-contact-summary">
+              <p className="text-sm font-medium">Shared from Communication</p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                {sharedContacts.length} {sharedContacts.length === 1 ? 'contact' : 'contacts'} · {sharedHistory.length} email, SMS, and WhatsApp {sharedHistory.length === 1 ? 'conversation' : 'conversations'}
+              </p>
+              <div className="mt-2 space-y-1">
+                {sharedContacts.slice(0, 4).map((contact) => (
+                  <p key={contact.id} className="text-sm">{contact.name}</p>
+                ))}
+                {sharedContacts.length === 0 && <p className="text-sm text-muted-foreground">Contacts added in Communication show up here.</p>}
+              </div>
             </Card>
             <Card className="p-4">
               <p className="text-sm font-medium">Staff notifications</p>
@@ -237,6 +281,37 @@ export default function Receptionist() {
             ))}
             {org.messages.length + org.tickets.length + org.leads.length === 0 && <p className="text-sm text-muted-foreground">Messages, tickets, and new leads will appear here.</p>}
           </Card>
+        </TabsContent>
+
+        <TabsContent value="shared" className="mt-4">
+          <SharedCommunicationPanel
+            contacts={sharedContacts}
+            conversations={sharedHistory}
+            messages={hub.selectedConversation ? hub.messages.map((message) => ({
+              id: message.id,
+              body: message.body,
+              direction: message.direction,
+              created_at: message.created_at,
+            })) : []}
+            selectedConversationId={hub.selectedConversation?.id ?? null}
+            loadingMessages={hub.isLoadingMessages}
+            onOpenConversation={(id) => {
+              const conversation = hub.conversations.find((item) => item.id === id);
+              if (conversation) void hub.selectConversation(conversation);
+            }}
+            onSend={hub.sendMessage}
+          />
+        </TabsContent>
+
+        <TabsContent value="reminders" className="mt-4">
+          <FilingRemindersPanel
+            organizationName={desk.organization?.name ?? 'Your organization'}
+            fiscalYearEndMonth={filing.fiscalYearEndMonth}
+            deadlines={filing.deadlines}
+            periods={filing.periods}
+            contacts={sharedContacts}
+            onSend={hub.sendMessage}
+          />
         </TabsContent>
 
         <TabsContent value="routing" className="mt-4 space-y-4">
