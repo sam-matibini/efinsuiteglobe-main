@@ -50,6 +50,9 @@ import {
   LogOut,
   Network,
   Phone,
+  Headphones,
+  Inbox,
+  Palette,
 } from 'lucide-react';
 import { SubscriptionUpgradeModal } from '@/components/SubscriptionUpgradeModal';
 import type { PlanTier } from '@/config/planModuleAccess';
@@ -64,7 +67,17 @@ import { isChildVisibleForCountry, getCountryModuleFlags } from '@/config/countr
 
 import { CreateOrganizationDialog } from '@/components/accounts/CreateOrganizationDialog';
 import { SearchableOrgSwitcher } from '@/components/layout/SearchableOrgSwitcher';
+import { COMMUNICATION_NAV, navHrefMatches } from '@/lib/navigation/hubNav';
 import logo from '@/assets/efinsuite-logo.png';
+
+const COMMUNICATION_ICONS: Record<string, React.ElementType> = {
+  Compose: Send,
+  Inbox,
+  Contacts: Users,
+  Voice: Phone,
+  Branding: Palette,
+  'AI Receptionist': Headphones,
+};
 
 interface NavItem {
   label: string;
@@ -82,9 +95,9 @@ interface NavItem {
 }
 
 // Navigation items with module requirements
-const getNavigation = (payrollLabels: { taxSlips: string; separationDoc: string; remittances: string }): NavItem[] => [
+export function getNavigation(payrollLabels: { taxSlips: string; separationDoc: string; remittances: string }): NavItem[] {
+  return [
   { label: 'Dashboard', icon: LayoutDashboard, href: '/' },
-  { label: 'AI Receptionist', icon: Phone, href: '/communication?tab=receptionist', requiredModules: ['communication'] },
   { 
     label: 'Sales', 
     icon: ShoppingCart,
@@ -289,11 +302,15 @@ const getNavigation = (payrollLabels: { taxSlips: string; separationDoc: string;
     href: '/docsign',
     requiredModules: ['docsign'],
   },
-  { 
-    label: 'Communication', 
-    icon: MessageSquare, 
-    href: '/communication',
+  {
+    label: 'Communication',
+    icon: MessageSquare,
     requiredModules: ['communication'],
+    children: COMMUNICATION_NAV.map((item) => ({
+      label: item.label,
+      href: item.href,
+      icon: COMMUNICATION_ICONS[item.label] ?? MessageSquare,
+    })),
   },
   {
     label: 'Treasury Mgmt',
@@ -320,7 +337,8 @@ const getNavigation = (payrollLabels: { taxSlips: string; separationDoc: string;
     requiredModules: ['general_ledger'],
   },
   { label: 'Settings', icon: Settings, href: '/settings', allowedRoles: ['owner', 'admin'] },
-];
+  ];
+}
 
 type NavGroupId = 'overview' | 'financials' | 'reports' | 'compliance' | 'treasury' | 'tools' | 'bottom';
 
@@ -343,7 +361,6 @@ const NAV_PRESENTATION: Record<string, { group: NavGroupId; iconColor: string }>
   Investments: { group: 'treasury', iconColor: '#fbbf24' },
   'FX Management': { group: 'treasury', iconColor: '#fca5a5' },
   eFinconnect: { group: 'treasury', iconColor: '#67e8f9' },
-  'AI Receptionist': { group: 'tools', iconColor: '#67e8f9' },
   'Accountant Dashboard': { group: 'tools', iconColor: '#a5b4fc' },
   'Alice AI': { group: 'tools', iconColor: '#6ee7b7' },
   DocSign: { group: 'tools', iconColor: '#93c5fd' },
@@ -435,7 +452,7 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
   // Auto-expand parent groups when navigating to child routes
   useEffect(() => {
     const activeParents = navigation
-      .filter(item => item.children?.some(child => location.pathname === child.href))
+      .filter(item => item.children?.some(child => navHrefMatches(child.href, location.pathname, location.search)))
       .map(item => item.label);
     
     if (activeParents.length > 0) {
@@ -449,7 +466,7 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
         return newExpanded;
       });
     }
-  }, [location.pathname, navigation]);
+  }, [location.pathname, location.search, navigation]);
 
   const toggleExpand = (label: string) => {
     setExpandedItems(prev => 
@@ -460,15 +477,8 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
   };
 
   const isActive = (href?: string, children?: NavItem['children']) => {
-    if (href) {
-      const [path, query] = href.split('?');
-      if (query) {
-        return location.pathname === path && location.search.includes(query);
-      }
-      if (path === '/communication' && location.search.includes('tab=receptionist')) return false;
-      return location.pathname === path;
-    }
-    if (children) return children.some(child => location.pathname === child.href);
+    if (href) return navHrefMatches(href, location.pathname, location.search);
+    if (children) return children.some(child => navHrefMatches(child.href, location.pathname, location.search));
     return false;
   };
 
@@ -599,7 +609,7 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
                           to={child.href}
                           className={cn(
                             "nav-item text-sm",
-                            location.pathname === child.href && "nav-item-active"
+                            navHrefMatches(child.href, location.pathname, location.search) && "nav-item-active"
                           )}
                         >
                           <child.icon className="w-4 h-4" />
