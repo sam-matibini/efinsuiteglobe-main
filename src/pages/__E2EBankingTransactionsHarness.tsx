@@ -4,10 +4,11 @@
  */
 import { useState } from 'react';
 import { TransactionDetailPanel, type TransactionDetail } from '@/components/banking/TransactionDetailPanel';
+import { AuroraScroll } from '@/components/ui/aurora-scroll';
 import { EditTransactionDialog } from '@/components/banking/EditTransactionDialog';
 import type { BankTransaction } from '@/hooks/useBankTransactions';
 
-const seed: TransactionDetail[] = Array.from({ length: 18 }, (_, index) => ({
+const seed: TransactionDetail[] = Array.from({ length: 40 }, (_, index) => ({
   id: `tx-${index + 1}`,
   bank_account_id: 'bank-1',
   transaction_date: '2026-10-02',
@@ -37,7 +38,7 @@ export default function E2EBankingTransactionsHarness() {
     <main className="flex h-screen gap-3 bg-slate-50 p-4">
       <section className="min-w-0 flex-1 overflow-hidden rounded-xl border bg-white">
         <h1 className="border-b px-4 py-3 text-lg font-semibold">Banking transactions</h1>
-        <div className="banking-tx-scroll h-[calc(100vh-7rem)]" data-testid="banking-transaction-scroll">
+        <AuroraScroll className="h-[calc(100vh-7rem)]" testId="banking-transaction-scroll">
           <table className="data-table min-w-[720px]">
             <thead>
               <tr>
@@ -65,7 +66,7 @@ export default function E2EBankingTransactionsHarness() {
               ))}
             </tbody>
           </table>
-        </div>
+        </AuroraScroll>
       </section>
       {selected && (
         <TransactionDetailPanel

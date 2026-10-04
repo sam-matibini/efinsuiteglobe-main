@@ -37,6 +37,7 @@ import AICategorizationDialog from '@/components/banking/AICategorizationDialog'
 import TransactionExportDialog from '@/components/banking/TransactionExportDialog';
 import { EditTransactionDialog } from '@/components/banking/EditTransactionDialog';
 import { TransactionDetailPanel } from '@/components/banking/TransactionDetailPanel';
+import { AuroraScroll } from '@/components/ui/aurora-scroll';
 import { EditCreditCardTransactionDialog } from '@/components/banking/EditCreditCardTransactionDialog';
 import { MatchPaymentDialog } from '@/components/banking/MatchPaymentDialog';
 import { UnifiedImportDialog, ParsedBankTransaction, ParsedCreditCardTransaction } from '@/components/banking/UnifiedImportDialog';
@@ -1560,7 +1561,7 @@ export default function BankTransactions() {
             {transactions.length === 0 ? 'No transactions yet. Import some to get started.' : 'No transactions match your filters.'}
           </div>
         ) : (
-          <div className="banking-tx-scroll h-[min(72vh,860px)]" data-testid="banking-transaction-scroll">
+          <AuroraScroll className="h-[min(72vh,860px)]" testId="banking-transaction-scroll">
           <table className="data-table min-w-[960px]">
             <thead>
               <tr>
@@ -1797,7 +1798,7 @@ export default function BankTransactions() {
               })}
             </tbody>
           </table>
-          </div>
+          </AuroraScroll>
         )}
       </Card>
       {detailTransaction && (

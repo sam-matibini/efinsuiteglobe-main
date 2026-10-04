@@ -4,6 +4,7 @@ import { ChevronDown, Pencil, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { signedBankAmount } from '@/lib/plaidBankAmount';
 import { parseLocalDate } from '@/lib/utils';
+import { AuroraScroll } from '@/components/ui/aurora-scroll';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -177,7 +178,8 @@ export function TransactionDetailPanel({
       {tab === 'details' && editing && editForm ? (
         <div className="min-h-0 flex-1 overflow-hidden">{editForm}</div>
       ) : tab === 'details' ? (
-        <div className="banking-tx-scroll min-h-0 flex-1 overflow-y-scroll px-4 py-4">
+        <AuroraScroll className="min-h-0 flex-1">
+        <div className="px-4 py-4">
           <div className="mb-4 flex flex-wrap gap-2">
             <Button
               type="button"
@@ -252,8 +254,10 @@ export function TransactionDetailPanel({
             </div>
           </div>
         </div>
+        </AuroraScroll>
       ) : (
-        <div className="banking-tx-scroll min-h-0 flex-1 overflow-y-scroll px-4 py-4">
+        <AuroraScroll className="min-h-0 flex-1">
+        <div className="px-4 py-4">
           <h3 className="text-sm font-semibold text-indigo-950">History</h3>
           <ul className="mt-2 space-y-2 text-sm text-muted-foreground">
             {history.length === 0 && <li>No history recorded yet.</li>}
@@ -284,6 +288,7 @@ export function TransactionDetailPanel({
             Statement date {format(parseLocalDate(transaction.transaction_date), 'MMM d, yyyy')} stays on the bank line.
           </p>
         </div>
+        </AuroraScroll>
       )}
     </aside>
   );
