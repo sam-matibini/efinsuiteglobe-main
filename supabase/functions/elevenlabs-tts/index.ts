@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { resolvePlatformSecret } from "../_shared/platformApiKey.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -12,7 +13,7 @@ serve(async (req) => {
 
   try {
     const { text, voiceId = "EXAVITQu4vr4xnSDxMaL" } = await req.json();
-    const ELEVENLABS_API_KEY = Deno.env.get("ELEVENLABS_API_KEY");
+    const ELEVENLABS_API_KEY = await resolvePlatformSecret("ELEVENLABS_API_KEY");
 
     if (!ELEVENLABS_API_KEY) {
       return new Response(

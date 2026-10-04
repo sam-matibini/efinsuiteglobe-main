@@ -1,6 +1,8 @@
 import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { format, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear, endOfYear, subMonths, subQuarters, subYears, subDays, differenceInCalendarDays } from 'date-fns';
+import { resolveDateRangePreset, STATEMENT_DATE_PRESETS, type DateRangePresetId } from '@/lib/dateRangePresets';
+import { DateRangePresetSelect } from '@/components/filters/DateRangePresetSelect';
 import { parseLocalDate } from '@/lib/utils';
 import { Download, Eye, FileText, Printer, Calendar, ArrowRight, Filter, SlidersHorizontal, GitCompare, Check, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -66,7 +68,6 @@ interface JournalEntryLine {
   vendor_customer?: string;
 }
 
-type PeriodType = 'current_month' | 'last_month' | 'current_quarter' | 'last_quarter' | 'current_year' | 'last_year' | 'custom';
 type ReportType = 'summary' | 'detailed' | 'by_tax_code' | 'by_jurisdiction';
 type AccountTypeFilter = 'all' | 'collected' | 'paid' | 'pst';
 type CompareType = 'none' | 'previous_period' | 'previous_year';
@@ -154,7 +155,7 @@ export function TaxReportPreview({
   formatCurrency,
 }: TaxReportPreviewProps) {
   const [reportCategory, setReportCategory] = useState<ReportCategory>('gst');
-  const [periodType, setPeriodType] = useState<PeriodType>('current_quarter');
+  const [periodType, setPeriodType] = useState<DateRangePresetId>('this-quarter');
   const [showPreview, setShowPreview] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
@@ -181,22 +182,7 @@ export function TaxReportPreview({
     if (periodType === 'custom' && customStartDate && customEndDate) {
       return { start: customStartDate, end: customEndDate };
     }
-    switch (periodType) {
-      case 'current_month':
-        return { start: startOfMonth(now), end: endOfMonth(now) };
-      case 'last_month':
-        return { start: startOfMonth(subMonths(now, 1)), end: endOfMonth(subMonths(now, 1)) };
-      case 'current_quarter':
-        return { start: startOfQuarter(now), end: endOfQuarter(now) };
-      case 'last_quarter':
-        return { start: startOfQuarter(subQuarters(now, 1)), end: endOfQuarter(subQuarters(now, 1)) };
-      case 'current_year':
-        return { start: startOfYear(now), end: endOfYear(now) };
-      case 'last_year':
-        return { start: startOfYear(subYears(now, 1)), end: endOfYear(subYears(now, 1)) };
-      default:
-        return { start: startOfQuarter(now), end: endOfQuarter(now) };
-    }
+    return resolveDateRangePreset(periodType, now) ?? { start: startOfQuarter(now), end: endOfQuarter(now) };
   }, [periodType, customStartDate, customEndDate]);
 
   // Calculate comparison date ranges
@@ -210,29 +196,30 @@ export function TaxReportPreview({
       
       if (compareType === 'previous_period') {
         switch (periodType) {
-          case 'current_month':
-          case 'last_month':
+          case 'this-month':
+          case 'last-month':
             start = startOfMonth(subMonths(dateRange.start, i));
             end = endOfMonth(subMonths(dateRange.start, i));
             label = format(start, 'MMM yyyy');
             break;
-          case 'current_quarter':
-          case 'last_quarter':
+          case 'this-quarter':
+          case 'last-quarter':
             start = startOfQuarter(subQuarters(dateRange.start, i));
             end = endOfQuarter(subQuarters(dateRange.start, i));
             label = `Q${Math.ceil((start.getMonth() + 1) / 3)} ${start.getFullYear()}`;
             break;
-          case 'custom': {
+          case 'this-year':
+          case 'last-year':
+            start = startOfYear(subYears(dateRange.start, i));
+            end = endOfYear(subYears(dateRange.start, i));
+            label = start.getFullYear().toString();
+            break;
+          default: {
             const length = differenceInCalendarDays(dateRange.end, dateRange.start) + 1;
             end = subDays(dateRange.start, 1 + (i - 1) * length);
             start = subDays(end, length - 1);
             label = `${format(start, 'MMM d')} – ${format(end, 'MMM d, yyyy')}`;
-            break;
           }
-          default:
-            start = startOfYear(subYears(dateRange.start, i));
-            end = endOfYear(subYears(dateRange.start, i));
-            label = start.getFullYear().toString();
         }
       } else {
         start = subYears(dateRange.start, i);
@@ -751,21 +738,31 @@ export function TaxReportPreview({
           {/* Period Selector */}
           <div className="flex items-center gap-2">
             <Label className="text-sm text-muted-foreground whitespace-nowrap">{isBurundi ? 'Période:' : 'Period:'}</Label>
-            <Select value={periodType} onValueChange={(v) => setPeriodType(v as PeriodType)}>
-              <SelectTrigger className="w-[160px] h-9">
-                <Calendar className="w-4 h-4 mr-2" />
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="current_month">{isBurundi ? 'Mois Courant' : 'Current Month'}</SelectItem>
-                <SelectItem value="last_month">{isBurundi ? 'Mois Dernier' : 'Last Month'}</SelectItem>
-                <SelectItem value="current_quarter">{isBurundi ? 'Trimestre Courant' : 'Current Quarter'}</SelectItem>
-                <SelectItem value="last_quarter">{isBurundi ? 'Trimestre Dernier' : 'Last Quarter'}</SelectItem>
-                <SelectItem value="current_year">{isBurundi ? 'Année Courante' : 'Current Year'}</SelectItem>
-                <SelectItem value="last_year">{isBurundi ? 'Année Dernière' : 'Last Year'}</SelectItem>
-                <SelectItem value="custom">{isBurundi ? 'Personnalisé' : 'Custom Range'}</SelectItem>
-              </SelectContent>
-            </Select>
+            <DateRangePresetSelect
+              value={periodType}
+              presets={STATEMENT_DATE_PRESETS.map((preset) => ({
+                ...preset,
+                label: isBurundi ? ({
+                  today: "Aujourd'hui",
+                  'this-week': 'Cette semaine',
+                  'this-month': 'Mois courant',
+                  'this-quarter': 'Trimestre courant',
+                  'this-year': 'Année courante',
+                  yesterday: 'Hier',
+                  'last-week': 'Semaine dernière',
+                  'last-month': 'Mois dernier',
+                  'last-quarter': 'Trimestre dernier',
+                  'last-year': 'Année dernière',
+                  'year-to-date': 'Année à ce jour',
+                  'fiscal-year-to-date': 'Exercice à ce jour',
+                  'last-fiscal-year': 'Exercice précédent',
+                  custom: 'Personnalisé',
+                  all: 'Toute la période',
+                }[preset.id] ?? preset.label) : preset.label,
+              }))}
+              onValueChange={setPeriodType}
+              triggerClassName="w-56 h-9"
+            />
           </div>
 
           {/* Custom Date Range */}

@@ -141,7 +141,7 @@ export function CountryFlagBadge() {
   if (!organization && !scopedCountry) return null;
 
   return (
-    <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted/50 border border-border/50">
+    <div className="flex items-center gap-2 rounded-full bg-[#ede9fe] px-2.5 py-1 text-[#6366f1]">
       <div role="img" aria-label={`${localization.name} flag`}>
         {getFlag(countryCode)}
       </div>

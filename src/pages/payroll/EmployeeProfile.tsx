@@ -29,6 +29,7 @@ import { getDefaultTD1Claims } from '@/lib/payrollCalculator';
 import EditEmployeeDialog from '@/components/employees/EditEmployeeDialog';
 import EmployeePayHistoryDialog from '@/components/employees/EmployeePayHistoryDialog';
 import { useCurrencyFormatter } from '@/hooks/useCurrencyFormatter';
+import { EmployeeTimeSection } from '@/components/timeAttendance/EmployeeTimeSection';
 
 export default function EmployeeProfile() {
   const { id } = useParams<{ id: string }>();
@@ -186,6 +187,7 @@ export default function EmployeeProfile() {
           <TabsTrigger value="compensation">Compensation</TabsTrigger>
           <TabsTrigger value="personal">Personal Info</TabsTrigger>
           <TabsTrigger value="tax">Tax Information</TabsTrigger>
+          <TabsTrigger value="time">Time & Attendance</TabsTrigger>
         </TabsList>
 
         <TabsContent value="employment">
@@ -308,6 +310,10 @@ export default function EmployeeProfile() {
               )}
             </div>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="time">
+          <EmployeeTimeSection employee={employee} />
         </TabsContent>
 
         <TabsContent value="tax">
