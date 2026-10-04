@@ -25,6 +25,13 @@ import {
   type JournalAmountDraft,
   type JournalAmountUpdate,
 } from '@/lib/journalAmountEdit';
+import {
+  journalLinesForSave,
+  journalSaveErrorMessage,
+  saveJournalAmountEdits,
+  type JournalAmountWriter,
+  type JournalLinePatch,
+} from '@/lib/journalAmountSave';
 
 interface ViewJournalEntryDialogProps {
   open: boolean;
@@ -34,6 +41,8 @@ interface ViewJournalEntryDialogProps {
   onSaved?: (entry: JournalEntryWithLines) => void;
   /** Replaces the ledger save. Used by the local preview. */
   onSaveAmounts?: (lines: JournalAmountUpdate[]) => Promise<void> | void;
+  /** Replaces the ledger writer. Used when the preview should run the real save steps. */
+  amountWriter?: JournalAmountWriter;
   /** Chart used by the local preview. The signed-in chart is used when omitted. */
   accountChoices?: GLAccountChoice[];
 }
@@ -44,6 +53,7 @@ export function ViewJournalEntryDialog({
   entry,
   onSaved,
   onSaveAmounts,
+  amountWriter,
   accountChoices,
 }: ViewJournalEntryDialogProps) {
   const { settings: mcSettings } = useMultiCurrencySettings();
@@ -126,20 +136,18 @@ export function ViewJournalEntryDialog({
   const saveAmounts = async () => {
     if (!canSave) return;
     setSaving(true);
+    let balanceWarning = '';
     try {
       if (onSaveAmounts) {
         await onSaveAmounts(edited.lines);
       } else {
-        const { error } = await supabase.rpc('update_journal_entry_amounts' as never, {
-          p_entry_id: entry.id,
-          p_lines: edited.lines.map((line) => ({
-            id: line.id,
-            debit: line.debit,
-            credit: line.credit,
-            account_id: line.accountId,
-          })),
-        } as never);
-        if (error) throw error;
+        const saved = await saveJournalAmountEdits(amountWriter ?? supabaseJournalAmountWriter(), {
+          entryId: entry.id,
+          organizationId: entry.organization_id,
+          status: entry.status,
+          lines: journalLinesForSave(sourceLines, edited.lines),
+        });
+        balanceWarning = saved.balanceWarning ?? '';
       }
       const nextLines = entry.lines.map((line) => {
         const update = edited.lines.find((item) => item.id === line.id);
@@ -160,11 +168,17 @@ export function ViewJournalEntryDialog({
       setDrafts(seedAmountDrafts(nextLines));
       queryClient.invalidateQueries({ queryKey: ['journal-entries', entry.organization_id] });
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['financial-reports'] });
+      queryClient.invalidateQueries({ queryKey: ['balance-sheet'] });
+      queryClient.invalidateQueries({ queryKey: ['trial-balance'] });
       onSaved?.(next);
-      toast.success('Journal entry updated');
+      if (balanceWarning) {
+        toast.warning(`Saved the journal lines. Account balances could not be refreshed: ${balanceWarning}`);
+      } else {
+        toast.success('Journal entry updated');
+      }
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Could not save the journal amounts';
-      toast.error(message);
+      toast.error(journalSaveErrorMessage(error));
     } finally {
       setSaving(false);
     }
@@ -352,6 +366,36 @@ export function ViewJournalEntryDialog({
       </DialogContent>
     </Dialog>
   );
+}
+
+function supabaseJournalAmountWriter(): JournalAmountWriter {
+  return {
+    async callAmountRpc(entryId, lines) {
+      const { error } = await supabase.rpc('update_journal_entry_amounts' as never, {
+        p_entry_id: entryId,
+        p_lines: lines,
+      } as never);
+      return { error };
+    },
+    async setEntryStatus(entryId, status) {
+      const { error } = await supabase.from('journal_entries').update({ status }).eq('id', entryId);
+      return { error };
+    },
+    async updateLine(entryId, lineId, patch: JournalLinePatch) {
+      const { error } = await supabase
+        .from('journal_entry_lines')
+        .update(patch)
+        .eq('id', lineId)
+        .eq('journal_entry_id', entryId);
+      return { error };
+    },
+    async refreshBalances(organizationId) {
+      const { error } = await supabase.rpc('recalculate_all_account_balances', {
+        p_organization_id: organizationId,
+      });
+      return { error };
+    },
+  };
 }
 
 function ViewAnalyzer({ entryId, currentNotes }: { entryId: string; currentNotes: string | null | undefined }) {
