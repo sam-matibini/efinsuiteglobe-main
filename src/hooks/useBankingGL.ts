@@ -9,6 +9,11 @@ import { reverseLinkedJournalEntry } from './useGLPropagation';
 import { applyGlEditToJournalLines } from '@/lib/postedJournalEdit';
 import { toast } from 'sonner';
 import { JournalEntryLineDimensions } from './useJournalEntryCreation';
+import {
+  planBankTaxLines,
+  taxLineMemo,
+  type PlannedTaxLine,
+} from '@/lib/expenseRefundPosting';
 import { 
   findExistingCCPaymentJE, 
   isCreditCardGLAccount, 
@@ -235,24 +240,52 @@ export function usePostTransactionToGL() {
         }
       }
 
-      // Calculate total amount including tax
-      // CRITICAL: Only include tax in total if we have GL accounts to post to
-      // Otherwise the journal entry will be out of balance
+      // Calculate total amount including tax.
+      // A deposit to an expense account is a refund: reverse the tax that was
+      // paid, and never post that reversal to a header such as Taxes Payable.
       const subtotal = amount;
-      
-      // Determine if we have valid tax posting accounts
+      let plannedLines: PlannedTaxLine[] = [];
       let effectiveTax = 0;
-      if (taxBreakdown && taxBreakdown.length > 0) {
-        // For split taxes, only count amounts that have GL accounts
-        effectiveTax = taxBreakdown
-          .filter(t => t.glAccountId && t.amount > 0)
-          .reduce((sum, t) => sum + t.amount, 0);
-      } else if (taxCode && taxAmount && taxAmount > 0) {
-        // For single tax, only count if we have a GL account
-        const hasGLAccount = transactionType === 'deposit' 
-          ? taxCode.gl_collected_account_id 
-          : taxCode.gl_paid_account_id;
-        effectiveTax = hasGLAccount ? taxAmount : 0;
+      if (transactionType === 'transfer') {
+        if (taxBreakdown && taxBreakdown.length > 0) {
+          effectiveTax = taxBreakdown
+            .filter(t => t.glAccountId && t.amount > 0)
+            .reduce((sum, t) => sum + t.amount, 0);
+        } else if (taxCode && taxAmount && taxAmount > 0 && taxCode.gl_paid_account_id) {
+          effectiveTax = taxAmount;
+        }
+      } else {
+        const { data: chart, error: chartError } = await supabase
+          .from('accounts')
+          .select('id, name, account_type, is_header, posting_allowed, parent_id')
+          .eq('organization_id', organizationId)
+          .eq('is_active', true);
+        if (chartError) throw new Error(`Failed to load accounts: ${chartError.message}`);
+        const chartAccounts = chart || [];
+        const incomingTax = (taxBreakdown && taxBreakdown.length > 0)
+          ? taxBreakdown
+          : (taxCode && taxAmount && taxAmount > 0)
+            ? [{
+                code: taxCode.code,
+                rate: Number(taxCode.rate) || 0,
+                amount: taxAmount,
+                glAccountId: transactionType === 'deposit'
+                  ? (taxCode.gl_collected_account_id || taxCode.gl_paid_account_id)
+                  : (taxCode.gl_paid_account_id || taxCode.gl_collected_account_id),
+              }]
+            : [];
+        const plannedTax = planBankTaxLines({
+          transactionType,
+          offsetAccounts: offsetLines.map((line) => chartAccounts.find((account) => account.id === line.accountId) ?? null),
+          taxBreakdown: incomingTax,
+          taxCode,
+          accounts: chartAccounts,
+        });
+        if (plannedTax.error) throw new Error(plannedTax.error);
+        plannedLines = plannedTax.lines;
+        effectiveTax = plannedLines
+          .filter((line) => line.glAccountId && line.amount > 0)
+          .reduce((sum, line) => sum + line.amount, 0);
       }
       
       const total = subtotal + effectiveTax;
@@ -342,30 +375,18 @@ export function usePostTransactionToGL() {
             ...baseDimensions,
           });
         }
-        if (taxBreakdown && taxBreakdown.length > 0) {
-          for (const taxItem of taxBreakdown) {
-            if (taxItem.amount > 0 && taxItem.glAccountId) {
-              lines.push({
-                account_id: taxItem.glAccountId,
-                debit: 0,
-                credit: toBase(taxItem.amount),
-                memo: `${taxItem.code} (${taxItem.rate}%) collected on ${description}`,
-                currency: offsetCur,
-                exchange_rate: 1,
-                ...baseDimensions,
-              });
-            }
+        for (const taxItem of plannedLines) {
+          if (taxItem.amount > 0 && taxItem.glAccountId) {
+            lines.push({
+              account_id: taxItem.glAccountId,
+              debit: 0,
+              credit: toBase(taxItem.amount),
+              memo: taxLineMemo(taxItem, description),
+              currency: offsetCur,
+              exchange_rate: 1,
+              ...baseDimensions,
+            });
           }
-        } else if (taxCode && effectiveTax > 0 && taxCode.gl_collected_account_id) {
-          lines.push({
-            account_id: taxCode.gl_collected_account_id,
-            debit: 0,
-            credit: toBase(effectiveTax),
-            memo: `${taxCode.code} collected on ${description}`,
-            currency: offsetCur,
-            exchange_rate: 1,
-            ...baseDimensions,
-          });
         }
       } else if (transactionType === 'transfer') {
         if (splitLines.length >= 2) {
@@ -413,43 +434,18 @@ export function usePostTransactionToGL() {
             ...baseDimensions,
           });
         }
-        if (taxBreakdown && taxBreakdown.length > 0) {
-          const gstLine = taxBreakdown.find(t => t.code === 'GST' || /^GST$/i.test(t.code));
-          for (const taxItem of taxBreakdown) {
-            const isPst = /^PST/i.test(taxItem.code);
-            if (
-              isPst &&
-              taxItem.glAccountId &&
-              gstLine?.glAccountId &&
-              taxItem.glAccountId === gstLine.glAccountId
-            ) {
-              toast.error(
-                'PST Paid account is not configured. Open Sales Tax Settings → assign a "PST Paid (Non-Recoverable)" expense account before posting.'
-              );
-              throw new Error('PST_PAID_ACCOUNT_NOT_CONFIGURED');
-            }
-            if (taxItem.amount > 0 && taxItem.glAccountId) {
-              lines.push({
-                account_id: taxItem.glAccountId,
-                debit: toBase(taxItem.amount),
-                credit: 0,
-                memo: `${taxItem.code} (${taxItem.rate}%) paid on ${description}`,
-                currency: offsetCur,
-                exchange_rate: 1,
-                ...baseDimensions,
-              });
-            }
+        for (const taxItem of plannedLines) {
+          if (taxItem.amount > 0 && taxItem.glAccountId) {
+            lines.push({
+              account_id: taxItem.glAccountId,
+              debit: toBase(taxItem.amount),
+              credit: 0,
+              memo: taxLineMemo(taxItem, description),
+              currency: offsetCur,
+              exchange_rate: 1,
+              ...baseDimensions,
+            });
           }
-        } else if (taxCode && effectiveTax > 0 && taxCode.gl_paid_account_id) {
-          lines.push({
-            account_id: taxCode.gl_paid_account_id,
-            debit: toBase(effectiveTax),
-            credit: 0,
-            memo: `${taxCode.code} paid on ${description}`,
-            currency: offsetCur,
-            exchange_rate: 1,
-            ...baseDimensions,
-          });
         }
         lines.push({
           account_id: bankAccount.gl_account_id,
@@ -549,7 +545,14 @@ export function usePostTransactionToGL() {
         txUpdate.tax_amount = effectiveTax;
         txUpdate.subtotal_amount = subtotal;
       }
-      if (taxBreakdown && taxBreakdown.length > 0) {
+      if (plannedLines.length > 0) {
+        txUpdate.tax_breakdown = plannedLines.map(({ code, rate, amount, glAccountId }) => ({
+          code,
+          rate,
+          amount,
+          glAccountId,
+        }));
+      } else if (taxBreakdown && taxBreakdown.length > 0) {
         txUpdate.tax_breakdown = taxBreakdown;
       }
       const { error: updateError } = await supabase

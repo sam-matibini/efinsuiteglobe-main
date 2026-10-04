@@ -52,6 +52,7 @@ import { useDonationForTransaction, useCreateDonationFromTransaction } from '@/h
 import { TaxCode, useTaxCodes } from '@/hooks/useSalesTax';
 import { useAccounts } from '@/hooks/useAccounts';
 import { withResolvedTaxAccounts } from '@/lib/taxGlAccounts';
+import { isExpenseRefund } from '@/lib/expenseRefundPosting';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { parseLocalDate } from '@/lib/utils';
@@ -225,13 +226,24 @@ export function EditTransactionDialog({
     [selectedTaxCode, orgAccounts, taxCodes],
   );
 
-  // Calculate tax amounts
+  const expenseRefund = useMemo(() => {
+    if (transactionType !== 'deposit') return false;
+    const ids = splitEnabled
+      ? splits.map((line) => line.accountId).filter(Boolean)
+      : (glAccountId ? [glAccountId] : []);
+    if (ids.length === 0) return false;
+    return isExpenseRefund(ids.map((id) => orgAccounts.find((account) => account.id === id)));
+  }, [transactionType, splitEnabled, splits, glAccountId, orgAccounts]);
+
+  // Calculate tax amounts. A deposit to an expense account reverses the tax that was paid.
   const taxCalculation = useMemo(() => {
     if (!transaction) return null;
     const amount = Math.abs(Number(transaction.amount));
-    const txDir = (transaction.transaction_type as 'deposit' | 'withdrawal' | 'transfer') || 'withdrawal';
+    const txDir = expenseRefund
+      ? 'withdrawal'
+      : ((transactionType as 'deposit' | 'withdrawal' | 'transfer') || 'withdrawal');
     return calculateTax(amount, resolvedTaxCode, taxInclusive, txDir);
-  }, [transaction, resolvedTaxCode, taxInclusive]);
+  }, [transaction, resolvedTaxCode, taxInclusive, expenseRefund, transactionType]);
 
   useEffect(() => {
     if (!transaction) return;
@@ -353,7 +365,7 @@ export function EditTransactionDialog({
         glAccountId: primaryAccount,
         organizationId: organization.id,
         amount: splitEnabled ? allocateTotal : (taxCalculation?.subtotal ?? bankAmount),
-        transactionType: transaction.transaction_type,
+        transactionType: (transactionType as 'deposit' | 'withdrawal' | 'transfer') || transaction.transaction_type,
         description: transaction.description,
         transactionDate: transaction.transaction_date,
         category: category || undefined,
@@ -704,7 +716,9 @@ export function EditTransactionDialog({
                     />
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Select the account to post the contra entry to (e.g., Expense or Revenue account)
+                    {expenseRefund
+                      ? 'Expense refund: this deposit credits the expense and reverses the sales tax that was paid.'
+                      : 'Select the account to post the contra entry to (e.g., Expense or Revenue account)'}
                   </p>
                 </>
               ) : (
@@ -820,7 +834,7 @@ export function EditTransactionDialog({
                       onValueChange={setSelectedTaxCode}
                       placeholder="Select tax..."
                       disabled={isReconciled}
-                      direction={transactionType === 'deposit' ? 'collected' : 'paid'}
+                      direction={expenseRefund ? 'both' : transactionType === 'deposit' ? 'collected' : 'paid'}
                     />
                   </div>
                 </div>

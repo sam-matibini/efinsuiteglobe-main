@@ -5,6 +5,7 @@ import { reverseLinkedJournalEntry, recalculateAndInvalidate } from './useGLProp
 import { TransactionRule } from './useTransactionRules';
 import { BankTransaction } from './useBankTransactions';
 import { allowUnreconciledBankUpdate } from '@/lib/bankTransactionLock';
+import { isExpenseLikeAccount, planBankTaxLines } from '@/lib/expenseRefundPosting';
 import { toast } from 'sonner';
 import { 
   matchText, 
@@ -256,6 +257,13 @@ export function useProcessTransactions() {
       organizationId: string;
     }): Promise<ProcessingResult[]> => {
       const results: ProcessingResult[] = [];
+      const { data: chart, error: chartError } = await supabase
+        .from('accounts')
+        .select('id, name, account_type, is_header, posting_allowed, parent_id')
+        .eq('organization_id', organizationId)
+        .eq('is_active', true);
+      if (chartError) throw new Error(`Failed to load accounts: ${chartError.message}`);
+      const chartAccounts = chart || [];
       
       // Filter to only matched transactions
       const toProcess = analysisResults.filter(r => r.matchedRule !== null);
@@ -320,13 +328,31 @@ export function useProcessTransactions() {
               if (bankAccount?.gl_account_id) {
                 const grossAmount = Math.abs(Number(transaction.amount));
                 const isDeposit = transaction.transaction_type === 'deposit';
+                const offsetAccount = chartAccounts.find((account) => account.id === glAccountId) ?? null;
+                const expenseRefund = isDeposit && isExpenseLikeAccount(offsetAccount);
 
-                // Determine the correct tax GL account based on transaction type
-                // - Deposits (sales): Use taxCollectedGlAccountId (GST/HST Payable - liability)
-                // - Withdrawals (expenses): Use taxPaidGlAccountId (GST/HST ITC - asset)
-                const effectiveTaxGlAccountId = isDeposit 
-                  ? (taxCollectedGlAccountId || taxGlAccountId)  // Sales -> Collected (Payable)
-                  : (taxPaidGlAccountId || taxGlAccountId);       // Expenses -> Paid (ITC)
+                // Sales deposits credit tax collected. An expense refund reverses tax paid.
+                const rawTaxAccount = expenseRefund
+                  ? (taxPaidGlAccountId || taxGlAccountId || taxCollectedGlAccountId)
+                  : (isDeposit
+                    ? (taxCollectedGlAccountId || taxGlAccountId)
+                    : (taxPaidGlAccountId || taxGlAccountId));
+                let effectiveTaxGlAccountId = rawTaxAccount || null;
+                if (taxRate && taxRate > 0 && rawTaxAccount) {
+                  const planned = planBankTaxLines({
+                    transactionType: isDeposit ? 'deposit' : 'withdrawal',
+                    offsetAccounts: offsetAccount ? [offsetAccount] : [],
+                    taxBreakdown: [{
+                      code: taxCode || 'Tax',
+                      rate: taxRate,
+                      amount: 1,
+                      glAccountId: rawTaxAccount,
+                    }],
+                    accounts: chartAccounts,
+                  });
+                  if (planned.error) throw new Error(planned.error);
+                  effectiveTaxGlAccountId = planned.lines[0]?.glAccountId || null;
+                }
 
                 // Calculate tax amounts if tax code is set AND we have a valid GL account
                 let subtotal = grossAmount;
@@ -359,13 +385,12 @@ export function useProcessTransactions() {
                     memo: category || transaction.description 
                   });
                   
-                  // Credit tax to GST/HST Payable (liability account)
                   if (taxAmount > 0 && effectiveTaxGlAccountId) {
                     lines.push({ 
                       account_id: effectiveTaxGlAccountId, 
                       debit: 0, 
                       credit: taxAmount, 
-                      memo: `${taxCode || 'Tax'} collected` 
+                      memo: expenseRefund ? `${taxCode || 'Tax'} reversed` : `${taxCode || 'Tax'} collected`,
                     });
                   }
                 } else {
