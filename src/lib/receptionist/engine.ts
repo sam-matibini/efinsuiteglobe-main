@@ -110,6 +110,7 @@ export function emptyReceptionOrg(organizationId: string): ReceptionOrg {
     tickets: [],
     leads: [],
     notifications: [],
+    notepad: '',
     activeCallId: null,
   };
 }
@@ -434,7 +435,7 @@ export function buildAgentPrompt(org: ReceptionOrg): string {
     `You are the eFinsuite AI receptionist. Personality: ${org.personality}`,
     'eFinsuite is the system of record. Use the provided tools for customers, invoices, payroll, tax, appointments, messages, tickets, and transfers. Never invent balances, pay amounts, or CRA amounts.',
     'Verify the caller with the last four digits of the phone number on the account before sharing account details. Do not ask for a SIN, full bank account, or card number.',
-    `Speak ${languages}. Switch to the caller\'s language when they use one of those languages.`,
+    `Speak ${languages}. Switch to the caller\'s language when they use one of those languages. End the call when the caller is finished.`,
     'Knowledge:',
     knowledge,
     'Routing:',

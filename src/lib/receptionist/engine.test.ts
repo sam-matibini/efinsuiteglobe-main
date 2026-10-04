@@ -110,7 +110,38 @@ describe('AI receptionist', () => {
       const credentials = await voiceCredentials(agentId, { apiKey: 'super-secret-api-key', fetchImpl: fetchImpl as unknown as typeof fetch });
       expect(credentials.signedUrl).toBe('wss://signed.example');
       expect(credentials.conversationToken).toBe('voice-token');
+      expect(body).toContain('end_call');
+      expect(body).toContain('language_detection');
+      const transferable = enabled();
+      transferable.forwardingNumber = '+14165550199';
+      expect(JSON.stringify(agentRequestBody(transferable))).toContain('transfer_to_number');
     });
+  });
+
+  it('saves a schedule note and a calendar appointment', () => {
+    const saved = handleReceptionApi({
+      method: 'POST',
+      action: 'schedule',
+      body: {
+        organizationId: 'org-1',
+        notepad: 'Call Jane back about payroll.',
+        appointment: { customerName: 'Jane Doe', department: 'payroll', startsAt: '2026-10-06T14:00:00.000Z', notes: 'Pay stub' },
+      },
+    }, { 'org-1': enabled() });
+    expect(saved.org?.notepad).toBe('Call Jane back about payroll.');
+    expect(saved.org?.appointments[0]?.customerName).toBe('Jane Doe');
+    expect(saved.org?.appointments[0]?.department).toBe('payroll');
+    const spoken = handleReceptionApi({
+      method: 'POST',
+      action: 'ingest',
+      body: {
+        organizationId: 'org-1',
+        conversationId: 'conv-1',
+        channel: 'web',
+        transcript: [{ role: 'receptionist', text: 'How can I help?' }, { role: 'caller', text: 'Payroll, please.' }],
+      },
+    }, { 'org-1': saved.org! });
+    expect(spoken.org?.calls[0]?.transcript.map((turn) => turn.role)).toEqual(['receptionist', 'caller']);
   });
 
   it('stores a text conversation through the API', () => {

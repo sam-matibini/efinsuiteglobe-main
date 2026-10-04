@@ -68,7 +68,7 @@ export function handleReceptionApi(
   if (request.action === 'save-settings') {
     const settings = (request.body.settings ?? {}) as Record<string, unknown>;
     const next = { ...current };
-    for (const key of ['enabled', 'voiceId', 'voiceName', 'language', 'languages', 'personality', 'timezone', 'forwardingNumber', 'channels', 'notifyEmail'] as const) {
+    for (const key of ['enabled', 'voiceId', 'voiceName', 'language', 'languages', 'personality', 'timezone', 'forwardingNumber', 'channels', 'notifyEmail', 'notepad'] as const) {
       if (key in settings) (next as unknown as Record<string, unknown>)[key] = settings[key];
     }
     return save(next);
@@ -94,6 +94,43 @@ export function handleReceptionApi(
     return save(result.org, { message: result.message });
   }
 
+  if (request.action === 'schedule') {
+    const next: ReceptionOrg = {
+      ...current,
+      appointments: [...current.appointments],
+      notifications: [...current.notifications],
+      notepad: typeof request.body.notepad === 'string' ? request.body.notepad.slice(0, 8000) : (current.notepad ?? ''),
+    };
+    const appointment = request.body.appointment as Record<string, unknown> | undefined;
+    if (appointment && String(appointment.customerName ?? '').trim() && String(appointment.startsAt ?? '')) {
+      const starts = new Date(String(appointment.startsAt));
+      if (!Number.isNaN(starts.getTime())) {
+        const department = ['general', 'accounting', 'payroll', 'tax', 'billing'].includes(String(appointment.department))
+          ? String(appointment.department) as ReceptionOrg['appointments'][number]['department']
+          : 'general';
+        const booked = {
+          id: crypto.randomUUID(),
+          customerId: null,
+          customerName: String(appointment.customerName).trim(),
+          department,
+          startsAt: starts.toISOString(),
+          durationMinutes: 30,
+          status: 'booked' as const,
+          notes: String(appointment.notes ?? '').slice(0, 2000),
+        };
+        next.appointments.unshift(booked);
+        next.notifications.unshift({
+          id: crypto.randomUUID(),
+          title: 'Appointment booked',
+          body: `${booked.customerName} · ${booked.department} · ${booked.startsAt}`,
+          createdAt: new Date().toISOString(),
+          read: false,
+        });
+      }
+    }
+    return save(next);
+  }
+
   if (request.action === 'ingest') {
     const transcript = Array.isArray(request.body.transcript) ? request.body.transcript : [];
     const next = { ...current, calls: [...current.calls] };
@@ -111,7 +148,7 @@ export function handleReceptionApi(
       status: 'resolved',
       summary: String(request.body.summary ?? 'Call completed.'),
       transcript: transcript.map((turn) => ({
-        role: (turn as { role?: string }).role === 'agent' ? 'receptionist' as const : 'caller' as const,
+        role: (turn as { role?: string }).role === 'agent' || (turn as { role?: string }).role === 'receptionist' ? 'receptionist' as const : 'caller' as const,
         text: String((turn as { message?: string; text?: string }).message ?? (turn as { text?: string }).text ?? ''),
         at: new Date().toISOString(),
       })),

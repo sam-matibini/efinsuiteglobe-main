@@ -142,6 +142,8 @@ export interface ReceptionOrg {
   tickets: ReceptionTicket[];
   leads: ReceptionLead[];
   notifications: ReceptionNotification[];
+  /** Staff notes kept on the schedule tab. */
+  notepad: string;
   activeCallId: string | null;
 }
 

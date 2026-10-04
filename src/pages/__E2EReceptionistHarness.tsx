@@ -1,9 +1,12 @@
 import { useState } from 'react';
 import { AIReceptionistDesk } from '@/components/receptionist/AIReceptionistDesk';
+import { ReceptionCallBar } from '@/components/receptionist/ReceptionCallBar';
+import { ReceptionSchedule } from '@/components/receptionist/ReceptionSchedule';
 import { FilingRemindersPanel, SharedCommunicationPanel } from '@/components/receptionist/ReceptionistHubShare';
 import { Contact } from '@/hooks/useContacts';
 import { COMMUNICATION_NAV } from '@/lib/navigation/hubNav';
 import type { CrmContact } from '@/lib/receptionist/crmContacts';
+import type { ReceptionAppointment, ReceptionDepartment } from '@/lib/receptionist/types';
 
 const contact = {
   id: 'c1',
@@ -51,6 +54,10 @@ export default function E2EReceptionistHarness() {
   const [apiStatus, setApiStatus] = useState('No API key saved.');
   const [navLabel, setNavLabel] = useState('AI Receptionist');
   const [crmContacts, setCrmContacts] = useState(initialCrmContacts);
+  const [callLive, setCallLive] = useState(false);
+  const [callMuted, setCallMuted] = useState(false);
+  const [appointments, setAppointments] = useState<ReceptionAppointment[]>([]);
+  const [notepad, setNotepad] = useState('');
 
   return (
     <div style={{ padding: 24 }}>
@@ -116,6 +123,38 @@ export default function E2EReceptionistHarness() {
           }}
         />
       </div>
+      <section className="mt-8 space-y-4" data-testid="reception-desk-preview">
+        <h2 className="text-lg font-semibold">Desk, calls, and schedule</h2>
+        <p data-testid="call-state">{callLive ? (callMuted ? 'Muted' : 'Listening') : 'Calls on'}</p>
+        <ReceptionCallBar
+          live={callLive}
+          muted={callMuted}
+          statusLabel={callLive ? (callMuted ? 'Muted' : 'Listening') : 'Calls on'}
+          onToggleCall={() => {
+            setCallLive((current) => !current);
+            setCallMuted(false);
+          }}
+          onToggleMute={() => setCallMuted((current) => !current)}
+        />
+        <p data-testid="notepad-state">{notepad || 'Notepad empty'}</p>
+        <ReceptionSchedule
+          appointments={appointments}
+          notepad={notepad}
+          onSaveNotepad={setNotepad}
+          onAddAppointment={(appointment: { customerName: string; department: ReceptionDepartment; startsAt: string; notes: string }) => {
+            setAppointments((current) => [{
+              id: `appt-${current.length + 1}`,
+              customerId: null,
+              customerName: appointment.customerName,
+              department: appointment.department,
+              startsAt: appointment.startsAt,
+              durationMinutes: 30,
+              status: 'booked',
+              notes: appointment.notes,
+            }, ...current]);
+          }}
+        />
+      </section>
       <div style={{ marginTop: 24 }}>
         <FilingRemindersPanel
           organizationName="eFintax Advisors Ltd"

@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Building2, CalendarDays, Loader2, MessageSquare, Phone, PhoneOff, Plus, ShieldBan, Sparkles } from 'lucide-react';
+import { Building2, MessageSquare, Plus, ShieldBan, Sparkles } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -9,6 +9,9 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
+import { ReceptionCallBar } from '@/components/receptionist/ReceptionCallBar';
+import { ReceptionCallsPanel } from '@/components/receptionist/ReceptionCallsPanel';
+import { ReceptionSchedule } from '@/components/receptionist/ReceptionSchedule';
 import { FilingRemindersPanel, SharedCommunicationPanel } from '@/components/receptionist/ReceptionistHubShare';
 import { useContacts } from '@/hooks/useContacts';
 import { useCustomers } from '@/hooks/useCustomers';
@@ -22,12 +25,6 @@ import { isSharedChannel } from '@/lib/receptionist/sharedInbox';
 import type { ReceptionOrg, TranscriptTurn } from '@/lib/receptionist/types';
 import { toast } from 'sonner';
 
-function when(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat('en-CA', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(date);
-}
-
 export default function Receptionist() {
   const desk = useReceptionist();
   const { customers, createCustomer } = useCustomers();
@@ -39,7 +36,10 @@ export default function Receptionist() {
   const [draft, setDraft] = useState('');
   const [turns, setTurns] = useState<TranscriptTurn[]>([]);
   const [voiceStatus, setVoiceStatus] = useState('disconnected');
-  const [session, setSession] = useState<{ endSession: () => Promise<void> } | null>(null);
+  const [session, setSession] = useState<{ endSession: () => Promise<void>; setMicMuted: (muted: boolean) => void; getId: () => string } | null>(null);
+  const [voiceMode, setVoiceMode] = useState<'listening' | 'speaking'>('listening');
+  const [muted, setMuted] = useState(false);
+  const voiceTurns = useRef<TranscriptTurn[]>([]);
   const [blockedPhone, setBlockedPhone] = useState('');
   const [blockedReason, setBlockedReason] = useState('');
   const [articleTitle, setArticleTitle] = useState('');
@@ -134,21 +134,35 @@ export default function Receptionist() {
     setTurns((current) => [...current, { role: 'receptionist', text: String(result.reply ?? ''), at: new Date().toISOString() }]);
   };
 
+  const callsEnabled = org.channels.phone || org.channels.web;
+  const callStatus = session
+    ? muted ? 'Muted' : voiceMode === 'speaking' ? 'Speaking' : voiceStatus === 'connecting' ? 'Connecting' : 'Listening'
+    : voiceStatus === 'connecting' ? 'Connecting' : callsEnabled ? 'Calls on' : 'Calls off';
+
+  const setCallsEnabled = async (enabled: boolean) => {
+    const channels = { ...org.channels, phone: enabled, web: enabled };
+    const result = await desk.saveSettings({ channels });
+    if (result.org) setLive(result.org as ReceptionOrg);
+  };
+
   const toggleVoice = async () => {
     if (session) {
       await session.endSession();
       setSession(null);
+      setMuted(false);
       setVoiceStatus('disconnected');
       return;
     }
+    if (!callsEnabled) await setCallsEnabled(true);
     const result = await desk.startSession();
     if (!result.conversationToken && !result.signedUrl) {
-      toast.message('Text desk is ready. Add the ElevenLabs API key in Platform Settings, then sync the agent, to answer by voice.');
+      toast.message('Calls are on. Add the ElevenLabs API key in Platform Settings, then sync the agent, to answer by voice. You can still type the call here.');
       return;
     }
     try {
       await navigator.mediaDevices.getUserMedia({ audio: true });
       const { startVoiceSession } = await import('@/lib/receptionist/voiceSession');
+      voiceTurns.current = [];
       const started = await startVoiceSession({
         signedUrl: result.signedUrl ? String(result.signedUrl) : null,
         conversationToken: result.conversationToken ? String(result.conversationToken) : null,
@@ -157,15 +171,44 @@ export default function Receptionist() {
           if (tool.org) setLive(tool.org as ReceptionOrg);
           return String(tool.message ?? 'Done.');
         }])),
-        onMessage: (message) => setTurns((current) => [...current, { role: message.source === 'user' ? 'caller' : 'receptionist', text: message.text, at: new Date().toISOString() }]),
+        onMessage: (message) => {
+          const turn: TranscriptTurn = { role: message.source === 'user' ? 'caller' : 'receptionist', text: message.text, at: new Date().toISOString() };
+          voiceTurns.current = [...voiceTurns.current, turn];
+          setTurns((current) => [...current, turn]);
+        },
         onStatus: setVoiceStatus,
+        onMode: setVoiceMode,
         onError: (message) => toast.error(message),
-        onDisconnect: () => { setSession(null); setVoiceStatus('disconnected'); },
+        onDisconnect: () => {
+          const transcript = voiceTurns.current;
+          const conversationId = started.getId();
+          voiceTurns.current = [];
+          setSession(null);
+          setMuted(false);
+          setVoiceStatus('disconnected');
+          if (transcript.length === 0) return;
+          void desk.finishCall({
+            transcript,
+            conversationId,
+            channel: 'web',
+            summary: transcript.map((turn) => turn.text).join(' ').slice(0, 240),
+          }).then((saved) => {
+            if (saved.org) setLive(saved.org as ReceptionOrg);
+          });
+        },
       });
       setSession(started);
+      setVoiceStatus('connecting');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'The microphone or voice session could not start.');
     }
+  };
+
+  const toggleMute = () => {
+    if (!session) return;
+    const next = !muted;
+    session.setMicMuted(next);
+    setMuted(next);
   };
 
   return (
@@ -228,12 +271,26 @@ export default function Receptionist() {
                 </div>
               ))}
             </div>
-            <div className="mt-4 flex gap-2">
-              <Input aria-label="Message the receptionist" value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void send(); }} placeholder="Type a caller message" />
-              <Button onClick={() => void send()} disabled={desk.pending}>Send</Button>
-              <Button variant={session ? 'destructive' : 'outline'} onClick={() => void toggleVoice()} aria-label={session ? 'End voice call' : 'Start voice call'}>
-                {session ? <PhoneOff className="h-4 w-4" /> : voiceStatus === 'connecting' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Phone className="h-4 w-4" />}
-              </Button>
+            <div className="mt-4 space-y-2">
+              {turns.length === 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {['I\'d like to speak with someone about my payroll.', 'Book an appointment tomorrow at 10.', 'Please take a message.'].map((prompt) => (
+                    <Button key={prompt} type="button" size="sm" variant="outline" onClick={() => setDraft(prompt)}>{prompt}</Button>
+                  ))}
+                </div>
+              )}
+              <ReceptionCallBar
+                live={Boolean(session)}
+                connecting={voiceStatus === 'connecting'}
+                muted={muted}
+                statusLabel={callStatus}
+                onToggleCall={() => void toggleVoice()}
+                onToggleMute={toggleMute}
+              />
+              <div className="flex gap-2">
+                <Input aria-label="Message the receptionist" value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void send(); }} placeholder="Type a caller message" />
+                <Button onClick={() => void send()} disabled={desk.pending}>Send</Button>
+              </div>
             </div>
           </Card>
           <div className="space-y-3">
@@ -263,30 +320,31 @@ export default function Receptionist() {
           </div>
         </TabsContent>
 
-        <TabsContent value="calls" className="mt-4 space-y-3">
-          {org.calls.length === 0 && <Card className="p-6 text-sm text-muted-foreground">Calls, transcripts, and summaries will appear here.</Card>}
-          {org.calls.map((call) => (
-            <Card key={call.id} className="p-4">
-              <div className="flex flex-wrap items-center gap-2">
-                <p className="font-medium">{call.callerName || 'Unknown caller'}</p>
-                <Badge variant="outline">{call.channel}</Badge>
-                <Badge variant="secondary">{call.status.replace('_', ' ')}</Badge>
-                <span className="text-xs text-muted-foreground">{when(call.startedAt)}</span>
-              </div>
-              <p className="mt-2 text-sm">{call.summary}</p>
-              <div className="mt-3 space-y-1">
-                {call.transcript.map((turn, index) => <p key={index} className="text-sm text-muted-foreground"><span className="font-medium text-foreground">{turn.role === 'caller' ? 'Caller' : 'Receptionist'}: </span>{turn.text}</p>)}
-              </div>
-            </Card>
-          ))}
+        <TabsContent value="calls" className="mt-4">
+          <ReceptionCallsPanel
+            enabled={callsEnabled}
+            live={Boolean(session)}
+            connecting={voiceStatus === 'connecting'}
+            muted={muted}
+            statusLabel={callStatus}
+            calls={org.calls}
+            onEnabledChange={(enabled) => void setCallsEnabled(enabled)}
+            onToggleCall={() => void toggleVoice()}
+            onToggleMute={toggleMute}
+          />
         </TabsContent>
 
-        <TabsContent value="schedule" className="mt-4 grid gap-4 lg:grid-cols-2">
-          <Card className="p-4">
-            <div className="mb-3 flex items-center gap-2"><CalendarDays className="h-4 w-4" /><h2 className="font-medium">Appointments</h2></div>
-            {org.appointments.length === 0 && <p className="text-sm text-muted-foreground">No appointments booked.</p>}
-            {org.appointments.map((item) => <p key={item.id} className="text-sm">{item.customerName} · {item.department} · {when(item.startsAt)} · {item.status}</p>)}
-          </Card>
+        <TabsContent value="schedule" className="mt-4 space-y-4">
+          <ReceptionSchedule
+            appointments={org.appointments}
+            notepad={org.notepad ?? ''}
+            onSaveNotepad={(notepad) => {
+              void desk.saveSchedule({ notepad }).then((result) => result.org && setLive(result.org as ReceptionOrg));
+            }}
+            onAddAppointment={(appointment) => {
+              void desk.saveSchedule({ appointment }).then((result) => result.org && setLive(result.org as ReceptionOrg));
+            }}
+          />
           <Card className="p-4">
             <div className="mb-3 flex items-center gap-2"><MessageSquare className="h-4 w-4" /><h2 className="font-medium">Messages and requests</h2></div>
             {org.messages.map((item) => <p key={item.id} className="text-sm">{item.priority === 'urgent' ? 'Urgent: ' : ''}{item.callerName} · {item.body}</p>)}

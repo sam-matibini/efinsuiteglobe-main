@@ -16,6 +16,31 @@ function headers(apiKey: string): HeadersInit {
   return { 'xi-api-key': apiKey, 'Content-Type': 'application/json' };
 }
 
+/** ElevenLabs built-in conversation tools. Phone transfer is included only for numbers already stored in E.164. */
+export function elevenSystemTools(org: ReceptionOrg): Array<Record<string, unknown>> {
+  const tools: Array<Record<string, unknown>> = [
+    { type: 'system', name: 'end_call', description: 'End the call when the caller is done or says goodbye.' },
+    { type: 'system', name: 'language_detection', description: 'Switch language when the caller changes language.' },
+  ];
+  const transfers = [...org.routes.map((route) => route.destinationPhone), org.forwardingNumber]
+    .map((phone) => phone.trim())
+    .filter((phone, index, all) => phone.startsWith('+') && all.indexOf(phone) === index)
+    .map((phone) => ({
+      transfer_destination: { type: 'phone', phone_number: phone },
+      condition: `The caller asked to be transferred and this number is ${phone}.`,
+      transfer_type: 'conference',
+    }));
+  if (transfers.length > 0) {
+    tools.push({
+      type: 'system',
+      name: 'transfer_to_number',
+      description: 'Transfer the caller to a staff phone number from the routing list.',
+      params: { system_tool_type: 'transfer_to_number', transfers },
+    });
+  }
+  return tools;
+}
+
 export function agentRequestBody(org: ReceptionOrg, toolBaseUrl?: string) {
   const tools = clientToolDefinitions().map((tool) => {
     if (!toolBaseUrl) return tool;
@@ -49,7 +74,7 @@ export function agentRequestBody(org: ReceptionOrg, toolBaseUrl?: string) {
         language: org.language,
         prompt: {
           prompt: buildAgentPrompt(org),
-          tools,
+          tools: [...tools, ...elevenSystemTools(org)],
         },
       },
       tts: { voice_id: org.voiceId },

@@ -151,5 +151,7 @@ export function useReceptionist() {
     runTool: (name: string, parameters: Record<string, unknown>) => mutate.mutateAsync({ action: 'tool', body: { name, parameters } }),
     syncAgent: () => mutate.mutateAsync({ action: 'sync' }),
     startSession: () => mutate.mutateAsync({ action: 'session' }),
+    finishCall: (body: Record<string, unknown>) => mutate.mutateAsync({ action: 'ingest', body }),
+    saveSchedule: (body: Record<string, unknown>) => mutate.mutateAsync({ action: 'schedule', body }),
   };
 }

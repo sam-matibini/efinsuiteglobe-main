@@ -1,5 +1,6 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
+import { handleReceptionApi } from '@/lib/receptionist/api';
 import { deskReply, emptyReceptionOrg } from '@/lib/receptionist/engine';
 import type { Directory, ReceptionOrg } from '@/lib/receptionist/types';
 
@@ -268,5 +269,69 @@ describe('AI Receptionist page', () => {
       expect.stringMatching(/^Acme: GST\/HST return is due /),
       expect.objectContaining({ subject: expect.stringMatching(/GST\/HST return due /) }),
     );
+  });
+
+  it('enables calls and keeps a calendar appointment with a notepad', async () => {
+    let org = emptyReceptionOrg('org-1');
+    org.enabled = true;
+    const saveSettings = vi.fn(async (settings: { channels?: ReceptionOrg['channels'] }) => {
+      org = { ...org, ...settings };
+      return { org };
+    });
+    const saveSchedule = vi.fn(async (body: Record<string, unknown>) => {
+      const result = handleReceptionApi({
+        method: 'POST',
+        action: 'schedule',
+        body: { organizationId: 'org-1', ...body },
+      }, { 'org-1': org });
+      org = result.org ?? org;
+      return { org };
+    });
+    state.useReceptionist.mockReturnValue({
+      organization: { id: 'org-1', name: 'Acme' },
+      orgLoading: false,
+      isLoading: false,
+      org,
+      voiceReady: false,
+      analytics: { calls: 0, resolved: 0, handedOff: 0, blocked: 0, bookings: 0, messages: 0, tickets: 0, leads: 0, byDepartment: {}, byChannel: {} },
+      pending: false,
+      talk: vi.fn(),
+      saveSettings,
+      saveLists: vi.fn(),
+      runTool: vi.fn(),
+      syncAgent: vi.fn(),
+      startSession: vi.fn(async () => ({})),
+      finishCall: vi.fn(),
+      saveSchedule,
+      refresh: vi.fn(),
+      directory,
+    } as never);
+
+    render(<Receptionist />);
+    expect(screen.getByText('Calls on')).toBeInTheDocument();
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Calls' }));
+    const callsSwitch = await screen.findByRole('switch', { name: 'Enable calls' });
+    expect(callsSwitch).toBeChecked();
+    await act(async () => {
+      fireEvent.click(callsSwitch);
+    });
+    expect(saveSettings).toHaveBeenCalledWith({ channels: { phone: false, web: false, sms: false, whatsapp: false } });
+    expect(screen.getByRole('button', { name: 'Start voice call' })).toBeInTheDocument();
+
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Schedule' }));
+    expect(await screen.findByTestId('reception-calendar')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'October 6, 2026' }));
+    fireEvent.change(screen.getByLabelText('Appointment name'), { target: { value: 'Jane Doe' } });
+    fireEvent.change(screen.getByLabelText('Appointment time'), { target: { value: '10:00' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Add to calendar' }));
+    });
+    expect(await screen.findByText(/Jane Doe · general/)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Reception notepad'), { target: { value: 'Call Jane back about payroll.' } });
+    await act(async () => {
+      fireEvent.blur(screen.getByLabelText('Reception notepad'));
+    });
+    expect(saveSchedule).toHaveBeenCalledWith({ notepad: 'Call Jane back about payroll.' });
   });
 });
