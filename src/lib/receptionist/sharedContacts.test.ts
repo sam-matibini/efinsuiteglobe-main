@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { activityCounts, matchSharedContact, type SharedContact } from './sharedContacts';
+import { activityCounts, matchSharedContact, mergeDirectoryContacts, type SharedContact } from './sharedContacts';
 
 const contacts: SharedContact[] = [
   {
@@ -30,6 +30,26 @@ describe('shared receptionist contacts', () => {
       text: 'Email edalsan@gmail.com about the Bank of Canada filing',
     });
     expect(match?.id).toBe('c2');
+  });
+
+  it('adds a communication contact the customer list does not already contain', () => {
+    const merged = mergeDirectoryContacts(
+      [
+        {
+          id: 'cust-1',
+          name: '17259484 Canada Inc.',
+          email: 'nnamdi@example.com',
+          phone: '4379088602',
+          openInvoiceCount: 2,
+          openBalance: 50,
+          currency: 'CAD',
+        },
+      ],
+      contacts,
+    );
+    expect(merged).toHaveLength(2);
+    expect(merged[0].openBalance).toBe(50);
+    expect(merged[1].name).toBe('Bank of Canada');
   });
 
   it('counts receptionist activity for the desk', () => {

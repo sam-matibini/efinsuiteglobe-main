@@ -36,7 +36,22 @@ describe('Payroll Calculator', () => {
       const stub = calculatePayStub(makeEmployee({ hourlyRate: 20, regularHours: 80, overtimeHours: 10 }));
       expect(stub.regularEarnings).toBe(1600);
       expect(stub.overtimeEarnings).toBe(300); // 10 * 20 * 1.5
+      expect(stub.holidayEarnings).toBe(0);
       expect(stub.grossPay).toBe(1900);
+    });
+
+    it('uses the employer overtime multiplier and holiday hours', () => {
+      const stub = calculatePayStub(makeEmployee({
+        hourlyRate: 25,
+        regularHours: 72,
+        overtimeHours: 6.5,
+        holidayHours: 8,
+        overtimeMultiplier: 1.5,
+      }));
+      expect(stub.regularEarnings).toBe(1800);
+      expect(stub.overtimeEarnings).toBe(243.75);
+      expect(stub.holidayEarnings).toBe(200);
+      expect(stub.grossPay).toBe(2243.75);
     });
   });
 

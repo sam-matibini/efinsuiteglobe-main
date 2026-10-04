@@ -1,4 +1,4 @@
-import { DollarSign, TrendingUp, Wallet, CreditCard, Building2, Calendar } from 'lucide-react';
+import { DollarSign, TrendingUp, ArrowDownCircle, ArrowUpCircle, Building2, Calendar } from 'lucide-react';
 import { StatCard } from '@/components/dashboard/StatCard';
 import { RevenueChart } from '@/components/dashboard/RevenueChart';
 import { ExpensesPieChart } from '@/components/dashboard/ExpensesPieChart';
@@ -18,6 +18,14 @@ import { Button } from '@/components/ui/button';
 import { useState } from 'react';
 import { useLocalizedCurrency } from '@/hooks/useLocalizedCurrency';
 import { CountryFlagBadge } from '@/components/dashboard/CountryFlagBadge';
+import { DateRangePresetSelect } from '@/components/filters/DateRangePresetSelect';
+import {
+  detectDateRangePreset,
+  resolveDateRangePreset,
+  STATEMENT_DATE_PRESETS,
+  STATEMENT_PRESET_IDS,
+  type DateRangePresetId,
+} from '@/lib/dateRangePresets';
 import { FxImpactWidget } from '@/components/dashboard/FxImpactWidget';
 import { TaxDashboardWidget } from '@/components/dashboard/TaxDashboardWidget';
 
@@ -107,6 +115,21 @@ export default function Dashboard() {
           {/* Economic Indicators Ticker */}
           <EconomicIndicatorsTicker />
           
+          <DateRangePresetSelect
+            value={detectDateRangePreset(
+              reportFilters.startDate,
+              reportFilters.endDate,
+              STATEMENT_PRESET_IDS,
+              new Date(),
+              reportFilters.fiscalYearEndMonth,
+            )}
+            presets={STATEMENT_DATE_PRESETS}
+            onValueChange={(preset: DateRangePresetId) => {
+              const bounds = resolveDateRangePreset(preset, new Date(), reportFilters.fiscalYearEndMonth);
+              if (bounds) reportFilters.setDateRange(bounds.start, bounds.end);
+            }}
+            triggerClassName="w-56 bg-background"
+          />
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted/50 text-sm">
             <Calendar className="w-4 h-4 text-muted-foreground" />
             <span className="text-muted-foreground">{periodStart} - {periodEnd}</span>
@@ -125,7 +148,7 @@ export default function Dashboard() {
           value={formatCurrency(incomeStatement.totalRevenue)}
           change={revenueGrowth}
           changeLabel="vs last year"
-          icon={<DollarSign className="w-6 h-6" />}
+          icon={<TrendingUp className="w-6 h-6" />}
           variant="accent"
         />
         <StatCard
@@ -133,19 +156,20 @@ export default function Dashboard() {
           value={formatCurrency(incomeStatement.netIncome)}
           change={incomeStatement.netMargin}
           changeLabel="net margin"
-          icon={<TrendingUp className="w-6 h-6" />}
-          variant="success"
+          icon={<DollarSign className="w-6 h-6" />}
+          variant="cyan"
         />
         <StatCard
           title={terminology.accountsReceivable}
           value={formatCurrency(accountsReceivable)}
-          icon={<Wallet className="w-6 h-6" />}
+          icon={<ArrowDownCircle className="w-6 h-6" />}
+          variant="gold"
         />
         <StatCard
           title={terminology.accountsPayable}
           value={formatCurrency(accountsPayable)}
-          icon={<CreditCard className="w-6 h-6" />}
-          variant="warning"
+          icon={<ArrowUpCircle className="w-6 h-6" />}
+          variant="danger"
         />
       </div>
 

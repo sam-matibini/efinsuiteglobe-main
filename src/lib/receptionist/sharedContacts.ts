@@ -94,3 +94,44 @@ export function activityCounts(activities: ReceptionistActivity[]) {
 export function contactIdentifier(contact: SharedContact): string {
   return contact.email?.trim() || contact.phone?.trim() || contact.cell_phone?.trim() || contact.id;
 }
+
+export interface DirectoryContactLike {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  openInvoiceCount: number;
+  openBalance: number;
+  currency: string;
+}
+
+function sameDirectoryPerson(existing: DirectoryContactLike, contact: SharedContact, phone: string | null): boolean {
+  const email = contact.email?.trim().toLowerCase();
+  if (email && existing.email?.trim().toLowerCase() === email) return true;
+  const sharedPhone = phoneDigits(phone);
+  const existingPhone = phoneDigits(existing.phone);
+  if (sharedPhone.length >= 7 && existingPhone.length >= 7 && (sharedPhone.endsWith(existingPhone) || existingPhone.endsWith(sharedPhone))) {
+    return true;
+  }
+  const name = contact.name.trim().toLowerCase();
+  return name.length >= 3 && existing.name.trim().toLowerCase() === name;
+}
+
+/** Add communication-hub contacts the receptionist does not already know as customers. */
+export function mergeDirectoryContacts<T extends DirectoryContactLike>(customers: T[], shared: SharedContact[]): T[] {
+  const merged = [...customers];
+  for (const contact of shared) {
+    const phone = contact.phone?.trim() || contact.cell_phone?.trim() || null;
+    if (merged.some((existing) => sameDirectoryPerson(existing, contact, phone))) continue;
+    merged.push({
+      id: contact.id,
+      name: contact.name,
+      email: contact.email,
+      phone,
+      openInvoiceCount: 0,
+      openBalance: 0,
+      currency: 'CAD',
+    } as T);
+  }
+  return merged;
+}
