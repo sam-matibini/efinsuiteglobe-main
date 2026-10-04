@@ -296,7 +296,7 @@ interface SidebarProps {
 
 export function Sidebar({ collapsed = false }: SidebarProps) {
   const location = useLocation();
-  const { isAdmin } = useAuth();
+  const { isAdmin, user } = useAuth();
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
   const { 
     currentOrganization: currentOrg, 
@@ -408,7 +408,7 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
               onSwitch={switchOrganization}
               onCreateNew={() => setCreateOrgOpen(true)}
               filterCountry={scopedCountry}
-
+              userId={user?.id ?? null}
             />
           )}
           
