@@ -30,6 +30,7 @@ import {
   Sparkles,
   FileSignature,
   MessageSquare,
+  Headset,
   Layers,
   Wallet,
   Factory,
@@ -287,6 +288,12 @@ const getNavigation = (payrollLabels: { taxSlips: string; separationDoc: string;
     href: '/communication',
     requiredModules: ['communication'],
   },
+  {
+    label: 'AI Receptionist',
+    icon: Headset,
+    href: '/communication?tab=receptionist',
+    requiredModules: ['communication'],
+  },
   { label: 'Settings', icon: Settings, href: '/settings', allowedRoles: ['owner', 'admin'] },
 ];
 
@@ -377,7 +384,14 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
   };
 
   const isActive = (href?: string, children?: NavItem['children']) => {
-    if (href) return location.pathname === href;
+    if (href) {
+      const [path, query] = href.split('?');
+      if (query) {
+        return location.pathname === path && location.search.includes(query);
+      }
+      if (path === '/communication' && location.search.includes('tab=receptionist')) return false;
+      return location.pathname === path;
+    }
     if (children) return children.some(child => location.pathname === child.href);
     return false;
   };

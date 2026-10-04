@@ -1,6 +1,8 @@
 import { useState, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { 
   MessageSquare, 
+  Headset,
   Users, 
   Search, 
   Mail, 
@@ -71,6 +73,7 @@ import { CommunicationTemplate } from '@/hooks/useCommunicationTemplates';
 import { TemplateSelector } from '@/components/communication/TemplateSelector';
 import { TemplateFormDialog } from '@/components/communication/TemplateFormDialog';
 import { AIComposeAssistant } from '@/components/communication/AIComposeAssistant';
+import { AIReceptionistPanel } from '@/components/receptionist/AIReceptionistPanel';
 import efinsuiteGlobeLogo from '@/assets/efinsuite-globe-logo.png';
 
 // Default contact details for signature
@@ -80,8 +83,20 @@ const DEFAULT_CONTACT = {
   website: 'https://globe.efinsuite.com/',
 };
 
+const HUB_TABS = ['compose', 'inbox', 'contacts', 'voice', 'branding', 'receptionist'] as const;
+
 export default function CommunicationHub() {
   const { currentOrganization } = useOrganizationContext();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedTab = searchParams.get('tab');
+  const hubTab = HUB_TABS.includes(requestedTab as (typeof HUB_TABS)[number]) ? requestedTab! : 'compose';
+  const setHubTab = (value: string) => {
+    if (value === 'compose') {
+      setSearchParams({}, { replace: true });
+      return;
+    }
+    setSearchParams({ tab: value }, { replace: true });
+  };
   const {
     conversations,
     messages,
@@ -414,7 +429,7 @@ export default function CommunicationHub() {
         </Card>
       </div>
 
-      <Tabs defaultValue="compose" className="space-y-6">
+      <Tabs value={hubTab} onValueChange={setHubTab} className="space-y-6">
         <TabsList className="inline-flex h-auto gap-2 bg-transparent p-1">
           <TabsTrigger value="compose" className="hub-tab hub-tab-messages">
             <MessageSquare className="w-4 h-4" />
@@ -441,6 +456,10 @@ export default function CommunicationHub() {
             <Settings2 className="w-4 h-4" />
             Branding
           </TabsTrigger>
+          <TabsTrigger value="receptionist" className="hub-tab hub-tab-voice">
+            <Headset className="w-4 h-4" />
+            AI Receptionist
+          </TabsTrigger>
         </TabsList>
 
         {/* Compose Tab - New Layout */}
@@ -451,6 +470,7 @@ export default function CommunicationHub() {
               <Card className="h-[700px] flex flex-col">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-lg">Customers</CardTitle>
+                  <p className="text-xs text-muted-foreground">Shared with AI Receptionist</p>
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <Input
@@ -1193,6 +1213,10 @@ export default function CommunicationHub() {
 
         <TabsContent value="branding" className="space-y-6">
           <BrandingSettingsPanel />
+        </TabsContent>
+
+        <TabsContent value="receptionist" className="space-y-6">
+          <AIReceptionistPanel onActivity={() => fetchConversations()} />
         </TabsContent>
       </Tabs>
 
