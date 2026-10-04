@@ -447,7 +447,7 @@ export function EditTransactionDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={cn('max-h-[90vh]', splitEnabled ? 'max-w-2xl' : 'max-w-xl')}>
+      <DialogContent className={cn('banking-edit-form max-h-[90vh]', splitEnabled ? 'max-w-2xl' : 'max-w-xl')}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             {isReconciled ? 'View Transaction' : 'Edit Transaction'}
@@ -895,19 +895,20 @@ export function EditTransactionDialog({
           </div>
         </ScrollArea>
 
-        <DialogFooter className="gap-2 sm:gap-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+        <DialogFooter className="gap-2 border-t border-indigo-100 bg-indigo-50/40 px-1 pt-4 sm:gap-2">
+          <Button variant="outline" className="h-10 border-slate-300 bg-white font-medium" onClick={() => onOpenChange(false)}>
             <X className="w-4 h-4 mr-2" />
             {isReconciled ? 'Close' : 'Cancel'}
           </Button>
           {!isReconciled && (
             <>
-              <Button variant="secondary" onClick={handleSave}>
+              <Button className="h-10 bg-cyan-600 font-semibold text-white shadow-sm hover:bg-cyan-700" onClick={handleSave}>
                 <Save className="w-4 h-4 mr-2" />
                 Save Changes
               </Button>
-              <Button 
-                onClick={handlePostToGL} 
+              <Button
+                className="h-10 bg-gradient-to-r from-indigo-600 to-cyan-500 font-semibold text-white shadow-md hover:from-indigo-700 hover:to-cyan-600"
+                onClick={handlePostToGL}
                 disabled={postToGL.isPending || (splitEnabled ? !!splitError : !glAccountId)}
               >
                 <Send className="w-4 h-4 mr-2" />

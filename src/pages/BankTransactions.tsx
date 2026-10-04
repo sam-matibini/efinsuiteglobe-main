@@ -1719,9 +1719,10 @@ export default function BankTransactions() {
                     </td>
                     <td>
                       <div className="flex items-center gap-1">
-                        <Button 
-                          variant="outline" 
+                        <Button
+                          variant="outline"
                           size="sm"
+                          className="h-8 border-indigo-300 bg-indigo-50 font-semibold text-indigo-800 shadow-sm hover:bg-indigo-100"
                           onClick={() => handleEditTransaction(transaction)}
                         >
                           {isReconciled ? (
@@ -1739,7 +1740,7 @@ export default function BankTransactions() {
                         {!isReconciled && (
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                              <Button variant="outline" size="sm" className="h-8 w-8 border-cyan-300 bg-cyan-50 p-0 text-cyan-800 shadow-sm hover:bg-cyan-100" aria-label="More transaction actions">
                                 <MoreHorizontal className="w-4 h-4" />
                               </Button>
                             </DropdownMenuTrigger>

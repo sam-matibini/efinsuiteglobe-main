@@ -3,7 +3,7 @@
  * Registered at /__e2e__/expense-refund when served with VITE_E2E=1.
  */
 import { useMemo, useState } from 'react';
-import { calculateTax } from '@/components/banking/TaxCodeSelect';
+import { calculateTax, TaxCodeSelect } from '@/components/banking/TaxCodeSelect';
 import { expenseRefundJournal, planBankTaxLines } from '@/lib/expenseRefundPosting';
 
 const chart = [
@@ -95,6 +95,19 @@ export default function E2EExpenseRefundHarness() {
           </li>
         ))}
       </ul>
+      <section className="mt-6 rounded-xl border border-indigo-100 bg-white p-4">
+        <h2 className="text-sm font-semibold text-indigo-950">Sales tax codes</h2>
+        <p className="mb-2 text-xs text-muted-foreground">Type to search collected and ITC codes.</p>
+        <TaxCodeSelect direction="both" value={null} onValueChange={() => undefined} placeholder="Search sales tax..." />
+      </section>
+      <section className="mt-4" data-testid="transaction-actions">
+        <h2 className="mb-2 text-sm font-semibold text-indigo-950">Actions</h2>
+        <div className="flex items-center gap-2">
+          <button type="button" className="inline-flex h-8 items-center rounded-md border border-indigo-300 bg-indigo-50 px-3 text-sm font-semibold text-indigo-800 shadow-sm">Edit</button>
+          <button type="button" className="inline-flex h-10 items-center rounded-md bg-cyan-600 px-3 text-sm font-semibold text-white shadow-sm">Save Changes</button>
+          <button type="button" className="inline-flex h-10 items-center rounded-md bg-gradient-to-r from-indigo-600 to-cyan-500 px-3 text-sm font-semibold text-white shadow-md">Save & Post to GL</button>
+        </div>
+      </section>
       <p className="mt-3 text-sm" data-testid="header-status">
         {planned.error
           ? planned.error

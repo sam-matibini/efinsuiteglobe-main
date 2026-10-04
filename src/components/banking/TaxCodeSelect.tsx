@@ -30,6 +30,7 @@ import {
 } from '@/lib/splitTaxCalculator';
 import { isPaidRetailTaxCode, taxCodeGroupLabel } from '@/lib/retailTaxRateCatalog';
 import { resolveTaxAccount, withResolvedTaxAccounts } from '@/lib/taxGlAccounts';
+import { noTaxMatches, taxCodeMatches, taxOptionMatches } from '@/lib/taxCodeSearch';
 
 // Combined provincial tax rates for Canadian place-of-supply compliance
 // These are logical display options that map to actual tax calculations
@@ -142,37 +143,20 @@ export function TaxCodeSelect({
     return null;
   }, [normalizedValue, selectedTaxCode]);
 
-  const filteredTaxCodes = useMemo(() => {
-    if (!search) return taxCodes;
-    const term = search.toLowerCase();
-    return taxCodes.filter(
-      (tc) =>
-        tc.code.toLowerCase().includes(term) ||
-        tc.name.toLowerCase().includes(term) ||
-        tc.tax_type.toLowerCase().includes(term)
-    );
-  }, [taxCodes, search]);
-
-  const filterCombined = (list: CombinedTaxOption[]) => {
-    if (!search) return list;
-    const term = search.toLowerCase();
-    return list.filter(
-      (opt) =>
-        opt.code.toLowerCase().includes(term) ||
-        opt.name.toLowerCase().includes(term) ||
-        opt.combinedRate.toString().includes(term) ||
-        opt.id.includes('paid')
-    );
-  };
+  const filteredTaxCodes = useMemo(
+    () => taxCodes.filter((tc) => taxCodeMatches(tc, search)),
+    [taxCodes, search],
+  );
 
   const filteredCombinedOptions = useMemo(
-    () => filterCombined(COMBINED_TAX_OPTIONS),
+    () => COMBINED_TAX_OPTIONS.filter((option) => taxOptionMatches(option, search, 'collected')),
     [search],
   );
   const filteredCombinedPaidOptions = useMemo(
-    () => filterCombined(COMBINED_PAID_TAX_OPTIONS),
+    () => COMBINED_PAID_TAX_OPTIONS.filter((option) => taxOptionMatches(option, search, 'paid')),
     [search],
   );
+  const showNoTax = noTaxMatches(search);
 
   // Group tax codes by type
   const groupedTaxCodes = useMemo(() => {
@@ -390,22 +374,23 @@ export function TaxCodeSelect({
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[340px] p-0" align="start">
+      <PopoverContent className="w-[min(440px,calc(100vw-2rem))] p-0" align="start">
         <Command shouldFilter={false}>
           <CommandInput
-            placeholder="Search tax rates..."
+            placeholder="Type GST, HST, PST, Manitoba, or ITC..."
             value={search}
             onValueChange={setSearch}
+            aria-label="Search sales tax codes"
           />
-          <CommandList className="max-h-[350px]">
+          <CommandList className="tax-code-scroll max-h-[360px]">
             <CommandEmpty>
-              {taxCodes.length === 0 
-                ? 'No tax codes configured. Set up in Settings → Sales Tax.'
+              {taxCodes.length === 0 && !search
+                ? 'No saved tax codes yet. Choose a province rate below, or set them up in Settings → Sales Tax.'
                 : 'No matching tax codes.'
               }
             </CommandEmpty>
             
-            {/* No Tax Option */}
+            {showNoTax && (
             <CommandGroup>
               <CommandItem
                 value="__none__"
@@ -420,6 +405,7 @@ export function TaxCodeSelect({
                 <span className="text-muted-foreground">No Tax</span>
               </CommandItem>
             </CommandGroup>
+            )}
 
             {/* Combined Provincial Tax Rates */}
             {showCombinedRates && direction !== 'paid' && Object.entries(groupedCombinedOptions).map(([group, options]) => (
@@ -511,7 +497,7 @@ function CombinedRateItem({
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
-          <CommandItem value={option.id} onSelect={onSelect}>
+          <CommandItem value={option.id} onSelect={onSelect} data-testid={`tax-option-${option.id}`}>
             <Check className={cn('mr-2 h-4 w-4', selected ? 'opacity-100' : 'opacity-0')} />
             <div className="flex items-center gap-2 flex-1">
               <MapPin className="w-3 h-3 text-muted-foreground" />
