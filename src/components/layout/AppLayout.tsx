@@ -321,7 +321,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         <AIAccountingAssistant isOpen={aliceOpen} onOpenChange={setAliceOpen} />
 
         {/* Page Content - responsive padding */}
-        <main className="flex flex-col gap-6 px-4 pb-20 pt-7 md:px-8 md:pb-12">
+        <main className="flex flex-col gap-4 px-4 pb-16 pt-4 md:px-6 md:pb-8">
           <ReadOnlyProvider>
             {isReadOnly && <ReadOnlyBanner />}
             {children}

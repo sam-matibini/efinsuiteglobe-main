@@ -911,23 +911,45 @@ export function EditTransactionDialog({
           </div>
         </ScrollArea>
 
-        <DialogFooter className="shrink-0 gap-2 border-t border-indigo-100 bg-indigo-50/40 px-1 pt-4 sm:gap-2">
-          <Button variant="outline" className="h-10 border-slate-300 bg-white font-medium" onClick={() => onOpenChange(false)}>
-            <X className="w-4 h-4 mr-2" />
+        <DialogFooter
+          data-testid="banking-edit-footer"
+          className={cn(
+            'shrink-0 border-t border-indigo-100 bg-indigo-50/40 pt-3',
+            embedded ? 'grid grid-cols-3 gap-1.5 sm:space-x-0' : 'gap-2 px-1 pt-4 sm:gap-2',
+          )}
+        >
+          <Button
+            variant="outline"
+            className={cn(
+              'border-slate-300 bg-white font-medium',
+              embedded ? 'h-auto min-h-9 min-w-0 whitespace-normal px-1.5 py-1.5 text-[11px] leading-tight' : 'h-10',
+            )}
+            onClick={() => onOpenChange(false)}
+          >
+            <X className="h-3.5 w-3.5 shrink-0" />
             {isReconciled ? 'Close' : 'Cancel'}
           </Button>
           {!isReconciled && (
             <>
-              <Button className="h-10 bg-cyan-600 font-semibold text-white shadow-sm hover:bg-cyan-700" onClick={handleSave}>
-                <Save className="w-4 h-4 mr-2" />
+              <Button
+                className={cn(
+                  'bg-cyan-600 font-semibold text-white shadow-sm hover:bg-cyan-700',
+                  embedded ? 'h-auto min-h-9 min-w-0 whitespace-normal px-1.5 py-1.5 text-[11px] leading-tight' : 'h-10',
+                )}
+                onClick={handleSave}
+              >
+                <Save className="h-3.5 w-3.5 shrink-0" />
                 Save Changes
               </Button>
               <Button
-                className="h-10 bg-gradient-to-r from-indigo-600 to-cyan-500 font-semibold text-white shadow-md hover:from-indigo-700 hover:to-cyan-600"
+                className={cn(
+                  'bg-gradient-to-r from-indigo-600 to-cyan-500 font-semibold text-white shadow-md hover:from-indigo-700 hover:to-cyan-600',
+                  embedded ? 'h-auto min-h-9 min-w-0 whitespace-normal px-1.5 py-1.5 text-[11px] leading-tight' : 'h-10',
+                )}
                 onClick={handlePostToGL}
                 disabled={postToGL.isPending || (splitEnabled ? !!splitError : !glAccountId)}
               >
-                <Send className="w-4 h-4 mr-2" />
+                <Send className="h-3.5 w-3.5 shrink-0" />
                 {postToGL.isPending ? 'Posting...' : 'Save & Post to GL'}
               </Button>
             </>

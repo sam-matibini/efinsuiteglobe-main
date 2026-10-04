@@ -4,6 +4,7 @@ export interface JournalAmountLine {
   id: string;
   debit: number | string | null;
   credit: number | string | null;
+  account_id?: string | null;
   exchange_rate?: number | string | null;
   base_currency_debit?: number | string | null;
   base_currency_credit?: number | string | null;
@@ -12,6 +13,8 @@ export interface JournalAmountLine {
 export interface JournalAmountDraft {
   debit: string;
   credit: string;
+  /** Empty keeps the account already stored on the line. */
+  accountId?: string;
 }
 
 export interface JournalAmountUpdate {
@@ -20,6 +23,7 @@ export interface JournalAmountUpdate {
   credit: number;
   baseDebit: number;
   baseCredit: number;
+  accountId: string;
   valid: boolean;
 }
 
@@ -57,6 +61,7 @@ export function seedAmountDrafts(lines: JournalAmountLine[]): Record<string, Jou
     drafts[line.id] = {
       debit: debit > 0 ? debit.toFixed(2) : '',
       credit: credit > 0 ? credit.toFixed(2) : '',
+      accountId: line.account_id ?? '',
     };
   }
   return drafts;
@@ -71,9 +76,14 @@ export function draftAfterSideEdit(
   const parsed = parseJournalAmount(raw);
   const clearsOther = parsed !== null && parsed > 0;
   if (side === 'debit') {
-    return { debit: raw, credit: clearsOther ? '' : current.credit };
+    return { ...current, debit: raw, credit: clearsOther ? '' : current.credit };
   }
-  return { debit: clearsOther ? '' : current.debit, credit: raw };
+  return { ...current, debit: clearsOther ? '' : current.debit, credit: raw };
+}
+
+function resolvedAccountId(line: JournalAmountLine, draft: JournalAmountDraft): string {
+  const stored = line.account_id ?? '';
+  return draft.accountId ? draft.accountId : stored;
 }
 
 function storedBase(raw: number | string | null | undefined, amount: number, rate: number): number {
@@ -90,9 +100,11 @@ export function editedJournalAmounts(
     const draft = drafts[line.id] ?? {
       debit: Number(line.debit) ? String(line.debit) : '',
       credit: Number(line.credit) ? String(line.credit) : '',
+      accountId: line.account_id ?? '',
     };
     const debit = parseJournalAmount(draft.debit);
     const credit = parseJournalAmount(draft.credit);
+    const accountId = resolvedAccountId(line, draft);
     const valid = debit !== null && credit !== null && !(debit > 0 && credit > 0);
     const rate = lineExchangeRate(line.exchange_rate);
     const storedDebit = roundMoney(Number(line.debit) || 0);
@@ -104,16 +116,18 @@ export function editedJournalAmounts(
         credit: 0,
         baseDebit: 0,
         baseCredit: 0,
+        accountId,
         valid: false,
       };
     }
-    const changed = debit !== storedDebit || credit !== storedCredit;
+    const amountChanged = debit !== storedDebit || credit !== storedCredit;
     return {
       id: line.id,
       debit,
       credit,
-      baseDebit: changed ? roundMoney(debit * rate) : storedBase(line.base_currency_debit, storedDebit, rate),
-      baseCredit: changed ? roundMoney(credit * rate) : storedBase(line.base_currency_credit, storedCredit, rate),
+      baseDebit: amountChanged ? roundMoney(debit * rate) : storedBase(line.base_currency_debit, storedDebit, rate),
+      baseCredit: amountChanged ? roundMoney(credit * rate) : storedBase(line.base_currency_credit, storedCredit, rate),
+      accountId,
       valid: true,
     };
   });
@@ -127,7 +141,8 @@ export function editedJournalAmounts(
     const debit = parseJournalAmount(draft.debit);
     const credit = parseJournalAmount(draft.credit);
     if (debit === null || credit === null) return true;
-    return debit !== roundMoney(Number(line.debit) || 0) || credit !== roundMoney(Number(line.credit) || 0);
+    const accountChanged = resolvedAccountId(line, draft) !== (line.account_id ?? '');
+    return accountChanged || debit !== roundMoney(Number(line.debit) || 0) || credit !== roundMoney(Number(line.credit) || 0);
   });
 
   return {

@@ -4,6 +4,7 @@
  */
 import { useState } from 'react';
 import { TransactionDetailPanel, type TransactionDetail } from '@/components/banking/TransactionDetailPanel';
+import { BankingRegisterToolbar } from '@/components/banking/BankingRegisterToolbar';
 import { AuroraScroll } from '@/components/ui/aurora-scroll';
 import { EditTransactionDialog } from '@/components/banking/EditTransactionDialog';
 import type { BankTransaction } from '@/hooks/useBankTransactions';
@@ -34,11 +35,44 @@ export default function E2EBankingTransactionsHarness() {
   const [editing, setEditing] = useState(false);
   const selected = rows.find((row) => row.id === selectedId) ?? null;
 
+  const metrics = [
+    ['Total', '261'],
+    ['Unmatched', '7'],
+    ['Matched', '254'],
+    ['Reconciled', '0'],
+    ['Deposits', '$57,039.95'],
+    ['Withdrawals', '$43,528.55'],
+    ['Net', '+$13,511.40'],
+    ['Posted', '161/261'],
+  ];
+
   return (
-    <main className="flex h-screen gap-3 bg-slate-50 p-4">
+    <main className="flex h-screen flex-col gap-2 bg-slate-50 p-3">
+      <BankingRegisterToolbar
+        title="Bank Transactions"
+        unmatchedCount={93}
+        activeRuleCount={50}
+        onAiCategorize={() => undefined}
+        onApplyRules={() => undefined}
+        onOpenRules={() => undefined}
+        onQuickImport={() => undefined}
+        onAiExtraction={() => undefined}
+        onPdfExtract={() => undefined}
+        onImportHistory={() => undefined}
+        onExport={() => undefined}
+      />
+      <div data-testid="banking-metric-strip" className="grid grid-cols-4 gap-2 xl:grid-cols-8">
+        {metrics.map(([label, value]) => (
+          <div key={label} className="rounded-xl border border-indigo-100 bg-white p-2 pr-8">
+            <p className="text-[11px] leading-tight text-muted-foreground">{label}</p>
+            <p className="text-base font-semibold text-foreground">{value}</p>
+          </div>
+        ))}
+      </div>
+      <section className="flex min-h-0 flex-1 gap-3">
       <section className="min-w-0 flex-1 overflow-hidden rounded-xl border bg-white">
-        <h1 className="border-b px-4 py-3 text-lg font-semibold">Banking transactions</h1>
-        <AuroraScroll className="h-[calc(100vh-7rem)]" testId="banking-transaction-scroll">
+        <h2 className="border-b px-3 py-2 text-sm font-semibold text-foreground">Register</h2>
+        <AuroraScroll className="h-[calc(100vh-11rem)]" testId="banking-transaction-scroll">
           <table className="data-table min-w-[720px]">
             <thead>
               <tr>
@@ -109,6 +143,7 @@ export default function E2EBankingTransactionsHarness() {
           )}
         />
       )}
+      </section>
     </main>
   );
 }

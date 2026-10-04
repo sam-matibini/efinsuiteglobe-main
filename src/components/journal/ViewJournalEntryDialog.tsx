@@ -17,6 +17,7 @@ import { useMultiCurrencySettings } from '@/hooks/useMultiCurrencySettings';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { SearchableGLAccountSelect, type GLAccountChoice } from '@/components/banking/SearchableGLAccountSelect';
 import {
   draftAfterSideEdit,
   editedJournalAmounts,
@@ -33,6 +34,8 @@ interface ViewJournalEntryDialogProps {
   onSaved?: (entry: JournalEntryWithLines) => void;
   /** Replaces the ledger save. Used by the local preview. */
   onSaveAmounts?: (lines: JournalAmountUpdate[]) => Promise<void> | void;
+  /** Chart used by the local preview. The signed-in chart is used when omitted. */
+  accountChoices?: GLAccountChoice[];
 }
 
 export function ViewJournalEntryDialog({
@@ -41,11 +44,12 @@ export function ViewJournalEntryDialog({
   entry,
   onSaved,
   onSaveAmounts,
+  accountChoices,
 }: ViewJournalEntryDialogProps) {
   const { settings: mcSettings } = useMultiCurrencySettings();
   const queryClient = useQueryClient();
   const entryKey = entry
-    ? `${entry.id}:${entry.status}:${entry.lines.map((line) => `${line.id}:${line.debit}:${line.credit}`).join('|')}`
+    ? `${entry.id}:${entry.status}:${entry.lines.map((line) => `${line.id}:${line.account_id}:${line.debit}:${line.credit}`).join('|')}`
     : '';
   const [drafts, setDrafts] = useState<Record<string, JournalAmountDraft>>(() =>
     entry ? seedAmountDrafts(entry.lines) : {},
@@ -53,9 +57,11 @@ export function ViewJournalEntryDialog({
   const [sourceLines, setSourceLines] = useState<DbJournalEntryLine[]>(entry?.lines ?? []);
   const [seenKey, setSeenKey] = useState(entryKey);
   const [saving, setSaving] = useState(false);
+  const [accountLabels, setAccountLabels] = useState<Record<string, { code: string; name: string }>>({});
 
   if (seenKey !== entryKey) {
     setSeenKey(entryKey);
+    setAccountLabels({});
     if (entry) {
       setSourceLines(entry.lines);
       setDrafts(seedAmountDrafts(entry.lines));
@@ -107,8 +113,8 @@ export function ViewJournalEntryDialog({
       : edited.changed && !edited.balanced
         ? 'Debits and credits must match before this entry can be saved.'
         : edited.changed
-          ? 'Amounts are balanced and ready to save.'
-          : 'Edit a debit or credit, then save.';
+          ? 'The entry is balanced and ready to save.'
+          : 'Edit an account, debit, or credit, then save.';
 
   const editSide = (lineId: string, side: 'debit' | 'credit', raw: string) => {
     setDrafts((current) => {
@@ -130,6 +136,7 @@ export function ViewJournalEntryDialog({
             id: line.id,
             debit: line.debit,
             credit: line.credit,
+            account_id: line.accountId,
           })),
         } as never);
         if (error) throw error;
@@ -137,8 +144,11 @@ export function ViewJournalEntryDialog({
       const nextLines = entry.lines.map((line) => {
         const update = edited.lines.find((item) => item.id === line.id);
         if (!update) return line;
+        const label = accountLabels[line.id];
         return {
           ...line,
+          account_id: update.accountId || line.account_id,
+          account: label ? { code: label.code, name: label.name } : line.account,
           debit: update.debit,
           credit: update.credit,
           base_currency_debit: update.baseDebit,
@@ -151,7 +161,7 @@ export function ViewJournalEntryDialog({
       queryClient.invalidateQueries({ queryKey: ['journal-entries', entry.organization_id] });
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
       onSaved?.(next);
-      toast.success('Journal amounts updated');
+      toast.success('Journal entry updated');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Could not save the journal amounts';
       toast.error(message);
@@ -214,8 +224,32 @@ export function ViewJournalEntryDialog({
                     className={`grid ${hasMixedCurrency ? 'grid-cols-[1fr_160px_160px]' : 'grid-cols-[1fr_150px_150px]'} border-t items-center`}
                   >
                     <div className="p-3">
-                      <p className="font-medium">{accountName}</p>
-                      <p className="text-sm text-muted-foreground">
+                      {readOnly ? (
+                        <p className="font-medium">{accountName}</p>
+                      ) : (
+                        <SearchableGLAccountSelect
+                          value={draft.accountId || line.account_id || ''}
+                          onValueChange={(accountId, account) => {
+                            setDrafts((current) => ({
+                              ...current,
+                              [line.id]: { ...(current[line.id] ?? draft), accountId },
+                            }));
+                            if (account) {
+                              setAccountLabels((current) => ({
+                                ...current,
+                                [line.id]: { code: account.code, name: account.name },
+                              }));
+                            }
+                          }}
+                          fallbackLabel={[line.account?.code, accountLabels[line.id]?.name || accountName].filter(Boolean).join(' ')}
+                          ariaLabel={`Account ${accountLabels[line.id]?.name || accountName}`}
+                          testId={`journal-account-${line.id}`}
+                          accounts={accountChoices}
+                          placeholder="Select account"
+                          className="h-9 border-indigo-200 bg-white font-medium shadow-sm hover:border-indigo-300"
+                        />
+                      )}
+                      <p className="mt-1 text-sm text-muted-foreground">
                         {line.description || entry.description || ''}
                         {isFc && line.exchange_rate ? (
                           <span className="ml-2 text-xs">
@@ -306,7 +340,7 @@ export function ViewJournalEntryDialog({
                 disabled={!canSave}
                 onClick={saveAmounts}
               >
-                {saving ? 'Saving…' : 'Save amounts'}
+                {saving ? 'Saving…' : 'Save changes'}
               </Button>
             )}
             <Button variant="outline" onClick={() => onOpenChange(false)}>

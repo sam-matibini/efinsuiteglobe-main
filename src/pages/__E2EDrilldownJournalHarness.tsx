@@ -4,7 +4,15 @@
  */
 import { useState } from 'react';
 import { ViewJournalEntryDialog } from '@/components/journal/ViewJournalEntryDialog';
+import type { GLAccountChoice } from '@/components/banking/SearchableGLAccountSelect';
 import type { JournalEntryWithLines } from '@/hooks/useJournalEntries';
+
+const accountChoices: GLAccountChoice[] = [
+  { id: 'ap', code: '2-01-101-0001', name: 'Trade Payables', account_type: 'liability', is_header: false, is_active: true },
+  { id: 'bank', code: '1-01-100', name: 'Chequing - ScotiaBank-eFintax Account', account_type: 'asset', is_header: false, is_active: true },
+  { id: 'office', code: '6-03-105', name: 'Office', account_type: 'expense', is_header: false, is_active: true },
+  { id: 'taxes-header', code: '2-02-000', name: 'Taxes Payable', account_type: 'liability', is_header: true, is_active: true },
+];
 
 const postedEntry = {
   id: 'je-bank-1500',
@@ -85,8 +93,9 @@ export default function E2EDrilldownJournalHarness() {
         open
         onOpenChange={() => undefined}
         entry={mode === 'posted' ? postedEntry : reversedEntry}
+        accountChoices={accountChoices}
         onSaveAmounts={async (lines) => {
-          setSaved(lines.map((line) => `${line.id}:${line.debit}:${line.credit}`).join('|'));
+          setSaved(lines.map((line) => `${line.id}:${line.accountId}:${line.debit}:${line.credit}`).join('|'));
         }}
       />
     </main>

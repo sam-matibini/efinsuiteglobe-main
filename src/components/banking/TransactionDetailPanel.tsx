@@ -150,7 +150,7 @@ export function TransactionDetailPanel({
 
   return (
     <aside
-      className="flex h-[min(72vh,860px)] w-full shrink-0 flex-col overflow-hidden rounded-xl border border-indigo-100 bg-white shadow-sm xl:w-[420px]"
+      className="flex h-[min(80vh,980px)] w-full shrink-0 flex-col overflow-hidden rounded-xl border border-indigo-100 bg-white shadow-sm xl:w-[28rem]"
       data-testid="transaction-detail-panel"
     >
       <div className="flex items-center justify-between gap-2 border-b bg-indigo-50/70 px-4 py-3">

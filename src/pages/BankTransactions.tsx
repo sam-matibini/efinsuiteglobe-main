@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Search, Download, Upload, ArrowUpRight, ArrowDownLeft, Link2, Check, AlertCircle, Sparkles, Settings, MoreHorizontal, Wand2, Building2, Plus, Filter, Calendar, Edit, Send, X, CheckSquare, ArrowUpDown, ArrowUp, ArrowDown, CreditCard, Landmark, RefreshCw, Lock, Eye, FileSpreadsheet, Trash2, History } from 'lucide-react';
+import { Search, ArrowUpRight, ArrowDownLeft, Link2, Check, AlertCircle, Sparkles, MoreHorizontal, Wand2, Building2, Plus, Filter, Calendar, Edit, Send, X, CheckSquare, ArrowUpDown, ArrowUp, ArrowDown, CreditCard, Landmark, Lock, Eye, Trash2 } from 'lucide-react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -69,6 +69,7 @@ import { useLocalizedCurrency } from '@/hooks/useLocalizedCurrency';
 import { classifyCreditCardType } from '@/lib/creditCardImportNormalizer';
 import { useIsReadOnly } from '@/hooks/useIsReadOnly';
 import { BankTxCardActions } from '@/components/banking/BankTxCardActions';
+import { BankingRegisterToolbar } from '@/components/banking/BankingRegisterToolbar';
 
 type SortField = 'transaction_date' | 'description' | 'payee_payor' | 'reference' | 'category' | 'amount' | 'status';
 type SortDirection = 'asc' | 'desc';
@@ -968,91 +969,26 @@ export default function BankTransactions() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Page Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">
-            {accountType === 'bank' ? 'Bank Transactions' : 'Credit Card Transactions'}
-          </h1>
-          <p className="text-muted-foreground">
-            Review and categorize {accountType === 'bank' ? 'bank' : 'credit card'} transactions
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          {!isReadOnly && unmatchedCount > 0 && (
-            <Button variant="outline" size="sm" onClick={() => setAiDialogOpen(true)}>
-              <Sparkles className="w-4 h-4 mr-2" />
-              AI Categorize ({unmatchedCount})
-            </Button>
-          )}
-          {!isReadOnly && (
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={handleApplyRules}
-              disabled={isApplyingRules || activeRules.length === 0}
-              className="gap-2"
-            >
-              {isApplyingRules ? (
-                <RefreshCw className="w-4 h-4 animate-spin" />
-              ) : (
-                <Wand2 className="w-4 h-4" />
-              )}
-              Apply Rules
-              {activeRules.length > 0 && (
-                <span className="text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full">
-                  {activeRules.length}
-                </span>
-              )}
-            </Button>
-          )}
-          {!isReadOnly && (
-            <Button variant="outline" size="sm" onClick={() => navigate('/banking/rules')}>
-              <Settings className="w-4 h-4 mr-2" />
-              AI Rules
-            </Button>
-          )}
-          {!isReadOnly && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm">
-                  <Upload className="w-4 h-4 mr-2" />
-                  Import
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => setImportDialogOpen(true)}>
-                  <FileSpreadsheet className="w-4 h-4 mr-2" />
-                  Quick Import (CSV/Excel)
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => openExtractionDialog(accountType === 'bank' ? 'bank' : 'creditcard')}>
-                  <Sparkles className="w-4 h-4 mr-2" />
-                  AI Extraction Engine
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setAiExtractorOpen(true)}>
-                  <Sparkles className="w-4 h-4 mr-2" />
-                  Extract from PDF (Gemini)
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
-          {!isReadOnly && (
-            <Button variant="outline" size="sm" onClick={() => setImportHistoryOpen(true)}>
-              <History className="w-4 h-4 mr-2" />
-              Import History
-            </Button>
-          )}
-          <Button variant="outline" size="sm" onClick={() => setExportDialogOpen(true)}>
-            <Download className="w-4 h-4 mr-2" />
-            Export
-          </Button>
-        </div>
-      </div>
+    <div className="space-y-3">
+      <BankingRegisterToolbar
+        title={accountType === 'bank' ? 'Bank Transactions' : 'Credit Card Transactions'}
+        isReadOnly={isReadOnly}
+        unmatchedCount={unmatchedCount}
+        activeRuleCount={activeRules.length}
+        isApplyingRules={isApplyingRules}
+        onAiCategorize={() => setAiDialogOpen(true)}
+        onApplyRules={handleApplyRules}
+        onOpenRules={() => navigate('/banking/rules')}
+        onQuickImport={() => setImportDialogOpen(true)}
+        onAiExtraction={() => openExtractionDialog(accountType === 'bank' ? 'bank' : 'creditcard')}
+        onPdfExtract={() => setAiExtractorOpen(true)}
+        onImportHistory={() => setImportHistoryOpen(true)}
+        onExport={() => setExportDialogOpen(true)}
+      />
 
       {/* Account Type Tabs */}
       <Tabs value={accountType} onValueChange={(v) => setAccountType(v as AccountType)} className="w-full">
-        <TabsList className="grid w-full max-w-md grid-cols-2 bg-muted/50">
+        <TabsList className="grid h-9 w-full max-w-sm grid-cols-2 bg-muted/50">
           <TabsTrigger 
             value="bank" 
             className="gap-2 data-[state=active]:bg-amber-100 data-[state=active]:text-amber-700 data-[state=active]:border-amber-300 data-[state=active]:border"
@@ -1112,10 +1048,8 @@ export default function BankTransactions() {
         const orgName = organization?.name;
 
         return (
-          <div className="space-y-4">
-            {/* Row 1 — Volume & status */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <Card className="p-4 relative">
+          <div data-testid="banking-metric-strip" className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-8">
+              <Card className="p-2 pr-8 relative">
                 <BankTxCardActions
                   title="Total Transactions"
                   snapshot={`Count: ${transactions.length}\nVolume (abs): ${formatCurrency(sumAbs(transactions))}`}
@@ -1123,12 +1057,12 @@ export default function BankTransactions() {
                   organizationName={orgName}
                   formatCurrency={formatCurrency}
                 />
-                <p className="text-sm text-muted-foreground mb-1">Total Transactions</p>
-                <p className="text-2xl font-bold text-foreground">{transactions.length}</p>
+                <p className="text-[11px] leading-tight text-muted-foreground">Total Transactions</p>
+                <p className="text-base font-semibold text-foreground">{transactions.length}</p>
                 <p className="text-xs text-muted-foreground mt-1">{formatCurrency(sumAbs(transactions))} volume</p>
               </Card>
               <Card
-                className={cn("p-4 relative", clickable)}
+                className={cn("p-2 pr-8 relative", clickable)}
                 onClick={() => { setStatusFilter('unmatched'); setGlPostedFilter('all'); }}
                 role="button"
                 tabIndex={0}
@@ -1140,12 +1074,12 @@ export default function BankTransactions() {
                   organizationName={orgName}
                   formatCurrency={formatCurrency}
                 />
-                <p className="text-sm text-muted-foreground mb-1">Unmatched</p>
-                <p className="text-2xl font-bold text-warning">{unmatchedTx.length}</p>
+                <p className="text-[11px] leading-tight text-muted-foreground">Unmatched</p>
+                <p className="text-base font-semibold text-warning">{unmatchedTx.length}</p>
                 <p className="text-xs text-muted-foreground mt-1">{formatCurrency(sumAbs(unmatchedTx))}</p>
               </Card>
               <Card
-                className={cn("p-4 relative", clickable)}
+                className={cn("p-2 pr-8 relative", clickable)}
                 onClick={() => { setStatusFilter('matched'); setGlPostedFilter('not-posted'); }}
                 role="button"
                 tabIndex={0}
@@ -1157,8 +1091,8 @@ export default function BankTransactions() {
                   organizationName={orgName}
                   formatCurrency={formatCurrency}
                 />
-                <p className="text-sm text-muted-foreground mb-1">Matched</p>
-                <p className="text-2xl font-bold text-blue-600">{matchedTx.length}</p>
+                <p className="text-[11px] leading-tight text-muted-foreground">Matched</p>
+                <p className="text-base font-semibold text-blue-600">{matchedTx.length}</p>
                 <p className="text-xs text-muted-foreground mt-1">
                   {formatCurrency(sumAbs(matchedTx))}
                 </p>
@@ -1167,7 +1101,7 @@ export default function BankTransactions() {
                 </p>
               </Card>
               <Card
-                className={cn("p-4 relative", clickable)}
+                className={cn("p-2 pr-8 relative", clickable)}
                 onClick={() => { setStatusFilter('reconciled'); setGlPostedFilter('all'); }}
                 role="button"
                 tabIndex={0}
@@ -1179,15 +1113,11 @@ export default function BankTransactions() {
                   organizationName={orgName}
                   formatCurrency={formatCurrency}
                 />
-                <p className="text-sm text-muted-foreground mb-1">Reconciled</p>
-                <p className="text-2xl font-bold text-success">{reconciledTx.length}</p>
+                <p className="text-[11px] leading-tight text-muted-foreground">Reconciled</p>
+                <p className="text-base font-semibold text-success">{reconciledTx.length}</p>
                 <p className="text-xs text-muted-foreground mt-1">{formatCurrency(sumAbs(reconciledTx))}</p>
               </Card>
-            </div>
-
-            {/* Row 2 — Money flow & GL health */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <Card className="p-4 relative">
+              <Card className="p-2 pr-8 relative">
                 <BankTxCardActions
                   title={inflowLabel}
                   snapshot={`Count: ${inflowTx.length}\nTotal: ${formatCurrency(inflow)}`}
@@ -1195,11 +1125,11 @@ export default function BankTransactions() {
                   organizationName={orgName}
                   formatCurrency={formatCurrency}
                 />
-                <p className="text-sm text-muted-foreground mb-1">{inflowLabel}</p>
-                <p className="text-2xl font-bold text-success">{formatCurrency(inflow)}</p>
+                <p className="text-[11px] leading-tight text-muted-foreground">{inflowLabel}</p>
+                <p className="text-base font-semibold text-success">{formatCurrency(inflow)}</p>
                 <p className="text-xs text-muted-foreground mt-1">{inflowTx.length} transactions</p>
               </Card>
-              <Card className="p-4 relative">
+              <Card className="p-2 pr-8 relative">
                 <BankTxCardActions
                   title={outflowLabel}
                   snapshot={`Count: ${outflowTx.length}\nTotal: ${formatCurrency(outflow)}`}
@@ -1207,25 +1137,25 @@ export default function BankTransactions() {
                   organizationName={orgName}
                   formatCurrency={formatCurrency}
                 />
-                <p className="text-sm text-muted-foreground mb-1">{outflowLabel}</p>
-                <p className="text-2xl font-bold text-foreground">{formatCurrency(outflow)}</p>
+                <p className="text-[11px] leading-tight text-muted-foreground">{outflowLabel}</p>
+                <p className="text-base font-semibold text-foreground">{formatCurrency(outflow)}</p>
                 <p className="text-xs text-muted-foreground mt-1">{outflowTx.length} transactions</p>
               </Card>
-              <Card className="p-4 relative">
+              <Card className="p-2 pr-8 relative">
                 <BankTxCardActions
                   title="Net Activity"
                   snapshot={`${inflowLabel}: ${formatCurrency(inflow)}\n${outflowLabel}: ${formatCurrency(outflow)}\nNet: ${net >= 0 ? '+' : '-'}${formatCurrency(Math.abs(net))}`}
                   organizationName={orgName}
                   formatCurrency={formatCurrency}
                 />
-                <p className="text-sm text-muted-foreground mb-1">Net Activity</p>
-                <p className={cn("text-2xl font-bold", net >= 0 ? "text-success" : "text-destructive")}>
+                <p className="text-[11px] leading-tight text-muted-foreground">Net Activity</p>
+                <p className={cn("text-base font-semibold", net >= 0 ? "text-success" : "text-destructive")}>
                   {net >= 0 ? '+' : '−'}{formatCurrency(net)}
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">{inflowLabel} − {outflowLabel}</p>
               </Card>
               <Card
-                className={cn("p-4 relative", clickable)}
+                className={cn("p-2 pr-8 relative", clickable)}
                 onClick={() => { setGlPostedFilter('posted'); }}
                 role="button"
                 tabIndex={0}
@@ -1237,28 +1167,27 @@ export default function BankTransactions() {
                   organizationName={orgName}
                   formatCurrency={formatCurrency}
                 />
-                <p className="text-sm text-muted-foreground mb-1">Posted to GL</p>
-                <p className="text-2xl font-bold text-foreground">
+                <p className="text-[11px] leading-tight text-muted-foreground">Posted to GL</p>
+                <p className="text-base font-semibold text-foreground">
                   {postedTx.length}<span className="text-sm font-normal text-muted-foreground">/{transactions.length}</span>
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">{formatCurrency(sumAbs(postedTx))} posted</p>
-                <div className="mt-2 h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-muted">
                   <div className="h-full bg-success transition-all" style={{ width: `${postedPct}%` }} />
                 </div>
               </Card>
-            </div>
           </div>
         );
       })()}
 
       {/* Filters */}
-      <Card className="p-4">
-        <div className="space-y-4">
+      <Card className="p-2.5">
+        <div className="space-y-2">
           {/* Primary Filters Row */}
-          <div className="flex flex-wrap items-center gap-4">
+          <div className="flex flex-wrap items-center gap-2">
             {accountType === 'bank' ? (
               <Select value={effectiveBankAccountId} onValueChange={setSelectedBankAccount}>
-                <SelectTrigger className="w-52">
+                <SelectTrigger className="h-8 w-48 text-xs">
                   <SelectValue placeholder="Select bank account" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1271,7 +1200,7 @@ export default function BankTransactions() {
               </Select>
             ) : (
               <Select value={effectiveCreditCardId} onValueChange={setSelectedCreditCard}>
-                <SelectTrigger className="w-52">
+                <SelectTrigger className="h-8 w-48 text-xs">
                   <SelectValue placeholder="Select credit card" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1290,12 +1219,12 @@ export default function BankTransactions() {
                 placeholder="Search transactions, payee, reference..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
+                className="h-8 pl-9 text-xs"
               />
             </div>
 
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-44">
+              <SelectTrigger className="h-8 w-40 text-xs">
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent>
@@ -1561,7 +1490,7 @@ export default function BankTransactions() {
             {transactions.length === 0 ? 'No transactions yet. Import some to get started.' : 'No transactions match your filters.'}
           </div>
         ) : (
-          <AuroraScroll className="h-[min(72vh,860px)]" testId="banking-transaction-scroll">
+          <AuroraScroll className="h-[min(80vh,980px)]" testId="banking-transaction-scroll">
           <table className="data-table min-w-[960px]">
             <thead>
               <tr>

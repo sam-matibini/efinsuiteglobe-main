@@ -98,6 +98,32 @@ describe('journal amount edit', () => {
     expect(edited.balanced).toBe(true);
   });
 
+  it('marks an account change while 1500 and 1500 stay balanced', () => {
+    const lines = [
+      { ...tradePayables, account_id: 'ap' },
+      { ...chequing, account_id: 'bank' },
+    ];
+    const drafts = seedAmountDrafts(lines);
+    const same = editedJournalAmounts(lines, drafts);
+    expect(same.changed).toBe(false);
+    expect(same.balanced).toBe(true);
+    expect(same.lines.map((line) => line.accountId)).toEqual(['ap', 'bank']);
+
+    const moved = editedJournalAmounts(lines, {
+      ...drafts,
+      'line-ap': { ...drafts['line-ap'], accountId: 'office' },
+    });
+    expect(moved.changed).toBe(true);
+    expect(moved.valid).toBe(true);
+    expect(moved.balanced).toBe(true);
+    expect(moved.lines.find((line) => line.id === 'line-ap')).toMatchObject({
+      accountId: 'office',
+      debit: 1500,
+      credit: 0,
+      baseDebit: 1500,
+    });
+  });
+
   it('balances an expense refund to the cent', () => {
     const lines = [
       { id: 'bank', debit: 1.39, credit: 0, exchange_rate: 1, base_currency_debit: 1.39, base_currency_credit: 0 },
