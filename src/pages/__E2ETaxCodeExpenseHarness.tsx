@@ -46,9 +46,18 @@ export default function E2ETaxCodeExpenseHarness() {
   const [code, setCode] = useState<typeof pstCode | typeof gstCode | null>(pstCode);
   const [saved, setSaved] = useState('');
 
+  const savedLabel =
+    saved === 'pst-paid'
+      ? 'Saved to PST Paid (Non-Recoverable)'
+      : saved === 'office'
+        ? 'Saved to Office'
+        : saved === 'gst-itc'
+          ? 'Saved to GST/HST Input Tax Credit'
+          : saved;
+
   return (
     <div className="p-6">
-      <p data-testid="saved-paid-account">{saved}</p>
+      <p data-testid="saved-paid-account" className="text-lg font-semibold text-foreground">{savedLabel}</p>
       <div className="flex gap-2">
         <button type="button" onClick={() => setCode({ ...pstCode })}>Edit PST</button>
         <button type="button" onClick={() => setCode({ ...gstCode })}>Edit GST</button>
