@@ -465,6 +465,7 @@ export default function TransactionRuleDialog({
             </div>
 
             {markAs === 'categorized' && (
+            <>
             <div className="space-y-3 p-3 bg-muted/30 rounded-lg">
               <div className="flex items-center gap-2">
                 <Checkbox
@@ -524,8 +525,6 @@ export default function TransactionRuleDialog({
               )}
             </div>
 
-            {/* Post to GL (Optional - syncs with categorize) */}
-            {markAs === 'categorized' && (
             <div className="space-y-3 p-3 bg-muted/30 rounded-lg">
               <div className="flex items-center gap-2">
                 <Checkbox
@@ -676,7 +675,7 @@ export default function TransactionRuleDialog({
                 </div>
               )}
             </div>
-            )}
+            </>
             )}
 
             {/* Add Memo Action */}

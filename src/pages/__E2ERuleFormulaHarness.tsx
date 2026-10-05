@@ -33,6 +33,7 @@ const canadaConditions: RuleCondition[] = [
 export default function E2ERuleFormulaHarness() {
   const [conditions, setConditions] = useState(initialConditions);
   const [logicOperator, setLogicOperator] = useState<RuleLogicOperator>('AND');
+  const [dialogOpen, setDialogOpen] = useState(true);
   const matched = useMemo(
     () => samples.filter((tx) => ruleConditionsMatch(tx, conditions, logicOperator, { accountKind: 'bank' })),
     [conditions, logicOperator],
@@ -68,12 +69,19 @@ export default function E2ERuleFormulaHarness() {
           <li key={tx.id}>{tx.description}</li>
         ))}
       </ul>
-      <p data-testid="canada-matches" className="text-sm font-medium">
-        Canada withdrawals: {canadaMatched.map((tx) => tx.id).join(', ') || 'none'}
-      </p>
+      <ul data-testid="canada-matches" className="text-sm space-y-1">
+        {canadaSamples.map((tx) => {
+          const hit = canadaMatched.some((match) => match.id === tx.id);
+          return (
+            <li key={tx.id}>
+              {tx.description} ({tx.transaction_type}) {hit ? 'matched' : 'unmatched'}
+            </li>
+          );
+        })}
+      </ul>
       <TransactionRuleDialog
-        open
-        onOpenChange={() => {}}
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
         onSave={() => {}}
         initialName="Canada"
         initialConditions={canadaInitial}
