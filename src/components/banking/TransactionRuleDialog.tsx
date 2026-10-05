@@ -15,6 +15,10 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { splitRuleApplyTo, withRuleApplyTo, ruleActionSettings, type RuleApplyTo, type RuleAccountScope, type RuleMarkAs } from '@/lib/ruleConditionFormula';
+import { useBankAccounts } from '@/hooks/useBankAccounts';
+import { useCreditCards } from '@/hooks/useCreditCards';
 import RuleConditionBuilder from './RuleConditionBuilder';
 import { SearchableGLAccountSelect } from './SearchableGLAccountSelect';
 import { TaxCodeSelect } from './TaxCodeSelect';
@@ -52,7 +56,16 @@ export default function TransactionRuleDialog({
   const [isActive, setIsActive] = useState(true);
   const [conditions, setConditions] = useState<RuleCondition[]>([]);
   const [logicOperator, setLogicOperator] = useState<RuleLogicOperator>('AND');
+  const [applyTo, setApplyTo] = useState<RuleApplyTo>('deposits');
+  const [markAs, setMarkAs] = useState<RuleMarkAs>('categorized');
+  const [recordAs, setRecordAs] = useState('');
+  const [referenceNumber, setReferenceNumber] = useState('');
+  const [accountScope, setAccountScope] = useState<RuleAccountScope>('all');
+  const [bankAccountIds, setBankAccountIds] = useState<string[]>([]);
+  const [creditCardIds, setCreditCardIds] = useState<string[]>([]);
   const [actions, setActions] = useState<RuleAction[]>([]);
+  const { accounts: bankAccounts = [] } = useBankAccounts();
+  const { creditCards = [] } = useCreditCards();
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{
     total: number;
@@ -77,26 +90,64 @@ export default function TransactionRuleDialog({
         setName(rule.name || '');
         setDescription(rule.description || '');
         setIsActive(rule.isActive ?? true);
-        const ruleConditions = rule.conditions && rule.conditions.length > 0 
-          ? ensureConditionIds(rule.conditions)
+        const source = rule.conditions && rule.conditions.length > 0 ? rule.conditions : [];
+        const split = splitRuleApplyTo(source);
+        const ruleConditions = split.criteria.length > 0
+          ? ensureConditionIds(split.criteria as RuleCondition[])
           : [{ id: `cond-${Date.now()}`, field: 'description' as const, operator: 'contains' as const, value: '' }];
+        setApplyTo(source.length > 0 ? split.applyTo : 'deposits');
         setConditions(ruleConditions);
         setLogicOperator(rule.logicOperator || 'AND');
-        setActions(rule.actions || [{ type: 'categorize', category: '' }]);
+        const savedActions = rule.actions || [{ type: 'categorize' as const, category: '' }];
+        const settings = ruleActionSettings(savedActions);
+        setMarkAs(settings.markAs);
+        setRecordAs(settings.recordAs);
+        setReferenceNumber(settings.referenceNumber);
+        setAccountScope(settings.accountScope);
+        setBankAccountIds(settings.bankAccountIds);
+        setCreditCardIds(settings.creditCardIds);
+        setActions(savedActions);
       } else {
         setName(initialName || '');
         setDescription('');
         setIsActive(true);
-        const initConditions = initialConditions && initialConditions.length > 0
-          ? ensureConditionIds(initialConditions)
+        const source = initialConditions && initialConditions.length > 0 ? initialConditions : [];
+        const split = splitRuleApplyTo(source);
+        const initConditions = split.criteria.length > 0
+          ? ensureConditionIds(split.criteria as RuleCondition[])
           : [{ id: `cond-${Date.now()}`, field: 'description' as const, operator: 'contains' as const, value: '' }];
+        setApplyTo(source.length > 0 ? split.applyTo : 'deposits');
         setConditions(initConditions);
         setLogicOperator('AND');
+        setMarkAs('categorized');
+        setRecordAs('');
+        setReferenceNumber('');
+        setAccountScope('all');
+        setBankAccountIds([]);
+        setCreditCardIds([]);
         setActions([{ type: 'categorize', category: '' }]);
       }
       setTestResult(null);
     }
   }, [open, rule, initialConditions, initialName]);
+
+  const stampedActions = (source: RuleAction[]): RuleAction[] => {
+    const next = (source.length > 0 ? source : [{ type: 'categorize' as const }]).map((action) => ({ ...action }));
+    let target = next.find((action) => action.type === 'categorize');
+    if (!target) {
+      target = { type: 'categorize', category: recordAs.trim() };
+      next.unshift(target);
+    }
+    target.markAs = markAs;
+    target.recordAs = recordAs.trim() || undefined;
+    if (recordAs.trim()) target.category = recordAs.trim();
+    target.referenceNumber = referenceNumber.trim() || undefined;
+    target.accountScope = accountScope;
+    target.bankAccountIds = accountScope === 'custom' ? bankAccountIds : [];
+    target.creditCardIds = accountScope === 'custom' ? creditCardIds : [];
+    if (markAs === 'recognized') return next.filter((action) => action.type !== 'post_to_gl');
+    return next;
+  };
 
   // Build a draft DB-shaped rule from current dialog state for the matchers
   const draftRule = useMemo<DBRule>(() => ({
@@ -105,15 +156,15 @@ export default function TransactionRuleDialog({
     name: name || 'Draft',
     description: description || null,
     is_active: true,
-    conditions: conditions,
+    conditions: withRuleApplyTo(conditions, applyTo) as RuleCondition[],
     logic_operator: logicOperator.toLowerCase() as 'and' | 'or',
-    actions: actions,
+    actions: stampedActions(actions),
     priority: rule?.priority ?? 10,
     matches_count: 0,
     last_matched_at: null,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
-  }), [rule?.id, rule?.priority, currentOrganization?.id, name, description, conditions, logicOperator, actions]);
+  }), [rule?.id, rule?.priority, currentOrganization?.id, name, description, conditions, logicOperator, applyTo, actions, markAs, recordAs, referenceNumber, accountScope, bankAccountIds, creditCardIds]);
 
   const handleTestRule = async () => {
     if (!currentOrganization?.id) return;
@@ -183,17 +234,18 @@ export default function TransactionRuleDialog({
   });
 
   // Check if at least one action has valid settings
-  const hasValidActions = actions.some(a => {
+  const hasValidActions = markAs === 'recognized' || actions.some(a => {
     if (a.type === 'categorize' && a.glAccountId) return true;
     if (a.type === 'post_to_gl' && a.glAccountId) return true;
     if (a.type === 'add_memo' && a.memo && a.memo.trim().length > 0) return true;
     if (a.type === 'flag_review') return true;
     return false;
   });
+  const scopeReady = accountScope !== 'custom' || bankAccountIds.length + creditCardIds.length > 0;
 
   const handleSave = () => {
     // Ensure all conditions have proper unique IDs
-    const validatedConditions = ensureConditionIds(conditions);
+    const validatedConditions = withRuleApplyTo(ensureConditionIds(conditions), applyTo) as RuleCondition[];
     
     const ruleData: Partial<TransactionRule> = {
       id: rule?.id || `rule-${Date.now()}`,
@@ -202,7 +254,7 @@ export default function TransactionRuleDialog({
       isActive,
       conditions: validatedConditions,
       logicOperator,
-      actions,
+      actions: stampedActions(actions),
       priority: rule?.priority || 10,
       matchCount: rule?.matchCount || 0,
       createdAt: rule?.createdAt || new Date(),
@@ -232,7 +284,7 @@ export default function TransactionRuleDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             {rule ? 'Edit Rule' : 'Create Transaction Rule'}
@@ -252,7 +304,7 @@ export default function TransactionRuleDialog({
           {/* Basic Info */}
           <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2">
-              <Label htmlFor="name">Rule Name</Label>
+              <Label htmlFor="name">Rule Name <span className="text-destructive">*</span></Label>
               <Input
                 id="name"
                 value={name}
@@ -260,6 +312,46 @@ export default function TransactionRuleDialog({
                 placeholder="e.g., Payroll Transactions"
                 className="mt-1.5"
               />
+            </div>
+            <div className="col-span-2 space-y-2">
+              <Label>Apply To <span className="text-destructive">*</span></Label>
+              <RadioGroup
+                value={applyTo}
+                onValueChange={(value) => setApplyTo(value as RuleApplyTo)}
+                className="flex flex-wrap gap-4"
+                data-testid="rule-apply-to"
+              >
+                <label className="flex items-center gap-2 text-sm">
+                  <RadioGroupItem value="deposits" id="apply-deposits" />
+                  Deposits
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <RadioGroupItem value="withdrawals" id="apply-withdrawals" />
+                  Withdrawals
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <RadioGroupItem value="both" id="apply-both" />
+                  Deposits and withdrawals
+                </label>
+              </RadioGroup>
+            </div>
+            <div className="col-span-2 space-y-2">
+              <Label>Mark Transaction As <span className="text-destructive">*</span></Label>
+              <RadioGroup
+                value={markAs}
+                onValueChange={(value) => setMarkAs(value as RuleMarkAs)}
+                className="flex flex-wrap gap-4"
+                data-testid="rule-mark-as"
+              >
+                <label className="flex items-center gap-2 text-sm">
+                  <RadioGroupItem value="recognized" id="mark-recognized" />
+                  Recognized
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <RadioGroupItem value="categorized" id="mark-categorized" />
+                  Categorized
+                </label>
+              </RadioGroup>
             </div>
             <div className="col-span-2">
               <Label htmlFor="description">Description (Optional)</Label>
@@ -284,16 +376,95 @@ export default function TransactionRuleDialog({
             />
           </div>
 
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="record-as">Record As</Label>
+              <Input
+                id="record-as"
+                data-testid="rule-record-as"
+                value={recordAs}
+                onChange={(e) => setRecordAs(e.target.value)}
+                placeholder="e.g. Expense, Interest income"
+                className="mt-1.5"
+              />
+            </div>
+            <div>
+              <Label htmlFor="reference-number">Reference Number</Label>
+              <Input
+                id="reference-number"
+                data-testid="rule-reference-number"
+                value={referenceNumber}
+                onChange={(e) => setReferenceNumber(e.target.value)}
+                placeholder="Filled in only when the transaction has no reference"
+                className="mt-1.5"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Associate Accounts <span className="text-destructive">*</span></Label>
+              <RadioGroup
+                value={accountScope}
+                onValueChange={(value) => setAccountScope(value as RuleAccountScope)}
+                className="grid grid-cols-2 gap-2 sm:grid-cols-4"
+                data-testid="rule-account-scope"
+              >
+                {([
+                  ['all', 'All Accounts'],
+                  ['banks', 'All Banks'],
+                  ['cards', 'All Cards'],
+                  ['custom', 'Custom'],
+                ] as const).map(([value, label]) => (
+                  <label key={value} className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
+                    <RadioGroupItem value={value} id={`scope-${value}`} />
+                    {label}
+                  </label>
+                ))}
+              </RadioGroup>
+              {accountScope === 'custom' && (
+                <div className="max-h-40 space-y-2 overflow-y-auto rounded-md border p-3">
+                  {bankAccounts.map((account) => (
+                    <label key={account.id} className="flex items-center gap-2 text-sm">
+                      <Checkbox
+                        checked={bankAccountIds.includes(account.id)}
+                        onCheckedChange={() => setBankAccountIds((current) => (
+                          current.includes(account.id)
+                            ? current.filter((id) => id !== account.id)
+                            : [...current, account.id]
+                        ))}
+                      />
+                      {account.name}
+                    </label>
+                  ))}
+                  {creditCards.map((card) => (
+                    <label key={card.id} className="flex items-center gap-2 text-sm">
+                      <Checkbox
+                        checked={creditCardIds.includes(card.id)}
+                        onCheckedChange={() => setCreditCardIds((current) => (
+                          current.includes(card.id)
+                            ? current.filter((id) => id !== card.id)
+                            : [...current, card.id]
+                        ))}
+                      />
+                      {card.name}
+                    </label>
+                  ))}
+                  {bankAccounts.length === 0 && creditCards.length === 0 && (
+                    <p className="text-xs text-muted-foreground">No bank or card accounts are available for this company yet.</p>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* Actions */}
           <div className="border rounded-lg p-4 space-y-4">
             <div className="flex items-center justify-between">
-              <h4 className="text-sm font-medium text-foreground">Actions</h4>
+              <h4 className="text-sm font-medium text-foreground">Account</h4>
               <p className="text-xs text-muted-foreground">
-                Analyze & Categorize → Post to GL (optional)
+                {markAs === 'recognized' ? 'Recognized transactions are matched without a journal' : 'Categorized transactions use this account'}
               </p>
             </div>
 
-            {/* Analyze & Categorize (Primary action) */}
+            {markAs === 'categorized' && (
             <div className="space-y-3 p-3 bg-muted/30 rounded-lg">
               <div className="flex items-center gap-2">
                 <Checkbox
@@ -302,24 +473,27 @@ export default function TransactionRuleDialog({
                   onCheckedChange={() => toggleActionType('categorize')}
                 />
                 <Label htmlFor="action-categorize" className="font-medium cursor-pointer">
-                  Analyze & Categorize
+                  Account <span className="text-destructive">*</span>
                 </Label>
               </div>
               
               {hasActionType('categorize') && (
                 <div className="ml-6">
                   <Label className="text-xs text-muted-foreground mb-1.5 block">
-                    GL Account (for categorization)
+                    Account
                   </Label>
                   <div className="w-full max-w-md">
                     <SearchableGLAccountSelect
                       value={getAction('categorize')?.glAccountId || getAction('post_to_gl')?.glAccountId || ''}
                       onValueChange={(id, account) => {
+                        if (account?.name) {
+                          setRecordAs((current) => current.trim() ? current : account.name);
+                        }
                         // Update categorize action with GL account info
                         const catIdx = actions.findIndex((a) => a.type === 'categorize');
                         if (catIdx >= 0) {
                           updateAction(catIdx, { 
-                            category: account?.name || '',
+                            category: recordAs.trim() || account?.name || '',
                             glAccountId: id,
                             glAccountName: account?.name,
                           });
@@ -351,6 +525,7 @@ export default function TransactionRuleDialog({
             </div>
 
             {/* Post to GL (Optional - syncs with categorize) */}
+            {markAs === 'categorized' && (
             <div className="space-y-3 p-3 bg-muted/30 rounded-lg">
               <div className="flex items-center gap-2">
                 <Checkbox
@@ -501,6 +676,8 @@ export default function TransactionRuleDialog({
                 </div>
               )}
             </div>
+            )}
+            )}
 
             {/* Add Memo Action */}
             <div className="space-y-2">
@@ -571,8 +748,8 @@ export default function TransactionRuleDialog({
               <div className="text-xs space-y-2">
                 <div>
                   <span className="font-medium">{testResult.matched}</span> of {testResult.total} transactions matched
-                  {testResult.matched === 0 && conditions.length > 1 && logicOperator === 'AND' && (
-                    <span className="text-amber-600"> — try switching AND → OR if any one condition should be enough.</span>
+                  {testResult.matched === 0 && (
+                    <span className="text-muted-foreground"> — Apply To still has to match, and Contains uses the whole word.</span>
                   )}
                 </div>
                 {conditions.length > 1 && (
@@ -607,11 +784,12 @@ export default function TransactionRuleDialog({
           </Button>
           <Button 
             onClick={handleSave} 
-            disabled={!name.trim() || !hasValidConditions || !hasValidActions}
+            disabled={!name.trim() || !hasValidConditions || !hasValidActions || !scopeReady}
             title={
               !name.trim() ? 'Enter a rule name' :
-              !hasValidConditions ? 'Add valid conditions with values' :
-              !hasValidActions ? 'Configure at least one action with a GL account' :
+              !hasValidConditions ? 'Add valid criteria with values' :
+              !scopeReady ? 'Choose at least one account for a custom association' :
+              !hasValidActions ? 'Choose an account, or mark the transaction as recognized' :
               'Save this rule'
             }
           >

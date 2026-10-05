@@ -1,6 +1,7 @@
 import { Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -22,13 +23,12 @@ const fieldOptions: { value: RuleConditionField; label: string }[] = [
   { value: 'payee_payor', label: 'Payee/Payor' },
   { value: 'reference', label: 'Reference' },
   { value: 'amount', label: 'Amount' },
-  { value: 'type', label: 'Transaction Type' },
   { value: 'date', label: 'Date' },
 ];
 
 const operatorsByField: Record<RuleConditionField, { value: RuleConditionOperator; label: string }[]> = {
   description: [
-    { value: 'contains', label: 'Contains (fuzzy)' },
+    { value: 'contains', label: 'Contains' },
     { value: 'fuzzy_match', label: 'Fuzzy match' },
     { value: 'contains_words', label: 'Contains all words' },
     { value: 'contains_any_word', label: 'Contains any word' },
@@ -40,7 +40,7 @@ const operatorsByField: Record<RuleConditionField, { value: RuleConditionOperato
     { value: 'matches_regex', label: 'Matches pattern (regex)' },
   ],
   payee_payor: [
-    { value: 'contains', label: 'Contains (fuzzy)' },
+    { value: 'contains', label: 'Contains' },
     { value: 'fuzzy_match', label: 'Fuzzy match' },
     { value: 'contains_words', label: 'Contains all words' },
     { value: 'contains_any_word', label: 'Contains any word' },
@@ -52,7 +52,7 @@ const operatorsByField: Record<RuleConditionField, { value: RuleConditionOperato
     { value: 'matches_regex', label: 'Matches pattern (regex)' },
   ],
   reference: [
-    { value: 'contains', label: 'Contains (fuzzy)' },
+    { value: 'contains', label: 'Contains' },
     { value: 'fuzzy_match', label: 'Fuzzy match' },
     { value: 'contains_words', label: 'Contains all words' },
     { value: 'not_contains', label: 'Does not contain' },
@@ -128,45 +128,36 @@ export default function RuleConditionBuilder({
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h4 className="text-sm font-medium text-foreground">Conditions</h4>
-        {conditions.length > 1 && (
-          <Select value={logicOperator} onValueChange={(v) => onLogicOperatorChange(v as RuleLogicOperator)}>
-            <SelectTrigger className="w-24 h-8">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="AND">AND</SelectItem>
-              <SelectItem value="OR">OR</SelectItem>
-            </SelectContent>
-          </Select>
-        )}
+        <h4 className="text-sm font-medium text-foreground">Criteria</h4>
       </div>
 
-      {conditions.length > 1 && (
-        <p className="text-xs -mt-2" data-testid="rule-condition-formula">
-          <span className="font-mono font-medium text-primary">
-            {conditions.map((_, index) => index + 1).join(` ${logicOperator} `)}
-          </span>
-          <span className="text-muted-foreground">
-            {logicOperator === 'AND'
-              ? ' — a transaction must match every condition.'
-              : ' — a transaction must match any one condition.'}
-          </span>
-        </p>
-      )}
+      <div className="space-y-1.5">
+        <Label className="text-sm">Categorise the transactions when</Label>
+        <Select value={logicOperator} onValueChange={(v) => onLogicOperatorChange(v as RuleLogicOperator)}>
+          <SelectTrigger className="h-9" data-testid="rule-condition-formula">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="AND">All of the following criteria match</SelectItem>
+            <SelectItem value="OR">Any one of the following criteria matches</SelectItem>
+          </SelectContent>
+        </Select>
+        {conditions.length > 1 && (
+          <p className="text-xs text-muted-foreground">
+            Criteria pattern:{' '}
+            <span className="font-mono font-medium text-primary">
+              ( {conditions.map((_, index) => index + 1).join(` ${logicOperator} `)} )
+            </span>
+          </p>
+        )}
+      </div>
 
 
       <div className="space-y-3">
         {conditions.map((condition, index) => (
           <div key={condition.id} className="space-y-2">
-            {index > 0 && (
-              <div className="flex items-center justify-center">
-                <span className="text-xs font-medium text-muted-foreground bg-muted px-2 py-1 rounded">
-                  {logicOperator}
-                </span>
-              </div>
-            )}
             <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg">
+              <span className="w-6 shrink-0 text-sm font-medium text-muted-foreground">{index + 1}</span>
               <Select
                 value={condition.field}
                 onValueChange={(v) => updateCondition(condition.id, { field: v as RuleConditionField })}
@@ -239,7 +230,7 @@ export default function RuleConditionBuilder({
 
       <Button variant="outline" size="sm" onClick={addCondition} className="w-full">
         <Plus className="w-4 h-4 mr-2" />
-        Add Condition
+        Add Criterion
       </Button>
     </div>
   );

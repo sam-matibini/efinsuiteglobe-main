@@ -570,35 +570,20 @@ export default function BankTransactions() {
   // Generate rule conditions from a transaction's patterns
   const generateRuleFromTransaction = (transaction: BankTransaction) => {
     const conditions: RuleCondition[] = [];
-    
-    const descParts = transaction.description.split(/[\s\-]+/).filter(p => p.length > 2);
-    const significantWords = descParts.filter(w => 
-      !['PAYMENT', 'TRANSFER', 'WIRE', 'E-TRANSFER', 'PAD', 'INTERAC', 'THE', 'FOR', 'INC', 'LTD', 'LLC'].includes(w.toUpperCase())
-    );
-    
-    if (significantWords.length > 0) {
-      conditions.push({
-        id: `cond-${Date.now()}-1`,
-        field: 'description',
-        operator: 'contains',
-        value: significantWords[0].toUpperCase(),
-      });
-    } else if (descParts.length > 0) {
-      conditions.push({
-        id: `cond-${Date.now()}-1`,
-        field: 'description',
-        operator: 'contains',
-        value: descParts[0].toUpperCase(),
-      });
-    }
+    const generic = new Set([
+      'PAYMENT', 'TRANSFER', 'WIRE', 'PAD', 'INTERAC', 'THE', 'FOR', 'INC', 'LTD', 'LLC',
+      'POS', 'PURCHASE', 'DEBIT', 'CREDIT', 'CARD',
+    ]);
+    const descParts = transaction.description.split(/[\s\-]+/).filter((part) => part.length > 2);
+    const significantWords = descParts.filter((word) => !generic.has(word.toUpperCase()));
+    const phrase = (transaction.payee_payor || significantWords.join(' ') || transaction.description).trim();
 
-    // Add payee/payor condition if available
-    if (transaction.payee_payor) {
+    if (phrase) {
       conditions.push({
-        id: `cond-${Date.now()}-payee`,
-        field: 'payee_payor',
+        id: `cond-${Date.now()}-1`,
+        field: transaction.payee_payor ? 'payee_payor' : 'description',
         operator: 'contains',
-        value: transaction.payee_payor,
+        value: phrase,
       });
     }
 
@@ -609,19 +594,8 @@ export default function BankTransactions() {
       value: '',
     });
 
-    const amount = Math.abs(Number(transaction.amount));
-    const lowerBound = Math.floor(amount * 0.8);
-    const upperBound = Math.ceil(amount * 1.2);
-    conditions.push({
-      id: `cond-${Date.now()}-3`,
-      field: 'amount',
-      operator: 'between',
-      value: lowerBound.toString(),
-      value2: upperBound.toString(),
-    });
-
-    const mainKeyword = transaction.payee_payor || significantWords[0] || descParts[0] || 'Transaction';
-    const ruleName = `${mainKeyword.charAt(0).toUpperCase() + mainKeyword.slice(1).toLowerCase()} ${transaction.transaction_type === 'deposit' ? 'Deposits' : 'Payments'}`;
+    const mainKeyword = phrase || 'Transaction';
+    const ruleName = `${mainKeyword.charAt(0).toUpperCase() + mainKeyword.slice(1).toLowerCase()} ${transaction.transaction_type === 'deposit' ? 'Deposits' : 'Withdrawals'}`;
 
     setRuleInitialConditions(conditions);
     setRuleInitialName(ruleName);

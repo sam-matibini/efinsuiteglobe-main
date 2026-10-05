@@ -1,12 +1,12 @@
 /**
- * Combine every condition on a transaction rule.
+ * Combine criteria on a transaction rule the way a bank rule form does.
  *
- * AND keeps a transaction only when every filled condition matches.
- * OR keeps it when any filled condition matches. Payee text is also read from
- * the description, because statement imports often leave payee blank.
+ * Deposit / withdrawal scope always applies. AND and OR apply only to the
+ * other criteria. "Contains" matches the phrase as whole words on the chosen
+ * field, so "Canada" does not categorise "pos purchase" or "canadian child benefit".
  */
 
-import { extractVendorName, fuzzyContains, matchText } from '@/lib/transactionMatcher';
+import { matchText } from '@/lib/transactionMatcher';
 
 export interface RuleMatchTransaction {
   description?: string | null;
@@ -59,10 +59,28 @@ function textsForField(tx: RuleMatchTransaction, field: string): string[] {
   const description = tx.description || '';
   const payee = tx.payee_payor || '';
   const reference = tx.reference || '';
-  const memo = tx.memo || '';
-  if (field === 'payee_payor') return uniqueTexts([payee, description, memo, reference]);
-  if (field === 'reference') return uniqueTexts([reference, description, memo]);
-  return uniqueTexts([description, extractVendorName(description), payee, memo, reference]);
+  if (field === 'payee_payor') {
+    return payee.trim() ? [payee] : uniqueTexts([description]);
+  }
+  if (field === 'reference') return uniqueTexts([reference]);
+  return uniqueTexts([description]);
+}
+
+/** Whole-word phrase. "canada" matches "First Data Canada", not "canadian". */
+export function phraseContains(text: string | null | undefined, search: string | null | undefined): boolean {
+  const haystack = (text || '')
+    .toLowerCase()
+    .replace(/[^\w\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const needle = (search || '')
+    .toLowerCase()
+    .replace(/[^\w\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!needle || !haystack) return false;
+  const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(?:^| )${escaped}(?: |$)`).test(haystack);
 }
 
 function amountMatches(tx: RuleMatchTransaction, condition: RuleMatchCondition): boolean {
@@ -119,22 +137,26 @@ function typeMatches(tx: RuleMatchTransaction, operator: string, kind: 'bank' | 
   return false;
 }
 
-function textMatches(
-  tx: RuleMatchTransaction,
-  condition: RuleMatchCondition,
-  options: RuleMatchOptions,
-): boolean {
+function searchWords(search: string): string[] {
+  return search.toLowerCase().replace(/[^\w\s]/g, ' ').split(/\s+/).filter(Boolean);
+}
+
+function textMatches(tx: RuleMatchTransaction, condition: RuleMatchCondition): boolean {
   const operator = condition.operator || '';
   const search = condition.value || '';
   const texts = textsForField(tx, condition.field || 'description');
-  const primary = texts[0] || '';
-  if (operator === 'not_contains' || operator === 'not_equals') {
-    return matchText(primary, operator, search, { txDirection: options.txDirection });
+  if (texts.length === 0) return false;
+  if (operator === 'contains') return texts.some((text) => phraseContains(text, search));
+  if (operator === 'not_contains') return texts.every((text) => !phraseContains(text, search));
+  if (operator === 'contains_words') {
+    const words = searchWords(search);
+    return words.length > 0 && texts.some((text) => words.every((word) => phraseContains(text, word)));
   }
-  return texts.some((text) => {
-    if (matchText(text, operator, search, { txDirection: options.txDirection })) return true;
-    return operator === 'contains' && fuzzyContains(text, search);
-  });
+  if (operator === 'contains_any_word') {
+    const words = searchWords(search);
+    return words.length > 0 && texts.some((text) => words.some((word) => phraseContains(text, word)));
+  }
+  return texts.some((text) => matchText(text, operator, search));
 }
 
 export function conditionIsReady(condition: RuleMatchCondition): boolean {
@@ -155,7 +177,7 @@ export function conditionMatches(
   if (operator === 'is_deposit' || operator === 'is_withdrawal') {
     return typeMatches(tx, operator, options.accountKind || 'bank');
   }
-  if (TEXT_OPERATORS.has(operator)) return textMatches(tx, condition, options);
+  if (TEXT_OPERATORS.has(operator)) return textMatches(tx, condition);
   return false;
 }
 
@@ -171,10 +193,49 @@ export function normalizeConditions(conditions: unknown): RuleMatchCondition[] {
   return conditions.filter((condition): condition is RuleMatchCondition => !!condition && typeof condition === 'object');
 }
 
+export type RuleApplyTo = 'deposits' | 'withdrawals' | 'both';
+
+export function splitRuleApplyTo<T extends RuleMatchCondition>(conditions: T[]): {
+  applyTo: RuleApplyTo;
+  criteria: T[];
+} {
+  const deposits = conditions.some((condition) => condition.operator === 'is_deposit');
+  const withdrawals = conditions.some((condition) => condition.operator === 'is_withdrawal');
+  const criteria = conditions.filter(
+    (condition) => condition.operator !== 'is_deposit' && condition.operator !== 'is_withdrawal',
+  );
+  const applyTo: RuleApplyTo = deposits && !withdrawals
+    ? 'deposits'
+    : withdrawals && !deposits
+      ? 'withdrawals'
+      : 'both';
+  return { applyTo, criteria };
+}
+
+export function withRuleApplyTo<T extends RuleMatchCondition>(criteria: T[], applyTo: RuleApplyTo): T[] {
+  const rest = criteria.filter(
+    (condition) => condition.operator !== 'is_deposit' && condition.operator !== 'is_withdrawal',
+  );
+  if (applyTo === 'both') return rest;
+  const scope = {
+    id: applyTo === 'deposits' ? 'apply-deposits' : 'apply-withdrawals',
+    field: 'type',
+    operator: applyTo === 'deposits' ? 'is_deposit' : 'is_withdrawal',
+    value: '',
+  } as T;
+  return [scope, ...rest];
+}
+
+function isDirectionCondition(condition: RuleMatchCondition): boolean {
+  const operator = condition.operator || '';
+  return operator === 'is_deposit' || operator === 'is_withdrawal' || condition.field === 'type';
+}
+
 /**
- * AND matches only when every ready condition matches.
- * OR matches when any ready condition matches.
- * A blank extra row is left out so it does not erase the other conditions.
+ * Direction is required even when the criteria use OR.
+ * AND matches only when every other criterion matches.
+ * OR matches when any other criterion matches.
+ * A blank extra row is left out so it does not erase the rest.
  */
 export function ruleConditionsMatch(
   tx: RuleMatchTransaction,
@@ -184,7 +245,84 @@ export function ruleConditionsMatch(
 ): boolean {
   const ready = normalizeConditions(conditions).filter(conditionIsReady);
   if (ready.length === 0) return false;
-  const results = ready.map((condition) => conditionMatches(tx, condition, options));
+  const scope = ready.filter(isDirectionCondition);
+  const criteria = ready.filter((condition) => !isDirectionCondition(condition));
+  if (scope.some((condition) => !conditionMatches(tx, condition, options))) return false;
+  if (criteria.length === 0) return false;
+  const results = criteria.map((condition) => conditionMatches(tx, condition, options));
   const logic = (logicOperator || 'and').trim().toLowerCase();
   return logic === 'or' ? results.some(Boolean) : results.every(Boolean);
+}
+
+export type RuleAccountScope = 'all' | 'banks' | 'cards' | 'custom';
+export type RuleMarkAs = 'recognized' | 'categorized';
+
+export interface RuleActionSettings {
+  type?: string | null;
+  markAs?: string | null;
+  recordAs?: string | null;
+  category?: string | null;
+  referenceNumber?: string | null;
+  accountScope?: string | null;
+  bankAccountIds?: string[] | null;
+  creditCardIds?: string[] | null;
+  glAccountId?: string | null;
+}
+
+export function ruleActionSettings(actions: RuleActionSettings[] | null | undefined): {
+  markAs: RuleMarkAs;
+  recordAs: string;
+  referenceNumber: string;
+  accountScope: RuleAccountScope;
+  bankAccountIds: string[];
+  creditCardIds: string[];
+} {
+  const list = actions || [];
+  const source = list.find((action) =>
+    action.accountScope || action.markAs || action.recordAs || action.referenceNumber
+    || action.bankAccountIds?.length || action.creditCardIds?.length,
+  ) || list.find((action) => action.type === 'categorize') || {};
+  const scope = source.accountScope;
+  return {
+    markAs: source.markAs === 'recognized' ? 'recognized' : 'categorized',
+    recordAs: (source.recordAs || source.category || '').trim(),
+    referenceNumber: (source.referenceNumber || '').trim(),
+    accountScope: scope === 'banks' || scope === 'cards' || scope === 'custom' ? scope : 'all',
+    bankAccountIds: source.bankAccountIds || [],
+    creditCardIds: source.creditCardIds || [],
+  };
+}
+
+export function ruleAppliesToAccount(
+  actions: RuleActionSettings[] | null | undefined,
+  tx: { bank_account_id?: string | null; credit_card_id?: string | null },
+  kind: 'bank' | 'card',
+): boolean {
+  const settings = ruleActionSettings(actions);
+  if (settings.accountScope === 'all') return true;
+  if (settings.accountScope === 'banks') return kind === 'bank';
+  if (settings.accountScope === 'cards') return kind === 'card';
+  if (kind === 'bank') return !!tx.bank_account_id && settings.bankAccountIds.includes(tx.bank_account_id);
+  return !!tx.credit_card_id && settings.creditCardIds.includes(tx.credit_card_id);
+}
+
+export function describeRuleCriteria(
+  conditions: unknown,
+  logicOperator: string | null | undefined,
+): string {
+  const ready = normalizeConditions(conditions).filter(conditionIsReady);
+  const { applyTo, criteria } = splitRuleApplyTo(ready);
+  const scope = applyTo === 'deposits'
+    ? 'Deposits'
+    : applyTo === 'withdrawals'
+      ? 'Withdrawals'
+      : 'Deposits and withdrawals';
+  const logic = (logicOperator || 'and').trim().toLowerCase() === 'or' ? 'OR' : 'AND';
+  const parts = criteria.map((condition) => {
+    const field = (condition.field || 'description').replace(/_/g, ' ');
+    const operator = (condition.operator || 'contains').replace(/_/g, ' ');
+    const value = condition.value2 ? `${condition.value} and ${condition.value2}` : (condition.value || '');
+    return `${field} ${operator} "${value}"`;
+  });
+  return parts.length > 0 ? `${scope} · ${parts.join(` ${logic} `)}` : scope;
 }

@@ -54,6 +54,15 @@ export interface RuleAction {
   // Division / Department tagging (multidimensional accounting)
   departmentId?: string;
   departmentName?: string;
+  /** Zoho-style: recognized keeps the match, categorized assigns the account. */
+  markAs?: 'recognized' | 'categorized';
+  /** Label recorded on the bank line. Separate from the GL account name. */
+  recordAs?: string;
+  referenceNumber?: string;
+  /** Which bank and card accounts this rule may post. */
+  accountScope?: 'all' | 'banks' | 'cards' | 'custom';
+  bankAccountIds?: string[];
+  creditCardIds?: string[];
 }
 
 export interface TransactionRule {

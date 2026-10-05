@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ruleConditionsMatch } from './ruleConditionFormula';
+import { describeRuleCriteria, ruleAppliesToAccount, ruleConditionsMatch } from './ruleConditionFormula';
 
 const firstData = {
   description: 'FIRST DATA CANADA MERCHANT',
@@ -83,6 +83,69 @@ describe('transaction rule AND and OR', () => {
       'AND',
       { accountKind: 'card' },
     )).toBe(false);
+  });
+
+  it('does not treat Canada as a match for pos purchase or canadian child benefit', () => {
+    const canada = [{ field: 'description', operator: 'contains', value: 'Canada' }];
+    expect(ruleConditionsMatch(
+      { description: 'pos purchase', amount: 1.96, transaction_type: 'withdrawal' },
+      canada,
+      'AND',
+    )).toBe(false);
+    expect(ruleConditionsMatch(
+      { description: 'canadian child benefit', amount: 549.1, transaction_type: 'deposit' },
+      canada,
+      'OR',
+    )).toBe(false);
+    expect(ruleConditionsMatch(
+      { description: 'POS PURCHASE', payee_payor: 'Canada', amount: 7.29, transaction_type: 'withdrawal' },
+      [{ field: 'payee_payor', operator: 'contains', value: 'Canada' }],
+      'AND',
+    )).toBe(true);
+  });
+
+  it('keeps deposit or withdrawal scope even when the other criteria use OR', () => {
+    const rule = [
+      { field: 'type', operator: 'is_withdrawal', value: '' },
+      { field: 'description', operator: 'contains', value: 'First Data Canada' },
+    ];
+    expect(ruleConditionsMatch(firstData, rule, 'OR')).toBe(true);
+    expect(ruleConditionsMatch(
+      { description: 'pos purchase', amount: 20, transaction_type: 'withdrawal' },
+      rule,
+      'OR',
+    )).toBe(false);
+    expect(ruleConditionsMatch(
+      { ...firstData, transaction_type: 'deposit' },
+      rule,
+      'OR',
+    )).toBe(false);
+  });
+
+  it('does not let the word Canada match inside canadian', () => {
+    expect(ruleConditionsMatch(
+      { description: 'canadian child benefit', transaction_type: 'deposit' },
+      [{ field: 'description', operator: 'contains_words', value: 'Canada benefit' }],
+      'AND',
+    )).toBe(false);
+  });
+
+  it('limits a custom rule to the selected bank account', () => {
+    const actions = [{ accountScope: 'custom', bankAccountIds: ['bank-1'], creditCardIds: [] }];
+    expect(ruleAppliesToAccount(actions, { bank_account_id: 'bank-1' }, 'bank')).toBe(true);
+    expect(ruleAppliesToAccount(actions, { bank_account_id: 'bank-2' }, 'bank')).toBe(false);
+    expect(ruleAppliesToAccount(actions, { credit_card_id: 'card-1' }, 'card')).toBe(false);
+    expect(ruleAppliesToAccount([{ accountScope: 'banks' }], { bank_account_id: 'bank-2' }, 'bank')).toBe(true);
+    expect(ruleAppliesToAccount([{ accountScope: 'cards' }], { credit_card_id: 'card-1' }, 'card')).toBe(true);
+    expect(ruleAppliesToAccount([{ accountScope: 'all' }], { bank_account_id: 'bank-9' }, 'bank')).toBe(true);
+  });
+
+  it('describes apply-to separately from the criteria pattern', () => {
+    expect(describeRuleCriteria([
+      { field: 'type', operator: 'is_withdrawal', value: '' },
+      { field: 'description', operator: 'contains', value: 'Canada' },
+      { field: 'amount', operator: 'greater_than', value: '0' },
+    ], 'or')).toBe('Withdrawals · description contains "Canada" OR amount greater than "0"');
   });
 
   it('still matches a payee stored on the payee field', () => {

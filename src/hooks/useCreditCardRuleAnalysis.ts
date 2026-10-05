@@ -6,7 +6,7 @@ import { CreditCardTransaction } from './useCreditCards';
 import { allowUnreconciledBankUpdate } from '@/lib/bankTransactionLock';
 import { toast } from 'sonner';
 import { getMatchConfidence } from '@/lib/transactionMatcher';
-import { ruleConditionsMatch } from '@/lib/ruleConditionFormula';
+import { ruleActionSettings, ruleAppliesToAccount, ruleConditionsMatch } from '@/lib/ruleConditionFormula';
 import { isOpenForTransactionRule } from '@/lib/transactionRuleEligibility';
 
 export interface CCAnalysisResult {
@@ -49,6 +49,7 @@ export function matchesCCRule(tx: CreditCardTransaction, rule: TransactionRule):
     : tx.transaction_type === 'charge' || tx.transaction_type === 'fee' || tx.transaction_type === 'interest' ? 'outflow'
     : null;
 
+  if (!ruleAppliesToAccount(rule.actions, tx, 'card')) return false;
   return ruleConditionsMatch(tx, rule.conditions, rule.logic_operator, {
     txDirection,
     accountKind: 'card',
@@ -117,14 +118,16 @@ export function analyzeCCTransactions(
       if (matchResult.matches) {
         const categoryAction = rule.actions.find(a => a.type === 'categorize');
         const glAction = rule.actions.find(a => a.type === 'post_to_gl');
+        const settings = ruleActionSettings(rule.actions);
+        const recognized = settings.markAs === 'recognized';
 
         return {
           transaction: tx,
           matchedRule: rule,
-          category: categoryAction?.category || null,
-          glAccountId: glAction?.glAccountId || null,
-          glAccountName: glAction?.glAccountName || null,
-          willPostToGL: !!glAction?.glAccountId,
+          category: settings.recordAs || categoryAction?.category || null,
+          glAccountId: recognized ? null : (glAction?.glAccountId || null),
+          glAccountName: recognized ? null : (glAction?.glAccountName || null),
+          willPostToGL: !recognized && !!glAction?.glAccountId,
           confidence: matchResult.confidence,
           matchScore: matchResult.score,
           // Include tax info from the rule action
@@ -215,6 +218,8 @@ export function useProcessCCTransactions() {
             if (category) updates.category = category;
             if (glAccountId) updates.gl_account_id = glAccountId;
             if (departmentId) updates.department_id = departmentId;
+            const referenceNumber = matchedRule ? ruleActionSettings(matchedRule.actions).referenceNumber : '';
+            if (referenceNumber && !transaction.reference) updates.reference = referenceNumber;
 
             // If posting to GL, create journal entry
             let journalEntryId: string | undefined;

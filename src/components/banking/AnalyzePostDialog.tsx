@@ -25,6 +25,7 @@ import {
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { AnalysisResult, useProcessTransactions } from '@/hooks/useRuleAnalysis';
+import { describeRuleCriteria } from '@/lib/ruleConditionFormula';
 
 interface AnalyzePostDialogProps {
   open: boolean;
@@ -171,9 +172,14 @@ export default function AnalyzePostDialog({
                         />
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between gap-2">
-                            <p className="font-medium text-sm truncate">
-                              {result.transaction.description}
-                            </p>
+                            <div className="min-w-0">
+                              <p className="font-medium text-sm truncate">
+                                {result.transaction.description}
+                              </p>
+                              {result.transaction.payee_payor && (
+                                <p className="text-xs text-muted-foreground truncate">{result.transaction.payee_payor}</p>
+                              )}
+                            </div>
                             <span className={cn(
                               "font-mono text-sm font-medium",
                               result.transaction.transaction_type === 'deposit' 
@@ -190,6 +196,9 @@ export default function AnalyzePostDialog({
                               <Sparkles className="w-3 h-3" />
                               {result.matchedRule?.name}
                             </Badge>
+                            <span className="text-xs text-muted-foreground">
+                              {describeRuleCriteria(result.matchedRule?.conditions, result.matchedRule?.logic_operator)}
+                            </span>
                             
                             <Badge className={cn('text-xs', confidenceColors[result.confidence])}>
                               {result.confidence} confidence
