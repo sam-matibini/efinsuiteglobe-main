@@ -11,6 +11,7 @@ import {
   extractVendorName,
   normalizeText 
 } from '@/lib/transactionMatcher';
+import { isOpenForTransactionRule } from '@/lib/transactionRuleEligibility';
 
 export interface CCAnalysisResult {
   transaction: CreditCardTransaction;
@@ -175,19 +176,14 @@ export function calculateCCMatchConfidence(
 }
 
 /**
- * Analyze credit card transactions against rules without applying
- * Includes pending and uncategorized transactions
+ * Analyze credit card transactions against rules without applying.
+ * Unmatched, pending, and other charges that are not posted to the GL are included.
  */
 export function analyzeCCTransactions(
   transactions: CreditCardTransaction[],
   rules: TransactionRule[]
 ): CCAnalysisResult[] {
-  // Include pending and uncategorized transactions (not reconciled)
-  const eligibleTxs = transactions.filter(t => 
-    !t.category && 
-    (t.status === 'pending' || t.status === 'unmatched' || !t.status) &&
-    t.status !== 'reconciled'
-  );
+  const eligibleTxs = transactions.filter(isOpenForTransactionRule);
   const activeRules = rules.filter(r => r.is_active).sort((a, b) => b.priority - a.priority);
 
   return eligibleTxs.map(tx => {

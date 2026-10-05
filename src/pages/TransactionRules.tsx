@@ -79,6 +79,7 @@ import {
   type RuleSortDirection,
   type RuleSortKey,
 } from '@/lib/transactionRuleList';
+import { isOpenForTransactionRule } from '@/lib/transactionRuleEligibility';
 
 type AnalysisSource = 'bank' | 'credit-card';
 
@@ -132,17 +133,15 @@ export default function TransactionRules() {
     creditCards.find(c => c.id === selectedCreditCardId)?.gl_account_id
   );
   
-  // Calculate eligible transactions for analysis (pending/unmatched without category)
-  const eligibleBankTransactions = useMemo(() => 
-    bankTransactions.filter(t => 
-      (t.status === 'unmatched' || t.status === 'pending') && !t.category
-    ), [bankTransactions]);
-    
-  const eligibleCCTransactions = useMemo(() => 
-    ccTransactions.filter(t => 
-      (t.status === 'pending' || t.status === 'unmatched' || !t.status) && 
-      !t.category && t.status !== 'reconciled'
-    ), [ccTransactions]);
+  const eligibleBankTransactions = useMemo(
+    () => bankTransactions.filter(isOpenForTransactionRule),
+    [bankTransactions],
+  );
+
+  const eligibleCCTransactions = useMemo(
+    () => ccTransactions.filter(isOpenForTransactionRule),
+    [ccTransactions],
+  );
   
   const currentEligibleCount = analysisSource === 'bank' 
     ? eligibleBankTransactions.length 
@@ -427,9 +426,9 @@ export default function TransactionRules() {
           )}
           
           {currentEligibleCount > 0 && (
-            <Badge variant="secondary" className="gap-1">
+            <Badge variant="secondary" className="gap-1" title="Unmatched, pending, and transactions that are not posted to the GL">
               <AlertCircle className="w-3 h-3" />
-              {currentEligibleCount} pending
+              {currentEligibleCount} not posted
             </Badge>
           )}
           <Button 
