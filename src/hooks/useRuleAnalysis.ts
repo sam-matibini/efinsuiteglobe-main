@@ -8,12 +8,8 @@ import { allowUnreconciledBankUpdate } from '@/lib/bankTransactionLock';
 import { isOpenForTransactionRule } from '@/lib/transactionRuleEligibility';
 import { isExpenseLikeAccount, planBankTaxLines } from '@/lib/expenseRefundPosting';
 import { toast } from 'sonner';
-import { 
-  matchText, 
-  getMatchConfidence, 
-  extractVendorName,
-  normalizeText 
-} from '@/lib/transactionMatcher';
+import { getMatchConfidence } from '@/lib/transactionMatcher';
+import { ruleConditionsMatch } from '@/lib/ruleConditionFormula';
 
 export interface AnalysisResult {
   transaction: BankTransaction;
@@ -55,85 +51,10 @@ export function matchesRule(tx: BankTransaction, rule: TransactionRule): boolean
     : tx.transaction_type === 'withdrawal' ? 'outflow'
     : null;
 
-  const results = rule.conditions.map(condition => {
-    const searchValue = condition.value || '';
-    const txAmount = Math.abs(Number(tx.amount));
-
-    // Get field value based on condition field
-    let fieldValue = '';
-    switch (condition.field) {
-      case 'description':
-        fieldValue = tx.description || '';
-        break;
-      case 'payee_payor':
-        fieldValue = tx.payee_payor || '';
-        break;
-      case 'reference':
-        fieldValue = tx.reference || '';
-        break;
-    }
-
-    // Handle amount-specific operators
-    if (condition.field === 'amount') {
-      switch (condition.operator) {
-        case 'equals':
-          return Math.abs(txAmount - parseFloat(searchValue)) < 0.01;
-        case 'greater_than':
-          return txAmount > parseFloat(searchValue);
-        case 'less_than':
-          return txAmount < parseFloat(searchValue);
-        case 'between':
-          const min = parseFloat(searchValue);
-          const max = parseFloat(condition.value2 || '0');
-          return txAmount >= min && txAmount <= max;
-        default:
-          return false;
-      }
-    }
-
-    // Handle transaction type operators
-    switch (condition.operator) {
-      case 'is_deposit':
-        return tx.transaction_type === 'deposit';
-      case 'is_withdrawal':
-        return tx.transaction_type === 'withdrawal';
-    }
-
-    const textOperators = [
-      'contains', 'not_contains', 'equals', 'not_equals',
-      'starts_with', 'ends_with', 'contains_words', 
-      'contains_any_word', 'fuzzy_match', 'matches_regex'
-    ];
-
-    if (textOperators.includes(condition.operator)) {
-      if (matchText(fieldValue, condition.operator, searchValue, { txDirection })) {
-        return true;
-      }
-      
-      if (condition.field === 'description') {
-        const vendor = extractVendorName(fieldValue);
-        if (matchText(vendor, condition.operator, searchValue, { txDirection })) {
-          return true;
-        }
-      }
-      
-      if (condition.field === 'payee_payor') {
-        const normalized = normalizeText(fieldValue);
-        if (matchText(normalized, condition.operator, searchValue, { txDirection })) {
-          return true;
-        }
-      }
-      
-      return false;
-    }
-
-    return false;
+  return ruleConditionsMatch(tx, rule.conditions, rule.logic_operator, {
+    txDirection,
+    accountKind: 'bank',
   });
-
-  const logicOp = (rule.logic_operator || 'and').toLowerCase();
-  return logicOp === 'and' 
-    ? results.every(Boolean)
-    : results.some(Boolean);
 }
 
 /**

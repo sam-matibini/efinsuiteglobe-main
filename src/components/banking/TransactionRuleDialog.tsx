@@ -123,12 +123,12 @@ export default function TransactionRuleDialog({
       const [bankRes, ccRes] = await Promise.all([
         supabase
           .from('bank_transactions')
-          .select('id, description, payee_payor, reference, amount, transaction_type, bank_account_id')
+          .select('id, description, payee_payor, reference, memo, amount, transaction_type, transaction_date, bank_account_id')
           .order('transaction_date', { ascending: false })
           .limit(200),
         supabase
           .from('credit_card_transactions')
-          .select('id, description, payee_payor, reference, amount, transaction_type')
+          .select('id, description, payee_payor, reference, memo, amount, transaction_type, transaction_date')
           .order('transaction_date', { ascending: false })
           .limit(200),
       ]);

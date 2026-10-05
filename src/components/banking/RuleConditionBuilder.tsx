@@ -142,9 +142,16 @@ export default function RuleConditionBuilder({
         )}
       </div>
 
-      {conditions.length > 1 && logicOperator === 'AND' && (
-        <p className="text-xs text-muted-foreground -mt-2">
-          All conditions must match. Switch to <span className="font-medium">OR</span> if any one is enough.
+      {conditions.length > 1 && (
+        <p className="text-xs -mt-2" data-testid="rule-condition-formula">
+          <span className="font-mono font-medium text-primary">
+            {conditions.map((_, index) => index + 1).join(` ${logicOperator} `)}
+          </span>
+          <span className="text-muted-foreground">
+            {logicOperator === 'AND'
+              ? ' — a transaction must match every condition.'
+              : ' — a transaction must match any one condition.'}
+          </span>
         </p>
       )}
 
