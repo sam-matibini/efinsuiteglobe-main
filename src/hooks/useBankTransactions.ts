@@ -7,6 +7,7 @@ import { repairLegacyPlaidRow } from '@/lib/plaidBankAmount';
 import { allowUnreconciledBankUpdate } from '@/lib/bankTransactionLock';
 import { readStoredSplits, validateBankSplits } from '@/lib/bankTransactionSplit';
 import { applyGlEditToJournalLines } from '@/lib/postedJournalEdit';
+import { fetchAllPages } from '@/lib/fetchAllPages';
 
 export interface BankTransaction {
   id: string;
@@ -53,15 +54,18 @@ export function useBankTransactions(bankAccountId?: string) {
     queryFn: async () => {
       if (!bankAccountId) return [];
       
-      const { data, error } = await supabase
-        .from('bank_transactions')
-        .select('*')
-        .eq('bank_account_id', bankAccountId)
-        .order('transaction_date', { ascending: false });
-      
-      if (error) throw error;
-      const rows = await repairDownloadedPlaidRows(data as BankTransaction[]);
-      const original = data as BankTransaction[];
+      const data = await fetchAllPages<BankTransaction>((from, to) =>
+        supabase
+          .from('bank_transactions')
+          .select('*')
+          .eq('bank_account_id', bankAccountId)
+          .order('transaction_date', { ascending: false })
+          .order('id', { ascending: false })
+          .range(from, to),
+      );
+
+      const rows = await repairDownloadedPlaidRows(data);
+      const original = data;
       const changed = rows.some((row, index) => row.amount !== original[index]?.amount || row.transaction_type !== original[index]?.transaction_type);
       if (changed) queryClient.invalidateQueries({ queryKey: ['bank-accounts'] });
       return rows;

@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { cn, parseLocalDate } from '@/lib/utils';
 import { signedBankAmount } from '@/lib/plaidBankAmount';
+import { bankingActivity } from '@/lib/bankingActivity';
 import { isBankTransactionLocked } from '@/lib/bankTransactionLock';
 import {
   Select,
@@ -192,6 +193,10 @@ export default function BankTransactions() {
 
   // Unified transactions based on account type
   const transactions = accountType === 'bank' ? bankTransactions : ccTransactions;
+  const activity = useMemo(
+    () => bankingActivity(transactions, accountType),
+    [transactions, accountType],
+  );
   const detailTransaction = transactions.find((item) => item.id === detailId) ?? null;
 
   const activeAccountKey = accountType === 'bank' ? effectiveBankAccountId : effectiveCreditCardId;
@@ -1020,8 +1025,12 @@ export default function BankTransactions() {
         const unmatchedTx = txs.filter(t => !isReconciled(t) && !hasMatch(t));
         const matchedNotPostedTx = matchedTx.filter(t => !t.journal_entry_id);
         const postedTx = txs.filter(t => hasMatch(t) && !!t.journal_entry_id);
-        const inflowTx = txs.filter(t => Number(t.amount) > 0);
-        const outflowTx = txs.filter(t => Number(t.amount) < 0);
+        const inflowTx = accountType === 'bank'
+          ? txs.filter(t => t.transaction_type === 'deposit')
+          : txs.filter(t => t.transaction_type === 'payment' || t.transaction_type === 'credit');
+        const outflowTx = accountType === 'bank'
+          ? txs.filter(t => t.transaction_type === 'withdrawal')
+          : txs.filter(t => t.transaction_type === 'charge' || t.transaction_type === 'fee' || t.transaction_type === 'interest');
         const inflow = accountType === 'bank' ? bankDeposits : totalPayments;
         const outflow = accountType === 'bank' ? bankWithdrawals : totalCharges;
         const net = inflow - outflow;
@@ -1052,14 +1061,14 @@ export default function BankTransactions() {
               <Card className="p-2 pr-8 relative">
                 <BankTxCardActions
                   title="Total Transactions"
-                  snapshot={`Count: ${transactions.length}\nVolume (abs): ${formatCurrency(sumAbs(transactions))}`}
+                  snapshot={`Count: ${activity.total}\nVolume (abs): ${formatCurrency(activity.volume)}`}
                   rows={toRows(txs)}
                   organizationName={orgName}
                   formatCurrency={formatCurrency}
                 />
                 <p className="text-[11px] leading-tight text-muted-foreground">Total Transactions</p>
-                <p className="text-base font-semibold text-foreground">{transactions.length}</p>
-                <p className="text-xs text-muted-foreground mt-1">{formatCurrency(sumAbs(transactions))} volume</p>
+                <p className="text-base font-semibold text-foreground">{activity.total}</p>
+                <p className="text-xs text-muted-foreground mt-1">{formatCurrency(activity.volume)} volume</p>
               </Card>
               <Card
                 className={cn("p-2 pr-8 relative", clickable)}
@@ -1120,26 +1129,26 @@ export default function BankTransactions() {
               <Card className="p-2 pr-8 relative">
                 <BankTxCardActions
                   title={inflowLabel}
-                  snapshot={`Count: ${inflowTx.length}\nTotal: ${formatCurrency(inflow)}`}
+                  snapshot={`Count: ${activity.inflowCount}\nTotal: ${formatCurrency(inflow)}`}
                   rows={toRows(inflowTx)}
                   organizationName={orgName}
                   formatCurrency={formatCurrency}
                 />
                 <p className="text-[11px] leading-tight text-muted-foreground">{inflowLabel}</p>
                 <p className="text-base font-semibold text-success">{formatCurrency(inflow)}</p>
-                <p className="text-xs text-muted-foreground mt-1">{inflowTx.length} transactions</p>
+                <p className="text-xs text-muted-foreground mt-1">{activity.inflowCount} transactions</p>
               </Card>
               <Card className="p-2 pr-8 relative">
                 <BankTxCardActions
                   title={outflowLabel}
-                  snapshot={`Count: ${outflowTx.length}\nTotal: ${formatCurrency(outflow)}`}
+                  snapshot={`Count: ${activity.outflowCount}\nTotal: ${formatCurrency(outflow)}`}
                   rows={toRows(outflowTx)}
                   organizationName={orgName}
                   formatCurrency={formatCurrency}
                 />
                 <p className="text-[11px] leading-tight text-muted-foreground">{outflowLabel}</p>
                 <p className="text-base font-semibold text-foreground">{formatCurrency(outflow)}</p>
-                <p className="text-xs text-muted-foreground mt-1">{outflowTx.length} transactions</p>
+                <p className="text-xs text-muted-foreground mt-1">{activity.outflowCount} transactions</p>
               </Card>
               <Card className="p-2 pr-8 relative">
                 <BankTxCardActions
@@ -1162,14 +1171,14 @@ export default function BankTransactions() {
               >
                 <BankTxCardActions
                   title="Posted to GL"
-                  snapshot={`Posted: ${postedTx.length} of ${transactions.length} (${postedPct}%)\nValue: ${formatCurrency(sumAbs(postedTx))}`}
+                  snapshot={`Posted: ${postedTx.length} of ${activity.total} (${postedPct}%)\nValue: ${formatCurrency(sumAbs(postedTx))}`}
                   rows={toRows(postedTx)}
                   organizationName={orgName}
                   formatCurrency={formatCurrency}
                 />
                 <p className="text-[11px] leading-tight text-muted-foreground">Posted to GL</p>
                 <p className="text-base font-semibold text-foreground">
-                  {postedTx.length}<span className="text-sm font-normal text-muted-foreground">/{transactions.length}</span>
+                  {postedTx.length}<span className="text-sm font-normal text-muted-foreground">/{activity.total}</span>
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">{formatCurrency(sumAbs(postedTx))} posted</p>
                 <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-muted">
@@ -1402,7 +1411,7 @@ export default function BankTransactions() {
         {/* Results count and bulk selection */}
         <div className="mt-4 pt-4 border-t flex items-center justify-between text-sm text-muted-foreground">
           <span>
-            Showing {filteredTransactions.length} of {transactions.length} transactions
+            Showing {filteredTransactions.length} of {activity.total} transactions
           </span>
           <div className="flex items-center gap-2">
             <span className="text-xs">Quick select:</span>

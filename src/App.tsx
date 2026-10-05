@@ -33,6 +33,7 @@ const E2EBankingTransactionsHarness = lazy(() => import("./pages/__E2EBankingTra
 const E2EDashboardFilterHarness = lazy(() => import("./pages/__E2EDashboardFilterHarness"));
 const E2ETaxCodeExpenseHarness = lazy(() => import("./pages/__E2ETaxCodeExpenseHarness"));
 const E2ERuleFormulaHarness = lazy(() => import("./pages/__E2ERuleFormulaHarness"));
+const E2EBankingVolumeHarness = lazy(() => import("./pages/__E2EBankingVolumeHarness"));
 const Index = lazy(() => import("./pages/Index"));
 const ChartOfAccounts = lazy(() => import("./pages/ChartOfAccounts"));
 const AccountGenerator = lazy(() => import("./pages/AccountGenerator"));
@@ -333,6 +334,7 @@ const AppRoutes = () => {
         <Route path="/__e2e__/dashboard-filter" element={<E2EDashboardFilterHarness />} />
         <Route path="/__e2e__/tax-code-expense" element={<E2ETaxCodeExpenseHarness />} />
         <Route path="/__e2e__/rule-formula" element={<E2ERuleFormulaHarness />} />
+        <Route path="/__e2e__/banking-volume" element={<E2EBankingVolumeHarness />} />
       </>
     )}
 
