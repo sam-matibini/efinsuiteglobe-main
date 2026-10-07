@@ -52,6 +52,7 @@ export function EditCustomerDialog({ open, onOpenChange, customer }: EditCustome
   const { updateCustomer } = useCustomers();
   const [formData, setFormData] = useState({
     name: '',
+    contact_person: '',
     email: '',
     phone: '',
     address_line1: '',
@@ -69,6 +70,7 @@ export function EditCustomerDialog({ open, onOpenChange, customer }: EditCustome
     if (customer) {
       setFormData({
         name: customer.name || '',
+        contact_person: customer.contact_person || '',
         email: customer.email || '',
         phone: customer.phone || '',
         address_line1: customer.address_line1 || '',
@@ -104,6 +106,7 @@ export function EditCustomerDialog({ open, onOpenChange, customer }: EditCustome
         postal_code: formData.postal_code.trim() || null,
         country: formData.country || null,
         tax_number: formData.tax_number.trim() || null,
+        contact_person: formData.contact_person.trim() || null,
         default_currency: formData.default_currency || null,
         notes: formData.notes.trim() || null,
       });
@@ -127,6 +130,17 @@ export function EditCustomerDialog({ open, onOpenChange, customer }: EditCustome
               id="edit-name"
               value={formData.name}
               onChange={(e) => handleChange('name', e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="edit-contact-person">Contact Person</Label>
+            <Input
+              id="edit-contact-person"
+              placeholder="Person to contact at this customer"
+              value={formData.contact_person}
+              onChange={(e) => handleChange('contact_person', e.target.value)}
+              maxLength={100}
             />
           </div>
 

@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrganization } from './useOrganization';
 import { toast } from 'sonner';
+import { isMissingContactPersonColumn } from '@/lib/customerContact';
 
 export interface Customer {
   id: string;
@@ -19,6 +20,7 @@ export interface Customer {
   payment_terms: number | null;
   credit_limit: number | null;
   notes: string | null;
+  contact_person: string | null;
   default_currency: string | null;
   is_active: boolean;
   created_at: string;
@@ -39,6 +41,7 @@ export interface CreateCustomerInput {
   payment_terms?: number;
   credit_limit?: number;
   notes?: string;
+  contact_person?: string;
   default_currency?: string;
 }
 
@@ -68,28 +71,42 @@ export function useCustomers() {
     mutationFn: async (input: CreateCustomerInput) => {
       if (!organization?.id) throw new Error('No organization selected');
       
-      const { data, error } = await supabase
+      const row = {
+        organization_id: organization.id,
+        name: input.name,
+        email: input.email || null,
+        phone: input.phone || null,
+        address_line1: input.address_line1 || null,
+        address_line2: input.address_line2 || null,
+        city: input.city || null,
+        province: input.province || null,
+        postal_code: input.postal_code || null,
+        country: input.country || 'CA',
+        tax_number: input.tax_number || null,
+        payment_terms: input.payment_terms || 30,
+        credit_limit: input.credit_limit || 0,
+        notes: input.notes || null,
+        contact_person: input.contact_person || null,
+        default_currency: input.default_currency || null,
+      };
+      let { data, error } = await supabase
         .from('customers')
-        .insert([{
-          organization_id: organization.id,
-          name: input.name,
-          email: input.email || null,
-          phone: input.phone || null,
-          address_line1: input.address_line1 || null,
-          address_line2: input.address_line2 || null,
-          city: input.city || null,
-          province: input.province || null,
-          postal_code: input.postal_code || null,
-          country: input.country || 'CA',
-          tax_number: input.tax_number || null,
-          payment_terms: input.payment_terms || 30,
-          credit_limit: input.credit_limit || 0,
-          notes: input.notes || null,
-          default_currency: input.default_currency || null,
-        }])
+        .insert([row])
         .select()
         .single();
-      
+
+      if (error && isMissingContactPersonColumn(error)) {
+        const { contact_person: _contactPerson, ...withoutContact } = row;
+        ({ data, error } = await supabase
+          .from('customers')
+          .insert([withoutContact])
+          .select()
+          .single());
+        if (!error && input.contact_person) {
+          toast.warning('Customer saved. Contact person is stored after the database update is applied.');
+        }
+      }
+
       if (error) throw error;
       return data;
     },
@@ -104,13 +121,23 @@ export function useCustomers() {
 
   const updateCustomer = useMutation({
     mutationFn: async ({ id, ...updates }: Partial<Customer> & { id: string }) => {
-      const { data, error } = await supabase
+      let { data, error } = await supabase
         .from('customers')
         .update(updates)
         .eq('id', id)
         .select()
         .single();
-      
+
+      if (error && isMissingContactPersonColumn(error) && 'contact_person' in updates) {
+        const { contact_person: _contactPerson, ...withoutContact } = updates;
+        ({ data, error } = await supabase
+          .from('customers')
+          .update(withoutContact)
+          .eq('id', id)
+          .select()
+          .single());
+      }
+
       if (error) throw error;
       return data;
     },
