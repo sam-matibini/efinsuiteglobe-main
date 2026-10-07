@@ -82,11 +82,46 @@ export const ROLE_MODULE_DESCRIPTIONS: Record<OrgRole, string> = {
   member: 'Basic access: Document signing & communication only.',
 };
 
+const ROLE_ALIASES: Record<string, OrgRole> = {
+  owner: 'owner',
+  admin: 'admin',
+  administrator: 'admin',
+  finance_manager: 'finance_manager',
+  finance_mgr: 'finance_manager',
+  cfo: 'finance_manager',
+  accountant: 'accountant',
+  bookkeeper: 'accountant',
+  book_keeper: 'accountant',
+  payroll_officer: 'payroll_officer',
+  payroll: 'payroll_officer',
+  auditor: 'auditor',
+  auditor_read_only: 'auditor',
+  viewer: 'auditor',
+  read_only: 'auditor',
+  readonly: 'auditor',
+  member: 'member',
+};
+
+/**
+ * Map stored role text onto the access matrix.
+ * Labels such as "Finance Manager" and "Admin" are the same roles as the
+ * snake_case values saved by the team editor.
+ */
+export function normalizeOrgRole(role: string | null | undefined): OrgRole {
+  const key = (role ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+  return ROLE_ALIASES[key] ?? 'member';
+}
+
 /**
  * Get the modules accessible by a given role
  */
 export function getModulesForRole(role: string): ModuleCode[] {
-  return ROLE_MODULE_ACCESS[role as OrgRole] || ROLE_MODULE_ACCESS.member;
+  return ROLE_MODULE_ACCESS[normalizeOrgRole(role)];
 }
 
 /**
