@@ -4,8 +4,9 @@ import { useOrganizationModules } from './useModules';
 import { useOrganizationContext } from './useOrganizationContext';
 import { useAuth } from './useAuth';
 import { supabase } from '@/integrations/supabase/client';
-import { roleHasModuleAccess } from '@/config/roleModuleAccess';
+import { normalizeOrgRole } from '@/config/roleModuleAccess';
 import { isModuleInPlan } from '@/config/planModuleAccess';
+import { isModuleEnabledForRole, isReadOnlyOrgRole, type OrgModuleRow } from '@/lib/roleAccess';
 import { useSubscription } from './useSubscription';
 
 
@@ -47,7 +48,8 @@ export function useEnabledModules() {
         .eq('user_id', user.id)
         .eq('organization_id', currentOrganization.id)
         .maybeSingle();
-      if (error) return null;
+      // Throw so a failed read is not cached as the member role.
+      if (error) throw error;
       return data?.role || null;
     },
     enabled: !!user?.id && !!currentOrganization?.id,
@@ -56,65 +58,32 @@ export function useEnabledModules() {
 
   const isLoading = modulesLoading || roleLoading || subLoading;
 
-  // Effective role: use org-level role when available; only fall back to global admin as owner
-  const effectiveRole = userRole || (isAdmin ? 'owner' : 'member');
+  const effectiveRole = userRole
+    ? normalizeOrgRole(userRole)
+    : (isAdmin ? 'owner' : 'member');
+
+  const moduleRows = useMemo<OrgModuleRow[] | null>(() => {
+    if (!orgModules) return null;
+    return orgModules.map((om) => ({
+      code: om.module?.code ?? null,
+      is_enabled: om.is_enabled,
+    }));
+  }, [orgModules]);
 
   const enabledModules = useMemo(() => {
     const enabled = new Set<ModuleCode>();
-    
-    if (!orgModules) return enabled;
-    
-    orgModules.forEach(om => {
-      if (om.is_enabled && om.module?.code) {
-        enabled.add(om.module.code as ModuleCode);
-      }
+    if (!moduleRows) return enabled;
+    moduleRows.forEach((row) => {
+      if (row.is_enabled !== false && row.code) enabled.add(row.code as ModuleCode);
     });
-    
     return enabled;
-  }, [orgModules]);
+  }, [moduleRows]);
 
   const isModuleEnabled = useCallback((code: ModuleCode): boolean => {
-    // If still loading, show all (graceful fallback for loading state)
     if (isLoading) return true;
-    // If no organization context yet, allow navigation (user might be on public page)
     if (!currentOrganization) return true;
-
-    // Role-based module access check (always enforced)
-    if (!roleHasModuleAccess(effectiveRole, code)) {
-      return false;
-    }
-
-    // CRA Tax & Remittance follows GL, payroll, or treasury. It does not need its own module row.
-    if (code === 'cra_tax') {
-      if (!orgModules || orgModules.length === 0) return true;
-      return (
-        enabledModules.has('cra_tax') ||
-        enabledModules.has('general_ledger') ||
-        enabledModules.has('payroll') ||
-        enabledModules.has('treasury')
-      );
-    }
-
-    // If no module configuration exists yet for this org, show core modules only by default
-    if (!orgModules || orgModules.length === 0) {
-      const coreModules: ModuleCode[] = [
-        'general_ledger',
-        'accounts_payable',
-        'accounts_receivable',
-        'banking',
-        'reporting',
-        'treasury',
-        'leases',
-      ];
-      return coreModules.includes(code);
-    }
-    // Fallback: if Leases has no explicit row yet, inherit visibility from Fixed Assets
-    if (code === 'leases' && !enabledModules.has('leases') && enabledModules.has('fixed_assets')) {
-      return true;
-    }
-    // Otherwise, check explicit configuration
-    return enabledModules.has(code);
-  }, [isLoading, currentOrganization, orgModules, enabledModules, effectiveRole]);
+    return isModuleEnabledForRole(effectiveRole, code, moduleRows);
+  }, [isLoading, currentOrganization, moduleRows, effectiveRole]);
 
   const hasAnyModule = useCallback((codes: ModuleCode[]): boolean => {
     return codes.some(code => isModuleEnabled(code));
@@ -123,11 +92,12 @@ export function useEnabledModules() {
   // Plan-based gating (separate from role/org gating so sidebar can show locked items)
   const isModuleInCurrentPlan = useCallback((code: ModuleCode): boolean => {
     if (isAdmin) return true;
+    // The role card is the access list. Do not lock a module that role already has.
+    if (!isLoading && currentOrganization && isModuleEnabled(code)) return true;
     return isModuleInPlan(code, planTier);
-  }, [isAdmin, planTier]);
+  }, [isAdmin, isLoading, currentOrganization, isModuleEnabled, planTier]);
 
-  // Auditor role is read-only across all modules
-  const isReadOnly = effectiveRole === 'auditor';
+  const isReadOnly = isReadOnlyOrgRole(effectiveRole);
 
   return {
     enabledModules,

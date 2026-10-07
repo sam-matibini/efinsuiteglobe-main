@@ -12,6 +12,11 @@ import {
   linkCCTransactionToExistingBankPayment,
   queueAmbiguousMatch,
 } from './usePaymentMatching';
+import {
+  creditCardRefundJournal,
+  isExpenseLikeAccount,
+  planBankTaxLines,
+} from '@/lib/expenseRefundPosting';
 
 export interface TaxBreakdownItem {
   code: string;
@@ -151,30 +156,41 @@ export function usePostCreditCardTransactionToGL() {
       // The expense account gets the net amount, and tax accounts get the tax portion.
       const grossAmount = Math.abs(amount); // Full amount including any tax
       
-      // Determine tax breakdown for separate posting
-      // Determine tax breakdown for separate posting
-      let taxToPost: Array<{ code: string; amount: number; glAccountId: string }> = [];
-      
-      if (taxBreakdown && taxBreakdown.length > 0) {
-        // Defensive guard: PST must NOT collapse onto the GST ITC account.
-        const gstLine = taxBreakdown.find(t => /^GST$/i.test(t.code));
-        const pstCollidesWithGst = taxBreakdown.some(
-          t => /^PST/i.test(t.code) && t.glAccountId && gstLine?.glAccountId && t.glAccountId === gstLine.glAccountId
-        );
-        if (pstCollidesWithGst) {
-          toast.error(
-            'PST Paid account is not configured. Open Sales Tax Settings → assign a "PST Paid (Non-Recoverable)" expense account before posting.'
-          );
-          throw new Error('PST_PAID_ACCOUNT_NOT_CONFIGURED');
-        }
-        // For split taxes, post each component that has a GL account
-        taxToPost = taxBreakdown
-          .filter(t => t.glAccountId && t.amount > 0)
-          .map(t => ({ code: t.code, amount: Math.abs(t.amount), glAccountId: t.glAccountId }));
-      } else if (taxCode && taxAmount && Math.abs(taxAmount) > 0 && taxCode.gl_paid_account_id) {
-        // Single tax with GL account
-        taxToPost = [{ code: taxCode.code, amount: Math.abs(taxAmount), glAccountId: taxCode.gl_paid_account_id }];
-      }
+      const { data: chart, error: chartError } = await supabase
+        .from('accounts')
+        .select('id, name, account_type, is_header, posting_allowed, parent_id')
+        .eq('organization_id', organizationId)
+        .eq('is_active', true);
+      if (chartError) throw new Error(`Failed to load accounts: ${chartError.message}`);
+      const chartAccounts = chart || [];
+      const offsetAccount = chartAccounts.find((account) => account.id === glAccountId) ?? null;
+      const incomingTax = (taxBreakdown && taxBreakdown.length > 0)
+        ? taxBreakdown.map((item) => ({ ...item, amount: Math.abs(item.amount) }))
+        : (taxCode && taxAmount && Math.abs(taxAmount) > 0)
+          ? [{
+              code: taxCode.code,
+              rate: Number(taxCode.rate) || 0,
+              amount: Math.abs(taxAmount),
+              glAccountId: taxCode.gl_paid_account_id || taxCode.gl_collected_account_id,
+            }]
+          : [];
+      const expenseRefund = transactionType === 'credit' && isExpenseLikeAccount(offsetAccount);
+      const plannedTax = planBankTaxLines({
+        transactionType: expenseRefund ? 'deposit' : 'withdrawal',
+        offsetAccounts: expenseRefund ? [offsetAccount] : [{ account_type: 'expense' }],
+        taxBreakdown: incomingTax,
+        taxCode,
+        accounts: chartAccounts,
+      });
+      const postsTax = transactionType === 'charge' || transactionType === 'fee' || transactionType === 'interest' || expenseRefund;
+      if (plannedTax.error && postsTax) throw new Error(plannedTax.error);
+      const taxToPost = plannedTax.lines
+        .filter((item) => item.glAccountId && item.amount > 0)
+        .map((item) => ({
+          code: item.code,
+          amount: item.amount,
+          glAccountId: item.glAccountId as string,
+        }));
 
       const payeeInfo = payeePayor ? ` - ${payeePayor}` : '';
       const baseDimensions = {
@@ -268,21 +284,35 @@ export function usePostCreditCardTransactionToGL() {
           ...baseDimensions,
         });
       } else if (transactionType === 'credit') {
-        // CREDIT/REFUND: Credit Card Liability decreases (debit), Expense decreases (credit)
-        lines.push({
-          account_id: creditCard.gl_account_id,
-          debit: grossAmount,
-          credit: 0,
-          memo: `CC Credit${payeeInfo}: ${description}`,
-          ...baseDimensions,
-        });
-        lines.push({
-          account_id: glAccountId,
-          debit: 0,
-          credit: grossAmount,
-          memo: `Refund - ${description}`,
-          ...baseDimensions,
-        });
+        if (expenseRefund && taxToPost.length > 0) {
+          const refundLines = creditCardRefundJournal({
+            liabilityAccountId: creditCard.gl_account_id,
+            offsetAccountId: glAccountId,
+            grossAmount,
+            taxLines: plannedTax.lines,
+            description,
+            payee: payeePayor,
+          });
+          for (const line of refundLines) {
+            lines.push({ ...line, ...baseDimensions });
+          }
+        } else {
+          // CREDIT/REFUND: Credit Card Liability decreases (debit), Expense decreases (credit)
+          lines.push({
+            account_id: creditCard.gl_account_id,
+            debit: grossAmount,
+            credit: 0,
+            memo: `CC Credit${payeeInfo}: ${description}`,
+            ...baseDimensions,
+          });
+          lines.push({
+            account_id: glAccountId,
+            debit: 0,
+            credit: grossAmount,
+            memo: `Refund - ${description}`,
+            ...baseDimensions,
+          });
+        }
       }
 
       // Create the journal entry

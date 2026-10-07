@@ -22,6 +22,9 @@ import {
   AlertCircle,
   CreditCard,
   Landmark,
+  ArrowUp,
+  ArrowDown,
+  X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -63,6 +66,20 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 import { TransactionRule as UITransactionRule, RuleCondition, RuleAction } from '@/types/bankingRules';
 import { useConfirmDelete } from '@/hooks/useConfirmDelete';
+import {
+  defaultSortDirection,
+  filterAndSortTransactionRules,
+  RULE_ACTION_FILTERS,
+  RULE_FIELD_FILTERS,
+  RULE_MATCH_FILTERS,
+  RULE_SORT_OPTIONS,
+  type RuleActionFilter,
+  type RuleFieldFilter,
+  type RuleMatchFilter,
+  type RuleSortDirection,
+  type RuleSortKey,
+} from '@/lib/transactionRuleList';
+import { isOpenForTransactionRule } from '@/lib/transactionRuleEligibility';
 
 type AnalysisSource = 'bank' | 'credit-card';
 
@@ -74,6 +91,11 @@ export default function TransactionRules() {
   
   const [activeTab, setActiveTab] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [actionFilter, setActionFilter] = useState<RuleActionFilter>('all');
+  const [fieldFilter, setFieldFilter] = useState<RuleFieldFilter>('all');
+  const [matchFilter, setMatchFilter] = useState<RuleMatchFilter>('all');
+  const [sortKey, setSortKey] = useState<RuleSortKey>('priority');
+  const [sortDirection, setSortDirection] = useState<RuleSortDirection>('desc');
   const [expandedRules, setExpandedRules] = useState<Set<string>>(new Set());
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingRule, setEditingRule] = useState<TransactionRule | null>(null);
@@ -111,17 +133,15 @@ export default function TransactionRules() {
     creditCards.find(c => c.id === selectedCreditCardId)?.gl_account_id
   );
   
-  // Calculate eligible transactions for analysis (pending/unmatched without category)
-  const eligibleBankTransactions = useMemo(() => 
-    bankTransactions.filter(t => 
-      (t.status === 'unmatched' || t.status === 'pending') && !t.category
-    ), [bankTransactions]);
-    
-  const eligibleCCTransactions = useMemo(() => 
-    ccTransactions.filter(t => 
-      (t.status === 'pending' || t.status === 'unmatched' || !t.status) && 
-      !t.category && t.status !== 'reconciled'
-    ), [ccTransactions]);
+  const eligibleBankTransactions = useMemo(
+    () => bankTransactions.filter(isOpenForTransactionRule),
+    [bankTransactions],
+  );
+
+  const eligibleCCTransactions = useMemo(
+    () => ccTransactions.filter(isOpenForTransactionRule),
+    [ccTransactions],
+  );
   
   const currentEligibleCount = analysisSource === 'bank' 
     ? eligibleBankTransactions.length 
@@ -294,28 +314,25 @@ export default function TransactionRules() {
     updatedAt: new Date(rule.updated_at),
   });
 
-  // Filter rules based on tab and search
-  const filteredRules = useMemo(() => {
-    let result = rules;
-    
-    if (activeTab === 'active') {
-      result = result.filter(r => r.is_active);
-    } else if (activeTab === 'inactive') {
-      result = result.filter(r => !r.is_active);
-    } else if (activeTab === 'ai') {
-      result = result.filter(r => r.actions.some(a => a.type === 'post_to_gl'));
-    }
+  const filteredRules = useMemo(() => filterAndSortTransactionRules(rules, {
+    tab: activeTab as 'all' | 'active' | 'inactive' | 'ai',
+    search: searchQuery,
+    action: actionFilter,
+    field: fieldFilter,
+    matches: matchFilter,
+    sort: sortKey,
+    direction: sortDirection,
+  }), [rules, activeTab, searchQuery, actionFilter, fieldFilter, matchFilter, sortKey, sortDirection]);
 
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      result = result.filter(r => 
-        r.name.toLowerCase().includes(query) ||
-        r.description?.toLowerCase().includes(query)
-      );
-    }
-
-    return result;
-  }, [rules, activeTab, searchQuery]);
+  const filtersActive = searchQuery !== '' || actionFilter !== 'all' || fieldFilter !== 'all' || matchFilter !== 'all' || sortKey !== 'priority' || sortDirection !== 'desc';
+  const clearRuleFilters = () => {
+    setSearchQuery('');
+    setActionFilter('all');
+    setFieldFilter('all');
+    setMatchFilter('all');
+    setSortKey('priority');
+    setSortDirection('desc');
+  };
 
   if (!orgLoading && !organization) {
     return (
@@ -347,14 +364,16 @@ export default function TransactionRules() {
   }
 
   return (
-    <div className="space-y-6">
+    <div>
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+      <div className="sticky top-[68px] z-20 -mx-4 -mt-7 space-y-4 border-b border-border/70 bg-background/95 px-4 pb-4 pt-4 shadow-sm backdrop-blur-sm md:-mx-8 md:px-8">
       {/* Page Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Transaction Rules</h1>
           <p className="text-muted-foreground">AI-powered rules for automatic transaction categorization</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center justify-end gap-2">
           {/* Source selector */}
           <div className="flex items-center gap-2 bg-muted/50 rounded-lg p-1">
             <Button
@@ -407,9 +426,9 @@ export default function TransactionRules() {
           )}
           
           {currentEligibleCount > 0 && (
-            <Badge variant="secondary" className="gap-1">
+            <Badge variant="secondary" className="gap-1" title="Unmatched, pending, and transactions that are not posted to the GL">
               <AlertCircle className="w-3 h-3" />
-              {currentEligibleCount} pending
+              {currentEligibleCount} not posted
             </Badge>
           )}
           <Button 
@@ -433,7 +452,7 @@ export default function TransactionRules() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Card className="p-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
@@ -484,9 +503,7 @@ export default function TransactionRules() {
         </Card>
       </div>
 
-      {/* Tabs and Search */}
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <TabsList>
             <TabsTrigger value="all" className="gap-2">
               <Settings className="w-4 h-4" />
@@ -506,9 +523,10 @@ export default function TransactionRules() {
             </TabsTrigger>
           </TabsList>
 
-          <div className="relative w-72">
+          <div className="relative w-full sm:w-72">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
+              aria-label="Search rules"
               placeholder="Search rules..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -517,20 +535,107 @@ export default function TransactionRules() {
           </div>
         </div>
 
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm font-medium text-muted-foreground">Sort</span>
+          <Select
+            value={sortKey}
+            onValueChange={(value) => {
+              const next = value as RuleSortKey;
+              setSortKey(next);
+              setSortDirection(defaultSortDirection(next));
+            }}
+          >
+            <SelectTrigger className="w-[168px]" aria-label="Sort rules">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {RULE_SORT_OPTIONS.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="shrink-0"
+            aria-label={sortDirection === 'asc' ? 'Sort ascending' : 'Sort descending'}
+            onClick={() => setSortDirection((current) => (current === 'asc' ? 'desc' : 'asc'))}
+          >
+            {sortDirection === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
+          </Button>
+          <Select value={actionFilter} onValueChange={(value) => setActionFilter(value as RuleActionFilter)}>
+            <SelectTrigger className="w-[168px]" aria-label="Filter by action">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {RULE_ACTION_FILTERS.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={fieldFilter} onValueChange={(value) => setFieldFilter(value as RuleFieldFilter)}>
+            <SelectTrigger className="w-[168px]" aria-label="Filter by condition field">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {RULE_FIELD_FILTERS.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={matchFilter} onValueChange={(value) => setMatchFilter(value as RuleMatchFilter)}>
+            <SelectTrigger className="w-[168px]" aria-label="Filter by matches">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {RULE_MATCH_FILTERS.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {filtersActive && (
+            <Button type="button" variant="ghost" size="sm" onClick={clearRuleFilters}>
+              <X className="mr-1 h-4 w-4" />
+              Clear
+            </Button>
+          )}
+          {(filtersActive || activeTab !== 'all') && (
+            <p className="ml-auto text-sm text-muted-foreground">
+              Showing {filteredRules.length} of {rules.length} rules
+            </p>
+          )}
+        </div>
+      </div>
+
         <TabsContent value={activeTab} className="mt-4 space-y-3">
           {filteredRules.length === 0 ? (
             <Card className="p-8 text-center">
               <Settings className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
               <h3 className="text-lg font-semibold mb-2">No Rules Found</h3>
               <p className="text-muted-foreground mb-4">
-                {searchQuery 
-                  ? 'No rules match your search criteria.'
+                {filtersActive || activeTab !== 'all'
+                  ? 'No rules match your filters.'
                   : 'Create your first rule to automatically categorize transactions.'}
               </p>
-              <Button onClick={handleCreateRule}>
-                <Plus className="w-4 h-4 mr-2" />
-                Create Rule
-              </Button>
+              {filtersActive || activeTab !== 'all' ? (
+                <Button variant="outline" onClick={() => { clearRuleFilters(); setActiveTab('all'); }}>
+                  Clear filters
+                </Button>
+              ) : (
+                <Button onClick={handleCreateRule}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Create Rule
+                </Button>
+              )}
             </Card>
           ) : (
             filteredRules.map((rule) => (

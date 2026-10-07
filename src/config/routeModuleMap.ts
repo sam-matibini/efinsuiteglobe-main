@@ -68,6 +68,7 @@ const ROUTE_MODULE_MAP: Array<{ prefix: string; module: ModuleCode }> = [
 
   // Communication
   { prefix: '/communication', module: 'communication' },
+  { prefix: '/ai-receptionist', module: 'communication' },
 
   // Firm / practice
   { prefix: '/firm', module: 'practice_management' },

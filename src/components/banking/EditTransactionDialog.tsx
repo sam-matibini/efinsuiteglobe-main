@@ -52,6 +52,7 @@ import { useDonationForTransaction, useCreateDonationFromTransaction } from '@/h
 import { TaxCode, useTaxCodes } from '@/hooks/useSalesTax';
 import { useAccounts } from '@/hooks/useAccounts';
 import { withResolvedTaxAccounts } from '@/lib/taxGlAccounts';
+import { isExpenseRefund } from '@/lib/expenseRefundPosting';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { parseLocalDate } from '@/lib/utils';
@@ -64,6 +65,8 @@ interface EditTransactionDialogProps {
   onOpenChange: (open: boolean) => void;
   transaction: BankTransaction | null;
   onSave: (updates: Partial<BankTransaction>) => void;
+  /** Keep the form in the transaction side panel instead of a modal. */
+  embedded?: boolean;
 }
 
 const transactionTypeOptions = [
@@ -178,6 +181,7 @@ export function EditTransactionDialog({
   onOpenChange,
   transaction,
   onSave,
+  embedded = false,
 }: EditTransactionDialogProps) {
   const { organization } = useCurrentOrganization();
   const postToGL = usePostTransactionToGL();
@@ -225,13 +229,24 @@ export function EditTransactionDialog({
     [selectedTaxCode, orgAccounts, taxCodes],
   );
 
-  // Calculate tax amounts
+  const expenseRefund = useMemo(() => {
+    if (transactionType !== 'deposit') return false;
+    const ids = splitEnabled
+      ? splits.map((line) => line.accountId).filter(Boolean)
+      : (glAccountId ? [glAccountId] : []);
+    if (ids.length === 0) return false;
+    return isExpenseRefund(ids.map((id) => orgAccounts.find((account) => account.id === id)));
+  }, [transactionType, splitEnabled, splits, glAccountId, orgAccounts]);
+
+  // Calculate tax amounts. A deposit to an expense account reverses the tax that was paid.
   const taxCalculation = useMemo(() => {
     if (!transaction) return null;
     const amount = Math.abs(Number(transaction.amount));
-    const txDir = (transaction.transaction_type as 'deposit' | 'withdrawal' | 'transfer') || 'withdrawal';
+    const txDir = expenseRefund
+      ? 'withdrawal'
+      : ((transactionType as 'deposit' | 'withdrawal' | 'transfer') || 'withdrawal');
     return calculateTax(amount, resolvedTaxCode, taxInclusive, txDir);
-  }, [transaction, resolvedTaxCode, taxInclusive]);
+  }, [transaction, resolvedTaxCode, taxInclusive, expenseRefund, transactionType]);
 
   useEffect(() => {
     if (!transaction) return;
@@ -353,7 +368,7 @@ export function EditTransactionDialog({
         glAccountId: primaryAccount,
         organizationId: organization.id,
         amount: splitEnabled ? allocateTotal : (taxCalculation?.subtotal ?? bankAmount),
-        transactionType: transaction.transaction_type,
+        transactionType: (transactionType as 'deposit' | 'withdrawal' | 'transfer') || transaction.transaction_type,
         description: transaction.description,
         transactionDate: transaction.transaction_date,
         category: category || undefined,
@@ -434,9 +449,22 @@ export function EditTransactionDialog({
   const isDeposit = transactionType === 'deposit';
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={cn('max-h-[90vh]', splitEnabled ? 'max-w-2xl' : 'max-w-xl')}>
-        <DialogHeader>
+    <Dialog open={open} onOpenChange={onOpenChange} modal={!embedded}>
+      <DialogContent
+        inline={embedded}
+        onInteractOutside={(event) => {
+          if (embedded) event.preventDefault();
+        }}
+        onPointerDownOutside={(event) => {
+          if (embedded) event.preventDefault();
+        }}
+        className={cn(
+          'banking-edit-form',
+          embedded ? 'h-full max-h-full overflow-hidden border-0 p-4 shadow-none' : 'max-h-[90vh]',
+          !embedded && (splitEnabled ? 'max-w-2xl' : 'max-w-xl'),
+        )}
+      >
+        <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2">
             {isReconciled ? 'View Transaction' : 'Edit Transaction'}
             {isReconciled && (
@@ -464,7 +492,7 @@ export function EditTransactionDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="max-h-[65vh] pr-4">
+        <ScrollArea className={embedded ? 'min-h-0 flex-1 pr-3' : 'max-h-[65vh] pr-4'}>
           <div className="space-y-4 py-4">
           {/* Reconciled Lock Warning */}
           {isReconciled && (
@@ -704,7 +732,9 @@ export function EditTransactionDialog({
                     />
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Select the account to post the contra entry to (e.g., Expense or Revenue account)
+                    {expenseRefund
+                      ? 'Expense refund: this deposit credits the expense and reverses the sales tax that was paid.'
+                      : 'Select the account to post the contra entry to (e.g., Expense or Revenue account)'}
                   </p>
                 </>
               ) : (
@@ -820,7 +850,7 @@ export function EditTransactionDialog({
                       onValueChange={setSelectedTaxCode}
                       placeholder="Select tax..."
                       disabled={isReconciled}
-                      direction={transactionType === 'deposit' ? 'collected' : 'paid'}
+                      direction={expenseRefund ? 'both' : transactionType === 'deposit' ? 'collected' : 'paid'}
                     />
                   </div>
                 </div>
@@ -881,22 +911,45 @@ export function EditTransactionDialog({
           </div>
         </ScrollArea>
 
-        <DialogFooter className="gap-2 sm:gap-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            <X className="w-4 h-4 mr-2" />
+        <DialogFooter
+          data-testid="banking-edit-footer"
+          className={cn(
+            'shrink-0 border-t border-indigo-100 bg-indigo-50/40 pt-3',
+            embedded ? 'grid grid-cols-3 gap-1.5 sm:space-x-0' : 'gap-2 px-1 pt-4 sm:gap-2',
+          )}
+        >
+          <Button
+            variant="outline"
+            className={cn(
+              'border-slate-300 bg-white font-medium',
+              embedded ? 'h-auto min-h-9 min-w-0 whitespace-normal px-1.5 py-1.5 text-[11px] leading-tight' : 'h-10',
+            )}
+            onClick={() => onOpenChange(false)}
+          >
+            <X className="h-3.5 w-3.5 shrink-0" />
             {isReconciled ? 'Close' : 'Cancel'}
           </Button>
           {!isReconciled && (
             <>
-              <Button variant="secondary" onClick={handleSave}>
-                <Save className="w-4 h-4 mr-2" />
+              <Button
+                className={cn(
+                  'bg-cyan-600 font-semibold text-white shadow-sm hover:bg-cyan-700',
+                  embedded ? 'h-auto min-h-9 min-w-0 whitespace-normal px-1.5 py-1.5 text-[11px] leading-tight' : 'h-10',
+                )}
+                onClick={handleSave}
+              >
+                <Save className="h-3.5 w-3.5 shrink-0" />
                 Save Changes
               </Button>
-              <Button 
-                onClick={handlePostToGL} 
+              <Button
+                className={cn(
+                  'bg-gradient-to-r from-indigo-600 to-cyan-500 font-semibold text-white shadow-md hover:from-indigo-700 hover:to-cyan-600',
+                  embedded ? 'h-auto min-h-9 min-w-0 whitespace-normal px-1.5 py-1.5 text-[11px] leading-tight' : 'h-10',
+                )}
+                onClick={handlePostToGL}
                 disabled={postToGL.isPending || (splitEnabled ? !!splitError : !glAccountId)}
               >
-                <Send className="w-4 h-4 mr-2" />
+                <Send className="h-3.5 w-3.5 shrink-0" />
                 {postToGL.isPending ? 'Posting...' : 'Save & Post to GL'}
               </Button>
             </>

@@ -126,6 +126,7 @@ export function AmountDrilldownDialog({
   const [viewEntry, setViewEntry] = useState<JournalEntryWithLines | null>(null);
   const [viewOpen, setViewOpen] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [reloadToken, setReloadToken] = useState(0);
 
   useEffect(() => {
     if (!open || !organizationId || !accountId) return;
@@ -229,7 +230,7 @@ export function AmountDrilldownDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, organizationId, accountId, periodStart, periodEnd, excludeCloseEntries, includeOffsetAccounts, hideOpeningBalance]);
+  }, [open, organizationId, accountId, periodStart, periodEnd, excludeCloseEntries, includeOffsetAccounts, hideOpeningBalance, reloadToken]);
 
   const sorted = [...lines].sort((a, b) => {
     const ad = a.journal_entry?.entry_date ?? '';
@@ -417,7 +418,7 @@ export function AmountDrilldownDialog({
                   Drilldown — {accountCode ? `${accountCode} ` : ''}{accountName}
                 </DialogTitle>
                 <DialogDescription className="mt-1">
-                  {periodLabel} · Double-click a row to open the source journal entry
+                  {periodLabel} · Double-click a row to open the journal entry and edit its amounts
                   {includeOffsetAccounts ? ' and see the offset Chart of Accounts code.' : '.'}
                 </DialogDescription>
               </div>
@@ -562,6 +563,10 @@ export function AmountDrilldownDialog({
         open={viewOpen}
         onOpenChange={setViewOpen}
         entry={viewEntry}
+        onSaved={(next) => {
+          setViewEntry(next);
+          setReloadToken((token) => token + 1);
+        }}
       />
     </>
   );

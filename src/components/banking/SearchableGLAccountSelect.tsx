@@ -15,10 +15,20 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
-import { useAccounts, DbAccount } from '@/hooks/useAccounts';
+import { useAccounts } from '@/hooks/useAccounts';
 import { useCurrentOrganization } from '@/hooks/useOrganization';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
+
+export interface GLAccountChoice {
+  id: string;
+  code: string;
+  name: string;
+  account_type?: string;
+  is_header?: boolean;
+  is_active?: boolean;
+  current_balance?: number;
+}
 
 interface SearchableGLAccountSelectProps {
   value: string;
@@ -27,6 +37,12 @@ interface SearchableGLAccountSelectProps {
   disabled?: boolean;
   className?: string;
   filterPostable?: boolean; // Only show postable accounts (non-headers)
+  /** Shown when the current id is not in the loaded chart, such as before accounts arrive. */
+  fallbackLabel?: string;
+  ariaLabel?: string;
+  testId?: string;
+  /** Uses these accounts instead of the organization chart. */
+  accounts?: GLAccountChoice[];
 }
 
 export function SearchableGLAccountSelect({
@@ -36,17 +52,25 @@ export function SearchableGLAccountSelect({
   disabled = false,
   className,
   filterPostable = true,
+  fallbackLabel,
+  ariaLabel,
+  testId,
+  accounts: accountsOverride,
 }: SearchableGLAccountSelectProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   
   const { organization } = useCurrentOrganization();
-  const { data: accounts = [], isLoading } = useAccounts(organization?.id);
+  const { data: loadedAccounts = [], isLoading: accountsLoading } = useAccounts(
+    accountsOverride ? undefined : organization?.id,
+  );
+  const accounts = accountsOverride ?? loadedAccounts;
+  const isLoading = accountsOverride ? false : accountsLoading;
 
   // Filter to postable accounts only if requested
   const postableAccounts = useMemo(() => {
     if (!filterPostable) return accounts;
-    return accounts.filter(acc => !acc.is_header && acc.is_active);
+    return accounts.filter(acc => !acc.is_header && acc.is_active !== false);
   }, [accounts, filterPostable]);
 
   const selectedAccount = useMemo(
@@ -66,7 +90,7 @@ export function SearchableGLAccountSelect({
 
   // Group accounts by type for better organization
   const groupedAccounts = useMemo(() => {
-    const groups: Record<string, DbAccount[]> = {};
+    const groups: Record<string, GLAccountChoice[]> = {};
     const typeOrder = ['asset', 'liability', 'equity', 'income', 'expense'];
     
     filteredAccounts.forEach((acc) => {
@@ -76,7 +100,7 @@ export function SearchableGLAccountSelect({
     });
 
     // Sort groups by type order
-    const sortedGroups: Record<string, DbAccount[]> = {};
+    const sortedGroups: Record<string, GLAccountChoice[]> = {};
     typeOrder.forEach(type => {
       if (groups[type]) {
         sortedGroups[type] = groups[type].sort((a, b) => a.code.localeCompare(b.code));
@@ -105,7 +129,7 @@ export function SearchableGLAccountSelect({
     other: '📁 Other',
   };
 
-  const handleSelect = (acc: DbAccount) => {
+  const handleSelect = (acc: GLAccountChoice) => {
     onValueChange(acc.id, { id: acc.id, code: acc.code, name: acc.name });
     setOpen(false);
     setSearch('');
@@ -122,6 +146,8 @@ export function SearchableGLAccountSelect({
           variant="outline"
           role="combobox"
           aria-expanded={open}
+          aria-label={ariaLabel}
+          data-testid={testId}
           className={cn("w-full h-9 justify-between font-normal", className)}
           disabled={disabled}
         >
@@ -130,6 +156,8 @@ export function SearchableGLAccountSelect({
               <span className="font-mono text-xs text-muted-foreground">{selectedAccount.code}</span>
               <span>{selectedAccount.name}</span>
             </span>
+          ) : fallbackLabel ? (
+            <span className="truncate text-left font-medium">{fallbackLabel}</span>
           ) : (
             <span className="text-muted-foreground flex items-center gap-2">
               <Building2 className="w-4 h-4" />
@@ -173,7 +201,7 @@ export function SearchableGLAccountSelect({
                         {acc.code}
                       </span>
                       <span className="truncate">{acc.name}</span>
-                      {acc.current_balance !== 0 && (
+                      {acc.current_balance != null && acc.current_balance !== 0 && (
                         <span className="ml-auto text-xs text-muted-foreground font-mono">
                           ${Math.abs(acc.current_balance || 0).toLocaleString()}
                         </span>

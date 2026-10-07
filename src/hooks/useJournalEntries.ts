@@ -37,6 +37,7 @@ export interface DbJournalEntryLine {
   account?: {
     code: string;
     name: string;
+    account_type?: string;
   };
 }
 
@@ -137,7 +138,7 @@ export function useJournalEntries(
             *,
             lines:journal_entry_lines(
               *,
-              account:accounts(code, name)
+              account:accounts(code, name, account_type)
             )
           `)
           .eq('organization_id', organizationId)

@@ -7,6 +7,7 @@ import { reverseLinkedJournalEntry, recalculateAndInvalidate } from './useGLProp
 import { parseLocalDate } from '@/lib/utils';
 import { allowUnreconciledBankUpdate } from '@/lib/bankTransactionLock';
 import { applyGlEditToJournalLines, isReversalJournal, matchingCardPayment } from '@/lib/postedJournalEdit';
+import { fetchAllPages, fetchInChunks } from '@/lib/fetchAllPages';
 
 export interface CreditCard {
   id: string;
@@ -352,16 +353,17 @@ export function useCreditCardTransactions(creditCardId?: string, glAccountId?: s
     queryFn: async () => {
       if (!creditCardId) return [];
       
-      // Fetch credit card transactions
-      const { data: ccTxns, error: ccError } = await supabase
-        .from('credit_card_transactions')
-        .select('*')
-        .eq('credit_card_id', creditCardId)
-        .order('transaction_date', { ascending: false });
-      
-      if (ccError) throw ccError;
-      
-      const ccTransactions: ExtendedCreditCardTransaction[] = (ccTxns || []).map(t => ({
+      const ccTxns = await fetchAllPages((from, to) =>
+        supabase
+          .from('credit_card_transactions')
+          .select('*')
+          .eq('credit_card_id', creditCardId)
+          .order('transaction_date', { ascending: false })
+          .order('id', { ascending: false })
+          .range(from, to),
+      );
+
+      const ccTransactions: ExtendedCreditCardTransaction[] = ccTxns.map(t => ({
         ...t,
         source: 'credit_card_transaction' as const,
       }));
@@ -369,27 +371,29 @@ export function useCreditCardTransactions(creditCardId?: string, glAccountId?: s
       // If GL account is linked, fetch unlinked journal entry lines affecting the GL account
       // These are payments from bank accounts that should appear in the CC transaction list
       if (glAccountId) {
-        const { data: journalLines, error: journalError } = await supabase
-          .from('journal_entry_lines')
-          .select(`
-            id,
-            journal_entry_id,
-            account_id,
-            description,
-            debit,
-            credit,
-            journal_entry:journal_entries!inner(
+        const journalLines = await fetchAllPages((from, to) =>
+          supabase
+            .from('journal_entry_lines')
+            .select(`
               id,
-              reference,
-              entry_date,
+              journal_entry_id,
+              account_id,
               description,
-              status,
-              reversal_of
-            )
-          `)
-          .eq('account_id', glAccountId);
-
-        if (journalError) throw journalError;
+              debit,
+              credit,
+              journal_entry:journal_entries!inner(
+                id,
+                reference,
+                entry_date,
+                description,
+                status,
+                reversal_of
+              )
+            `)
+            .eq('account_id', glAccountId)
+            .order('id', { ascending: true })
+            .range(from, to),
+        );
 
         // Get all CC transactions journal_entry_ids to exclude already-linked entries
         const linkedJournalIds = new Set(
@@ -397,19 +401,21 @@ export function useCreditCardTransactions(creditCardId?: string, glAccountId?: s
         );
 
         // Convert unlinked journal entries to transaction items
-        const candidates = (journalLines || []).filter((line) => {
+        const candidates = journalLines.filter((line) => {
           const je = line.journal_entry as any;
           return je?.status === 'posted' && !isReversalJournal(je) && !linkedJournalIds.has(je.id);
         });
         const entryIds = [...new Set(candidates.map((line) => (line.journal_entry as any).id as string))];
         const offsetByEntry = new Map<string, string>();
         if (entryIds.length > 0) {
-          const { data: siblingLines } = await supabase
-            .from('journal_entry_lines')
-            .select('id, journal_entry_id, account_id, debit, credit')
-            .in('journal_entry_id', entryIds);
+          const siblingLines = await fetchInChunks(entryIds, 200, (ids) =>
+            supabase
+              .from('journal_entry_lines')
+              .select('id, journal_entry_id, account_id, debit, credit')
+              .in('journal_entry_id', ids),
+          );
           for (const entryId of entryIds) {
-            const siblings = (siblingLines || []).filter((row) => row.journal_entry_id === entryId && row.account_id !== glAccountId);
+            const siblings = siblingLines.filter((row) => row.journal_entry_id === entryId && row.account_id !== glAccountId);
             const largest = [...siblings].sort(
               (a, b) => (Number(b.debit) + Number(b.credit)) - (Number(a.debit) + Number(a.credit)),
             )[0];

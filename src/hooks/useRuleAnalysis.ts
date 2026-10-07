@@ -5,13 +5,11 @@ import { reverseLinkedJournalEntry, recalculateAndInvalidate } from './useGLProp
 import { TransactionRule } from './useTransactionRules';
 import { BankTransaction } from './useBankTransactions';
 import { allowUnreconciledBankUpdate } from '@/lib/bankTransactionLock';
+import { isOpenForTransactionRule } from '@/lib/transactionRuleEligibility';
+import { isExpenseLikeAccount, planBankTaxLines } from '@/lib/expenseRefundPosting';
 import { toast } from 'sonner';
-import { 
-  matchText, 
-  getMatchConfidence, 
-  extractVendorName,
-  normalizeText 
-} from '@/lib/transactionMatcher';
+import { getMatchConfidence } from '@/lib/transactionMatcher';
+import { ruleActionSettings, ruleAppliesToAccount, ruleConditionsMatch } from '@/lib/ruleConditionFormula';
 
 export interface AnalysisResult {
   transaction: BankTransaction;
@@ -53,85 +51,11 @@ export function matchesRule(tx: BankTransaction, rule: TransactionRule): boolean
     : tx.transaction_type === 'withdrawal' ? 'outflow'
     : null;
 
-  const results = rule.conditions.map(condition => {
-    const searchValue = condition.value || '';
-    const txAmount = Math.abs(Number(tx.amount));
-
-    // Get field value based on condition field
-    let fieldValue = '';
-    switch (condition.field) {
-      case 'description':
-        fieldValue = tx.description || '';
-        break;
-      case 'payee_payor':
-        fieldValue = tx.payee_payor || '';
-        break;
-      case 'reference':
-        fieldValue = tx.reference || '';
-        break;
-    }
-
-    // Handle amount-specific operators
-    if (condition.field === 'amount') {
-      switch (condition.operator) {
-        case 'equals':
-          return Math.abs(txAmount - parseFloat(searchValue)) < 0.01;
-        case 'greater_than':
-          return txAmount > parseFloat(searchValue);
-        case 'less_than':
-          return txAmount < parseFloat(searchValue);
-        case 'between':
-          const min = parseFloat(searchValue);
-          const max = parseFloat(condition.value2 || '0');
-          return txAmount >= min && txAmount <= max;
-        default:
-          return false;
-      }
-    }
-
-    // Handle transaction type operators
-    switch (condition.operator) {
-      case 'is_deposit':
-        return tx.transaction_type === 'deposit';
-      case 'is_withdrawal':
-        return tx.transaction_type === 'withdrawal';
-    }
-
-    const textOperators = [
-      'contains', 'not_contains', 'equals', 'not_equals',
-      'starts_with', 'ends_with', 'contains_words', 
-      'contains_any_word', 'fuzzy_match', 'matches_regex'
-    ];
-
-    if (textOperators.includes(condition.operator)) {
-      if (matchText(fieldValue, condition.operator, searchValue, { txDirection })) {
-        return true;
-      }
-      
-      if (condition.field === 'description') {
-        const vendor = extractVendorName(fieldValue);
-        if (matchText(vendor, condition.operator, searchValue, { txDirection })) {
-          return true;
-        }
-      }
-      
-      if (condition.field === 'payee_payor') {
-        const normalized = normalizeText(fieldValue);
-        if (matchText(normalized, condition.operator, searchValue, { txDirection })) {
-          return true;
-        }
-      }
-      
-      return false;
-    }
-
-    return false;
+  if (!ruleAppliesToAccount(rule.actions, tx, 'bank')) return false;
+  return ruleConditionsMatch(tx, rule.conditions, rule.logic_operator, {
+    txDirection,
+    accountKind: 'bank',
   });
-
-  const logicOp = (rule.logic_operator || 'and').toLowerCase();
-  return logicOp === 'and' 
-    ? results.every(Boolean)
-    : results.some(Boolean);
 }
 
 /**
@@ -181,18 +105,14 @@ export function calculateMatchConfidence(
 }
 
 /**
- * Analyze transactions against rules without applying
- * Includes both 'pending' and 'unmatched' transactions that don't have a category
+ * Analyze transactions against rules without applying.
+ * Unmatched, pending, and other lines that are not posted to the GL are included.
  */
 export function analyzeTransactions(
   transactions: BankTransaction[],
   rules: TransactionRule[]
 ): AnalysisResult[] {
-  // Include pending and unmatched transactions without categories
-  const eligibleTxs = transactions.filter(t => 
-    (t.status === 'unmatched' || t.status === 'pending') && 
-    !t.category
-  );
+  const eligibleTxs = transactions.filter(isOpenForTransactionRule);
   const activeRules = rules.filter(r => r.is_active).sort((a, b) => b.priority - a.priority);
 
   return eligibleTxs.map(tx => {
@@ -202,14 +122,16 @@ export function analyzeTransactions(
       if (matchResult.matches) {
         const categoryAction = rule.actions.find(a => a.type === 'categorize');
         const glAction = rule.actions.find(a => a.type === 'post_to_gl');
+        const settings = ruleActionSettings(rule.actions);
+        const recognized = settings.markAs === 'recognized';
 
         return {
           transaction: tx,
           matchedRule: rule,
-          category: categoryAction?.category || null,
-          glAccountId: glAction?.glAccountId || null,
-          glAccountName: glAction?.glAccountName || null,
-          willPostToGL: !!glAction?.glAccountId,
+          category: settings.recordAs || categoryAction?.category || null,
+          glAccountId: recognized ? null : (glAction?.glAccountId || null),
+          glAccountName: recognized ? null : (glAction?.glAccountName || null),
+          willPostToGL: !recognized && !!glAction?.glAccountId,
           confidence: matchResult.confidence,
           matchScore: matchResult.score,
           // Include tax info from the rule action
@@ -256,6 +178,13 @@ export function useProcessTransactions() {
       organizationId: string;
     }): Promise<ProcessingResult[]> => {
       const results: ProcessingResult[] = [];
+      const { data: chart, error: chartError } = await supabase
+        .from('accounts')
+        .select('id, name, account_type, is_header, posting_allowed, parent_id')
+        .eq('organization_id', organizationId)
+        .eq('is_active', true);
+      if (chartError) throw new Error(`Failed to load accounts: ${chartError.message}`);
+      const chartAccounts = chart || [];
       
       // Filter to only matched transactions
       const toProcess = analysisResults.filter(r => r.matchedRule !== null);
@@ -305,6 +234,8 @@ export function useProcessTransactions() {
             if (category) updates.category = category;
             if (glAccountId) updates.gl_account_id = glAccountId;
             if (departmentId) updates.department_id = departmentId;
+            const referenceNumber = matchedRule ? ruleActionSettings(matchedRule.actions).referenceNumber : '';
+            if (referenceNumber && !transaction.reference) updates.reference = referenceNumber;
 
             // If posting to GL, create journal entry
             let journalEntryId: string | undefined;
@@ -320,13 +251,31 @@ export function useProcessTransactions() {
               if (bankAccount?.gl_account_id) {
                 const grossAmount = Math.abs(Number(transaction.amount));
                 const isDeposit = transaction.transaction_type === 'deposit';
+                const offsetAccount = chartAccounts.find((account) => account.id === glAccountId) ?? null;
+                const expenseRefund = isDeposit && isExpenseLikeAccount(offsetAccount);
 
-                // Determine the correct tax GL account based on transaction type
-                // - Deposits (sales): Use taxCollectedGlAccountId (GST/HST Payable - liability)
-                // - Withdrawals (expenses): Use taxPaidGlAccountId (GST/HST ITC - asset)
-                const effectiveTaxGlAccountId = isDeposit 
-                  ? (taxCollectedGlAccountId || taxGlAccountId)  // Sales -> Collected (Payable)
-                  : (taxPaidGlAccountId || taxGlAccountId);       // Expenses -> Paid (ITC)
+                // Sales deposits credit tax collected. An expense refund reverses tax paid.
+                const rawTaxAccount = expenseRefund
+                  ? (taxPaidGlAccountId || taxGlAccountId || taxCollectedGlAccountId)
+                  : (isDeposit
+                    ? (taxCollectedGlAccountId || taxGlAccountId)
+                    : (taxPaidGlAccountId || taxGlAccountId));
+                let effectiveTaxGlAccountId = rawTaxAccount || null;
+                if (taxRate && taxRate > 0 && rawTaxAccount) {
+                  const planned = planBankTaxLines({
+                    transactionType: isDeposit ? 'deposit' : 'withdrawal',
+                    offsetAccounts: offsetAccount ? [offsetAccount] : [],
+                    taxBreakdown: [{
+                      code: taxCode || 'Tax',
+                      rate: taxRate,
+                      amount: 1,
+                      glAccountId: rawTaxAccount,
+                    }],
+                    accounts: chartAccounts,
+                  });
+                  if (planned.error) throw new Error(planned.error);
+                  effectiveTaxGlAccountId = planned.lines[0]?.glAccountId || null;
+                }
 
                 // Calculate tax amounts if tax code is set AND we have a valid GL account
                 let subtotal = grossAmount;
@@ -359,13 +308,12 @@ export function useProcessTransactions() {
                     memo: category || transaction.description 
                   });
                   
-                  // Credit tax to GST/HST Payable (liability account)
                   if (taxAmount > 0 && effectiveTaxGlAccountId) {
                     lines.push({ 
                       account_id: effectiveTaxGlAccountId, 
                       debit: 0, 
                       credit: taxAmount, 
-                      memo: `${taxCode || 'Tax'} collected` 
+                      memo: expenseRefund ? `${taxCode || 'Tax'} reversed` : `${taxCode || 'Tax'} collected`,
                     });
                   }
                 } else {

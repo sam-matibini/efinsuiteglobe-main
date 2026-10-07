@@ -1,6 +1,7 @@
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { PieChart as PieChartIcon } from 'lucide-react';
 import { useFinancialReports } from '@/hooks/useFinancialReports';
+import { useReportFilters } from '@/hooks/useReportFilters';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useLocalizedCurrency } from '@/hooks/useLocalizedCurrency';
 
@@ -13,7 +14,8 @@ const COLORS = [
 ];
 
 export function ExpensesPieChart() {
-  const { getIncomeStatementData, isLoading } = useFinancialReports();
+  const { startDate, endDate } = useReportFilters();
+  const { getIncomeStatementData, isLoading } = useFinancialReports({ startDate, endDate });
   const { formatCurrency: formatLocalizedCurrency } = useLocalizedCurrency();
 
   const formatCurrency = (value: number) => {

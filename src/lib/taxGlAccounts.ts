@@ -13,6 +13,7 @@ export interface NamedAccount {
   name: string;
   is_header?: boolean;
   posting_allowed?: boolean;
+  parent_id?: string | null;
 }
 
 export interface TaxGlComponent {
@@ -81,6 +82,47 @@ export function resolveTaxAccount(
     if (hit) return hit.id;
   }
   return null;
+}
+
+function isPostableAccount(account: NamedAccount | undefined): boolean {
+  return !!account && !account.is_header && account.posting_allowed !== false;
+}
+
+export function taxAccountKind(code: string): 'gst' | 'pst' {
+  const upper = code.toUpperCase();
+  if (upper.startsWith('PST') || upper.startsWith('QST') || upper === 'RST') return 'pst';
+  if (upper.includes('PST') && !upper.includes('GST') && !upper.includes('HST')) return 'pst';
+  return 'gst';
+}
+
+export function taxAccountPatterns(code: string, side: 'paid' | 'collected'): RegExp[] {
+  const pst = taxAccountKind(code) === 'pst';
+  if (side === 'paid') return pst ? PST_PAID : GST_PAID;
+  return pst ? PST_COLLECTED : GST_COLLECTED;
+}
+
+/**
+ * Use a posting account for a tax line. A stored header such as "Taxes Payable"
+ * is replaced by a postable child or a named GST/PST detail account.
+ */
+export function postableTaxAccount(
+  accounts: NamedAccount[] | undefined,
+  accountId: string | null | undefined,
+  code: string,
+  side: 'paid' | 'collected',
+): string | null {
+  const list = accounts ?? [];
+  const patterns = taxAccountPatterns(code, side);
+  const named = accountId ? list.find((account) => account.id === accountId) : undefined;
+  if (isPostableAccount(named)) return named.id;
+  if (named && (named.is_header || named.posting_allowed === false)) {
+    const children = list.filter((account) => account.parent_id === named.id && isPostableAccount(account));
+    for (const pattern of patterns) {
+      const hit = children.find((account) => pattern.test(account.name.trim()));
+      if (hit) return hit.id;
+    }
+  }
+  return resolveTaxAccount(list, patterns);
 }
 
 function firstId(...ids: Array<string | null | undefined>): string | null {

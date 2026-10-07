@@ -2,13 +2,20 @@ import { ArrowUpRight, ArrowDownLeft } from 'lucide-react';
 import { cn, parseLocalDate } from '@/lib/utils';
 import { useJournalEntries } from '@/hooks/useJournalEntries';
 import { useCurrentOrganization } from '@/hooks/useOrganization';
+import { useReportFilters } from '@/hooks/useReportFilters';
+import { toLocalISO } from '@/lib/dateRangePresets';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useNavigate } from 'react-router-dom';
 import { useLocalizedCurrency } from '@/hooks/useLocalizedCurrency';
 
 export function RecentTransactions() {
   const { organization } = useCurrentOrganization();
-  const { data: journalEntries, isLoading } = useJournalEntries(organization?.id);
+  const { startDate, endDate } = useReportFilters();
+  const { data: journalEntries, isLoading } = useJournalEntries(organization?.id, {
+    status: 'posted',
+    startDate: toLocalISO(startDate),
+    endDate: toLocalISO(endDate),
+  });
   const navigate = useNavigate();
   const { formatCurrency: formatLocalizedCurrency, formatDate } = useLocalizedCurrency();
 
@@ -26,7 +33,7 @@ export function RecentTransactions() {
         <div className="flex items-center justify-between mb-6">
           <div>
             <h3 className="text-lg font-semibold text-foreground">Recent Transactions</h3>
-            <p className="text-sm text-muted-foreground">Latest activity in your accounts</p>
+            <p className="text-sm text-muted-foreground">Posted in the selected period</p>
           </div>
         </div>
         <div className="space-y-4">
@@ -49,7 +56,7 @@ export function RecentTransactions() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h3 className="text-lg font-semibold text-foreground">Recent Transactions</h3>
-          <p className="text-sm text-muted-foreground">Latest activity in your accounts</p>
+            <p className="text-sm text-muted-foreground">Posted in the selected period</p>
         </div>
         <button 
           onClick={() => navigate('/journal-entries')}
@@ -62,7 +69,7 @@ export function RecentTransactions() {
       <div className="space-y-4">
         {recentEntries.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-4">
-            No recent transactions
+            No transactions in this period
           </p>
         ) : (
           recentEntries.map((entry) => {

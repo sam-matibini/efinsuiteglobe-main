@@ -56,6 +56,7 @@ const initialFormState = {
   organizationName: '',
   firstName: '',
   lastName: '',
+  contactPerson: '',
   email: '',
   phone: '',
   addressLine1: '',
@@ -107,6 +108,7 @@ export function AddCustomerDialog({ open, onOpenChange }: AddCustomerDialogProps
       postal_code: formData.postalCode.trim() || undefined,
       country: formData.country || undefined,
       tax_number: formData.taxNumber.trim() || undefined,
+      contact_person: formData.contactPerson.trim() || undefined,
       default_currency: formData.defaultCurrency || undefined,
       notes: formData.notes.trim() || undefined,
     };
@@ -205,6 +207,18 @@ export function AddCustomerDialog({ open, onOpenChange }: AddCustomerDialogProps
               </div>
             </div>
           )}
+
+          <div className="space-y-2">
+            <Label htmlFor="contactPerson">Contact Person</Label>
+            <Input
+              id="contactPerson"
+              data-testid="customer-contact-person"
+              placeholder="Person to contact at this customer"
+              value={formData.contactPerson}
+              onChange={(e) => handleChange('contactPerson', e.target.value)}
+              maxLength={100}
+            />
+          </div>
 
           {/* Contact Information */}
           <div className="grid grid-cols-2 gap-4">

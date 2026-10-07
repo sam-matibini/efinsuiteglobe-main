@@ -5,12 +5,9 @@ import { TransactionRule } from './useTransactionRules';
 import { CreditCardTransaction } from './useCreditCards';
 import { allowUnreconciledBankUpdate } from '@/lib/bankTransactionLock';
 import { toast } from 'sonner';
-import { 
-  matchText, 
-  getMatchConfidence, 
-  extractVendorName,
-  normalizeText 
-} from '@/lib/transactionMatcher';
+import { getMatchConfidence } from '@/lib/transactionMatcher';
+import { ruleActionSettings, ruleAppliesToAccount, ruleConditionsMatch } from '@/lib/ruleConditionFormula';
+import { isOpenForTransactionRule } from '@/lib/transactionRuleEligibility';
 
 export interface CCAnalysisResult {
   transaction: CreditCardTransaction;
@@ -52,82 +49,11 @@ export function matchesCCRule(tx: CreditCardTransaction, rule: TransactionRule):
     : tx.transaction_type === 'charge' || tx.transaction_type === 'fee' || tx.transaction_type === 'interest' ? 'outflow'
     : null;
 
-  const results = rule.conditions.map(condition => {
-    const searchValue = condition.value || '';
-    const txAmount = Math.abs(Number(tx.amount));
-
-    let fieldValue = '';
-    switch (condition.field) {
-      case 'description':
-        fieldValue = tx.description || '';
-        break;
-      case 'payee_payor':
-        fieldValue = tx.payee_payor || '';
-        break;
-      case 'reference':
-        fieldValue = tx.reference || '';
-        break;
-    }
-
-    if (condition.field === 'amount') {
-      switch (condition.operator) {
-        case 'equals':
-          return Math.abs(txAmount - parseFloat(searchValue)) < 0.01;
-        case 'greater_than':
-          return txAmount > parseFloat(searchValue);
-        case 'less_than':
-          return txAmount < parseFloat(searchValue);
-        case 'between':
-          const min = parseFloat(searchValue);
-          const max = parseFloat(condition.value2 || '0');
-          return txAmount >= min && txAmount <= max;
-        default:
-          return false;
-      }
-    }
-
-    switch (condition.operator) {
-      case 'is_deposit':
-        return tx.transaction_type === 'payment' || tx.transaction_type === 'credit';
-      case 'is_withdrawal':
-        return tx.transaction_type === 'charge' || tx.transaction_type === 'fee' || tx.transaction_type === 'interest';
-    }
-
-    const textOperators = [
-      'contains', 'not_contains', 'equals', 'not_equals',
-      'starts_with', 'ends_with', 'contains_words', 
-      'contains_any_word', 'fuzzy_match', 'matches_regex'
-    ];
-
-    if (textOperators.includes(condition.operator)) {
-      if (matchText(fieldValue, condition.operator, searchValue, { txDirection })) {
-        return true;
-      }
-      
-      if (condition.field === 'description') {
-        const vendor = extractVendorName(fieldValue);
-        if (matchText(vendor, condition.operator, searchValue, { txDirection })) {
-          return true;
-        }
-      }
-      
-      if (condition.field === 'payee_payor') {
-        const normalized = normalizeText(fieldValue);
-        if (matchText(normalized, condition.operator, searchValue, { txDirection })) {
-          return true;
-        }
-      }
-      
-      return false;
-    }
-
-    return false;
+  if (!ruleAppliesToAccount(rule.actions, tx, 'card')) return false;
+  return ruleConditionsMatch(tx, rule.conditions, rule.logic_operator, {
+    txDirection,
+    accountKind: 'card',
   });
-
-  const logicOp = (rule.logic_operator || 'and').toLowerCase();
-  return logicOp === 'and' 
-    ? results.every(Boolean)
-    : results.some(Boolean);
 }
 
 /**
@@ -175,19 +101,14 @@ export function calculateCCMatchConfidence(
 }
 
 /**
- * Analyze credit card transactions against rules without applying
- * Includes pending and uncategorized transactions
+ * Analyze credit card transactions against rules without applying.
+ * Unmatched, pending, and other charges that are not posted to the GL are included.
  */
 export function analyzeCCTransactions(
   transactions: CreditCardTransaction[],
   rules: TransactionRule[]
 ): CCAnalysisResult[] {
-  // Include pending and uncategorized transactions (not reconciled)
-  const eligibleTxs = transactions.filter(t => 
-    !t.category && 
-    (t.status === 'pending' || t.status === 'unmatched' || !t.status) &&
-    t.status !== 'reconciled'
-  );
+  const eligibleTxs = transactions.filter(isOpenForTransactionRule);
   const activeRules = rules.filter(r => r.is_active).sort((a, b) => b.priority - a.priority);
 
   return eligibleTxs.map(tx => {
@@ -197,14 +118,16 @@ export function analyzeCCTransactions(
       if (matchResult.matches) {
         const categoryAction = rule.actions.find(a => a.type === 'categorize');
         const glAction = rule.actions.find(a => a.type === 'post_to_gl');
+        const settings = ruleActionSettings(rule.actions);
+        const recognized = settings.markAs === 'recognized';
 
         return {
           transaction: tx,
           matchedRule: rule,
-          category: categoryAction?.category || null,
-          glAccountId: glAction?.glAccountId || null,
-          glAccountName: glAction?.glAccountName || null,
-          willPostToGL: !!glAction?.glAccountId,
+          category: settings.recordAs || categoryAction?.category || null,
+          glAccountId: recognized ? null : (glAction?.glAccountId || null),
+          glAccountName: recognized ? null : (glAction?.glAccountName || null),
+          willPostToGL: !recognized && !!glAction?.glAccountId,
           confidence: matchResult.confidence,
           matchScore: matchResult.score,
           // Include tax info from the rule action
@@ -295,6 +218,8 @@ export function useProcessCCTransactions() {
             if (category) updates.category = category;
             if (glAccountId) updates.gl_account_id = glAccountId;
             if (departmentId) updates.department_id = departmentId;
+            const referenceNumber = matchedRule ? ruleActionSettings(matchedRule.actions).referenceNumber : '';
+            if (referenceNumber && !transaction.reference) updates.reference = referenceNumber;
 
             // If posting to GL, create journal entry
             let journalEntryId: string | undefined;

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganizationContext } from '@/hooks/useOrganizationContext';
 import { toast } from 'sonner';
+import { CONTACTS_CHANGED_EVENT, notifyContactsChanged } from '@/lib/receptionist/contactEvents';
 
 export type ContactSource = 'manual' | 'customer' | 'vendor' | 'employee' | 'other';
 
@@ -143,6 +144,7 @@ export function useContacts() {
 
       toast.success('Contact created successfully');
       await fetchContacts();
+      notifyContactsChanged();
       return data as Contact;
     } catch (err: any) {
       console.error('Error creating contact:', err);
@@ -266,6 +268,14 @@ export function useContacts() {
     if (organizationId) {
       fetchContacts();
     }
+  }, [organizationId, fetchContacts]);
+
+  useEffect(() => {
+    const refresh = () => {
+      if (organizationId) fetchContacts();
+    };
+    window.addEventListener(CONTACTS_CHANGED_EVENT, refresh);
+    return () => window.removeEventListener(CONTACTS_CHANGED_EVENT, refresh);
   }, [organizationId, fetchContacts]);
 
   return {

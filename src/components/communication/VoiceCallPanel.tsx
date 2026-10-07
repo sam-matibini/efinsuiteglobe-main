@@ -161,7 +161,7 @@ export function VoiceCallPanel() {
   };
 
   const loadRecordings = async () => {
-    const recs = await getRecordings();
+    const recs = await getRecordings({ silent: true });
     setRecordings(recs);
   };
 

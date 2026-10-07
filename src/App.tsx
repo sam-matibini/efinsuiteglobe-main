@@ -5,6 +5,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { PageErrorBoundary } from "@/components/layout/PageErrorBoundary";
 import { AdminRoute } from "@/components/AdminRoute";
 import { RouteAccessGuard } from "@/components/auth/RouteAccessGuard";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
@@ -24,6 +25,17 @@ import NotFound from "./pages/NotFound";
 // initial JS bundle for landing / auth traffic.
 const Security = lazy(() => import("./pages/Security"));
 const E2EReportsHarness = lazy(() => import("./pages/__E2EReportsHarness"));
+const E2ECompanySortHarness = lazy(() => import("./pages/__E2ECompanySortHarness"));
+const E2EReceptionistHarness = lazy(() => import("./pages/__E2EReceptionistHarness"));
+const E2EExpenseRefundHarness = lazy(() => import("./pages/__E2EExpenseRefundHarness"));
+const E2EDrilldownJournalHarness = lazy(() => import("./pages/__E2EDrilldownJournalHarness"));
+const E2EBankingTransactionsHarness = lazy(() => import("./pages/__E2EBankingTransactionsHarness"));
+const E2EDashboardFilterHarness = lazy(() => import("./pages/__E2EDashboardFilterHarness"));
+const E2ETaxCodeExpenseHarness = lazy(() => import("./pages/__E2ETaxCodeExpenseHarness"));
+const E2ERuleFormulaHarness = lazy(() => import("./pages/__E2ERuleFormulaHarness"));
+const E2EBankingVolumeHarness = lazy(() => import("./pages/__E2EBankingVolumeHarness"));
+const E2ERoleAccessHarness = lazy(() => import("./pages/__E2ERoleAccessHarness"));
+const E2ECustomerContactHarness = lazy(() => import("./pages/__E2ECustomerContactHarness"));
 const Index = lazy(() => import("./pages/Index"));
 const ChartOfAccounts = lazy(() => import("./pages/ChartOfAccounts"));
 const AccountGenerator = lazy(() => import("./pages/AccountGenerator"));
@@ -154,6 +166,8 @@ const EmployeeProfile = lazy(() => import("./pages/payroll/EmployeeProfile"));
 const EmployeeTimesheets = lazy(() => import("./pages/payroll/EmployeeTimesheets"));
 const TimesheetDetail = lazy(() => import("./pages/payroll/TimesheetDetail"));
 const EmployeeSelfService = lazy(() => import("./pages/payroll/EmployeeSelfService"));
+const TimeAttendance = lazy(() => import("./pages/payroll/TimeAttendance"));
+const TimeAttendanceReports = lazy(() => import("./pages/payroll/TimeAttendanceReports"));
 const Settings = lazy(() => import("./pages/Settings"));
 const ExchangeRates = lazy(() => import("./pages/ExchangeRates"));
 const CurrencyRevaluation = lazy(() => import("./pages/CurrencyRevaluation"));
@@ -206,9 +220,14 @@ const LoanCalculatorPage = lazy(() => import("./pages/toolkit/LoanCalculatorPage
 
 const queryClient = new QueryClient();
 
-const PageWrapper = ({ children }: { children: React.ReactNode }) => (
-  <AppLayout>{children}</AppLayout>
-);
+const PageWrapper = ({ children }: { children: React.ReactNode }) => {
+  const location = useLocation();
+  return (
+    <AppLayout>
+      <PageErrorBoundary key={location.pathname}>{children}</PageErrorBoundary>
+    </AppLayout>
+  );
+};
 
 // Suspense fallback shown while a lazy route chunk downloads.
 const RouteFallback = () => (
@@ -307,12 +326,26 @@ const AppRoutes = () => {
 
     {/* E2E-only harness route — registered when built/served with VITE_E2E=1. */}
     {import.meta.env.VITE_E2E === '1' && (
-      <Route path="/__e2e__/income-statement" element={<E2EReportsHarness />} />
+      <>
+        <Route path="/__e2e__/income-statement" element={<E2EReportsHarness />} />
+        <Route path="/__e2e__/company-sort" element={<E2ECompanySortHarness />} />
+        <Route path="/__e2e__/receptionist" element={<E2EReceptionistHarness />} />
+        <Route path="/__e2e__/expense-refund" element={<E2EExpenseRefundHarness />} />
+        <Route path="/__e2e__/drilldown-journal" element={<E2EDrilldownJournalHarness />} />
+        <Route path="/__e2e__/banking-transactions" element={<E2EBankingTransactionsHarness />} />
+        <Route path="/__e2e__/dashboard-filter" element={<E2EDashboardFilterHarness />} />
+        <Route path="/__e2e__/tax-code-expense" element={<E2ETaxCodeExpenseHarness />} />
+        <Route path="/__e2e__/rule-formula" element={<E2ERuleFormulaHarness />} />
+        <Route path="/__e2e__/banking-volume" element={<E2EBankingVolumeHarness />} />
+        <Route path="/__e2e__/role-access" element={<E2ERoleAccessHarness />} />
+        <Route path="/__e2e__/customer-contact" element={<E2ECustomerContactHarness />} />
+      </>
     )}
 
 
     {/* Protected app routes */}
     <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+    <Route path="/receptionist" element={<ProtectedRoute><Navigate to="/communication?tab=receptionist" replace /></ProtectedRoute>} />
     <Route path="/toolkit/loan" element={<ProtectedRoute><LoanCalculatorPage /></ProtectedRoute>} />
     <Route path="/accounts" element={<ProtectedRoute><PageWrapper><ChartOfAccounts /></PageWrapper></ProtectedRoute>} />
     <Route path="/accounts/generator" element={<ProtectedRoute><PageWrapper><AccountGenerator /></PageWrapper></ProtectedRoute>} />
@@ -468,6 +501,8 @@ const AppRoutes = () => {
     <Route path="/payroll/timesheets" element={<ProtectedRoute><PageWrapper><EmployeeTimesheets /></PageWrapper></ProtectedRoute>} />
     <Route path="/payroll/timesheets/:id" element={<ProtectedRoute><PageWrapper><TimesheetDetail /></PageWrapper></ProtectedRoute>} />
     <Route path="/payroll/self-service" element={<ProtectedRoute><PageWrapper><EmployeeSelfService /></PageWrapper></ProtectedRoute>} />
+    <Route path="/payroll/time-attendance" element={<ProtectedRoute><PageWrapper><TimeAttendance /></PageWrapper></ProtectedRoute>} />
+    <Route path="/payroll/time-attendance/reports" element={<ProtectedRoute><PageWrapper><TimeAttendanceReports /></PageWrapper></ProtectedRoute>} />
     <Route path="/payroll/runs" element={<ProtectedRoute><PageWrapper><PayRuns /></PageWrapper></ProtectedRoute>} />
     <Route path="/payroll/reports" element={<ProtectedRoute><PageWrapper><PayrollReports /></PageWrapper></ProtectedRoute>} />
     <Route path="/payroll/remittances" element={<ProtectedRoute><PageWrapper><Remittances /></PageWrapper></ProtectedRoute>} />
@@ -476,6 +511,7 @@ const AppRoutes = () => {
     <Route path="/settings" element={<ProtectedRoute><PageWrapper><Settings /></PageWrapper></ProtectedRoute>} />
     <Route path="/docsign" element={<DocSignRoute />} />
     <Route path="/communication" element={<ProtectedRoute><PageWrapper><CommunicationHub /></PageWrapper></ProtectedRoute>} />
+    <Route path="/ai-receptionist" element={<ProtectedRoute><Navigate to="/communication?tab=receptionist" replace /></ProtectedRoute>} />
     
     {/* Budget routes - static routes must come before dynamic :id route */}
     <Route path="/budgets" element={<ProtectedRoute><Budgets /></ProtectedRoute>} />

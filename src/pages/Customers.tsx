@@ -302,7 +302,12 @@ export default function Customers() {
                           {customer.name.charAt(0)}
                         </span>
                       </div>
-                      <span className="font-medium">{customer.name}</span>
+                      <div>
+                        <span className="font-medium">{customer.name}</span>
+                        {customer.contact_person && (
+                          <p className="text-xs text-muted-foreground">{customer.contact_person}</p>
+                        )}
+                      </div>
                     </div>
                   </td>
                   <td className="text-muted-foreground">{customer.email || '-'}</td>
@@ -329,6 +334,9 @@ export default function Customers() {
                   </div>
                   <div>
                     <h3 className="font-semibold text-foreground">{customer.name}</h3>
+                    {customer.contact_person && (
+                      <p className="text-xs text-muted-foreground">{customer.contact_person}</p>
+                    )}
                     <Badge variant="outline" className="mt-1">Active</Badge>
                   </div>
                 </div>

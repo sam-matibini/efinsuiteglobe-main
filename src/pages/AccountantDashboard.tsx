@@ -43,6 +43,9 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useCurrentOrganization } from '@/hooks/useOrganization';
+import { useStatementSort } from '@/hooks/useStatementSort';
+import { StatementSortControls } from '@/components/reports/StatementSortControls';
+import { sortIncomeStatementSections } from '@/lib/reports/statementSort';
 import { useFinancialReports } from '@/hooks/useFinancialReports';
 import { useCompilationReports, useCreateCompilationReport, useUpdateCompilationReport, useDeleteCompilationReport, useIssueCompilationReport, CompilationReport, aspeNoteTemplates, getFrameworkNoteTemplates, engagementChecklistData } from '@/hooks/useCompilationReports';
 import { useCreateAuditEntry } from '@/hooks/useCompilationAuditTrail';
@@ -65,6 +68,7 @@ import { subYears, endOfYear } from 'date-fns';
 export default function AccountantDashboard() {
   const navigate = useNavigate();
   const { organization } = useCurrentOrganization();
+  const lineSort = useStatementSort(organization?.id);
   const { startDate, endDate } = useReportFilters();
   
   // State to track which compilation to fetch comparative data for
@@ -588,6 +592,23 @@ export default function AccountantDashboard() {
     }
 
     
+    const sortedIncome = sortIncomeStatementSections({
+      income: incomeStatement.income,
+      cogs: incomeStatement.cogs,
+      expenses: incomeStatement.expenses,
+      otherIncome: incomeStatement.otherIncome || [],
+      otherExpenses: incomeStatement.otherExpenses || [],
+    }, lineSort.criteria);
+    const sortedPrior = priorIncomeData
+      ? sortIncomeStatementSections({
+          income: priorIncomeData.income,
+          cogs: priorIncomeData.cogs,
+          expenses: priorIncomeData.expenses,
+          otherIncome: priorIncomeData.otherIncome || [],
+          otherExpenses: priorIncomeData.otherExpenses || [],
+        }, lineSort.criteria)
+      : null;
+
     // Build comparative financial data structure for side-by-side display
     const comparativeData: ComparativeFinancialData = {
       currentYear: {
@@ -603,11 +624,11 @@ export default function AccountantDashboard() {
           reClosingBalance: currentReClosingBalance,
         },
         incomeStatement: {
-          income: incomeStatement.income,
-          cogs: incomeStatement.cogs,
-          expenses: incomeStatement.expenses,
-          otherIncome: incomeStatement.otherIncome || [],
-          otherExpenses: incomeStatement.otherExpenses || [],
+          income: sortedIncome.income,
+          cogs: sortedIncome.cogs,
+          expenses: sortedIncome.expenses,
+          otherIncome: sortedIncome.otherIncome || [],
+          otherExpenses: sortedIncome.otherExpenses || [],
           totalRevenue: incomeStatement.totalRevenue,
           totalCogs: incomeStatement.cogs.reduce((sum, c) => sum + Math.abs(c.calculated_balance), 0),
           grossProfit: incomeStatement.grossProfit,
@@ -643,11 +664,11 @@ export default function AccountantDashboard() {
           reClosingBalance: priorReClosingBalance,
         },
         incomeStatement: {
-          income: priorIncomeData?.income.map(a => ({ name: a.name, calculated_balance: a.calculated_balance })) || [],
-          cogs: priorIncomeData?.cogs.map(a => ({ name: a.name, calculated_balance: a.calculated_balance })) || [],
-          expenses: priorIncomeData?.expenses.map(a => ({ name: a.name, calculated_balance: a.calculated_balance })) || [],
-          otherIncome: priorIncomeData?.otherIncome.map(a => ({ name: a.name, calculated_balance: a.calculated_balance })) || [],
-          otherExpenses: priorIncomeData?.otherExpenses.map(a => ({ name: a.name, calculated_balance: a.calculated_balance })) || [],
+          income: sortedPrior?.income.map(a => ({ name: a.name, calculated_balance: a.calculated_balance })) || [],
+          cogs: sortedPrior?.cogs.map(a => ({ name: a.name, calculated_balance: a.calculated_balance })) || [],
+          expenses: sortedPrior?.expenses.map(a => ({ name: a.name, calculated_balance: a.calculated_balance })) || [],
+          otherIncome: sortedPrior?.otherIncome.map(a => ({ name: a.name, calculated_balance: a.calculated_balance })) || [],
+          otherExpenses: sortedPrior?.otherExpenses.map(a => ({ name: a.name, calculated_balance: a.calculated_balance })) || [],
           totalRevenue: priorIncomeData?.totalRevenue || 0,
           totalCogs: priorIncomeData?.totalCOGS || 0,
           grossProfit: priorIncomeData?.grossProfit || 0,
@@ -692,7 +713,7 @@ export default function AccountantDashboard() {
     // Legacy format for Word export
     const legacyFinancialData = {
       balanceSheet: { ...balanceSheet, netIncome: incomeStatement.netIncome, reClosingBalance: currentReClosingBalance },
-      incomeStatement: { ...incomeStatement, totalCogs: incomeStatement.cogs.reduce((sum, c) => sum + Math.abs(c.calculated_balance), 0) },
+      incomeStatement: { ...incomeStatement, ...sortedIncome, totalCogs: incomeStatement.cogs.reduce((sum, c) => sum + Math.abs(c.calculated_balance), 0) },
       organizationName: organization?.name || 'Organization',
       leaseNotes: leaseNotes.length > 0 ? leaseNotes : undefined,
       retainedEarningsOpening,
@@ -1232,6 +1253,8 @@ export default function AccountantDashboard() {
           isSubmitting={createCompilation.isPending}
         />
       </div>
+
+      <StatementSortControls organizationId={organization?.id} model={lineSort} />
 
       {/* Edit Dialog */}
       <Dialog open={editDialogOpen} onOpenChange={(open) => {

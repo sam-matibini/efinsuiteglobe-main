@@ -35,7 +35,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [aliceOpen, setAliceOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
+  const [viewport, setViewport] = useState<'mobile' | 'tablet' | 'desktop'>('desktop');
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const { isReadOnly } = useEnabledModules();
   const navigate = useNavigate();
@@ -45,10 +45,13 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   // Detect mobile viewport
   useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 768);
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
+    const checkViewport = () => {
+      const width = window.innerWidth;
+      setViewport(width < 768 ? 'mobile' : width < 1024 ? 'tablet' : 'desktop');
+    };
+    checkViewport();
+    window.addEventListener('resize', checkViewport);
+    return () => window.removeEventListener('resize', checkViewport);
   }, []);
 
   // Listen for service worker updates to show refresh icon
@@ -125,6 +128,17 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   // Use displayName for initials
   const userInitials = getInitials(displayName);
+  const isMobile = viewport === 'mobile';
+  const sidebarCollapsedEffective = viewport === 'tablet' || sidebarCollapsed;
+  const hour = new Date().getHours();
+  const greeting = hour < 17 ? 'Good morning' : 'Good evening';
+  const greetingMark = hour < 17 ? '☀' : '🌙';
+  const headerDate = new Date().toLocaleDateString(undefined, {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
 
   const handleLogout = async () => {
     await signOut();
@@ -153,7 +167,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     <div className="min-h-screen bg-background">
       {/* Desktop Sidebar */}
       <div className="hidden md:block">
-        <Sidebar collapsed={sidebarCollapsed} />
+        <Sidebar collapsed={sidebarCollapsedEffective} />
       </div>
       
       {/* Mobile Sidebar Drawer */}
@@ -164,10 +178,10 @@ export function AppLayout({ children }: AppLayoutProps) {
       </Sheet>
       
       {/* Main Content */}
-      <div className={`transition-all duration-300 ${isMobile ? 'ml-0' : sidebarCollapsed ? 'ml-16' : 'ml-64'}`}>
+      <div className={`transition-all duration-300 ${isMobile ? 'ml-0' : sidebarCollapsedEffective ? 'ml-[60px]' : 'ml-[220px]'}`}>
         {/* Top Header */}
-        <header className="sticky top-0 z-30 h-14 md:h-16 bg-card/80 backdrop-blur-sm border-b border-border flex items-center justify-between px-3 md:px-6">
-          <div className="flex items-center gap-2 md:gap-4">
+        <header className="sticky top-0 z-30 flex h-[68px] items-center justify-between border-b border-[rgba(99,102,241,0.15)] bg-white px-4 shadow-[0_1px_0_rgba(99,102,241,0.1),0_2px_8px_rgba(0,0,0,0.04)] md:px-8">
+          <div className="flex min-w-0 items-center gap-2 md:gap-4">
             {/* Mobile menu button */}
             <Button 
               variant="ghost" 
@@ -178,11 +192,18 @@ export function AppLayout({ children }: AppLayoutProps) {
               <Menu className="w-5 h-5" />
             </Button>
 
+            <div className="hidden min-w-0 md:block">
+              <p className="truncate text-xl font-extrabold text-[#0f172a]">
+                {greeting}, {displayName.split(' ')[0]} {greetingMark}
+              </p>
+              <p className="text-[13px] text-[#64748b]">{headerDate}</p>
+            </div>
+
             {/* Country selector (MS Dynamics-style, top-left) */}
             <CountrySelector />
 
             {/* Search - hidden on mobile, shown on tablet+ */}
-            <div className="relative hidden sm:block">
+            <div className="relative hidden lg:block">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input 
                 placeholder="Search..." 
@@ -220,23 +241,23 @@ export function AppLayout({ children }: AppLayoutProps) {
             </Button>
             <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground relative">
               <Bell className="w-5 h-5" />
-              <span className="absolute top-2 right-2 w-2 h-2 bg-accent rounded-full" />
+              <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-[#ef4444]" />
             </Button>
 
             {/* User Profile Dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="flex items-center gap-2 px-2 hover:bg-muted/50">
-                  <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
-                    <span className="text-sm font-medium text-primary-foreground">
+                  <div className="flex h-[38px] w-[38px] items-center justify-center rounded-full bg-gradient-to-br from-[#6366f1] to-[#4f46e5]">
+                    <span className="text-sm font-extrabold text-white">
                       {userInitials}
                     </span>
                   </div>
                   <div className="text-left hidden sm:block">
-                    <p className="text-sm font-medium text-foreground">
+                    <p className="text-sm font-semibold text-[#0f172a]">
                       {displayName}
                     </p>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-[11px] font-medium text-[#6366f1]">
                       {getRoleLabel(effectiveRole)}
                     </p>
                   </div>
@@ -277,7 +298,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                 className="fixed top-36 right-6 z-40 flex flex-col items-center gap-1 group cursor-pointer"
               >
                 <div className="relative">
-                  <div className="w-16 h-16 rounded-2xl overflow-hidden bg-gradient-to-br from-blue-500 via-blue-600 to-blue-800 hover:scale-110 transition-all duration-300 shadow-[0_8px_30px_-5px_rgba(37,99,235,0.5),0_4px_15px_-3px_rgba(30,64,175,0.4)]">
+                  <div className="h-16 w-16 overflow-hidden rounded-2xl bg-gradient-to-br from-[#6366f1] to-[#4f46e5] shadow-[0_8px_30px_-5px_rgba(99,102,241,0.45)] transition-all duration-300 hover:scale-110">
                     <img 
                       src={aliceAvatar} 
                       alt="Alice - AI Assistant" 
@@ -286,7 +307,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                   </div>
                   <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-green-500 rounded-full border-2 border-background animate-pulse" />
                 </div>
-                <span className="text-xs font-semibold text-white bg-blue-600 px-2.5 py-0.5 rounded-full shadow-md">
+                <span className="rounded-full bg-[#6366f1] px-2.5 py-0.5 text-xs font-semibold text-white shadow-md">
                   Alice
                 </span>
               </button>
@@ -300,7 +321,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         <AIAccountingAssistant isOpen={aliceOpen} onOpenChange={setAliceOpen} />
 
         {/* Page Content - responsive padding */}
-        <main className="p-3 md:p-6 pb-20 md:pb-6">
+        <main className="flex flex-col gap-4 px-4 pb-16 pt-4 md:px-6 md:pb-8">
           <ReadOnlyProvider>
             {isReadOnly && <ReadOnlyBanner />}
             {children}
@@ -312,26 +333,25 @@ export function AppLayout({ children }: AppLayoutProps) {
       {isMobile && (
         <nav className="fixed bottom-0 left-0 right-0 z-40 bg-card/95 backdrop-blur-sm border-t border-border safe-area-inset-bottom">
           <div className="flex items-center justify-around h-14">
-            <Button variant="ghost" size="sm" className="flex-col gap-0.5 h-auto py-2" onClick={() => navigate('/')}>
+            <Button variant="ghost" size="sm" className="h-auto flex-col gap-0.5 py-2 text-[#6366f1]" onClick={() => navigate('/')}>
               <LayoutDashboard className="w-5 h-5" />
-              <span className="text-[10px]">Home</span>
+              <span className="text-[10px]">Dashboard</span>
             </Button>
-            <Button variant="ghost" size="sm" className="flex-col gap-0.5 h-auto py-2" onClick={() => navigate('/sales/invoices')}>
+            <Button variant="ghost" size="sm" className="h-auto flex-col gap-0.5 py-2" onClick={() => navigate('/sales/invoices')}>
               <Receipt className="w-5 h-5" />
-              <span className="text-[10px]">Invoices</span>
+              <span className="text-[10px]">Sales</span>
             </Button>
-            <Button variant="ghost" size="sm" className="flex-col gap-0.5 h-auto py-2" onClick={() => setAliceOpen(true)}>
-              <div className="w-8 h-8 rounded-full overflow-hidden bg-accent">
-                <img src={aliceAvatar} alt="Alice" className="w-full h-full object-cover" />
-              </div>
-            </Button>
-            <Button variant="ghost" size="sm" className="flex-col gap-0.5 h-auto py-2" onClick={() => navigate('/reports')}>
+            <Button variant="ghost" size="sm" className="h-auto flex-col gap-0.5 py-2" onClick={() => navigate('/reports')}>
               <BarChart3 className="w-5 h-5" />
               <span className="text-[10px]">Reports</span>
             </Button>
-            <Button variant="ghost" size="sm" className="flex-col gap-0.5 h-auto py-2" onClick={() => navigate('/settings')}>
+            <Button variant="ghost" size="sm" className="h-auto flex-col gap-0.5 py-2" onClick={() => navigate('/tax')}>
+              <Receipt className="w-5 h-5" />
+              <span className="text-[10px]">Tax</span>
+            </Button>
+            <Button variant="ghost" size="sm" className="h-auto flex-col gap-0.5 py-2" onClick={() => setMobileMenuOpen(true)}>
               <Settings className="w-5 h-5" />
-              <span className="text-[10px]">Settings</span>
+              <span className="text-[10px]">More</span>
             </Button>
           </div>
         </nav>

@@ -1,13 +1,21 @@
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { useFinancialReports } from '@/hooks/useFinancialReports';
+import { useJournalEntries } from '@/hooks/useJournalEntries';
+import { useReportFilters } from '@/hooks/useReportFilters';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useCurrentOrganization } from '@/hooks/useOrganization';
 import { getCountryLocalization } from '@/data/countryLocalizations';
 import { getLocaleForCountry } from '@/lib/localizedCurrencyFormatter';
+import { toLocalISO } from '@/lib/dateRangePresets';
+import { revenueExpenseByMonth } from '@/lib/dashboardPeriodSeries';
 
 export function RevenueChart() {
-  const { getIncomeStatementData, isLoading } = useFinancialReports();
   const { organization } = useCurrentOrganization();
+  const { startDate, endDate } = useReportFilters();
+  const { data: journalEntries, isLoading } = useJournalEntries(organization?.id, {
+    status: 'posted',
+    startDate: toLocalISO(startDate),
+    endDate: toLocalISO(endDate),
+  });
 
   const countryCode = organization?.country?.toUpperCase() || 'CA';
   const localization = getCountryLocalization(countryCode);
@@ -35,43 +43,41 @@ export function RevenueChart() {
       <div className="stat-card animate-slide-in">
         <div className="mb-6">
           <h3 className="text-lg font-semibold text-foreground">Revenue vs Expenses</h3>
-          <p className="text-sm text-muted-foreground">Monthly comparison</p>
+          <p className="text-sm text-muted-foreground">Selected period</p>
         </div>
         <Skeleton className="h-72" />
       </div>
     );
   }
 
-  // Get data AFTER loading check
-  const incomeData = getIncomeStatementData();
-
-  // Generate monthly data based on actual totals (simplified - divide by 12)
-  // In a real implementation, this would come from time-series journal entry data
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  
-  // Create a distribution pattern to make the chart more realistic
-  const distribution = [0.06, 0.07, 0.08, 0.08, 0.09, 0.09, 0.08, 0.08, 0.09, 0.09, 0.10, 0.09];
-  
-  const monthlyData = months.map((month, idx) => ({
-    month,
-    revenue: Math.round(incomeData.totalRevenue * distribution[idx]),
-    expenses: Math.round(incomeData.totalExpenses * distribution[idx]),
-  }));
+  const monthlyData = revenueExpenseByMonth(
+    (journalEntries ?? []).flatMap((entry) =>
+      (entry.lines ?? []).map((line) => ({
+        entryDate: entry.entry_date,
+        accountCode: line.account?.code ?? '',
+        accountType: line.account?.account_type,
+        debit: Number(line.debit) || 0,
+        credit: Number(line.credit) || 0,
+      })),
+    ),
+    startDate,
+    endDate,
+  );
 
   return (
     <div className="stat-card animate-slide-in">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h3 className="text-lg font-semibold text-foreground">Revenue vs Expenses</h3>
-          <p className="text-sm text-muted-foreground">Monthly comparison for fiscal year</p>
+          <p className="text-sm text-muted-foreground">Posted activity in the selected period</p>
         </div>
         <div className="flex gap-4">
           <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-accent" />
+            <div className="w-3 h-3 rounded-full bg-[#6366f1]" />
             <span className="text-sm text-muted-foreground">Revenue</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-primary" />
+            <div className="w-3 h-3 rounded-full bg-[#06b6d4]" />
             <span className="text-sm text-muted-foreground">Expenses</span>
           </div>
         </div>
@@ -82,25 +88,25 @@ export function RevenueChart() {
           <AreaChart data={monthlyData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
             <defs>
               <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="hsl(var(--accent))" stopOpacity={0.3}/>
-                <stop offset="95%" stopColor="hsl(var(--accent))" stopOpacity={0}/>
+                <stop offset="5%" stopColor="#6366f1" stopOpacity={0.82}/>
+                <stop offset="95%" stopColor="#6366f1" stopOpacity={0.05}/>
               </linearGradient>
               <linearGradient id="colorExpenses" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3}/>
-                <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0}/>
+                <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.82}/>
+                <stop offset="95%" stopColor="#06b6d4" stopOpacity={0.05}/>
               </linearGradient>
             </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(99,102,241,0.06)" vertical={false} />
             <XAxis 
               dataKey="month" 
               axisLine={false} 
               tickLine={false}
-              tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+              tick={{ fill: '#94a3b8', fontSize: 12 }}
             />
             <YAxis 
               axisLine={false} 
               tickLine={false}
-              tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+              tick={{ fill: '#94a3b8', fontSize: 12 }}
               tickFormatter={(value) => formatCurrency(value)}
             />
             <Tooltip 
@@ -116,7 +122,7 @@ export function RevenueChart() {
             <Area 
               type="monotone" 
               dataKey="revenue" 
-              stroke="hsl(var(--accent))" 
+              stroke="#6366f1" 
               strokeWidth={2}
               fillOpacity={1} 
               fill="url(#colorRevenue)" 
@@ -125,7 +131,7 @@ export function RevenueChart() {
             <Area 
               type="monotone" 
               dataKey="expenses" 
-              stroke="hsl(var(--primary))" 
+              stroke="#06b6d4" 
               strokeWidth={2}
               fillOpacity={1} 
               fill="url(#colorExpenses)" 

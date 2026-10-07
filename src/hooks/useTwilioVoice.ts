@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { recordingFailureMessage } from "@/lib/voice/recordingResult";
 
 interface CallResult {
   success: boolean;
@@ -64,28 +65,24 @@ export function useTwilioVoice() {
   /**
    * Get voicemail recordings
    */
-  const getRecordings = async (): Promise<Recording[]> => {
+  const getRecordings = async (options?: { silent?: boolean }): Promise<Recording[]> => {
     setLoadingRecordings(true);
     try {
       const { data, error } = await supabase.functions.invoke("twilio-voice", {
         body: { action: "get-recordings" },
       });
 
-      if (error) {
-        console.error("Recordings fetch error:", error);
-        toast.error("Failed to fetch recordings");
+      const failure = recordingFailureMessage(error, data);
+      if (failure) {
+        console.error("Recordings fetch error:", failure);
+        if (!options?.silent) toast.error(failure);
         return [];
       }
 
-      if (data.success) {
-        return data.recordings || [];
-      } else {
-        toast.error(data.error || "Failed to fetch recordings");
-        return [];
-      }
+      return data?.recordings || [];
     } catch (err: any) {
       console.error("Recordings error:", err);
-      toast.error("Failed to fetch recordings");
+      if (!options?.silent) toast.error("Failed to fetch recordings");
       return [];
     } finally {
       setLoadingRecordings(false);

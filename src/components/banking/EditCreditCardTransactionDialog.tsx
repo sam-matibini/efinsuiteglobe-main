@@ -292,7 +292,7 @@ export function EditCreditCardTransactionDialog({
         creditCardId: transaction.credit_card_id,
         glAccountId, // This is the expense/revenue account
         organizationId: organization.id,
-        amount: taxCalculation?.subtotal ?? Math.abs(Number(transaction.amount)),
+        amount: Math.abs(Number(transaction.amount)),
         transactionType: transactionType as 'charge' | 'payment' | 'credit' | 'fee' | 'interest',
         description: description || transaction.description,
         transactionDate: transactionDate ? format(transactionDate, 'yyyy-MM-dd') : transaction.transaction_date,

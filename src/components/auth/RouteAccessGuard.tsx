@@ -45,13 +45,15 @@ export function RouteAccessGuard({ children }: { children: React.ReactNode }) {
   // No organization context yet — let the page's own empty-state handle it.
   if (!currentOrganization) return <>{children}</>;
 
-  const roleOrModuleBlocked = !isModuleEnabled(requiredModule);
-  const planBlocked = !isModuleInCurrentPlan(requiredModule);
-  const subscriptionBlocked = !isActive;
-
-  if (!roleOrModuleBlocked && !planBlocked && !subscriptionBlocked) {
+  // Owner, admin, finance manager, and accountant already include creates such
+  // as invoices. A missing subscription row or unmapped plan must not block them.
+  if (isModuleEnabled(requiredModule)) {
     return <>{children}</>;
   }
+
+  const roleOrModuleBlocked = true;
+  const planBlocked = !isModuleInCurrentPlan(requiredModule);
+  const subscriptionBlocked = !isActive;
 
   // Determine the reason to show
   let title = 'Access denied';

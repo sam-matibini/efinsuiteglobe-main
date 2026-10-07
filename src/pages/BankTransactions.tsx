@@ -1,6 +1,6 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Search, Download, Upload, ArrowUpRight, ArrowDownLeft, Link2, Check, AlertCircle, Sparkles, Settings, MoreHorizontal, Wand2, Building2, Plus, Filter, Calendar, Edit, Send, X, CheckSquare, ArrowUpDown, ArrowUp, ArrowDown, CreditCard, Landmark, RefreshCw, Lock, Eye, FileSpreadsheet, Trash2, History } from 'lucide-react';
+import { Search, ArrowUpRight, ArrowDownLeft, Link2, Check, AlertCircle, Sparkles, MoreHorizontal, Wand2, Building2, Plus, Filter, Calendar, Edit, Send, X, CheckSquare, ArrowUpDown, ArrowUp, ArrowDown, CreditCard, Landmark, Lock, Eye, Trash2 } from 'lucide-react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { cn, parseLocalDate } from '@/lib/utils';
 import { signedBankAmount } from '@/lib/plaidBankAmount';
+import { bankingActivity } from '@/lib/bankingActivity';
 import { isBankTransactionLocked } from '@/lib/bankTransactionLock';
 import {
   Select,
@@ -36,6 +37,8 @@ import TransactionRuleDialog from '@/components/banking/TransactionRuleDialog';
 import AICategorizationDialog from '@/components/banking/AICategorizationDialog';
 import TransactionExportDialog from '@/components/banking/TransactionExportDialog';
 import { EditTransactionDialog } from '@/components/banking/EditTransactionDialog';
+import { TransactionDetailPanel } from '@/components/banking/TransactionDetailPanel';
+import { AuroraScroll } from '@/components/ui/aurora-scroll';
 import { EditCreditCardTransactionDialog } from '@/components/banking/EditCreditCardTransactionDialog';
 import { MatchPaymentDialog } from '@/components/banking/MatchPaymentDialog';
 import { UnifiedImportDialog, ParsedBankTransaction, ParsedCreditCardTransaction } from '@/components/banking/UnifiedImportDialog';
@@ -54,7 +57,12 @@ import { useCurrentOrganization } from '@/hooks/useOrganization';
 import { useAccounts } from '@/hooks/useAccounts';
 import { CreateOrganizationDialog } from '@/components/accounts/CreateOrganizationDialog';
 import { Skeleton } from '@/components/ui/skeleton';
-import { format, startOfMonth, endOfMonth, subMonths, startOfYear, endOfYear, isWithinInterval, parseISO } from 'date-fns';
+import { format } from 'date-fns';
+import { DateRangePresetSelect } from '@/components/filters/DateRangePresetSelect';
+import { BANKING_DATE_PRESETS, dateInIsoRange, resolveDateRangeISO, toLocalISO, type DateRangePresetId } from '@/lib/dateRangePresets';
+import { SavedFilterMenu } from '@/components/filters/SavedFilterMenu';
+import { useSavedFilters } from '@/hooks/useSavedFilters';
+import type { BankingSavedFilter } from '@/lib/savedFilters';
 import { useTransactionRules } from '@/hooks/useTransactionRules';
 import { analyzeTransactions, useProcessTransactions } from '@/hooks/useRuleAnalysis';
 import { analyzeCCTransactions, useProcessCCTransactions } from '@/hooks/useCreditCardRuleAnalysis';
@@ -62,6 +70,7 @@ import { useLocalizedCurrency } from '@/hooks/useLocalizedCurrency';
 import { classifyCreditCardType } from '@/lib/creditCardImportNormalizer';
 import { useIsReadOnly } from '@/hooks/useIsReadOnly';
 import { BankTxCardActions } from '@/components/banking/BankTxCardActions';
+import { BankingRegisterToolbar } from '@/components/banking/BankingRegisterToolbar';
 
 type SortField = 'transaction_date' | 'description' | 'payee_payor' | 'reference' | 'category' | 'amount' | 'status';
 type SortDirection = 'asc' | 'desc';
@@ -121,9 +130,9 @@ export default function BankTransactions() {
   const queryClient = useQueryClient();
   const [importHistoryOpen, setImportHistoryOpen] = useState(false);
   const [createRuleDialogOpen, setCreateRuleDialogOpen] = useState(false);
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editCCDialogOpen, setEditCCDialogOpen] = useState(false);
-  const [selectedTransaction, setSelectedTransaction] = useState<BankTransaction | null>(null);
+  const [detailId, setDetailId] = useState<string | null>(null);
+  const [detailEditing, setDetailEditing] = useState(false);
   const [selectedCCTransaction, setSelectedCCTransaction] = useState<CreditCardTransaction | null>(null);
   const [ruleInitialConditions, setRuleInitialConditions] = useState<RuleCondition[]>([]);
   const [ruleInitialName, setRuleInitialName] = useState('');
@@ -184,6 +193,17 @@ export default function BankTransactions() {
 
   // Unified transactions based on account type
   const transactions = accountType === 'bank' ? bankTransactions : ccTransactions;
+  const activity = useMemo(
+    () => bankingActivity(transactions, accountType),
+    [transactions, accountType],
+  );
+  const detailTransaction = transactions.find((item) => item.id === detailId) ?? null;
+
+  const activeAccountKey = accountType === 'bank' ? effectiveBankAccountId : effectiveCreditCardId;
+  useEffect(() => {
+    setDetailId(null);
+    setDetailEditing(false);
+  }, [activeAccountKey, accountType]);
   const isLoading = accountType === 'bank' ? bankTxLoading : ccTxLoading;
   const unmatchedTransactions = accountType === 'bank' ? bankUnmatched : ccUnmatched;
 
@@ -214,24 +234,12 @@ export default function BankTransactions() {
     reconciled: { label: 'Reconciled', icon: Lock, color: 'bg-success/10 text-success' },
   };
 
-  // Date range helper
   const getDateRangeFilter = useCallback(() => {
-    const now = new Date();
-    switch (dateRange) {
-      case 'this-month':
-        return { start: startOfMonth(now), end: endOfMonth(now) };
-      case 'last-month':
-        const lastMonth = subMonths(now, 1);
-        return { start: startOfMonth(lastMonth), end: endOfMonth(lastMonth) };
-      case 'last-3-months':
-        return { start: startOfMonth(subMonths(now, 2)), end: endOfMonth(now) };
-      case 'this-year':
-        return { start: startOfYear(now), end: endOfYear(now) };
-      case 'custom':
-        return { start: customStartDate, end: customEndDate };
-      default:
-        return null;
+    if (dateRange === 'custom') {
+      if (!customStartDate || !customEndDate) return null;
+      return { start: format(customStartDate, 'yyyy-MM-dd'), end: format(customEndDate, 'yyyy-MM-dd') };
     }
+    return resolveDateRangeISO(dateRange as DateRangePresetId);
   }, [dateRange, customStartDate, customEndDate]);
 
   const filteredTransactions = useMemo(() => {
@@ -293,12 +301,7 @@ export default function BankTransactions() {
         (glPostedFilter === 'posted' && t.journal_entry_id) ||
         (glPostedFilter === 'not-posted' && !t.journal_entry_id);
       
-      // Date range filter
-      let matchesDate = true;
-      if (dateFilter && dateFilter.start && dateFilter.end) {
-        const txDate = parseISO(t.transaction_date);
-        matchesDate = isWithinInterval(txDate, { start: dateFilter.start, end: dateFilter.end });
-      }
+      const matchesDate = dateInIsoRange(t.transaction_date, dateFilter);
       
       // Amount filter
       let matchesAmount = true;
@@ -526,6 +529,33 @@ export default function BankTransactions() {
     setSelectedTransactionIds(new Set());
   }, [accountType, selectedTransactionIds, filteredTransactions, unimportBankTx, unimportCcTx]);
 
+  const savedFilters = useSavedFilters<BankingSavedFilter>('banking-transactions', organization?.id);
+  const currentBankingFilter = (): BankingSavedFilter => ({
+    searchQuery,
+    statusFilter,
+    typeFilter,
+    categoryFilter,
+    glPostedFilter,
+    dateRange,
+    customStartDate: customStartDate ? toLocalISO(customStartDate) : null,
+    customEndDate: customEndDate ? toLocalISO(customEndDate) : null,
+    amountMin,
+    amountMax,
+  });
+  const applyBankingFilter = (value: BankingSavedFilter) => {
+    setSearchQuery(value.searchQuery ?? '');
+    setStatusFilter(value.statusFilter || 'all');
+    setTypeFilter(value.typeFilter || 'all');
+    setCategoryFilter(value.categoryFilter || 'all');
+    setGlPostedFilter(value.glPostedFilter || 'all');
+    setDateRange(value.dateRange || 'all');
+    setCustomStartDate(value.customStartDate ? parseLocalDate(value.customStartDate) : undefined);
+    setCustomEndDate(value.customEndDate ? parseLocalDate(value.customEndDate) : undefined);
+    setAmountMin(value.amountMin ?? '');
+    setAmountMax(value.amountMax ?? '');
+    setShowAdvancedFilters(true);
+  };
+
   const clearAllFilters = () => {
     setStatusFilter('all');
     setTypeFilter('all');
@@ -540,35 +570,20 @@ export default function BankTransactions() {
   // Generate rule conditions from a transaction's patterns
   const generateRuleFromTransaction = (transaction: BankTransaction) => {
     const conditions: RuleCondition[] = [];
-    
-    const descParts = transaction.description.split(/[\s\-]+/).filter(p => p.length > 2);
-    const significantWords = descParts.filter(w => 
-      !['PAYMENT', 'TRANSFER', 'WIRE', 'E-TRANSFER', 'PAD', 'INTERAC', 'THE', 'FOR', 'INC', 'LTD', 'LLC'].includes(w.toUpperCase())
-    );
-    
-    if (significantWords.length > 0) {
-      conditions.push({
-        id: `cond-${Date.now()}-1`,
-        field: 'description',
-        operator: 'contains',
-        value: significantWords[0].toUpperCase(),
-      });
-    } else if (descParts.length > 0) {
-      conditions.push({
-        id: `cond-${Date.now()}-1`,
-        field: 'description',
-        operator: 'contains',
-        value: descParts[0].toUpperCase(),
-      });
-    }
+    const generic = new Set([
+      'PAYMENT', 'TRANSFER', 'WIRE', 'PAD', 'INTERAC', 'THE', 'FOR', 'INC', 'LTD', 'LLC',
+      'POS', 'PURCHASE', 'DEBIT', 'CREDIT', 'CARD',
+    ]);
+    const descParts = transaction.description.split(/[\s\-]+/).filter((part) => part.length > 2);
+    const significantWords = descParts.filter((word) => !generic.has(word.toUpperCase()));
+    const phrase = (transaction.payee_payor || significantWords.join(' ') || transaction.description).trim();
 
-    // Add payee/payor condition if available
-    if (transaction.payee_payor) {
+    if (phrase) {
       conditions.push({
-        id: `cond-${Date.now()}-payee`,
-        field: 'payee_payor',
+        id: `cond-${Date.now()}-1`,
+        field: transaction.payee_payor ? 'payee_payor' : 'description',
         operator: 'contains',
-        value: transaction.payee_payor,
+        value: phrase,
       });
     }
 
@@ -579,32 +594,22 @@ export default function BankTransactions() {
       value: '',
     });
 
-    const amount = Math.abs(Number(transaction.amount));
-    const lowerBound = Math.floor(amount * 0.8);
-    const upperBound = Math.ceil(amount * 1.2);
-    conditions.push({
-      id: `cond-${Date.now()}-3`,
-      field: 'amount',
-      operator: 'between',
-      value: lowerBound.toString(),
-      value2: upperBound.toString(),
-    });
-
-    const mainKeyword = transaction.payee_payor || significantWords[0] || descParts[0] || 'Transaction';
-    const ruleName = `${mainKeyword.charAt(0).toUpperCase() + mainKeyword.slice(1).toLowerCase()} ${transaction.transaction_type === 'deposit' ? 'Deposits' : 'Payments'}`;
+    const mainKeyword = phrase || 'Transaction';
+    const ruleName = `${mainKeyword.charAt(0).toUpperCase() + mainKeyword.slice(1).toLowerCase()} ${transaction.transaction_type === 'deposit' ? 'Deposits' : 'Withdrawals'}`;
 
     setRuleInitialConditions(conditions);
     setRuleInitialName(ruleName);
     setCreateRuleDialogOpen(true);
   };
 
-  const handleEditTransaction = (transaction: BankTransaction | CreditCardTransaction) => {
+  const handleEditTransaction = (transaction: BankTransaction | CreditCardTransaction, edit = true) => {
+    setDetailId(transaction.id);
     if (accountType === 'bank' && 'bank_account_id' in transaction) {
-      setSelectedTransaction(transaction as BankTransaction);
-      setEditDialogOpen(true);
+      setDetailEditing(edit);
     } else if (accountType === 'credit-card' && 'credit_card_id' in transaction) {
+      setDetailEditing(false);
       setSelectedCCTransaction(transaction as CreditCardTransaction);
-      setEditCCDialogOpen(true);
+      if (edit) setEditCCDialogOpen(true);
     }
   };
 
@@ -943,91 +948,26 @@ export default function BankTransactions() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Page Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">
-            {accountType === 'bank' ? 'Bank Transactions' : 'Credit Card Transactions'}
-          </h1>
-          <p className="text-muted-foreground">
-            Review and categorize {accountType === 'bank' ? 'bank' : 'credit card'} transactions
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          {!isReadOnly && unmatchedCount > 0 && (
-            <Button variant="outline" size="sm" onClick={() => setAiDialogOpen(true)}>
-              <Sparkles className="w-4 h-4 mr-2" />
-              AI Categorize ({unmatchedCount})
-            </Button>
-          )}
-          {!isReadOnly && (
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={handleApplyRules}
-              disabled={isApplyingRules || activeRules.length === 0}
-              className="gap-2"
-            >
-              {isApplyingRules ? (
-                <RefreshCw className="w-4 h-4 animate-spin" />
-              ) : (
-                <Wand2 className="w-4 h-4" />
-              )}
-              Apply Rules
-              {activeRules.length > 0 && (
-                <span className="text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full">
-                  {activeRules.length}
-                </span>
-              )}
-            </Button>
-          )}
-          {!isReadOnly && (
-            <Button variant="outline" size="sm" onClick={() => navigate('/banking/rules')}>
-              <Settings className="w-4 h-4 mr-2" />
-              AI Rules
-            </Button>
-          )}
-          {!isReadOnly && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm">
-                  <Upload className="w-4 h-4 mr-2" />
-                  Import
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => setImportDialogOpen(true)}>
-                  <FileSpreadsheet className="w-4 h-4 mr-2" />
-                  Quick Import (CSV/Excel)
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => openExtractionDialog(accountType === 'bank' ? 'bank' : 'creditcard')}>
-                  <Sparkles className="w-4 h-4 mr-2" />
-                  AI Extraction Engine
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setAiExtractorOpen(true)}>
-                  <Sparkles className="w-4 h-4 mr-2" />
-                  Extract from PDF (Gemini)
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
-          {!isReadOnly && (
-            <Button variant="outline" size="sm" onClick={() => setImportHistoryOpen(true)}>
-              <History className="w-4 h-4 mr-2" />
-              Import History
-            </Button>
-          )}
-          <Button variant="outline" size="sm" onClick={() => setExportDialogOpen(true)}>
-            <Download className="w-4 h-4 mr-2" />
-            Export
-          </Button>
-        </div>
-      </div>
+    <div className="space-y-3">
+      <BankingRegisterToolbar
+        title={accountType === 'bank' ? 'Bank Transactions' : 'Credit Card Transactions'}
+        isReadOnly={isReadOnly}
+        unmatchedCount={unmatchedCount}
+        activeRuleCount={activeRules.length}
+        isApplyingRules={isApplyingRules}
+        onAiCategorize={() => setAiDialogOpen(true)}
+        onApplyRules={handleApplyRules}
+        onOpenRules={() => navigate('/banking/rules')}
+        onQuickImport={() => setImportDialogOpen(true)}
+        onAiExtraction={() => openExtractionDialog(accountType === 'bank' ? 'bank' : 'creditcard')}
+        onPdfExtract={() => setAiExtractorOpen(true)}
+        onImportHistory={() => setImportHistoryOpen(true)}
+        onExport={() => setExportDialogOpen(true)}
+      />
 
       {/* Account Type Tabs */}
       <Tabs value={accountType} onValueChange={(v) => setAccountType(v as AccountType)} className="w-full">
-        <TabsList className="grid w-full max-w-md grid-cols-2 bg-muted/50">
+        <TabsList className="grid h-9 w-full max-w-sm grid-cols-2 bg-muted/50">
           <TabsTrigger 
             value="bank" 
             className="gap-2 data-[state=active]:bg-amber-100 data-[state=active]:text-amber-700 data-[state=active]:border-amber-300 data-[state=active]:border"
@@ -1059,8 +999,12 @@ export default function BankTransactions() {
         const unmatchedTx = txs.filter(t => !isReconciled(t) && !hasMatch(t));
         const matchedNotPostedTx = matchedTx.filter(t => !t.journal_entry_id);
         const postedTx = txs.filter(t => hasMatch(t) && !!t.journal_entry_id);
-        const inflowTx = txs.filter(t => Number(t.amount) > 0);
-        const outflowTx = txs.filter(t => Number(t.amount) < 0);
+        const inflowTx = accountType === 'bank'
+          ? txs.filter(t => t.transaction_type === 'deposit')
+          : txs.filter(t => t.transaction_type === 'payment' || t.transaction_type === 'credit');
+        const outflowTx = accountType === 'bank'
+          ? txs.filter(t => t.transaction_type === 'withdrawal')
+          : txs.filter(t => t.transaction_type === 'charge' || t.transaction_type === 'fee' || t.transaction_type === 'interest');
         const inflow = accountType === 'bank' ? bankDeposits : totalPayments;
         const outflow = accountType === 'bank' ? bankWithdrawals : totalCharges;
         const net = inflow - outflow;
@@ -1087,23 +1031,21 @@ export default function BankTransactions() {
         const orgName = organization?.name;
 
         return (
-          <div className="space-y-4">
-            {/* Row 1 — Volume & status */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <Card className="p-4 relative">
+          <div data-testid="banking-metric-strip" className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-8">
+              <Card className="p-2 pr-8 relative">
                 <BankTxCardActions
                   title="Total Transactions"
-                  snapshot={`Count: ${transactions.length}\nVolume (abs): ${formatCurrency(sumAbs(transactions))}`}
+                  snapshot={`Count: ${activity.total}\nVolume (abs): ${formatCurrency(activity.volume)}`}
                   rows={toRows(txs)}
                   organizationName={orgName}
                   formatCurrency={formatCurrency}
                 />
-                <p className="text-sm text-muted-foreground mb-1">Total Transactions</p>
-                <p className="text-2xl font-bold text-foreground">{transactions.length}</p>
-                <p className="text-xs text-muted-foreground mt-1">{formatCurrency(sumAbs(transactions))} volume</p>
+                <p className="text-[11px] leading-tight text-muted-foreground">Total Transactions</p>
+                <p className="text-base font-semibold text-foreground">{activity.total}</p>
+                <p className="text-xs text-muted-foreground mt-1">{formatCurrency(activity.volume)} volume</p>
               </Card>
               <Card
-                className={cn("p-4 relative", clickable)}
+                className={cn("p-2 pr-8 relative", clickable)}
                 onClick={() => { setStatusFilter('unmatched'); setGlPostedFilter('all'); }}
                 role="button"
                 tabIndex={0}
@@ -1115,12 +1057,12 @@ export default function BankTransactions() {
                   organizationName={orgName}
                   formatCurrency={formatCurrency}
                 />
-                <p className="text-sm text-muted-foreground mb-1">Unmatched</p>
-                <p className="text-2xl font-bold text-warning">{unmatchedTx.length}</p>
+                <p className="text-[11px] leading-tight text-muted-foreground">Unmatched</p>
+                <p className="text-base font-semibold text-warning">{unmatchedTx.length}</p>
                 <p className="text-xs text-muted-foreground mt-1">{formatCurrency(sumAbs(unmatchedTx))}</p>
               </Card>
               <Card
-                className={cn("p-4 relative", clickable)}
+                className={cn("p-2 pr-8 relative", clickable)}
                 onClick={() => { setStatusFilter('matched'); setGlPostedFilter('not-posted'); }}
                 role="button"
                 tabIndex={0}
@@ -1132,8 +1074,8 @@ export default function BankTransactions() {
                   organizationName={orgName}
                   formatCurrency={formatCurrency}
                 />
-                <p className="text-sm text-muted-foreground mb-1">Matched</p>
-                <p className="text-2xl font-bold text-blue-600">{matchedTx.length}</p>
+                <p className="text-[11px] leading-tight text-muted-foreground">Matched</p>
+                <p className="text-base font-semibold text-blue-600">{matchedTx.length}</p>
                 <p className="text-xs text-muted-foreground mt-1">
                   {formatCurrency(sumAbs(matchedTx))}
                 </p>
@@ -1142,7 +1084,7 @@ export default function BankTransactions() {
                 </p>
               </Card>
               <Card
-                className={cn("p-4 relative", clickable)}
+                className={cn("p-2 pr-8 relative", clickable)}
                 onClick={() => { setStatusFilter('reconciled'); setGlPostedFilter('all'); }}
                 role="button"
                 tabIndex={0}
@@ -1154,86 +1096,81 @@ export default function BankTransactions() {
                   organizationName={orgName}
                   formatCurrency={formatCurrency}
                 />
-                <p className="text-sm text-muted-foreground mb-1">Reconciled</p>
-                <p className="text-2xl font-bold text-success">{reconciledTx.length}</p>
+                <p className="text-[11px] leading-tight text-muted-foreground">Reconciled</p>
+                <p className="text-base font-semibold text-success">{reconciledTx.length}</p>
                 <p className="text-xs text-muted-foreground mt-1">{formatCurrency(sumAbs(reconciledTx))}</p>
               </Card>
-            </div>
-
-            {/* Row 2 — Money flow & GL health */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <Card className="p-4 relative">
+              <Card className="p-2 pr-8 relative">
                 <BankTxCardActions
                   title={inflowLabel}
-                  snapshot={`Count: ${inflowTx.length}\nTotal: ${formatCurrency(inflow)}`}
+                  snapshot={`Count: ${activity.inflowCount}\nTotal: ${formatCurrency(inflow)}`}
                   rows={toRows(inflowTx)}
                   organizationName={orgName}
                   formatCurrency={formatCurrency}
                 />
-                <p className="text-sm text-muted-foreground mb-1">{inflowLabel}</p>
-                <p className="text-2xl font-bold text-success">{formatCurrency(inflow)}</p>
-                <p className="text-xs text-muted-foreground mt-1">{inflowTx.length} transactions</p>
+                <p className="text-[11px] leading-tight text-muted-foreground">{inflowLabel}</p>
+                <p className="text-base font-semibold text-success">{formatCurrency(inflow)}</p>
+                <p className="text-xs text-muted-foreground mt-1">{activity.inflowCount} transactions</p>
               </Card>
-              <Card className="p-4 relative">
+              <Card className="p-2 pr-8 relative">
                 <BankTxCardActions
                   title={outflowLabel}
-                  snapshot={`Count: ${outflowTx.length}\nTotal: ${formatCurrency(outflow)}`}
+                  snapshot={`Count: ${activity.outflowCount}\nTotal: ${formatCurrency(outflow)}`}
                   rows={toRows(outflowTx)}
                   organizationName={orgName}
                   formatCurrency={formatCurrency}
                 />
-                <p className="text-sm text-muted-foreground mb-1">{outflowLabel}</p>
-                <p className="text-2xl font-bold text-foreground">{formatCurrency(outflow)}</p>
-                <p className="text-xs text-muted-foreground mt-1">{outflowTx.length} transactions</p>
+                <p className="text-[11px] leading-tight text-muted-foreground">{outflowLabel}</p>
+                <p className="text-base font-semibold text-foreground">{formatCurrency(outflow)}</p>
+                <p className="text-xs text-muted-foreground mt-1">{activity.outflowCount} transactions</p>
               </Card>
-              <Card className="p-4 relative">
+              <Card className="p-2 pr-8 relative">
                 <BankTxCardActions
                   title="Net Activity"
                   snapshot={`${inflowLabel}: ${formatCurrency(inflow)}\n${outflowLabel}: ${formatCurrency(outflow)}\nNet: ${net >= 0 ? '+' : '-'}${formatCurrency(Math.abs(net))}`}
                   organizationName={orgName}
                   formatCurrency={formatCurrency}
                 />
-                <p className="text-sm text-muted-foreground mb-1">Net Activity</p>
-                <p className={cn("text-2xl font-bold", net >= 0 ? "text-success" : "text-destructive")}>
+                <p className="text-[11px] leading-tight text-muted-foreground">Net Activity</p>
+                <p className={cn("text-base font-semibold", net >= 0 ? "text-success" : "text-destructive")}>
                   {net >= 0 ? '+' : '−'}{formatCurrency(net)}
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">{inflowLabel} − {outflowLabel}</p>
               </Card>
               <Card
-                className={cn("p-4 relative", clickable)}
+                className={cn("p-2 pr-8 relative", clickable)}
                 onClick={() => { setGlPostedFilter('posted'); }}
                 role="button"
                 tabIndex={0}
               >
                 <BankTxCardActions
                   title="Posted to GL"
-                  snapshot={`Posted: ${postedTx.length} of ${transactions.length} (${postedPct}%)\nValue: ${formatCurrency(sumAbs(postedTx))}`}
+                  snapshot={`Posted: ${postedTx.length} of ${activity.total} (${postedPct}%)\nValue: ${formatCurrency(sumAbs(postedTx))}`}
                   rows={toRows(postedTx)}
                   organizationName={orgName}
                   formatCurrency={formatCurrency}
                 />
-                <p className="text-sm text-muted-foreground mb-1">Posted to GL</p>
-                <p className="text-2xl font-bold text-foreground">
-                  {postedTx.length}<span className="text-sm font-normal text-muted-foreground">/{transactions.length}</span>
+                <p className="text-[11px] leading-tight text-muted-foreground">Posted to GL</p>
+                <p className="text-base font-semibold text-foreground">
+                  {postedTx.length}<span className="text-sm font-normal text-muted-foreground">/{activity.total}</span>
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">{formatCurrency(sumAbs(postedTx))} posted</p>
-                <div className="mt-2 h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-muted">
                   <div className="h-full bg-success transition-all" style={{ width: `${postedPct}%` }} />
                 </div>
               </Card>
-            </div>
           </div>
         );
       })()}
 
       {/* Filters */}
-      <Card className="p-4">
-        <div className="space-y-4">
+      <Card className="p-2.5">
+        <div className="space-y-2">
           {/* Primary Filters Row */}
-          <div className="flex flex-wrap items-center gap-4">
+          <div className="flex flex-wrap items-center gap-2">
             {accountType === 'bank' ? (
               <Select value={effectiveBankAccountId} onValueChange={setSelectedBankAccount}>
-                <SelectTrigger className="w-52">
+                <SelectTrigger className="h-8 w-48 text-xs">
                   <SelectValue placeholder="Select bank account" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1246,7 +1183,7 @@ export default function BankTransactions() {
               </Select>
             ) : (
               <Select value={effectiveCreditCardId} onValueChange={setSelectedCreditCard}>
-                <SelectTrigger className="w-52">
+                <SelectTrigger className="h-8 w-48 text-xs">
                   <SelectValue placeholder="Select credit card" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1265,12 +1202,12 @@ export default function BankTransactions() {
                 placeholder="Search transactions, payee, reference..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
+                className="h-8 pl-9 text-xs"
               />
             </div>
 
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-44">
+              <SelectTrigger className="h-8 w-40 text-xs">
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent>
@@ -1299,6 +1236,13 @@ export default function BankTransactions() {
                 </Badge>
               )}
             </Button>
+
+            <SavedFilterMenu
+              items={savedFilters.items}
+              onSave={(filterName) => savedFilters.save(filterName, currentBankingFilter())}
+              onApply={(filter) => applyBankingFilter(filter.value)}
+              onDelete={savedFilters.remove}
+            />
 
             {activeFiltersCount > 0 && (
               <Button variant="ghost" size="sm" onClick={clearAllFilters}>
@@ -1361,19 +1305,12 @@ export default function BankTransactions() {
                 {/* Date Range Filter */}
                 <div>
                   <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Date Range</label>
-                  <Select value={dateRange} onValueChange={setDateRange}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="All Time" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Time</SelectItem>
-                      <SelectItem value="this-month">This Month</SelectItem>
-                      <SelectItem value="last-month">Last Month</SelectItem>
-                      <SelectItem value="last-3-months">Last 3 Months</SelectItem>
-                      <SelectItem value="this-year">This Year</SelectItem>
-                      <SelectItem value="custom">Custom Range</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <DateRangePresetSelect
+                    value={dateRange}
+                    presets={BANKING_DATE_PRESETS}
+                    onValueChange={setDateRange}
+                    triggerClassName="w-full"
+                  />
                 </div>
 
                 {/* Amount Min */}
@@ -1448,7 +1385,7 @@ export default function BankTransactions() {
         {/* Results count and bulk selection */}
         <div className="mt-4 pt-4 border-t flex items-center justify-between text-sm text-muted-foreground">
           <span>
-            Showing {filteredTransactions.length} of {transactions.length} transactions
+            Showing {filteredTransactions.length} of {activity.total} transactions
           </span>
           <div className="flex items-center gap-2">
             <span className="text-xs">Quick select:</span>
@@ -1527,7 +1464,8 @@ export default function BankTransactions() {
       )}
 
       {/* Transactions List */}
-      <Card className="overflow-hidden">
+      <div className="flex flex-col gap-3 xl:flex-row xl:items-start">
+      <Card className="min-w-0 flex-1 overflow-hidden">
         {isLoading ? (
           <div className="p-8 text-center text-muted-foreground">Loading transactions...</div>
         ) : filteredTransactions.length === 0 ? (
@@ -1535,8 +1473,9 @@ export default function BankTransactions() {
             {transactions.length === 0 ? 'No transactions yet. Import some to get started.' : 'No transactions match your filters.'}
           </div>
         ) : (
-          <table className="data-table">
-            <thead className="bg-muted/50">
+          <AuroraScroll className="h-[min(80vh,980px)]" testId="banking-transaction-scroll">
+          <table className="data-table min-w-[960px]">
+            <thead>
               <tr>
                 <th className="w-10 px-3">
                   <Checkbox
@@ -1572,9 +1511,15 @@ export default function BankTransactions() {
                   <tr 
                     key={transaction.id} 
                     className={cn(
-                      "hover:bg-muted/20",
-                      isSelected && "bg-primary/5"
+                      "cursor-pointer hover:bg-indigo-50/60",
+                      isSelected && "bg-primary/5",
+                      detailId === transaction.id && "bg-indigo-50 shadow-[inset_3px_0_0_#6366f1]"
                     )}
+                    onClick={(event) => {
+                      const target = event.target as HTMLElement;
+                      if (target.closest('button, input, a, [role="checkbox"], [role="menuitem"]')) return;
+                      handleEditTransaction(transaction, false);
+                    }}
                   >
                     <td className="px-3">
                       <Checkbox
@@ -1704,9 +1649,10 @@ export default function BankTransactions() {
                     </td>
                     <td>
                       <div className="flex items-center gap-1">
-                        <Button 
-                          variant="outline" 
+                        <Button
+                          variant="outline"
                           size="sm"
+                          className="h-8 border-indigo-300 bg-indigo-50 font-semibold text-indigo-800 shadow-sm hover:bg-indigo-100"
                           onClick={() => handleEditTransaction(transaction)}
                         >
                           {isReconciled ? (
@@ -1724,7 +1670,7 @@ export default function BankTransactions() {
                         {!isReconciled && (
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                              <Button variant="outline" size="sm" className="h-8 w-8 border-cyan-300 bg-cyan-50 p-0 text-cyan-800 shadow-sm hover:bg-cyan-100" aria-label="More transaction actions">
                                 <MoreHorizontal className="w-4 h-4" />
                               </Button>
                             </DropdownMenuTrigger>
@@ -1764,8 +1710,57 @@ export default function BankTransactions() {
               })}
             </tbody>
           </table>
+          </AuroraScroll>
         )}
       </Card>
+      {detailTransaction && (
+        <TransactionDetailPanel
+          transaction={detailTransaction}
+          accountName={accountType === 'bank'
+            ? bankAccounts.find((account) => account.id === effectiveBankAccountId)?.name || 'Bank Account'
+            : currentCreditCard?.name || 'Credit Card'}
+          accountKind={accountType}
+          glAccountLabel={(() => {
+            const account = detailTransaction.gl_account_id
+              ? glAccounts.find((item) => item.id === detailTransaction.gl_account_id)
+              : null;
+            return account ? `${account.code} ${account.name}` : null;
+          })()}
+          formatCurrency={formatCurrency}
+          formatDate={formatDate}
+          locked={isBankTransactionLocked(detailTransaction)}
+          editing={detailEditing && accountType === 'bank' && 'bank_account_id' in detailTransaction}
+          onEdit={() => handleEditTransaction(detailTransaction, true)}
+          onClose={() => {
+            setDetailId(null);
+            setDetailEditing(false);
+          }}
+          onUncategorize={() => {
+            if (detailTransaction.journal_entry_id || isBankTransactionLocked(detailTransaction)) return;
+            if (accountType === 'bank') {
+              updateBankTx.mutate({ id: detailTransaction.id, category: null, gl_account_id: null });
+            } else {
+              updateCcTx.mutate({ id: detailTransaction.id, category: null, gl_account_id: null });
+            }
+          }}
+          onSaveMemo={(memo) => {
+            if (accountType === 'bank') updateBankTx.mutate({ id: detailTransaction.id, memo });
+            else updateCcTx.mutate({ id: detailTransaction.id, memo });
+          }}
+          editForm={'bank_account_id' in detailTransaction ? (
+            <EditTransactionDialog
+              embedded
+              open
+              onOpenChange={(open) => {
+                if (!open) setDetailEditing(false);
+              }}
+              transaction={detailTransaction as BankTransaction}
+              onSave={handleSaveTransaction}
+            />
+          ) : null}
+        />
+      )}
+      </div>
 
       {/* AI Categorization Dialog */}
       <AICategorizationDialog
@@ -1829,14 +1824,6 @@ export default function BankTransactions() {
         onSave={handleSaveRule}
         initialConditions={ruleInitialConditions}
         initialName={ruleInitialName}
-      />
-
-      {/* Edit Transaction Dialog */}
-      <EditTransactionDialog
-        open={editDialogOpen}
-        onOpenChange={setEditDialogOpen}
-        transaction={selectedTransaction}
-        onSave={handleSaveTransaction}
       />
 
       {/* Edit Credit Card Transaction Dialog */}

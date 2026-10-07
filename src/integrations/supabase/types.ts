@@ -5932,6 +5932,7 @@ export type Database = {
           address_line1: string | null
           address_line2: string | null
           city: string | null
+          contact_person: string | null
           country: string | null
           created_at: string
           credit_limit: number | null
@@ -5956,6 +5957,7 @@ export type Database = {
           address_line1?: string | null
           address_line2?: string | null
           city?: string | null
+          contact_person?: string | null
           country?: string | null
           created_at?: string
           credit_limit?: number | null
@@ -5980,6 +5982,7 @@ export type Database = {
           address_line1?: string | null
           address_line2?: string | null
           city?: string | null
+          contact_person?: string | null
           country?: string | null
           created_at?: string
           credit_limit?: number | null

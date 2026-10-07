@@ -4,6 +4,17 @@ import { toast } from "sonner";
 // Alice's ElevenLabs voice ID - professional female voice
 const ALICE_VOICE_ID = "EXAVITQu4vr4xnSDxMaL"; // Sarah - clear, professional female voice
 
+export function aliceSpeechError(errorData: { error?: string; provider_error?: { detail?: { status?: string; message?: string } } } | null, status: number): string {
+  const detail = errorData?.provider_error?.detail;
+  if (detail?.status === "quota_exceeded") {
+    return detail.message || "Voice quota exceeded. Please shorten the text or top up credits.";
+  }
+  if (detail?.status === "invalid_api_key" || status === 401) {
+    return "Voice is unavailable right now.";
+  }
+  return errorData?.error || `Failed to generate speech (${status})`;
+}
+
 export function useAliceTTS() {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -67,13 +78,7 @@ export function useAliceTTS() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({} as any));
-        const providerDetail = errorData?.provider_error?.detail;
-
-        if (providerDetail?.status === "quota_exceeded") {
-          throw new Error(providerDetail?.message || "Voice quota exceeded. Please shorten the text or top up credits.");
-        }
-
-        throw new Error(errorData?.error || `Failed to generate speech (${response.status})`);
+        throw new Error(aliceSpeechError(errorData, response.status));
       }
 
       const audioBlob = await response.blob();

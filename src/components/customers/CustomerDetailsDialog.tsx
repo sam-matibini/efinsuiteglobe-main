@@ -5,7 +5,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { Mail, Phone, MapPin, FileText, Building2 } from 'lucide-react';
+import { Mail, Phone, MapPin, FileText, Building2, User } from 'lucide-react';
 import { Customer } from '@/hooks/useCustomers';
 
 interface CustomerDetailsDialogProps {
@@ -50,6 +50,12 @@ export function CustomerDetailsDialog({ open, onOpenChange, customer }: Customer
           {/* Contact */}
           <div className="space-y-2">
             <h4 className="text-sm font-medium text-muted-foreground">Contact</h4>
+            {customer.contact_person && (
+              <div className="flex items-center gap-2 text-sm">
+                <User className="w-4 h-4 text-muted-foreground" />
+                <span>{customer.contact_person}</span>
+              </div>
+            )}
             {customer.email && (
               <div className="flex items-center gap-2 text-sm">
                 <Mail className="w-4 h-4 text-muted-foreground" />
@@ -62,7 +68,7 @@ export function CustomerDetailsDialog({ open, onOpenChange, customer }: Customer
                 <span>{customer.phone}</span>
               </div>
             )}
-            {!customer.email && !customer.phone && (
+            {!customer.email && !customer.phone && !customer.contact_person && (
               <p className="text-sm text-muted-foreground italic">No contact info</p>
             )}
           </div>
