@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Building2, Users, Shield, Palette, Receipt, Plus, MapPin, Phone, Wand2, FileText, Globe, TrendingUp, Check, ChevronsUpDown, RotateCcw, AlertTriangle, CreditCard, Coins, Wallet, Send } from 'lucide-react';
 import { EfinconnectSettingsTab } from '@/components/settings/EfinconnectSettingsTab';
+import { CraRepresentativeSettingsTab } from '@/components/settings/CraRepresentativeSettingsTab';
 import { DivisionsSettingsTab } from '@/components/settings/DivisionsSettingsTab';
 import { JobSitesSettingsTab } from '@/components/settings/JobSitesSettingsTab';
 import { ShieldCheck } from 'lucide-react';
@@ -340,6 +341,10 @@ export default function Settings() {
           <TabsTrigger value="users" className="gap-2">
             <Users className="w-4 h-4" />
             <span className="hidden sm:inline">Users</span>
+          </TabsTrigger>
+          <TabsTrigger value="integrations" className="gap-2">
+            <Network className="w-4 h-4" />
+            <span className="hidden sm:inline">Integrations</span>
           </TabsTrigger>
           <TabsTrigger value="security" className="gap-2">
             <Shield className="w-4 h-4" />
@@ -801,6 +806,14 @@ export default function Settings() {
 
         <TabsContent value="users" className="space-y-6">
           <UsersSettingsTab />
+        </TabsContent>
+
+        <TabsContent value="integrations" className="space-y-6">
+          <div>
+            <h2 className="text-lg font-semibold text-foreground">Integrations</h2>
+            <p className="text-sm text-muted-foreground">Connections to government and third-party services.</p>
+          </div>
+          <CraRepresentativeSettingsTab />
         </TabsContent>
 
         <TabsContent value="security" className="space-y-6">

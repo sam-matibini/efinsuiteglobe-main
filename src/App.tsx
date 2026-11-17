@@ -130,6 +130,7 @@ const CraCorporateTax = lazy(() => import("./pages/cra/CraCorporateTax"));
 const CraEfile = lazy(() => import("./pages/cra/CraEfile"));
 const CraRemittances = lazy(() => import("./pages/cra/CraRemittances"));
 const CraBillPay = lazy(() => import("./pages/cra/CraBillPay"));
+const CraPayments = lazy(() => import("./pages/cra/CraPayments"));
 const CraAuthorizations = lazy(() => import("./pages/cra/CraAuthorizations"));
 const CraNotices = lazy(() => import("./pages/cra/CraNotices"));
 const CraActivity = lazy(() => import("./pages/cra/CraActivity"));
@@ -435,6 +436,7 @@ const AppRoutes = () => {
     <Route path="/tax-cra/corporate" element={<ProtectedRoute><PageWrapper><CraCorporateTax /></PageWrapper></ProtectedRoute>} />
     <Route path="/tax-cra/efile" element={<ProtectedRoute><PageWrapper><CraEfile /></PageWrapper></ProtectedRoute>} />
     <Route path="/tax-cra/remittances" element={<ProtectedRoute><PageWrapper><CraRemittances /></PageWrapper></ProtectedRoute>} />
+    <Route path="/tax-cra/payments" element={<ProtectedRoute><PageWrapper><CraPayments /></PageWrapper></ProtectedRoute>} />
     <Route path="/tax-cra/bill-pay" element={<ProtectedRoute><PageWrapper><CraBillPay /></PageWrapper></ProtectedRoute>} />
     <Route path="/tax-cra/authorizations" element={<ProtectedRoute><PageWrapper><CraAuthorizations /></PageWrapper></ProtectedRoute>} />
     <Route path="/tax-cra/notices" element={<ProtectedRoute><PageWrapper><CraNotices /></PageWrapper></ProtectedRoute>} />

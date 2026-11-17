@@ -253,6 +253,7 @@ const getNavigation = (payrollLabels: { taxSlips: string; separationDoc: string;
       { label: 'Payroll', href: '/tax-cra/payroll', icon: Users },
       { label: 'Corporate Income Tax', href: '/tax-cra/corporate', icon: Landmark },
       { label: 'EFILE Gateway', href: '/tax-cra/efile', icon: Send },
+      { label: 'CRA Payments', href: '/tax-cra/payments', icon: Landmark },
       { label: 'Tax Remittances', href: '/tax-cra/remittances', icon: Wallet },
       { label: 'CRA bill pay', href: '/tax-cra/bill-pay', icon: DollarSign },
       { label: 'CRA Authorizations', href: '/tax-cra/authorizations', icon: ShieldCheck },
