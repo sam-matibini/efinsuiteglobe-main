@@ -32,6 +32,7 @@ import { getPayrollLocalization } from '@/data/payrollLocalization';
 import { COUNTRY_LOCALIZATIONS } from '@/data/countryLocalizations';
 import { downloadRemittancePD7APdf, downloadRemittanceCsv, downloadLocalizedRemittancePdf, downloadLocalizedRemittanceCsv, type RemittancePD7AData } from '@/lib/generateRemittancePD7APdf';
 import { toast } from 'sonner';
+import { craRemittanceAccounts } from '@/lib/payroll/remittancePeriod';
 
 export default function Remittances() {
   const [year, setYear] = useState(new Date().getFullYear().toString());
@@ -148,15 +149,18 @@ export default function Remittances() {
         .filter(Boolean)
         .join(' '),
     ].filter(Boolean) as string[];
+    const accounts = craRemittanceAccounts({
+      business_number: (organization as any)?.business_number,
+      payroll_account_number: organization?.payroll_account_number,
+    });
 
     return {
       formCode: (remitConfig as any).formCode || 'PD7A',
       authorityName: remitConfig.authority,
       employerName: organization?.name || 'Employer',
       employerAddress: employerAddressParts.join(', ') || undefined,
-      payrollAccountNumber:
-        (organization as any)?.payroll_account_number || (organization as any)?.business_number,
-      businessNumber: (organization as any)?.business_number,
+      payrollAccountNumber: accounts.payrollAccountNumber,
+      businessNumber: accounts.businessNumber,
       periodLabel: formatPeriod(period),
       periodStart: detail.startDate,
       periodEnd: detail.endDate,
@@ -410,6 +414,11 @@ export default function Remittances() {
                   ))}
                 </SelectContent>
               </Select>
+              {countryCode === 'CA' ? (
+                <p className="text-xs text-muted-foreground">
+                  Includes every paid pay run whose pay period ends in this month. A pay period ending Oct 5 goes on the October remittance.
+                </p>
+              ) : null}
             </div>
           </div>
           <DialogFooter>
