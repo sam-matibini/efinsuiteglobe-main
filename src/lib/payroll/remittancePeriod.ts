@@ -14,6 +14,18 @@ function lastDayOfMonth(year: number, month: number) {
   return new Date(Date.UTC(year, month, 0)).getUTCDate();
 }
 
+/**
+ * CRA treats a payment as on time when the due date falls on a Saturday, Sunday or public
+ * holiday and the payment arrives the next business day. This moves weekends only; statutory
+ * holidays are not modelled.
+ */
+export function nextBusinessDay(isoDate: string): string {
+  const [y, m, d] = isoDate.split('-').map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  while (date.getUTCDay() === 0 || date.getUTCDay() === 6) date.setUTCDate(date.getUTCDate() + 1);
+  return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}`;
+}
+
 /** Parse "YYYY-MM" or "YYYY-MM-DD" into a year and month. */
 function parseMonth(period: string) {
   const match = /^(\d{4})-(\d{1,2})/.exec(period.trim());
@@ -32,7 +44,8 @@ export function remittanceMonthFor(payPeriodEnd: string): string {
 
 /**
  * Date range used to select pay runs for a remittance month (by pay period end date),
- * and the regular-remitter due date: the 15th of the following month.
+ * and the regular-remitter due date: the 15th of the following month, moved to the next
+ * business day when the 15th is a weekend.
  */
 export function remittanceMonthRange(period: string) {
   const { year, month } = parseMonth(period);
@@ -42,7 +55,7 @@ export function remittanceMonthRange(period: string) {
     period: `${year}-${pad(month)}`,
     startDate: `${year}-${pad(month)}-01`,
     endDate: `${year}-${pad(month)}-${pad(lastDayOfMonth(year, month))}`,
-    dueDate: `${nextYear}-${pad(nextMonth)}-15`,
+    dueDate: nextBusinessDay(`${nextYear}-${pad(nextMonth)}-15`),
   };
 }
 

@@ -134,6 +134,17 @@ export function useRemittances(year?: number) {
       
       const { period: month, startDate, endDate, dueDate } = remittanceMonthRange(period);
 
+      // One PD7A per month: refresh an unpaid one instead of creating a duplicate.
+      const { data: existing, error: existingError } = await supabase
+        .from('remittances')
+        .select('id, status')
+        .eq('organization_id', organization.id)
+        .eq('remittance_period', `${month}-01`);
+      if (existingError) throw existingError;
+      if ((existing ?? []).some((row) => row.status === 'paid')) {
+        throw new Error('This month is already paid. A paid remittance is not regenerated.');
+      }
+
       // A pay run belongs to the month in which its pay period ends.
       const { data: payRuns, error: payRunsError } = await supabase
         .from('pay_runs')
@@ -174,7 +185,30 @@ export function useRemittances(year?: number) {
         provincial_tax: 0,
       });
       
-      // CRA remittance due date is the 15th of the following month
+      const totalAmount = totals.cpp_employee + totals.cpp_employer + totals.ei_employee + totals.ei_employer + totals.federal_tax + totals.provincial_tax;
+      if ((existing ?? []).length > 0) {
+        const { data, error } = await supabase
+          .from('remittances')
+          .update({
+            due_date: dueDate,
+            total_amount: totalAmount,
+            total_cpp_employee: totals.cpp_employee,
+            total_cpp_employer: totals.cpp_employer,
+            total_ei_employee: totals.ei_employee,
+            total_ei_employer: totals.ei_employer,
+            total_federal_tax: totals.federal_tax,
+            total_provincial_tax: totals.provincial_tax,
+          })
+          .eq('id', existing![0].id)
+          .select()
+          .single();
+        if (error) throw error;
+        queryClient.invalidateQueries({ queryKey: ['remittances'] });
+        toast.success('This month already had a remittance. Its totals were refreshed instead of creating a duplicate.');
+        return data;
+      }
+
+      // CRA remittance due date is the 15th of the following month (next business day on a weekend)
       return createRemittance.mutateAsync({
         remittance_period: `${month}-01`,
         due_date: dueDate,
@@ -310,6 +344,7 @@ export function useRemittances(year?: number) {
       const { error } = await supabase
         .from('remittances')
         .update({
+          due_date: detail.dueDate,
           total_federal_tax: detail.federalTax,
           total_provincial_tax: detail.provincialTax,
           total_cpp_employee: detail.cppEmployee,
@@ -329,8 +364,26 @@ export function useRemittances(year?: number) {
     onError: (e: any) => toast.error('Recalculate failed: ' + (e?.message || 'Unknown error')),
   });
 
+  // Delete an unpaid PD7A (for example a duplicate) before it is paid and posted to the GL.
+  // The database refuses when it is paid or a CRA payment for it is under way.
+  const deleteRemittance = useMutation({
+    mutationFn: async (remittanceId: string) => {
+      const target = remittances.find(r => r.id === remittanceId);
+      if (target?.status === 'paid') throw new Error('A paid remittance cannot be deleted.');
+      const { error } = await supabase.from('remittances').delete().eq('id', remittanceId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['remittances'] });
+      queryClient.invalidateQueries({ queryKey: ['tax-report-payments'] });
+      toast.success('Remittance deleted');
+    },
+    onError: (e: Error) => toast.error('Delete failed: ' + e.message),
+  });
+
   return {
     remittances,
+    deleteRemittance,
     isLoading,
     error,
     pendingRemittances,
