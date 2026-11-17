@@ -13,7 +13,7 @@ export default function CraActivity() {
         <table className="w-full min-w-[960px] text-left text-sm">
           <thead className="bg-muted/50">
             <tr>
-              {['Date/time', 'User', 'Client', 'Action', 'CRA account', 'Authorization', 'EFILE submission', 'CRA response', 'Confirmation', 'IP/device'].map((heading) => (
+              {['Date/time', 'User', 'Client', 'Action', 'CRA account', 'Authorization', 'Filing reference', 'CRA response', 'Confirmation', 'IP/device'].map((heading) => (
                 <th key={heading} className="px-3 py-2 font-medium">{heading}</th>
               ))}
             </tr>

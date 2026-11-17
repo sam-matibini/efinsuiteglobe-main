@@ -802,6 +802,75 @@ export function submitEfile(
   return { ok: true, message: `${input.returnType} submitted to the EFILE gateway. Retrieve the CRA acknowledgement before treating it as accepted.`, id };
 }
 
+/**
+ * Record a return the user filed themselves on a CRA channel (Represent a Client, My Business
+ * Account, GST/HST NETFILE, or CRA-certified T2 software). eFinsuite never transmits the return;
+ * it only keeps the confirmation number CRA showed the user.
+ */
+export function recordCraFiling(
+  orgId: string,
+  orgName: string | undefined,
+  actor: CraActor,
+  input: { returnType: EfileReturnType; obligationId: string; taxYear: string; account: string; confirmationNumber: string; filedOn: string; channel: string },
+): ActionResult {
+  const action = `Record ${input.returnType} filing`;
+  const ledger = getLedger(orgId, orgName);
+  if (!capsOf(ledger, actor).includes('file_return')) {
+    return fail(orgId, orgName, actor, action, 'Your role cannot record tax filings.');
+  }
+  const confirmation = input.confirmationNumber.trim();
+  if (!/^[A-Za-z0-9][A-Za-z0-9-]{5,}$/.test(confirmation)) {
+    return fail(orgId, orgName, actor, action, 'Enter the confirmation number CRA showed after you filed.');
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.filedOn) || input.filedOn > new Date().toISOString().slice(0, 10)) {
+    return fail(orgId, orgName, actor, action, 'Enter the date you filed. It cannot be in the future.');
+  }
+  if (input.returnType === 'GST34' && ledger.gst.filingStatus === 'calculated') {
+    return fail(orgId, orgName, actor, action, 'Review the GST/HST return before recording the filing.');
+  }
+  if (input.returnType === 'T2' && ledger.corporate.filingStatus === 'not_filed') {
+    return fail(orgId, orgName, actor, action, 'Prepare the T2 before recording the filing.');
+  }
+  if (ledger.submissions.some((item) => item.obligationId === input.obligationId && item.confirmationNumber === confirmation)) {
+    return fail(orgId, orgName, actor, action, `Confirmation ${confirmation} is already recorded for this return.`);
+  }
+
+  let id = '';
+  update(orgId, orgName, (draft) => {
+    draft.seq.efile += 1;
+    const ymd = input.filedOn.replace(/-/g, '');
+    id = `FL-${ymd}-${String(draft.seq.efile).padStart(6, '0')}`;
+    draft.submissions.unshift({
+      id,
+      clientName: draft.profile.legalName,
+      clientBn: draft.profile.businessNumber,
+      taxYear: input.taxYear,
+      returnType: input.returnType,
+      submittedAt: new Date(`${input.filedOn}T12:00:00`).toISOString(),
+      craResponse: `Filed by the user on ${input.channel}`,
+      confirmationNumber: confirmation,
+      errors: [],
+      status: 'accepted',
+      obligationId: input.obligationId,
+    });
+    if (input.obligationId === draft.gst.id) {
+      draft.gst.filingStatus = 'filed';
+      draft.gst.efileSubmissionId = id;
+    }
+    if (input.obligationId === draft.corporate.id) {
+      draft.corporate.filingStatus = 'filed';
+      draft.corporate.efileSubmissionId = id;
+    }
+    audit(draft, actor, `${input.returnType} filed on ${input.channel}`, {
+      craAccount: input.account,
+      efileSubmission: id,
+      craResponse: 'Filed on CRA',
+      confirmation,
+    });
+  });
+  return { ok: true, message: `${input.returnType} filing recorded. Confirmation ${confirmation}.`, id };
+}
+
 export interface EfileApplyInput {
   httpStatus: number;
   body?: string;

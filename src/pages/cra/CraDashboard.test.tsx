@@ -6,7 +6,6 @@ import { effectiveCapabilities } from '@/lib/cra/engine';
 import { applyCdeResult, getLedger, resetCraStoreForTests } from '@/lib/cra/store';
 import CraDashboard from './CraDashboard';
 import CraAuthorizations from './CraAuthorizations';
-import CraRemittances from './CraRemittances';
 
 vi.mock('@/hooks/useCraTaxCentre', () => ({
   useCraTaxCentre: () => {
@@ -74,7 +73,7 @@ describe('CRA Tax & Remittance screens', () => {
     expect(screen.queryByText(/\$4,200\.00/)).not.toBeInTheDocument();
     expect(screen.getAllByText('Not returned by CRA').length).toBeGreaterThan(0);
     expect(screen.getByText('CRA has not returned account balances.')).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'Pay CRA' }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('link', { name: 'Pay CRA' }).length).toBeGreaterThan(0);
     expect(screen.getByRole('link', { name: 'File return' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Sales tax reporting' })).toHaveAttribute('href', '/tax');
     expect(screen.getByText(/They are not CRA account balances/)).toBeInTheDocument();
@@ -123,12 +122,11 @@ describe('CRA Tax & Remittance screens', () => {
     expect(screen.getByRole('button', { name: 'Request CRA authorization' })).toBeInTheDocument();
   });
 
-  it('lists no remittances until a payment is prepared', () => {
-    renderAt(<CraRemittances />);
-    expect(screen.getByRole('heading', { name: 'Tax remittances' })).toBeInTheDocument();
-    expect(screen.getByText(/No CRA payments yet/)).toBeInTheDocument();
-    expect(screen.queryByText('EFS-CRA-00001246')).not.toBeInTheDocument();
-    expect(screen.queryByText('EFS-CRA-00001245')).not.toBeInTheDocument();
-    expect(screen.queryByText('CRA-123456789')).not.toBeInTheDocument();
+  it('sends payments to CRA Payments and has no EFILE gateway link', () => {
+    renderAt(<CraDashboard />);
+    const payLinks = screen.getAllByRole('link', { name: 'Pay CRA' });
+    expect(payLinks.length).toBeGreaterThan(0);
+    payLinks.forEach((link) => expect(link).toHaveAttribute('href', '/tax-cra/payments'));
+    expect(screen.queryByRole('link', { name: /EFILE gateway/i })).not.toBeInTheDocument();
   });
 });

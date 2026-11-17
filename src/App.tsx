@@ -127,9 +127,6 @@ const CraDashboard = lazy(() => import("./pages/cra/CraDashboard"));
 const CraGstHst = lazy(() => import("./pages/cra/CraGstHst"));
 const CraPayrollTax = lazy(() => import("./pages/cra/CraPayrollTax"));
 const CraCorporateTax = lazy(() => import("./pages/cra/CraCorporateTax"));
-const CraEfile = lazy(() => import("./pages/cra/CraEfile"));
-const CraRemittances = lazy(() => import("./pages/cra/CraRemittances"));
-const CraBillPay = lazy(() => import("./pages/cra/CraBillPay"));
 const CraPayments = lazy(() => import("./pages/cra/CraPayments"));
 const CraAuthorizations = lazy(() => import("./pages/cra/CraAuthorizations"));
 const CraNotices = lazy(() => import("./pages/cra/CraNotices"));
@@ -434,10 +431,11 @@ const AppRoutes = () => {
     <Route path="/tax-cra/gst-hst" element={<ProtectedRoute><PageWrapper><CraGstHst /></PageWrapper></ProtectedRoute>} />
     <Route path="/tax-cra/payroll" element={<ProtectedRoute><PageWrapper><CraPayrollTax /></PageWrapper></ProtectedRoute>} />
     <Route path="/tax-cra/corporate" element={<ProtectedRoute><PageWrapper><CraCorporateTax /></PageWrapper></ProtectedRoute>} />
-    <Route path="/tax-cra/efile" element={<ProtectedRoute><PageWrapper><CraEfile /></PageWrapper></ProtectedRoute>} />
-    <Route path="/tax-cra/remittances" element={<ProtectedRoute><PageWrapper><CraRemittances /></PageWrapper></ProtectedRoute>} />
+    {/* Retired pages that transmitted returns or released payments outside CRA's own channels. */}
+    <Route path="/tax-cra/efile" element={<Navigate to="/tax-cra" replace />} />
+    <Route path="/tax-cra/remittances" element={<Navigate to="/tax-cra/payments" replace />} />
+    <Route path="/tax-cra/bill-pay" element={<Navigate to="/tax-cra/payments" replace />} />
     <Route path="/tax-cra/payments" element={<ProtectedRoute><PageWrapper><CraPayments /></PageWrapper></ProtectedRoute>} />
-    <Route path="/tax-cra/bill-pay" element={<ProtectedRoute><PageWrapper><CraBillPay /></PageWrapper></ProtectedRoute>} />
     <Route path="/tax-cra/authorizations" element={<ProtectedRoute><PageWrapper><CraAuthorizations /></PageWrapper></ProtectedRoute>} />
     <Route path="/tax-cra/notices" element={<ProtectedRoute><PageWrapper><CraNotices /></PageWrapper></ProtectedRoute>} />
     <Route path="/tax-cra/activity" element={<ProtectedRoute><PageWrapper><CraActivity /></PageWrapper></ProtectedRoute>} />

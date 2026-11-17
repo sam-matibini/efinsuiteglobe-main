@@ -1,19 +1,14 @@
-import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ConnectionSummary, CraModule } from '@/components/cra/CraModule';
-import { PayCraDialog, type PayPreset } from '@/components/cra/PayCraDialog';
 import { authorizationView } from '@/lib/cra/authorizationView';
 import { bookAmount, craAmount, craCount, craYesNo, formatDay, NOT_RETURNED_BY_CRA, outstandingBalance, upcomingAssessed } from '@/lib/cra/engine';
-import type { CraLedger } from '@/lib/cra/types';
 import { useCraTaxCentre } from '@/hooks/useCraTaxCentre';
 
 export default function CraDashboard() {
   const cra = useCraTaxCentre();
-  const [payOpen, setPayOpen] = useState(false);
-  const [preset, setPreset] = useState<PayPreset | undefined>();
   const { ledger } = cra;
   const outstanding = outstandingBalance(ledger);
   const upcoming = upcomingAssessed(ledger);
@@ -24,23 +19,18 @@ export default function CraDashboard() {
   const payrollTotal = ledger.payroll.cpp + ledger.payroll.ei + ledger.payroll.incomeTax;
   const enquiry = ledger.enquiry;
 
-  const openPay = (next?: PayPreset) => {
-    setPreset(next ?? outstandingPreset(ledger));
-    setPayOpen(true);
-  };
+  const canPay = cra.can('prepare_payment');
 
   return (
     <CraModule
       title="Tax & CRA"
-      description="Balances, filings, and remittances for this organization. Amounts are limited to program accounts the client enrolled and the authorization CRA has granted."
+      description="Balances, filings, and payments for this organization. File returns on CRA, pay through CRA My Payment, and keep the confirmations here. Amounts are limited to program accounts the client enrolled and the authorization CRA has granted."
       actions={
         <>
           <Button variant="outline" onClick={() => cra.refresh()}>
             <RefreshCw className="mr-2 h-4 w-4" /> Refresh
           </Button>
-          <Button onClick={() => openPay()} disabled={!cra.can('prepare_payment')}>
-            Pay CRA
-          </Button>
+          <PayCraButton canPay={canPay} />
         </>
       }
     >
@@ -144,12 +134,9 @@ export default function CraDashboard() {
             <div className="flex justify-between"><span>Payroll</span><span>{ledger.payroll.dueDate ? formatDay(ledger.payroll.dueDate) : NOT_RETURNED_BY_CRA} · {bookAmount(payrollTotal, payrollCalculated)}</span></div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button onClick={() => openPay()} disabled={!cra.can('prepare_payment')}>Pay CRA</Button>
+            <PayCraButton canPay={canPay} />
             <Button asChild variant="outline">
               <Link to="/tax-cra/gst-hst">File return</Link>
-            </Button>
-            <Button asChild variant="outline">
-              <Link to="/tax-cra/efile">EFILE gateway</Link>
             </Button>
             <Button asChild variant="outline">
               <Link to="/tax">Sales tax reporting</Link>
@@ -157,42 +144,17 @@ export default function CraDashboard() {
           </div>
         </CardContent>
       </Card>
-
-      <PayCraDialog open={payOpen} onOpenChange={setPayOpen} preset={preset} />
     </CraModule>
   );
 }
 
-function outstandingPreset(ledger: CraLedger): PayPreset | undefined {
-  const today = new Date().toISOString().slice(0, 10);
-  if (typeof ledger.balances.corporate_tax === 'number' && ledger.balances.corporate_tax > 0) {
-    return {
-      taxType: 'corporate_tax',
-      amount: ledger.balances.corporate_tax,
-      dueDate: ledger.corporate.nextInstallmentDate || today,
-      purpose: 'Corporation income tax RC0001 balance',
-      obligationId: ledger.corporate.id,
-    };
-  }
-  if (typeof ledger.balances.payroll === 'number' && ledger.balances.payroll > 0) {
-    return {
-      taxType: 'payroll',
-      amount: ledger.balances.payroll,
-      dueDate: ledger.payroll.dueDate || today,
-      purpose: 'Payroll source deductions balance',
-      obligationId: ledger.payroll.id,
-    };
-  }
-  if (typeof ledger.balances.gst_hst === 'number' && ledger.balances.gst_hst > 0) {
-    return {
-      taxType: 'gst_hst',
-      amount: ledger.balances.gst_hst,
-      dueDate: ledger.gst.dueDate || today,
-      purpose: 'GST/HST balance',
-      obligationId: ledger.gst.id,
-    };
-  }
-  return undefined;
+function PayCraButton({ canPay }: { canPay: boolean }) {
+  if (!canPay) return <Button disabled>Pay CRA</Button>;
+  return (
+    <Button asChild>
+      <Link to="/tax-cra/payments">Pay CRA</Link>
+    </Button>
+  );
 }
 
 function ProgramCard({

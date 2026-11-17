@@ -1,9 +1,9 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { CraModule } from '@/components/cra/CraModule';
 import { FileReturnDialog } from '@/components/cra/FileReturnDialog';
-import { PayCraDialog } from '@/components/cra/PayCraDialog';
 import { bookAmount, craAmount, filingLabel, formatCad, formatDay, NOT_RETURNED_BY_CRA } from '@/lib/cra/engine';
 import { knownCraOverview } from '@/lib/cra/store';
 import { useCraTaxCentre } from '@/hooks/useCraTaxCentre';
@@ -14,13 +14,12 @@ export default function CraCorporateTax() {
   const overview = knownCraOverview(cra.ledger.profile.businessNumber);
   const craBalance = cra.ledger.balances.corporate_tax;
   const [fileOpen, setFileOpen] = useState(false);
-  const [payOpen, setPayOpen] = useState(false);
   const [refile, setRefile] = useState(false);
 
   return (
     <CraModule
       title="Corporate income tax"
-      description="Prepare the T2, file it through EFILE, and pay installments separately. The return balance is not the same figure as the CRA account balance."
+      description="Prepare the T2, file it with CRA-certified T2 software, then pay the balance or installments through CRA My Payment. The return balance is not the same figure as the CRA account balance."
     >
       {!cra.ledger.profile.programs.includes('RC') ? (
         <Card><CardContent className="p-5 text-sm text-muted-foreground">RC is not enrolled. Add corporate income tax under CRA Authorizations.</CardContent></Card>
@@ -53,12 +52,16 @@ export default function CraCorporateTax() {
             <Button variant="outline" onClick={() => { setRefile(true); setFileOpen(true); }} disabled={!cra.can('file_return') || t2.filingStatus !== 'filed'}>
               ReFILE
             </Button>
-            <Button variant="outline" onClick={() => setPayOpen(true)} disabled={!cra.can('prepare_payment')}>
-              Pay CRA
-            </Button>
+            {cra.can('prepare_payment') ? (
+              <Button asChild variant="outline">
+                <Link to="/tax-cra/payments">Pay CRA</Link>
+              </Button>
+            ) : (
+              <Button variant="outline" disabled>Pay CRA</Button>
+            )}
           </div>
           <p className="text-sm text-muted-foreground">
-            T1 and T3 stay on the EFILE gateway for clients whose authorization includes those returns. This organization is a corporation, so the active return is the T2.
+            CRA accepts a T2 only from CRA-certified software through Corporation Internet Filing. Record CRA's confirmation here after filing. Pay CRA opens CRA Payments.
           </p>
           <FileReturnDialog
             open={fileOpen}
@@ -74,17 +77,6 @@ export default function CraCorporateTax() {
               { label: 'Installments', value: formatCad(t2.installmentsPaid) },
               { label: 'Next installment', value: formatCad(t2.nextInstallmentAmount) },
             ]}
-          />
-          <PayCraDialog
-            open={payOpen}
-            onOpenChange={setPayOpen}
-            preset={{
-              taxType: 'corporate_tax',
-              amount: typeof craBalance === 'number' ? craBalance : t2.nextInstallmentAmount,
-              dueDate: t2.nextInstallmentDate,
-              purpose: typeof craBalance === 'number' ? 'Corporation income tax RC0001' : 'Corporate tax installment',
-              obligationId: `${t2.id}-installment-${t2.nextInstallmentDate}`,
-            }}
           />
         </>
       )}

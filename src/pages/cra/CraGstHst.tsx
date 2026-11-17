@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { CraModule } from '@/components/cra/CraModule';
 import { FileReturnDialog } from '@/components/cra/FileReturnDialog';
-import { PayCraDialog } from '@/components/cra/PayCraDialog';
 import { bookAmount, craAmount, filingLabel, formatCad, formatDay, NOT_RETURNED_BY_CRA, obligationPayments, remitAmount } from '@/lib/cra/engine';
 import { useCraTaxCentre } from '@/hooks/useCraTaxCentre';
 
@@ -18,13 +17,12 @@ export default function CraGstHst() {
   const calculated = gst.collected !== 0 || gst.itcs !== 0 || gst.filingStatus !== 'calculated';
   const payments = obligationPayments(cra.ledger, gst.id);
   const [fileOpen, setFileOpen] = useState(false);
-  const [payOpen, setPayOpen] = useState(false);
   const step = stepIndex(gst.filingStatus, payments.some((payment) => payment.status === 'confirmed'), payments.length > 0);
 
   return (
     <CraModule
       title="GST/HST"
-      description="Calculate the return from collected tax and ITCs, review it, file it through EFILE, then pay CRA. Those steps stay separate."
+      description="Calculate the return from collected tax and ITCs, review it, file it on CRA, then pay through CRA My Payment. Filing and paying stay separate."
     >
       {!cra.ledger.profile.programs.includes('RT') ? (
         <Card><CardContent className="p-5 text-sm text-muted-foreground">RT is not enrolled. Add it under CRA Authorizations.</CardContent></Card>
@@ -62,16 +60,20 @@ export default function CraGstHst() {
             <Button onClick={() => setFileOpen(true)} disabled={!cra.can('file_return') || gst.filingStatus === 'calculated'}>
               File return
             </Button>
-            <Button variant="outline" onClick={() => setPayOpen(true)} disabled={!cra.can('prepare_payment') || payAmount <= 0}>
-              Pay GST/HST
-            </Button>
+            {cra.can('prepare_payment') && payAmount > 0 ? (
+              <Button asChild variant="outline">
+                <Link to="/tax-cra/payments">Pay GST/HST</Link>
+              </Button>
+            ) : (
+              <Button variant="outline" disabled>Pay GST/HST</Button>
+            )}
             <Button asChild variant="link">
               <Link to="/tax">Sales tax transactions</Link>
             </Button>
           </div>
           <p className="text-sm text-muted-foreground">
             {payAmount > 0
-              ? `Pay GST/HST sends ${formatCad(payAmount)} for RT0001. Filing the GST34 is a separate step and does not move money.`
+              ? `Pay GST/HST opens CRA Payments to pay ${formatCad(payAmount)} for RT0001 through CRA My Payment. Filing the GST34 is a separate step and does not move money.`
               : 'CRA GST/HST owing is $0.00, so there is no GST/HST payment to send. Review and file the GST34 separately when a return is outstanding.'}
           </p>
           <FileReturnDialog
@@ -88,17 +90,6 @@ export default function CraGstHst() {
               { label: 'Payable', value: formatCad(payable) },
               { label: 'Due', value: formatDay(gst.dueDate) },
             ]}
-          />
-          <PayCraDialog
-            open={payOpen}
-            onOpenChange={setPayOpen}
-            preset={{
-              taxType: 'gst_hst',
-              amount: payAmount,
-              dueDate: gst.dueDate,
-              purpose: 'GST/HST balance',
-              obligationId: gst.id,
-            }}
           />
         </>
       )}

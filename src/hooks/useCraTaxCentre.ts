@@ -14,6 +14,7 @@ import {
   paymentReleaseBlock,
   prepareT2,
   recordClientConfirmation,
+  recordCraFiling,
   recordConfirmation,
   recordRepresentativeAuthorization,
   recordException,
@@ -272,6 +273,14 @@ export function useCraTaxCentre() {
     prepareT2: bind(prepareT2),
     submitEfile: submitToEfile,
     acknowledgeEfile,
+    recordFiling: bind(
+      (
+        id,
+        name,
+        who,
+        input: { returnType: EfileReturnType; obligationId: string; taxYear: string; account: string; confirmationNumber: string; filedOn: string; channel: string },
+      ) => recordCraFiling(id, name, who, input),
+    ),
     createPayment: bind(
       (
         id,
