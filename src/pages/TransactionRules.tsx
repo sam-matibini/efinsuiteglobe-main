@@ -56,6 +56,7 @@ import { useBankAccounts } from '@/hooks/useBankAccounts';
 import { useCreditCards, useCreditCardTransactions, CreditCardTransaction } from '@/hooks/useCreditCards';
 import { analyzeTransactions, AnalysisResult, useProcessTransactions } from '@/hooks/useRuleAnalysis';
 import { analyzeCCTransactions, CCAnalysisResult, useProcessCCTransactions } from '@/hooks/useCreditCardRuleAnalysis';
+import { countRuleScopes } from '@/lib/ruleEligibility';
 import TransactionRuleDialog from '@/components/banking/TransactionRuleDialog';
 import AnalyzePostDialog from '@/components/banking/AnalyzePostDialog';
 import { CreateOrganizationDialog } from '@/components/accounts/CreateOrganizationDialog';
@@ -111,21 +112,18 @@ export default function TransactionRules() {
     creditCards.find(c => c.id === selectedCreditCardId)?.gl_account_id
   );
   
-  // Calculate eligible transactions for analysis (pending/unmatched without category)
-  const eligibleBankTransactions = useMemo(() => 
-    bankTransactions.filter(t => 
-      (t.status === 'unmatched' || t.status === 'pending') && !t.category
-    ), [bankTransactions]);
-    
-  const eligibleCCTransactions = useMemo(() => 
-    ccTransactions.filter(t => 
-      (t.status === 'pending' || t.status === 'unmatched' || !t.status) && 
-      !t.category && t.status !== 'reconciled'
-    ), [ccTransactions]);
-  
-  const currentEligibleCount = analysisSource === 'bank' 
-    ? eligibleBankTransactions.length 
-    : eligibleCCTransactions.length;
+  // Transactions the rules can act on: unmatched lines (whatever category the bank
+  // gave them) and matched lines not yet posted to the GL.
+  const bankScopeCounts = useMemo(
+    () => countRuleScopes(bankTransactions, { replacesExistingPosting: true }),
+    [bankTransactions],
+  );
+  const ccScopeCounts = useMemo(
+    () => countRuleScopes(ccTransactions as CreditCardTransaction[]),
+    [ccTransactions],
+  );
+  const currentScopeCounts = analysisSource === 'bank' ? bankScopeCounts : ccScopeCounts;
+  const currentEligibleCount = currentScopeCounts.total;
 
   const processBankRules = useProcessTransactions();
   const processCCRules = useProcessCCTransactions();
@@ -409,7 +407,8 @@ export default function TransactionRules() {
           {currentEligibleCount > 0 && (
             <Badge variant="secondary" className="gap-1">
               <AlertCircle className="w-3 h-3" />
-              {currentEligibleCount} pending
+              {currentScopeCounts.unmatched} unmatched
+              {currentScopeCounts.notPosted > 0 ? ` · ${currentScopeCounts.notPosted} not posted to GL` : ''}
             </Badge>
           )}
           <Button 
