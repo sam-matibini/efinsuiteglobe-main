@@ -5,6 +5,7 @@ import { TransactionRule } from './useTransactionRules';
 import { CreditCardTransaction } from './useCreditCards';
 import { allowUnreconciledBankUpdate } from '@/lib/bankTransactionLock';
 import { toast } from 'sonner';
+import { ruleCanActOn, ruleGlTarget, ruleScopeFor } from '@/lib/ruleEligibility';
 import { 
   matchText, 
   getMatchConfidence, 
@@ -182,16 +183,17 @@ export function analyzeCCTransactions(
   transactions: CreditCardTransaction[],
   rules: TransactionRule[]
 ): CCAnalysisResult[] {
-  // Include pending and uncategorized transactions (not reconciled)
-  const eligibleTxs = transactions.filter(t => 
-    !t.category && 
-    (t.status === 'pending' || t.status === 'unmatched' || !t.status) &&
-    t.status !== 'reconciled'
-  );
+  // Unmatched lines (whatever category the card issuer gave them) and matched lines
+  // not yet posted to the GL. Lines that already have a journal entry stay out:
+  // processing here does not reverse an earlier entry.
+  const eligibleTxs = transactions.filter(t => ruleScopeFor(t) !== null);
   const activeRules = rules.filter(r => r.is_active).sort((a, b) => b.priority - a.priority);
 
   return eligibleTxs.map(tx => {
+    const scope = ruleScopeFor(tx)!;
     for (const rule of activeRules) {
+      const target = ruleGlTarget(rule.actions);
+      if (!ruleCanActOn(scope, target.willPostToGL)) continue;
       const matchResult = calculateCCMatchConfidence(tx, rule);
       
       if (matchResult.matches) {
@@ -201,10 +203,10 @@ export function analyzeCCTransactions(
         return {
           transaction: tx,
           matchedRule: rule,
-          category: categoryAction?.category || null,
-          glAccountId: glAction?.glAccountId || null,
-          glAccountName: glAction?.glAccountName || null,
-          willPostToGL: !!glAction?.glAccountId,
+          category: target.category,
+          glAccountId: target.glAccountId,
+          glAccountName: target.glAccountName,
+          willPostToGL: target.willPostToGL,
           confidence: matchResult.confidence,
           matchScore: matchResult.score,
           // Include tax info from the rule action

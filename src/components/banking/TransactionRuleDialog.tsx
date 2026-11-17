@@ -245,6 +245,8 @@ export default function TransactionRuleDialog({
           </DialogTitle>
           <DialogDescription>
             Define conditions to analyze & categorize transactions, with optional posting to the General Ledger.
+            Rules run on every unmatched transaction, including ones the bank already categorized, and on matched
+            transactions not yet posted to the GL when the rule posts to the GL.
           </DialogDescription>
         </DialogHeader>
 
