@@ -5,7 +5,7 @@ import { TransactionRule } from './useTransactionRules';
 import { CreditCardTransaction } from './useCreditCards';
 import { allowUnreconciledBankUpdate } from '@/lib/bankTransactionLock';
 import { toast } from 'sonner';
-import { ruleCanActOn, ruleGlTarget, ruleScopeFor } from '@/lib/ruleEligibility';
+import { rulePlanFor, ruleScopeFor } from '@/lib/ruleEligibility';
 import { 
   matchText, 
   getMatchConfidence, 
@@ -192,8 +192,8 @@ export function analyzeCCTransactions(
   return eligibleTxs.map(tx => {
     const scope = ruleScopeFor(tx)!;
     for (const rule of activeRules) {
-      const target = ruleGlTarget(rule.actions);
-      if (!ruleCanActOn(scope, target.willPostToGL)) continue;
+      const target = rulePlanFor(scope, rule.actions);
+      if (!target.canAct) continue;
       const matchResult = calculateCCMatchConfidence(tx, rule);
       
       if (matchResult.matches) {

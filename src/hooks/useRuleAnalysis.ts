@@ -5,7 +5,7 @@ import { reverseLinkedJournalEntry, recalculateAndInvalidate } from './useGLProp
 import { TransactionRule } from './useTransactionRules';
 import { BankTransaction } from './useBankTransactions';
 import { allowUnreconciledBankUpdate } from '@/lib/bankTransactionLock';
-import { ruleCanActOn, ruleGlTarget, ruleScopeFor } from '@/lib/ruleEligibility';
+import { rulePlanFor, ruleScopeFor } from '@/lib/ruleEligibility';
 import { toast } from 'sonner';
 import { 
   matchText, 
@@ -196,8 +196,8 @@ export function analyzeTransactions(
   return eligibleTxs.map(tx => {
     const scope = ruleScopeFor(tx, { replacesExistingPosting: true })!;
     for (const rule of activeRules) {
-      const target = ruleGlTarget(rule.actions);
-      if (!ruleCanActOn(scope, target.willPostToGL)) continue;
+      const target = rulePlanFor(scope, rule.actions);
+      if (!target.canAct) continue;
       const matchResult = calculateMatchConfidence(tx, rule);
       
       if (matchResult.matches) {
