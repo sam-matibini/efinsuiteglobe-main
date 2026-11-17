@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { belongsToRemittanceMonth, craRemittanceAccounts, remittanceMonthFor, remittanceMonthRange } from './remittancePeriod';
+import { belongsToRemittanceMonth, craRemittanceAccounts, nextBusinessDay, remittanceMonthFor, remittanceMonthRange } from './remittancePeriod';
 
 describe('PD7A remittance month', () => {
   it('assigns a pay run to the month its pay period ends in', () => {
@@ -13,15 +13,23 @@ describe('PD7A remittance month', () => {
   });
 
   it('builds the selection range and due date without time-zone drift', () => {
+    // Nov 15, 2026 is a Sunday, so the October 2026 PD7A is due Monday Nov 16.
     expect(remittanceMonthRange('2026-10')).toEqual({
       period: '2026-10',
       startDate: '2026-10-01',
       endDate: '2026-10-31',
-      dueDate: '2026-11-15',
+      dueDate: '2026-11-16',
     });
     expect(remittanceMonthRange('2026-12-01')).toMatchObject({ endDate: '2026-12-31', dueDate: '2027-01-15' });
     expect(remittanceMonthRange('2028-02')).toMatchObject({ endDate: '2028-02-29', dueDate: '2028-03-15' });
+    expect(remittanceMonthRange('2026-09')).toMatchObject({ dueDate: '2026-10-15' });
     expect(remittanceMonthRange('2026-09')).toMatchObject({ endDate: '2026-09-30' });
+  });
+
+  it('moves a weekend due date to Monday', () => {
+    expect(nextBusinessDay('2026-11-14')).toBe('2026-11-16');
+    expect(nextBusinessDay('2026-11-15')).toBe('2026-11-16');
+    expect(nextBusinessDay('2026-11-16')).toBe('2026-11-16');
   });
 
   it('rejects a malformed period', () => {

@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
-import { Link } from 'react-router-dom';
-import { Calendar, Download, Check, Clock, AlertTriangle, Plus, MoreHorizontal, Loader2 } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Calendar, Download, Check, Clock, AlertTriangle, Plus, MoreHorizontal, Loader2, Landmark, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -32,7 +32,10 @@ import { getPayrollLocalization } from '@/data/payrollLocalization';
 import { COUNTRY_LOCALIZATIONS } from '@/data/countryLocalizations';
 import { downloadRemittancePD7APdf, downloadRemittanceCsv, downloadLocalizedRemittancePdf, downloadLocalizedRemittanceCsv, type RemittancePD7AData } from '@/lib/generateRemittancePD7APdf';
 import { toast } from 'sonner';
-import { craRemittanceAccounts } from '@/lib/payroll/remittancePeriod';
+import { craRemittanceAccounts, remittanceMonthRange } from '@/lib/payroll/remittancePeriod';
+import { canDeleteRemittance } from '@/lib/cra/reportPayments';
+import { useTaxReportPayments } from '@/hooks/useTaxReportPayments';
+import { parseLocalDate } from '@/lib/utils';
 
 export default function Remittances() {
   const [year, setYear] = useState(new Date().getFullYear().toString());
@@ -44,6 +47,9 @@ export default function Remittances() {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [detailsRemittance, setDetailsRemittance] = useState<Remittance | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Remittance | null>(null);
+  const navigate = useNavigate();
+  const { linkedByReport, startPayment } = useTaxReportPayments();
 
   const { organization } = useCurrentOrganization();
 
@@ -72,6 +78,7 @@ export default function Remittances() {
     ytdPaid,
     generateRemittanceFromPayRuns,
     markRemittancePaid,
+    deleteRemittance,
     buildRemittanceReport,
   } = useRemittances(parseInt(year));
 
@@ -83,8 +90,9 @@ export default function Remittances() {
     }).format(value);
   };
 
+  // Date-only columns are local calendar dates. Parsing them as UTC shows the day before in Canada.
   const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString(payrollConfig.currencyLocale, {
+    return parseLocalDate(dateStr).toLocaleDateString(payrollConfig.currencyLocale, {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
@@ -100,7 +108,9 @@ export default function Remittances() {
   };
 
   const getStatusBadge = (status: string, dueDate: string) => {
-    const isOverdue = status === 'pending' && new Date(dueDate) < new Date();
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const isOverdue = status === 'pending' && parseLocalDate(dueDate) < today;
     
     if (isOverdue) {
       return <Badge className="bg-destructive/10 text-destructive gap-1"><AlertTriangle className="w-3 h-3" /> Overdue</Badge>;
@@ -122,6 +132,35 @@ export default function Remittances() {
       setSelectedMonth('');
     } catch (error: any) {
       // Error handled by hook
+    }
+  };
+
+  const handlePayInTaxCra = async (remittance: Remittance) => {
+    const period = remittance.remittance_period.substring(0, 7);
+    const range = remittanceMonthRange(period);
+    try {
+      await startPayment.mutateAsync({
+        kind: 'pd7a',
+        id: remittance.id,
+        amount: Number(remittance.total_amount),
+        periodStart: range.startDate,
+        periodEnd: range.endDate,
+        periodLabel: formatPeriod(period),
+        dueDate: remittance.due_date,
+      });
+      navigate('/tax-cra/payments');
+    } catch {
+      // Error shown by the hook
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      await deleteRemittance.mutateAsync(deleteTarget.id);
+      setDeleteTarget(null);
+    } catch {
+      // Error shown by the hook
     }
   };
 
@@ -345,7 +384,14 @@ export default function Remittances() {
                     {formatCurrency((remittance.total_federal_tax || 0) + (remittance.total_provincial_tax || 0))}
                   </td>
                   <td className="text-right font-mono font-semibold">{formatCurrency(remittance.total_amount)}</td>
-                  <td>{getStatusBadge(remittance.status, remittance.due_date)}</td>
+                  <td>
+                    {getStatusBadge(remittance.status, remittance.due_date)}
+                    {linkedByReport.get(remittance.id) ? (
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        CRA payment {linkedByReport.get(remittance.id)!.reference}
+                      </div>
+                    ) : null}
+                  </td>
                   <td>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -357,7 +403,22 @@ export default function Remittances() {
                         <DropdownMenuItem onClick={() => handleViewDetails(remittance)}>
                           View Details
                         </DropdownMenuItem>
-                        {remittance.status === 'pending' && (
+                        {countryCode === 'CA' && linkedByReport.get(remittance.id) ? (
+                          <DropdownMenuItem onClick={() => navigate('/tax-cra/payments')}>
+                            <Landmark className="w-4 h-4 mr-2" />
+                            Open in CRA Payments
+                          </DropdownMenuItem>
+                        ) : null}
+                        {countryCode === 'CA' && remittance.status !== 'paid' && !linkedByReport.get(remittance.id) ? (
+                          <DropdownMenuItem
+                            onClick={() => handlePayInTaxCra(remittance)}
+                            disabled={startPayment.isPending || !(Number(remittance.total_amount) > 0)}
+                          >
+                            <Landmark className="w-4 h-4 mr-2" />
+                            Pay in Tax &amp; CRA
+                          </DropdownMenuItem>
+                        ) : null}
+                        {remittance.status === 'pending' && !linkedByReport.get(remittance.id) && (
                           <DropdownMenuItem
                             onClick={() => {
                               setSelectedRemittance(remittance.id);
@@ -382,6 +443,12 @@ export default function Remittances() {
                           <Download className="w-4 h-4 mr-2" />
                           Download CSV
                         </DropdownMenuItem>
+                        {canDeleteRemittance(remittance.status, linkedByReport.get(remittance.id)) ? (
+                          <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteTarget(remittance)}>
+                            <Trash2 className="w-4 h-4 mr-2" />
+                            Delete
+                          </DropdownMenuItem>
+                        ) : null}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </td>
@@ -391,6 +458,32 @@ export default function Remittances() {
           </table>
         )}
       </Card>
+
+      {/* Delete Remittance Dialog */}
+      <Dialog open={Boolean(deleteTarget)} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete this remittance?</DialogTitle>
+            <DialogDescription>
+              {deleteTarget
+                ? `${formatPeriod(deleteTarget.remittance_period)} · ${formatCurrency(deleteTarget.total_amount)}. Use this for a duplicate or a report generated by mistake. Pay runs are not changed, and you can generate the month again.`
+                : null}
+            </DialogDescription>
+          </DialogHeader>
+          {deleteTarget && linkedByReport.get(deleteTarget.id) ? (
+            <p className="text-sm text-muted-foreground">
+              Draft CRA payment {linkedByReport.get(deleteTarget.id)!.reference} will be deleted with it.
+            </p>
+          ) : null}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleDelete} disabled={deleteRemittance.isPending}>
+              {deleteRemittance.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Trash2 className="w-4 h-4 mr-2" />}
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Generate Remittance Dialog */}
       <Dialog open={generateDialogOpen} onOpenChange={setGenerateDialogOpen}>

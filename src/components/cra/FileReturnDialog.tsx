@@ -56,6 +56,7 @@ export function FileReturnDialog({
   account,
   obligationId,
   summary,
+  onRecord,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -65,6 +66,11 @@ export function FileReturnDialog({
   account: string;
   obligationId: string;
   summary: { label: string; value: string }[];
+  /**
+   * Save the filing somewhere other than the CRA ledger (for example a GST/HST return in Sales Tax).
+   * Resolve with an error message to keep the dialog open, or null when it was saved.
+   */
+  onRecord?: (input: { confirmationNumber: string; filedOn: string; channel: string }) => Promise<string | null>;
 }) {
   const cra = useCraTaxCentre();
   const { channels, guidance } = channelsFor(returnType);
@@ -82,7 +88,18 @@ export function FileReturnDialog({
     setError('');
   }, [open, returnType]);
 
-  const record = () => {
+  const [saving, setSaving] = useState(false);
+  const record = async () => {
+    if (onRecord) {
+      const trimmed = confirmation.trim();
+      if (!/^[A-Za-z0-9][A-Za-z0-9-]{5,}$/.test(trimmed)) return setError('Enter the confirmation number CRA showed after you filed.');
+      if (!filedOn || filedOn > today) return setError('Enter the date you filed. It cannot be in the future.');
+      setSaving(true);
+      const message = await onRecord({ confirmationNumber: trimmed, filedOn, channel }).finally(() => setSaving(false));
+      if (message) setError(message);
+      else onOpenChange(false);
+      return;
+    }
     const result = cra.recordFiling({ returnType, obligationId, taxYear, account, confirmationNumber: confirmation, filedOn, channel });
     if (result.ok === false) setError(result.error);
     else onOpenChange(false);
@@ -147,7 +164,7 @@ export function FileReturnDialog({
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
-          <Button onClick={record} disabled={!cra.can('file_return') || !confirmation.trim()}>
+          <Button onClick={record} disabled={!cra.can('file_return') || !confirmation.trim() || saving}>
             Record filing
           </Button>
         </DialogFooter>
