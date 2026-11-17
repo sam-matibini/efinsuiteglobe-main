@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrganization } from './useOrganization';
 import { toast } from 'sonner';
+import { remittanceMonthRange } from '@/lib/payroll/remittancePeriod';
 
 export interface Remittance {
   id: string;
@@ -131,21 +132,15 @@ export function useRemittances(year?: number) {
     mutationFn: async (period: string) => {
       if (!organization?.id) throw new Error('No organization selected');
       
-      // Ensure period is YYYY-MM format, strip any trailing day portion
-      const normalizedPeriod = period.substring(0, 7);
-      const [year, month] = normalizedPeriod.split('-');
-      const yearNum = parseInt(year);
-      const monthNum = parseInt(month);
-      const startDate = `${year}-${month.padStart(2, '0')}-01`;
-      const endDate = new Date(yearNum, monthNum, 0).toISOString().split('T')[0];
-      
-      // Get all paid pay runs whose pay period is fully contained in this month
+      const { period: month, startDate, endDate, dueDate } = remittanceMonthRange(period);
+
+      // A pay run belongs to the month in which its pay period ends.
       const { data: payRuns, error: payRunsError } = await supabase
         .from('pay_runs')
         .select('id')
         .eq('organization_id', organization.id)
         .eq('status', 'paid')
-        .gte('pay_period_start', startDate)
+        .gte('pay_period_end', startDate)
         .lte('pay_period_end', endDate);
       
       if (payRunsError) throw payRunsError;
@@ -180,10 +175,8 @@ export function useRemittances(year?: number) {
       });
       
       // CRA remittance due date is the 15th of the following month
-      const dueDate = new Date(yearNum, monthNum, 15).toISOString().split('T')[0];
-      
       return createRemittance.mutateAsync({
-        remittance_period: `${year}-${month.padStart(2, '0')}-01`,
+        remittance_period: `${month}-01`,
         due_date: dueDate,
         total_cpp_employee: totals.cpp_employee,
         total_cpp_employer: totals.cpp_employer,
@@ -209,19 +202,15 @@ export function useRemittances(year?: number) {
   // Build the detailed PD7A-style report data for a given period (YYYY-MM)
   const buildRemittanceReport = async (period: string) => {
     if (!organization?.id) throw new Error('No organization selected');
-    const normalizedPeriod = period.substring(0, 7);
-    const [year, month] = normalizedPeriod.split('-');
-    const yearNum = parseInt(year);
-    const monthNum = parseInt(month);
-    const startDate = `${year}-${month.padStart(2, '0')}-01`;
-    const endDate = new Date(yearNum, monthNum, 0).toISOString().split('T')[0];
+    const { startDate, endDate, dueDate } = remittanceMonthRange(period);
 
+    // A pay run belongs to the month in which its pay period ends.
     const { data: payRuns, error: payRunsError } = await supabase
       .from('pay_runs')
       .select('id')
       .eq('organization_id', organization.id)
       .eq('status', 'paid')
-      .gte('pay_period_start', startDate)
+      .gte('pay_period_end', startDate)
       .lte('pay_period_end', endDate);
     if (payRunsError) throw payRunsError;
     const payRunIds = (payRuns || []).map(pr => pr.id);
@@ -230,7 +219,7 @@ export function useRemittances(year?: number) {
       return {
         startDate,
         endDate,
-        dueDate: new Date(yearNum, monthNum, 15).toISOString().split('T')[0],
+        dueDate,
         numberOfEmployees: 0,
         grossPayroll: 0,
         federalTax: 0,
@@ -293,7 +282,7 @@ export function useRemittances(year?: number) {
     return {
       startDate,
       endDate,
-      dueDate: new Date(yearNum, monthNum, 15).toISOString().split('T')[0],
+      dueDate,
       numberOfEmployees: byEmployee.size,
       ...totals,
       employees: Array.from(byEmployee.values()).sort((a, b) => a.name.localeCompare(b.name)),

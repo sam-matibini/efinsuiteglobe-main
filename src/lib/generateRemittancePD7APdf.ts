@@ -94,28 +94,28 @@ export function generateRemittancePD7APdf(data: RemittancePD7AData): jsPDF {
   doc.setTextColor(0, 0, 0);
   doc.setFontSize(10);
 
-  // Employer block
+  // Employer block (left column, wrapped so long names never run into the account block)
+  const rx = pw / 2 + 10;
+  const leftWidth = rx - M - 6;
   doc.setFont('helvetica', 'bold');
   doc.text('Employer', M, y);
   doc.setFont('helvetica', 'normal');
-  doc.text(data.employerName, M, y + 5);
-  if (data.employerAddress) {
-    doc.text(data.employerAddress, M, y + 10);
-  }
+  const employerLines: string[] = [
+    ...doc.splitTextToSize(data.employerName, leftWidth),
+    ...(data.employerAddress ? doc.splitTextToSize(data.employerAddress, leftWidth) : []),
+  ];
+  employerLines.forEach((line, index) => doc.text(line, M, y + 5 + index * 5));
 
   // Account block (right)
-  const rx = pw / 2 + 10;
   doc.setFont('helvetica', 'bold');
   doc.text('Account', rx, y);
   doc.setFont('helvetica', 'normal');
-  if (data.payrollAccountNumber) {
-    doc.text(`Payroll Account #: ${data.payrollAccountNumber}`, rx, y + 5);
-  }
+  doc.text(`Payroll Account #: ${data.payrollAccountNumber || 'Not on file'}`, rx, y + 5);
   if (data.businessNumber) {
     doc.text(`Business #: ${data.businessNumber}`, rx, y + 10);
   }
 
-  y += 20;
+  y += 10 + Math.max(employerLines.length, 2) * 5;
 
   // Period banner
   doc.setFillColor(240, 244, 250);
