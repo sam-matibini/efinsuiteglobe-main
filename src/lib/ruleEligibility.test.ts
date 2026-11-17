@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { countRuleScopes, ruleCanActOn, ruleGlTarget, ruleScopeFor } from './ruleEligibility';
+import { countRuleScopes, ruleGlTarget, rulePlanFor, ruleScopeFor } from './ruleEligibility';
 import { analyzeTransactions } from '@/hooks/useRuleAnalysis';
 import { analyzeCCTransactions } from '@/hooks/useCreditCardRuleAnalysis';
 import type { BankTransaction } from '@/hooks/useBankTransactions';
@@ -49,10 +49,11 @@ describe('which transactions rules act on', () => {
     expect(ruleScopeFor({ status: 'unmatched', journal_entry_id: 'je' }, { replacesExistingPosting: true })).toBe('unmatched');
   });
 
-  it('acts on not-posted matched lines only when the rule posts', () => {
-    expect(ruleCanActOn('unmatched', false)).toBe(true);
-    expect(ruleCanActOn('not_posted', false)).toBe(false);
-    expect(ruleCanActOn('not_posted', true)).toBe(true);
+  it('posts not-posted matched lines with any rule that has a GL account', () => {
+    const categorizeOnly = rule({}).actions;
+    expect(rulePlanFor('unmatched', categorizeOnly)).toMatchObject({ canAct: true, willPostToGL: false });
+    expect(rulePlanFor('not_posted', categorizeOnly)).toMatchObject({ canAct: true, willPostToGL: true, glAccountId: 'gl-due' });
+    expect(rulePlanFor('not_posted', [{ type: 'add_memo' }])).toMatchObject({ canAct: false, willPostToGL: false });
   });
 
   it('counts both groups', () => {
@@ -74,17 +75,18 @@ describe('analyzing bank transactions', () => {
     expect(result.willPostToGL).toBe(false);
   });
 
-  it('posts matched-but-unposted lines only with a posting rule', () => {
+  it('posts matched-but-unposted lines even with a categorize-only rule', () => {
     const tx = bank({ status: 'matched', category: 'Due to shareholder' });
-    expect(analyzeTransactions([tx], [rule({})])[0].matchedRule).toBeNull();
-    const [result] = analyzeTransactions([tx], [postingRule]);
+    const [result] = analyzeTransactions([tx], [rule({})]);
     expect(result.matchedRule?.id).toBe('r');
+    expect(result.glAccountId).toBe('gl-due');
     expect(result.willPostToGL).toBe(true);
   });
 
-  it('falls through to a lower-priority posting rule for a not-posted line', () => {
+  it('skips a rule with no GL account for a not-posted line and uses the next one', () => {
     const tx = bank({ status: 'matched' });
-    const [result] = analyzeTransactions([tx], [rule({ id: 'cat-only', priority: 9 }), { ...postingRule, id: 'post', priority: 1 }]);
+    const memoOnly = rule({ id: 'memo', priority: 9, actions: [{ type: 'add_memo', memo: 'x' }] });
+    const [result] = analyzeTransactions([tx], [memoOnly, { ...postingRule, id: 'post', priority: 1 }]);
     expect(result.matchedRule?.id).toBe('post');
   });
 });
@@ -95,6 +97,11 @@ describe('analyzing credit card transactions', () => {
     transaction_type: 'charge', category: 'Food and Drink', merchant_category_code: null, payee_payor: null, memo: null, reference: null,
     is_cleared: false, cleared_at: null, gl_account_id: null, journal_entry_id: null, status: 'unmatched', imported_at: null,
     created_at: '', updated_at: '', ...over,
+  });
+
+  it('posts matched card lines that have no journal entry', () => {
+    const [result] = analyzeCCTransactions([cc({ status: 'matched' })], [rule({})]);
+    expect(result.willPostToGL).toBe(true);
   });
 
   it('includes categorized unmatched charges and skips ones already posted', () => {

@@ -5,9 +5,9 @@
  * on import ("Transfer", "Food and Drink"), so nearly every downloaded line was
  * skipped. Now a rule considers:
  *  - unmatched: pending or unmatched lines, whatever category the bank gave them;
- *  - not_posted: lines marked matched that have no journal entry yet. A rule only
- *    changes these when it posts to the GL, so a manual categorization is not
- *    overwritten by a rule that only categorizes.
+ *  - not_posted: lines marked matched that have no journal entry yet. Any rule
+ *    with a GL account finishes these by posting them to the ledger, even one set
+ *    to categorize only, because posting is the step they are missing.
  *
  * Never eligible: reconciled lines, and lines matched to an invoice or a bill
  * (posting those would count the amount twice).
@@ -44,9 +44,16 @@ export function ruleScopeFor(tx: RuleScopeInput, options: RuleScopeOptions = {})
   return null;
 }
 
-/** A rule applies to a not-yet-posted matched line only when it posts to the GL. */
-export function ruleCanActOn(scope: RuleScope, willPostToGL: boolean): boolean {
-  return scope === 'unmatched' || willPostToGL;
+/**
+ * What a rule does to a line in the given scope.
+ * Unmatched lines follow the rule's own actions. Matched lines that are not yet
+ * posted are posted with the rule's GL account; a rule without a GL account
+ * cannot post them, so it does not act on them.
+ */
+export function rulePlanFor(scope: RuleScope, actions: RuleActionLike[]) {
+  const target = ruleGlTarget(actions);
+  if (scope === 'unmatched') return { ...target, canAct: true };
+  return { ...target, willPostToGL: Boolean(target.glAccountId), canAct: Boolean(target.glAccountId) };
 }
 
 export function countRuleScopes<T extends RuleScopeInput>(transactions: T[], options: RuleScopeOptions = {}) {
