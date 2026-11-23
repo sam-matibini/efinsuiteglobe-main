@@ -2,6 +2,7 @@ import * as XLSX from 'xlsx';
 import {
   COMPENSATION_TYPES,
   DEDUCTION_TYPES,
+  EMPLOYEE_STATUSES,
   EMPLOYMENT_TYPES,
   PAY_FREQUENCIES,
   PAYMENT_METHODS,
@@ -28,6 +29,8 @@ export function generateEmployeeTemplate(opts: TemplateOptions = {}): Blob {
     [`Country: ${rule.countryName} (${rule.countryCode})`],
     [`Currency default: ${rule.currency}`],
     [`Date format: ${rule.dateFormat}`],
+    [`Required identifiers: ${rule.requiredIdentifiers.filter((r) => !r.optional).map((r) => r.label).join(', ') || 'none'}`],
+    ...(rule.countryCode === 'NG' ? [['National ID (NIN) must be exactly 11 digits. Format the column as Text so leading zeros are kept.']] : []),
     [],
     ['Sheets:'],
     ['  1. Employees — master data (one row per employee).'],
@@ -56,7 +59,7 @@ export function generateEmployeeTemplate(opts: TemplateOptions = {}): Blob {
   const employeeExample = [
     'EMP-0001', 'Amina', 'Grace', 'Okafor', 'Amina',
     '1990-05-15', 'Female', rule.countryName,
-    '', '',
+    rule.countryCode === 'NG' ? '12345678901' : '', rule.countryCode === 'NG' ? '12345678-0001' : '',
     'amina.okafor@example.com', '+234 800 000 0000',
     '12 Example Street', '', 'Lagos', rule.countryCode === 'NG' ? 'LA' : '', rule.countryCode, '100001',
     'full_time', '2026-01-01', '',
@@ -111,7 +114,7 @@ export function generateEmployeeTemplate(opts: TemplateOptions = {}): Blob {
     ['Compensation Type', COMPENSATION_TYPES.join(', ')],
     ['Deduction Type', DEDUCTION_TYPES.join(', ')],
     ['Deduction Category', 'statutory, voluntary'],
-    ['Status', 'active, on_leave, terminated, onboarding'],
+    ['Status', EMPLOYEE_STATUSES.join(', ')],
     ['Currency default', rule.currency],
     ['Country statutory deductions', rule.statutoryDeductions.join(', ')],
   ];

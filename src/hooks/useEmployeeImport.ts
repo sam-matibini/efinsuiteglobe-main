@@ -115,10 +115,14 @@ export function useEmployeeImport() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (data: { created?: number; updated?: number; failed?: number }) => {
       qc.invalidateQueries({ queryKey: ['employee-import-batches'] });
       qc.invalidateQueries({ queryKey: ['employees'] });
-      toast.success('Import posted successfully');
+      const posted = (data?.created ?? 0) + (data?.updated ?? 0);
+      const failed = data?.failed ?? 0;
+      if (failed > 0 && posted === 0) toast.error(`Import failed: all ${failed} rows were rejected. See the error list.`);
+      else if (failed > 0) toast.warning(`Imported ${posted} rows; ${failed} failed. See the error list.`);
+      else toast.success('Import posted successfully');
     },
     onError: (e: Error) => toast.error(`Import failed: ${e.message}`),
   });

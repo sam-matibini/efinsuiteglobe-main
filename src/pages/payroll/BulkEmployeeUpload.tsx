@@ -16,6 +16,7 @@ import { validateImport, ValidationResult, ValidatedRow } from '@/lib/employeeIm
 import { COUNTRY_IMPORT_RULES, MAX_FILE_SIZE_BYTES } from '@/lib/employeeImport/rules';
 import { useEmployeeImport } from '@/hooks/useEmployeeImport';
 import { useEmployees } from '@/hooks/useEmployees';
+import { EmployeeImportErrors, EmployeeImportPostError } from '@/components/payroll/EmployeeImportErrors';
 import * as XLSX from 'xlsx';
 
 type Step = 'config' | 'upload' | 'preview' | 'confirm' | 'done';
@@ -31,7 +32,8 @@ export default function BulkEmployeeUpload() {
   const [parsedFile, setParsedFile] = useState<Awaited<ReturnType<typeof parseEmployeeFile>> | null>(null);
   const [busy, setBusy] = useState(false);
   const [batchId, setBatchId] = useState<string | null>(null);
-  const [postResult, setPostResult] = useState<{ created: number; updated: number; skipped: number; failed: number } | null>(null);
+  type PostResult = { created: number; updated: number; skipped: number; failed: number; errors?: EmployeeImportPostError[] };
+  const [postResult, setPostResult] = useState<PostResult | null>(null);
 
   const { loadExistingIndex, createBatch, postBatch } = useEmployeeImport();
   const { departments } = useEmployees();
@@ -112,7 +114,7 @@ export default function BulkEmployeeUpload() {
     try {
       const batch = await createBatch.mutateAsync({ parsed: parsedFile, validation, mode, countryCode, replaceBlanks, file });
       setBatchId(batch.id);
-      const res = (await postBatch.mutateAsync(batch.id)) as { created: number; updated: number; skipped: number; failed: number };
+      const res = (await postBatch.mutateAsync(batch.id)) as PostResult;
       setPostResult(res);
       setStep('done');
     } catch (e) {
@@ -323,8 +325,13 @@ export default function BulkEmployeeUpload() {
       {step === 'done' && postResult && (
         <Card className="p-6 space-y-4">
           <div className="flex items-center gap-3">
-            <CheckCircle2 className="w-6 h-6 text-success" />
-            <h2 className="text-lg font-semibold">Import Completed</h2>
+            {postResult.created + postResult.updated === 0 && postResult.failed > 0 ? (
+              <><XCircle className="w-6 h-6 text-destructive" /><h2 className="text-lg font-semibold">Import Failed</h2></>
+            ) : postResult.failed > 0 ? (
+              <><AlertTriangle className="w-6 h-6 text-warning" /><h2 className="text-lg font-semibold">Import Completed with Errors</h2></>
+            ) : (
+              <><CheckCircle2 className="w-6 h-6 text-success" /><h2 className="text-lg font-semibold">Import Completed</h2></>
+            )}
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <Stat label="Created" value={postResult.created} tone="ok" />
@@ -332,6 +339,7 @@ export default function BulkEmployeeUpload() {
             <Stat label="Skipped" value={postResult.skipped} tone="warn" />
             <Stat label="Failed" value={postResult.failed} tone={postResult.failed > 0 ? 'error' : 'info'} />
           </div>
+          <EmployeeImportErrors errors={postResult.errors ?? []} />
           <div className="flex gap-2">
             <Button onClick={() => navigate('/payroll/employees/list')}>View Employees</Button>
             <Button variant="outline" onClick={() => navigate('/payroll/employees/bulk-upload/history')}>Import History</Button>

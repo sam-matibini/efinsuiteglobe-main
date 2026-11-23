@@ -43,8 +43,10 @@ export const DEDUCTION_TYPES = [
   'other',
 ] as const;
 
-export const EMPLOYMENT_TYPES = ['full_time', 'part_time', 'contract', 'temporary', 'casual', 'intern'] as const;
+// Must match the public.employment_type / pay_frequency / employee_status enums.
+export const EMPLOYMENT_TYPES = ['full_time', 'part_time', 'contract', 'temporary'] as const;
 export const PAY_FREQUENCIES = ['weekly', 'bi_weekly', 'semi_monthly', 'monthly'] as const;
+export const EMPLOYEE_STATUSES = ['active', 'on_leave', 'terminated', 'onboarding'] as const;
 export const PAYMENT_METHODS = ['bank_transfer', 'cheque', 'cash', 'mobile_money'] as const;
 
 export const COUNTRY_IMPORT_RULES: Record<string, CountryImportRule> = {
@@ -76,7 +78,8 @@ export const COUNTRY_IMPORT_RULES: Record<string, CountryImportRule> = {
     regionField: 'state',
     requiredIdentifiers: [
       { key: 'tax_id', label: 'Tax Identification Number (TIN)' },
-      { key: 'national_id', label: 'National ID (NIN)', optional: true },
+      // Required: the trg_enforce_nigeria_nin trigger rejects employees without an 11-digit NIN.
+      { key: 'national_id', label: 'National ID (NIN)' },
     ],
     statutoryDeductions: ['paye', 'pension'],
     statutoryFields: [

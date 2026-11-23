@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, RotateCcw, Loader2 } from 'lucide-react';
+import { ArrowLeft, RotateCcw, Loader2, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -10,12 +10,14 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { useEmployeeImport } from '@/hooks/useEmployeeImport';
 import { format } from 'date-fns';
+import { EmployeeImportErrors, EmployeeImportPostError } from '@/components/payroll/EmployeeImportErrors';
 
 export default function BulkEmployeeUploadHistory() {
   const navigate = useNavigate();
   const { history, isLoadingHistory, rollbackBatch } = useEmployeeImport();
   const [rollbackTarget, setRollbackTarget] = useState<string | null>(null);
   const [reason, setReason] = useState('');
+  const [errorsTarget, setErrorsTarget] = useState<EmployeeImportPostError[] | null>(null);
 
   const statusColor = (s: string) =>
     s === 'posted' ? 'bg-success/10 text-success' :
@@ -71,7 +73,12 @@ export default function BulkEmployeeUploadHistory() {
                   <TableCell className="text-right">{b.updated_count}</TableCell>
                   <TableCell className="text-right">{b.failed_count}</TableCell>
                   <TableCell><Badge className={statusColor(b.status)} variant="outline">{b.status}</Badge></TableCell>
-                  <TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    {Array.isArray(b.error_report) && b.error_report.length > 0 && (
+                      <Button variant="ghost" size="sm" onClick={() => setErrorsTarget(b.error_report as unknown as EmployeeImportPostError[])}>
+                        <AlertCircle className="w-3 h-3 mr-1" /> Errors
+                      </Button>
+                    )}
                     {b.status === 'posted' && (
                       <Button variant="ghost" size="sm" onClick={() => setRollbackTarget(b.id)}>
                         <RotateCcw className="w-3 h-3 mr-1" /> Rollback
@@ -84,6 +91,15 @@ export default function BulkEmployeeUploadHistory() {
           </Table>
         )}
       </Card>
+
+      <Dialog open={!!errorsTarget} onOpenChange={(o) => !o && setErrorsTarget(null)}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Import Errors</DialogTitle>
+          </DialogHeader>
+          <EmployeeImportErrors errors={errorsTarget ?? []} />
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={!!rollbackTarget} onOpenChange={(o) => !o && setRollbackTarget(null)}>
         <DialogContent>
