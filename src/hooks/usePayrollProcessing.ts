@@ -18,6 +18,8 @@ export interface TimesheetEntry {
   overtimeHours: number;
   vacationHours: number;
   sickHours: number;
+  holidayHours?: number;
+  overtimeMultiplier?: number;
   bonus: number;
   commission: number;
   otherEarnings: number;
@@ -119,6 +121,8 @@ export function usePayrollProcessing() {
           overtimeHours: timesheet.overtimeHours,
           vacationHours: timesheet.vacationHours,
           sickHours: timesheet.sickHours,
+          holidayHours: timesheet.holidayHours,
+          overtimeMultiplier: timesheet.overtimeMultiplier,
           bonus: timesheet.bonus,
           commission: timesheet.commission,
           otherEarnings: timesheet.otherEarnings,
@@ -165,7 +169,8 @@ export function usePayrollProcessing() {
           vacation_pay: calculation.vacationPay,
           bonus: calculation.bonus,
           commission: calculation.commission,
-          other_earnings: calculation.otherEarnings,
+          // Holiday pay is an earning. pay_stubs has no holiday column, so it is stored with other earnings.
+          other_earnings: Math.round((calculation.otherEarnings + calculation.holidayEarnings) * 100) / 100,
           gross_pay: calculation.grossPay,
           cpp_contribution: calculation.cppContribution + calculation.cpp2Contribution,
           ei_premium: calculation.eiPremium,

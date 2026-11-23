@@ -35,6 +35,10 @@ import { useEmployees } from '@/hooks/useEmployees';
 import { useTimesheets, TimesheetStatus } from '@/hooks/useTimesheets';
 import { CreateTimesheetDialog } from '@/components/payroll/CreateTimesheetDialog';
 import { TimeClockCard } from '@/components/payroll/TimeClockCard';
+import { EmployeeClockPanel } from '@/components/timeAttendance/EmployeeClockPanel';
+import { useAttendanceActor } from '@/hooks/useAttendanceActor';
+import { useTimeAttendance } from '@/hooks/useTimeAttendance';
+import { inferPayType, resolveTracking } from '@/lib/timeAttendance/engine';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -65,6 +69,14 @@ export default function EmployeeSelfService() {
     : undefined;
   
   const { timesheets, isLoading: timesheetsLoading, submitTimesheet } = useTimesheets(currentEmployee?.id);
+  const actor = useAttendanceActor(currentEmployee?.id);
+  const { org: attendanceOrg } = useTimeAttendance(organization?.id, actor);
+  const attendancePayType = currentEmployee ? inferPayType(currentEmployee) : 'hourly';
+  const attendanceTracked = !!currentEmployee && !!attendanceOrg && resolveTracking(
+    attendanceOrg.company,
+    attendanceOrg.employees[currentEmployee.id],
+    attendancePayType,
+  );
 
   // Fetch pay stubs for this employee
   const { data: payStubs = [], isLoading: payStubsLoading } = useQuery({
@@ -238,8 +250,19 @@ export default function EmployeeSelfService() {
         </CardContent>
       </Card>
 
-      {/* Time Clock - primary way to record hours */}
-      <TimeClockCard employee={currentEmployee} submitTimesheet={submitTimesheet} />
+      {attendanceTracked && organization?.id ? (
+        <EmployeeClockPanel
+          organizationId={organization.id}
+          employeeId={currentEmployee.id}
+          employeeName={`${currentEmployee.first_name} ${currentEmployee.last_name}`}
+          department={currentEmployee.department}
+          payType={attendancePayType}
+          payFrequency={currentEmployee.pay_frequency}
+          actor={actor}
+        />
+      ) : (
+        <TimeClockCard employee={currentEmployee} submitTimesheet={submitTimesheet} />
+      )}
 
       {/* Quick Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">

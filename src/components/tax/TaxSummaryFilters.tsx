@@ -8,6 +8,14 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { Checkbox } from '@/components/ui/checkbox';
+import { DateRangePresetSelect } from '@/components/filters/DateRangePresetSelect';
+import {
+  detectDateRangePreset,
+  resolveDateRangePreset,
+  STATEMENT_DATE_PRESETS,
+  STATEMENT_PRESET_IDS,
+  type DateRangePresetId,
+} from '@/lib/dateRangePresets';
 
 export type TaxReportType = 'summary' | 'detailed' | 'by_tax_code' | 'by_jurisdiction';
 export type TaxAccountType = 'all' | 'collected' | 'paid' | 'pst';
@@ -44,6 +52,14 @@ export function TaxSummaryFilters({
   onClearFilters,
 }: TaxSummaryFiltersProps) {
   const isBurundi = countryCode === 'BI';
+  const datePreset = detectDateRangePreset(startDate, endDate, STATEMENT_PRESET_IDS);
+
+  const handlePresetChange = (preset: DateRangePresetId) => {
+    const bounds = resolveDateRangePreset(preset);
+    if (!bounds) return;
+    onStartDateChange(bounds.start);
+    onEndDateChange(bounds.end);
+  };
 
   const hasActiveFilters = useMemo(() => {
     return selectedTaxCodes.length > 0 || accountType !== 'all' || reportType !== 'summary';
@@ -60,6 +76,11 @@ export function TaxSummaryFilters({
   return (
     <div className="flex flex-wrap items-center gap-3 p-4 bg-muted/30 rounded-lg border">
       {/* Date Range */}
+      <DateRangePresetSelect
+        value={datePreset}
+        presets={STATEMENT_DATE_PRESETS}
+        onValueChange={handlePresetChange}
+      />
       <div className="flex items-center gap-2">
         <Popover>
           <PopoverTrigger asChild>

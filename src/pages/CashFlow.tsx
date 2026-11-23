@@ -8,7 +8,7 @@ import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { cn } from '@/lib/utils';
+import { cn, parseLocalDate } from '@/lib/utils';
 import { ReportsTabs } from '@/components/reports/ReportsTabs';
 import { RealtimeIndicator } from '@/components/reports/RealtimeIndicator';
 import { DivisionFilter } from '@/components/reports/DivisionFilter';
@@ -18,16 +18,13 @@ import { useComparativeFinancialReports } from '@/hooks/useComparativeFinancialR
 import { buildComparisonPeriods } from '@/lib/financialCompare';
 import { useCurrentOrganization } from '@/hooks/useOrganization';
 import { CreateOrganizationDialog } from '@/components/accounts/CreateOrganizationDialog';
-import { 
-  format, 
-  startOfMonth, 
-  endOfMonth, 
-  startOfQuarter, 
-  endOfQuarter, 
-  subMonths,
-  subQuarters
-} from 'date-fns';
-import { getFiscalYearStart, getFiscalYearEnd, getFiscalYearForDate } from '@/lib/fiscalYearUtils';
+import { format } from 'date-fns';
+import { getFiscalYearStart, getFiscalYearForDate } from '@/lib/fiscalYearUtils';
+import { DateRangePresetSelect } from '@/components/filters/DateRangePresetSelect';
+import { detectDateRangePreset, resolveDateRangePreset, STATEMENT_DATE_PRESETS, STATEMENT_PRESET_IDS, toLocalISO, type DateRangePresetId } from '@/lib/dateRangePresets';
+import { SavedFilterMenu } from '@/components/filters/SavedFilterMenu';
+import { useSavedFilters } from '@/hooks/useSavedFilters';
+import type { FinancialReportSavedFilter } from '@/lib/savedFilters';
 import {
   Select,
   SelectContent,
@@ -67,7 +64,6 @@ import { useCurrencyFormatter } from '@/hooks/useCurrencyFormatter';
 import { exportToFormattedExcel } from '@/lib/excelExport';
 import { useNpoTerminology } from '@/hooks/useNpoTerminology';
 
-type DatePreset = 'this-month' | 'last-month' | 'this-quarter' | 'last-quarter' | 'fiscal-year-to-date' | 'last-fiscal-year' | 'custom';
 type CompareType = 'periods' | 'years';
 
 /**
@@ -150,7 +146,7 @@ export default function CashFlow() {
   const fiscalYearEndMonth = organization?.fiscal_year_end_month || 12;
   
   const [showOrgDialog, setShowOrgDialog] = useState(false);
-  const [datePreset, setDatePreset] = useState<DatePreset>('fiscal-year-to-date');
+  const [datePreset, setDatePreset] = useState<DateRangePresetId>('fiscal-year-to-date');
   
   // Initialize dates based on fiscal year settings
   const now = new Date();
@@ -204,44 +200,55 @@ export default function CashFlow() {
   const { getCashFlowData, isLoading, error, realtimeLastEventAt } = useFinancialReports(dateFilter);
 
   // Handle date preset changes - uses org's fiscal year settings
-  const handlePresetChange = (preset: DatePreset) => {
-    setDatePreset(preset);
-    const now = new Date();
-    const fyMonth = organization?.fiscal_year_end_month || 12;
-    const currentFiscalYear = getFiscalYearForDate(now, fyMonth);
-    
-    switch (preset) {
-      case 'this-month':
-        setDateFrom(startOfMonth(now));
-        setDateTo(endOfMonth(now));
-        break;
-      case 'last-month':
-        const lastMonth = subMonths(now, 1);
-        setDateFrom(startOfMonth(lastMonth));
-        setDateTo(endOfMonth(lastMonth));
-        break;
-      case 'this-quarter':
-        setDateFrom(startOfQuarter(now));
-        setDateTo(endOfQuarter(now));
-        break;
-      case 'last-quarter':
-        const lastQuarter = subQuarters(now, 1);
-        setDateFrom(startOfQuarter(lastQuarter));
-        setDateTo(endOfQuarter(lastQuarter));
-        break;
-      case 'fiscal-year-to-date':
-        setDateFrom(getFiscalYearStart(currentFiscalYear, fyMonth));
-        setDateTo(now);
-        break;
-      case 'last-fiscal-year':
-        const lastFY = currentFiscalYear - 1;
-        setDateFrom(getFiscalYearStart(lastFY, fyMonth));
-        setDateTo(getFiscalYearEnd(lastFY, fyMonth));
-        break;
-      case 'custom':
-        // Keep current dates
-        break;
+  const savedReportFilters = useSavedFilters<FinancialReportSavedFilter>('financial-reports', organization?.id);
+  const currentReportFilter = (): FinancialReportSavedFilter => ({
+    startDate: toLocalISO(dateFrom),
+    endDate: toLocalISO(dateTo),
+    datePreset,
+    showZeroBalances,
+    compare: comparison.enabled
+      ? {
+          type: comparison.type === 'years' ? 'year' : 'period',
+          count: comparison.count,
+          latestToOldest: comparison.latestToOldest,
+        }
+      : null,
+    divisionIds,
+  });
+  const applyReportFilter = (value: FinancialReportSavedFilter) => {
+    const preset = value.datePreset;
+    const rolling = preset && preset !== 'custom'
+      ? resolveDateRangePreset(preset as DateRangePresetId, new Date(), fiscalYearEndMonth)
+      : null;
+    if (rolling) {
+      setDateFrom(rolling.start);
+      setDateTo(rolling.end);
+      setDatePreset(preset as DateRangePresetId);
+    } else if (value.startDate && value.endDate) {
+      const start = parseLocalDate(value.startDate);
+      const end = parseLocalDate(value.endDate);
+      setDateFrom(start);
+      setDateTo(end);
+      setDatePreset(detectDateRangePreset(start, end, STATEMENT_PRESET_IDS, new Date(), fiscalYearEndMonth));
     }
+    setShowZeroBalances(!!value.showZeroBalances);
+    const nextComparison: ComparisonSettings = {
+      enabled: !!value.compare,
+      type: value.compare?.type === 'year' ? 'years' : 'periods',
+      count: value.compare?.count || 2,
+      latestToOldest: value.compare?.latestToOldest ?? true,
+    };
+    setComparison(nextComparison);
+    setTempComparison(nextComparison);
+    setDivisionIds(value.divisionIds ?? []);
+  };
+
+  const handlePresetChange = (preset: DateRangePresetId) => {
+    setDatePreset(preset);
+    const bounds = resolveDateRangePreset(preset, new Date(), organization?.fiscal_year_end_month || 12);
+    if (!bounds) return;
+    setDateFrom(bounds.start);
+    setDateTo(bounds.end);
   };
 
   // Column headers use the same dates the comparative query reads.
@@ -1254,21 +1261,19 @@ export default function CashFlow() {
 
       {/* Filter Bar - Zoho Style */}
       <div className="flex flex-wrap items-center gap-3 print:hidden">
+        <SavedFilterMenu
+          items={savedReportFilters.items}
+          onSave={(filterName) => savedReportFilters.save(filterName, currentReportFilter())}
+          onApply={(filter) => applyReportFilter(filter.value)}
+          onDelete={savedReportFilters.remove}
+        />
         {/* Date Preset Dropdown */}
-        <Select value={datePreset} onValueChange={(v) => handlePresetChange(v as DatePreset)}>
-          <SelectTrigger className="w-36 h-9 bg-background border-border rounded-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="fiscal-year-to-date">Fiscal Year to Date</SelectItem>
-            <SelectItem value="last-fiscal-year">Last Fiscal Year</SelectItem>
-            <SelectItem value="this-month">This Month</SelectItem>
-            <SelectItem value="last-month">Last Month</SelectItem>
-            <SelectItem value="this-quarter">This Quarter</SelectItem>
-            <SelectItem value="last-quarter">Last Quarter</SelectItem>
-            <SelectItem value="custom">Custom</SelectItem>
-          </SelectContent>
-        </Select>
+        <DateRangePresetSelect
+          value={datePreset}
+          presets={STATEMENT_DATE_PRESETS}
+          onValueChange={handlePresetChange}
+          triggerClassName="w-56 h-9 bg-background border-border rounded-full"
+        />
 
         {/* Date Range Button */}
         <Popover>

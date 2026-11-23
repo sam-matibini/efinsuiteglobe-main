@@ -95,16 +95,16 @@ interface NumFieldProps {
 
 const NumField = React.forwardRef<HTMLInputElement, NumFieldProps>(
   ({ label, value, onChange, prefix }, ref) => (
-    <div className="space-y-1">
+    <div className="min-w-0 space-y-1">
       <Label className="text-xs text-muted-foreground">{label}</Label>
-      <div className="relative">
-        {prefix && <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">{prefix}</span>}
+      <div className="relative min-w-0">
+        {prefix && <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">{prefix}</span>}
         <Input
           ref={ref}
           type="number"
           value={value}
           onChange={e => onChange(Number(e.target.value))}
-          className={prefix ? 'pl-6 h-9 text-sm' : 'h-9 text-sm'}
+          className={prefix ? 'h-9 min-w-0 pl-7 text-sm' : 'h-9 min-w-0 text-sm'}
         />
       </div>
     </div>
@@ -796,7 +796,7 @@ export function AIFinancialToolkit({ isOpen, onOpenChange, initialTab, onBack, l
         </Button>
       )}
       {/* Export row */}
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-1 gap-2 min-[480px]:grid-cols-3">
         {onExportExcel && (
           <Button size="sm" variant="outline" onClick={onExportExcel} className="w-full">
             <Download className="h-3.5 w-3.5 mr-1" /> Excel
@@ -815,7 +815,7 @@ export function AIFinancialToolkit({ isOpen, onOpenChange, initialTab, onBack, l
       </div>
       {/* Share row */}
       {(onEmail || onWhatsApp || onSMS) && (
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-1 gap-2 min-[480px]:grid-cols-3">
           {onEmail && (
             <Button size="sm" variant="secondary" onClick={onEmail} className="w-full text-xs">
               <Mail className="h-3.5 w-3.5 mr-1" /> Email
@@ -834,7 +834,7 @@ export function AIFinancialToolkit({ isOpen, onOpenChange, initialTab, onBack, l
         </div>
       )}
       {/* Save row */}
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2">
         <Button size="sm" variant="outline" onClick={onSave} className="w-full">
           <Save className="h-3.5 w-3.5 mr-1" /> Save
         </Button>
@@ -891,10 +891,10 @@ export function AIFinancialToolkit({ isOpen, onOpenChange, initialTab, onBack, l
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className={cn(
-        "sm:max-w-4xl w-screen max-w-none sm:w-auto h-[100dvh] sm:h-auto sm:max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden rounded-none sm:rounded-lg",
+        "flex h-[100dvh] w-full max-w-full flex-col gap-0 overflow-hidden rounded-none p-0 sm:h-[min(90vh,860px)] sm:w-[min(56rem,calc(100vw-2rem))] sm:max-w-[min(56rem,calc(100vw-2rem))] sm:rounded-lg",
         isDark && "dark bg-background text-foreground border-border"
       )}>
-        <DialogHeader className="px-6 pt-6 pb-3">
+        <DialogHeader className="px-6 pb-3 pr-14 pt-6">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 min-w-0">
               <TooltipProvider delayDuration={300}>
@@ -910,7 +910,7 @@ export function AIFinancialToolkit({ isOpen, onOpenChange, initialTab, onBack, l
                       <ChevronLeft className="h-4 w-4" />
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent side="bottom">Back to Dashboard</TooltipContent>
+                  <TooltipContent side="bottom" align="start">Back to Dashboard</TooltipContent>
                 </Tooltip>
               </TooltipProvider>
               <div className="min-w-0">
@@ -937,8 +937,8 @@ export function AIFinancialToolkit({ isOpen, onOpenChange, initialTab, onBack, l
 
 
         <Tabs value={activeTab} onValueChange={v => { setActiveTab(v as ToolTab); setAiInsight(''); }} className="flex-1 flex flex-col min-h-0">
-          <div className="px-6 overflow-x-auto">
-            <TabsList className="w-full min-w-max sm:flex-wrap inline-flex h-auto gap-1 bg-muted/50 p-1">
+          <div className="px-6">
+            <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1 bg-muted/50 p-1">
               {TOOL_TABS.map(t => (
                 <TabsTrigger key={t.value} value={t.value} className="flex items-center gap-1 text-xs px-3 py-1.5 whitespace-nowrap">
                   {t.icon} {t.label}
@@ -947,9 +947,9 @@ export function AIFinancialToolkit({ isOpen, onOpenChange, initialTab, onBack, l
             </TabsList>
           </div>
 
-          <ScrollArea className="flex-1 min-h-0 px-6 pb-6">
+          <ScrollArea className="min-h-0 flex-1 px-6 pb-6 [&_[data-radix-scroll-area-viewport]>div]:!block [&_[data-radix-scroll-area-viewport]>div]:!min-w-0">
             {/* ════ LOAN (Multi-loan with grace period) ════ */}
-            <TabsContent value="loan" className="mt-4 space-y-3">
+            <TabsContent value="loan" className="mt-4 min-w-0 space-y-3 data-[state=inactive]:hidden">
               {/* Add Loan link — always visible */}
               <div className="flex items-center justify-end">
                 <Button size="sm" variant="outline" onClick={addLoan} className="h-8 text-xs">
@@ -971,11 +971,11 @@ export function AIFinancialToolkit({ isOpen, onOpenChange, initialTab, onBack, l
                       </Button>
                     </div>
                   )}
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
                     <NumField label="Loan Amount" value={loan.principal} onChange={v => updateLoan(loan.id, { principal: v })} prefix="$" />
                     <NumField label="Interest Rate (%)" value={loan.rate} onChange={v => updateLoan(loan.id, { rate: v })} />
                     <NumField label="Term (Years)" value={loan.termYears} onChange={v => updateLoan(loan.id, { termYears: v })} />
-                    <div className="space-y-1">
+                    <div className="min-w-0 space-y-1">
                       <Label className="text-xs text-muted-foreground">Payment Frequency</Label>
                       <div>
                         <Select value={loan.frequency} onValueChange={v => updateLoan(loan.id, { frequency: v as 'monthly' | 'biweekly' | 'weekly' })}>
@@ -988,7 +988,7 @@ export function AIFinancialToolkit({ isOpen, onOpenChange, initialTab, onBack, l
                         </Select>
                       </div>
                     </div>
-                    <div className="space-y-1">
+                    <div className="min-w-0 space-y-1">
                       <Label className="text-xs text-muted-foreground">Start Date</Label>
                       <Popover>
                         <PopoverTrigger asChild>
@@ -1080,7 +1080,7 @@ export function AIFinancialToolkit({ isOpen, onOpenChange, initialTab, onBack, l
                     {/* ── Loan Summary Card ── */}
                     <div ref={registerSection(`${loan.id}-summary`)} data-section-key={`${loan.id}-summary`} className="rounded-lg border bg-card p-4 space-y-3 scroll-mt-4">
                       <h5 className="text-sm font-semibold text-foreground">Loan Summary</h5>
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
                         <div className="rounded-md bg-primary/10 border border-primary/20 p-3">
                           <p className="text-xs text-muted-foreground mb-0.5">{freqLabel} P&I Payment</p>
                           <p className="text-lg font-bold text-primary">${fmt(loan.result!.monthlyPayment)}</p>
@@ -1348,8 +1348,8 @@ export function AIFinancialToolkit({ isOpen, onOpenChange, initialTab, onBack, l
             </TabsContent>
 
             {/* ════ VALUATION (Unified) ════ */}
-            <TabsContent value="valuation" className="mt-4 space-y-4">
-              <div className="grid grid-cols-2 gap-3">
+            <TabsContent value="valuation" className="mt-4 min-w-0 space-y-4 data-[state=inactive]:hidden">
+              <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
                 <NumField label="Annual Revenue" value={valRevenue} onChange={setValRevenue} prefix="$" />
                 <NumField label="Annual Profit" value={valEarnings} onChange={setValEarnings} prefix="$" />
                 <NumField label="Revenue Multiple" value={valRevMultiplier} onChange={setValRevMultiplier} />
@@ -1360,7 +1360,7 @@ export function AIFinancialToolkit({ isOpen, onOpenChange, initialTab, onBack, l
               <Button onClick={calcValuation} className="w-full">Calculate Valuation</Button>
               {valResult && (
                 <>
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-3">
                      <ResultCard label="Revenue Multiple" value={`$${fmt(valResult.revenueMultiple)}`} />
                      <ResultCard label="Earnings Multiple" value={`$${fmt(valResult.earningsMultiple)}`} />
                      <ResultCard label="DCF Value" value={`$${fmt(valResult.dcfValue)}`} highlight />
@@ -1381,10 +1381,10 @@ export function AIFinancialToolkit({ isOpen, onOpenChange, initialTab, onBack, l
             </TabsContent>
 
             {/* ════ BREAK-EVEN ════ */}
-            <TabsContent value="breakeven" className="mt-4 space-y-4">
+            <TabsContent value="breakeven" className="mt-4 min-w-0 space-y-4 data-[state=inactive]:hidden">
               <div className="space-y-3">
                 <NumField label="Fixed Costs" value={beFixed} onChange={setBeFixed} prefix="$" />
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
                   <NumField label="Variable Cost/Unit" value={beVariable} onChange={setBeVariable} prefix="$" />
                   <NumField label="Selling Price/Unit" value={bePrice} onChange={setBePrice} prefix="$" />
                 </div>
@@ -1392,7 +1392,7 @@ export function AIFinancialToolkit({ isOpen, onOpenChange, initialTab, onBack, l
               <Button onClick={calcBreakEven} className="w-full">Calculate Break-even</Button>
               {beResult && (
                 <>
-                   <div className="grid grid-cols-2 gap-3">
+                   <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
                      <ResultCard label="Break-even Units" value={fmt(beResult.breakEvenUnits)} highlight />
                      <ResultCard label="Break-even Revenue" value={`$${fmt(beResult.breakEvenRevenue)}`} highlight />
                      <ResultCard label="Contribution Margin" value={`$${fmt(beResult.contributionMargin)}`} />
@@ -1414,7 +1414,7 @@ export function AIFinancialToolkit({ isOpen, onOpenChange, initialTab, onBack, l
             </TabsContent>
 
             {/* ════ CASH FLOW ════ */}
-            <TabsContent value="cashflow" className="mt-4 space-y-4">
+            <TabsContent value="cashflow" className="mt-4 min-w-0 space-y-4 data-[state=inactive]:hidden">
               <NumField label="Opening Balance" value={cfOpening} onChange={setCfOpening} prefix="$" />
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
@@ -1424,14 +1424,14 @@ export function AIFinancialToolkit({ isOpen, onOpenChange, initialTab, onBack, l
                   </Button>
                 </div>
                 {cfPeriods.map((p, i) => (
-                  <div key={i} className="grid grid-cols-4 gap-2 items-end">
-                    <div className="space-y-1">
+                  <div key={i} className="grid min-w-0 grid-cols-1 gap-2 rounded-lg border p-3 sm:grid-cols-2 sm:border-0 sm:p-0 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)_auto] lg:items-end">
+                    <div className="min-w-0 space-y-1">
                       <Label className="text-xs text-muted-foreground">Label</Label>
                       <Input value={p.label} onChange={e => updateCfPeriod(i, 'label', e.target.value)} className="h-8 text-xs" />
                     </div>
                     <NumField label="Inflows" value={p.inflows} onChange={v => updateCfPeriod(i, 'inflows', v)} prefix="$" />
                     <NumField label="Outflows" value={p.outflows} onChange={v => updateCfPeriod(i, 'outflows', v)} prefix="$" />
-                    <Button size="icon" variant="ghost" onClick={() => removeCfPeriod(i)} className="h-9 w-9 text-destructive">
+                    <Button size="icon" variant="ghost" onClick={() => removeCfPeriod(i)} className="h-9 w-9 justify-self-start text-destructive lg:justify-self-end">
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
                   </div>
@@ -1480,8 +1480,8 @@ export function AIFinancialToolkit({ isOpen, onOpenChange, initialTab, onBack, l
             </TabsContent>
 
             {/* ════ ROI (4-field layout) ════ */}
-            <TabsContent value="roi" className="mt-4 space-y-4">
-              <div className="grid grid-cols-2 gap-3">
+            <TabsContent value="roi" className="mt-4 min-w-0 space-y-4 data-[state=inactive]:hidden">
+              <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
                 <NumField label="Investment Cost ($)" value={roiInvestment} onChange={setRoiInvestment} prefix="$" />
                 <NumField label="Net Profit ($)" value={roiNetProfit} onChange={setRoiNetProfit} prefix="$" />
                 <NumField label="Time Period (Years)" value={roiTimePeriod} onChange={setRoiTimePeriod} />
@@ -1490,7 +1490,7 @@ export function AIFinancialToolkit({ isOpen, onOpenChange, initialTab, onBack, l
               <Button onClick={calcROI} className="w-full">Calculate ROI</Button>
               {roiResult !== null && (
                 <>
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-3">
                     <ResultCard label="Basic ROI" value={`${roiResult.basic.toFixed(2)}%`} highlight />
                     <ResultCard label="Annualized ROI" value={`${roiResult.annualized.toFixed(2)}%`} highlight />
                     <ResultCard label="Discounted ROI" value={`${roiResult.discounted.toFixed(2)}%`} />
@@ -1510,8 +1510,8 @@ export function AIFinancialToolkit({ isOpen, onOpenChange, initialTab, onBack, l
             </TabsContent>
 
             {/* ════ NPV (Dynamic cash flows) ════ */}
-            <TabsContent value="npv" className="mt-4 space-y-4">
-              <div className="grid grid-cols-2 gap-3">
+            <TabsContent value="npv" className="mt-4 min-w-0 space-y-4 data-[state=inactive]:hidden">
+              <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
                 <NumField label="Initial Investment ($)" value={npvInitial} onChange={setNpvInitial} prefix="$" />
                 <NumField label="Discount Rate (%)" value={npvRate} onChange={setNpvRate} />
               </div>
@@ -1555,8 +1555,8 @@ export function AIFinancialToolkit({ isOpen, onOpenChange, initialTab, onBack, l
             </TabsContent>
 
             {/* ════ IRR + MIRR ════ */}
-            <TabsContent value="irr" className="mt-4 space-y-4">
-              <div className="grid grid-cols-3 gap-3">
+            <TabsContent value="irr" className="mt-4 min-w-0 space-y-4 data-[state=inactive]:hidden">
+              <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 <NumField label="Initial Investment" value={irrInitial} onChange={setIrrInitial} prefix="$" />
                 <NumField label="Finance Rate (%) for MIRR" value={irrFinanceRate} onChange={setIrrFinanceRate} />
                 <NumField label="Reinvestment Rate (%) for MIRR" value={irrReinvestRate} onChange={setIrrReinvestRate} />
@@ -1585,7 +1585,7 @@ export function AIFinancialToolkit({ isOpen, onOpenChange, initialTab, onBack, l
               <Button onClick={calcIRR} className="w-full">Calculate IRR & MIRR</Button>
               {irrResult !== null && (
                 <>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
                     <ResultCard label="Internal Rate of Return (IRR)" value={`${irrResult.toFixed(2)}%`} highlight />
                     <ResultCard label="Modified IRR (MIRR)" value={mirrResult !== null ? `${mirrResult.toFixed(2)}%` : 'N/A'} highlight />
                   </div>
@@ -1604,12 +1604,12 @@ export function AIFinancialToolkit({ isOpen, onOpenChange, initialTab, onBack, l
             </TabsContent>
 
             {/* ════ FUTURE VALUE (Enhanced) ════ */}
-            <TabsContent value="fv" className="mt-4 space-y-4">
-              <div className="grid grid-cols-2 gap-3">
+            <TabsContent value="fv" className="mt-4 min-w-0 space-y-4 data-[state=inactive]:hidden">
+              <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
                 <NumField label="Present Value" value={fvPresent} onChange={setFvPresent} prefix="$" />
                 <NumField label="Annual Rate (%)" value={fvRate} onChange={setFvRate} />
                 <NumField label="Years" value={fvYears} onChange={setFvYears} />
-                <div className="space-y-1">
+                <div className="min-w-0 space-y-1">
                   <Label className="text-xs text-muted-foreground">Compounding</Label>
                   <div>
                     <Select value={fvCompounding} onValueChange={v => setFvCompounding(v as 'monthly' | 'quarterly' | 'annually')}>
@@ -1623,7 +1623,7 @@ export function AIFinancialToolkit({ isOpen, onOpenChange, initialTab, onBack, l
                   </div>
                 </div>
                 <NumField label="Periodic Contribution" value={fvContribution} onChange={setFvContribution} prefix="$" />
-                <div className="space-y-1">
+                <div className="min-w-0 space-y-1">
                   <Label className="text-xs text-muted-foreground">Contribution Timing</Label>
                   <div>
                     <Select value={fvContribTiming} onValueChange={v => setFvContribTiming(v as 'beginning' | 'end')}>
@@ -1639,7 +1639,7 @@ export function AIFinancialToolkit({ isOpen, onOpenChange, initialTab, onBack, l
               <Button onClick={calcFV} className="w-full">Calculate Future Value</Button>
               {fvResult !== null && (
                 <>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
                     <ResultCard label="Future Value" value={`$${fmt(fvResult)}`} highlight />
                     <ResultCard label="Total Growth" value={`$${fmt(fvResult - fvPresent)}`} />
                   </div>

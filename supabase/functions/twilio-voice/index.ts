@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { encode as base64Encode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
+import { resolvePlatformSecret } from "../_shared/platformApiKey.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -30,7 +31,7 @@ interface VoiceRequest {
 
 // Generate audio using ElevenLabs TTS
 async function generateElevenLabsAudio(text: string, voiceId?: string): Promise<ArrayBuffer | null> {
-  const apiKey = Deno.env.get("ELEVENLABS_API_KEY");
+  const apiKey = await resolvePlatformSecret("ELEVENLABS_API_KEY");
   if (!apiKey) {
     console.log("ElevenLabs API key not configured, falling back to Polly");
     return null;
@@ -247,7 +248,7 @@ serve(async (req) => {
 
     // Health check
     if (action === "health-check") {
-      const elevenLabsKey = Deno.env.get("ELEVENLABS_API_KEY");
+      const elevenLabsKey = await resolvePlatformSecret("ELEVENLABS_API_KEY");
       return new Response(
         JSON.stringify({ 
           success: true, 

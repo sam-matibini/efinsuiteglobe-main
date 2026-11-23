@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
-import { X, Send, Loader2, Minimize2, Maximize2, Paperclip, Download, FileText, FileSpreadsheet, File, Table, Building2, CreditCard, Sparkles, FileUp, RefreshCw, FolderCog, Volume2, Pause, Play, RotateCcw, Square, Share2, Mail, MessageSquare, MessageCircle, Copy, FileDown, FileType, Sheet, FileType2, Calculator } from 'lucide-react';
+import { X, Send, Loader2, Minimize2, Maximize2, Paperclip, Download, FileText, FileSpreadsheet, File, Table, Building2, CreditCard, Sparkles, FileUp, RefreshCw, FolderCog, Volume2, Pause, Play, RotateCcw, Square, Share2, Mail, MessageSquare, MessageCircle, Copy, FileDown, FileType, Sheet, FileType2, Calculator, Phone } from 'lucide-react';
 import aliceAvatar from '@/assets/alice-avatar.png';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -218,6 +219,7 @@ export function AIAccountingAssistant({
   onImportToBank,
   onImportToCreditCard,
 }: AIAccountingAssistantProps) {
+  const navigate = useNavigate();
   const [isExpanded, setIsExpanded] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -571,6 +573,18 @@ export function AIAccountingAssistant({
     setInput('');
     setIsLoading(true);
 
+    const lowerInput = userContent.toLowerCase();
+    if (/\breceptionist\b|answer the phone|answer calls/.test(lowerInput)) {
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: 'Opening the AI Receptionist. ElevenLabs speaks with the caller, and eFinsuite keeps the customers, invoices, payroll, and appointments.',
+      }]);
+      setIsLoading(false);
+      onOpenChange(false);
+      navigate('/receptionist');
+      return;
+    }
+
     let assistantSoFar = "";
     const upsertAssistant = (nextChunk: string) => {
       assistantSoFar += nextChunk;
@@ -590,7 +604,6 @@ export function AIAccountingAssistant({
     }));
 
     // Check for financial toolkit conversational triggers
-    const lowerInput = userContent.toLowerCase();
     const toolkitTriggers: Record<string, string> = {
       'loan': 'loan', 'amortization': 'loan', 'mortgage': 'loan',
       'valuation': 'valuation', 'business value': 'valuation', 'dcf': 'valuation',
@@ -623,7 +636,7 @@ export function AIAccountingAssistant({
         setIsLoading(false);
       },
     });
-  }, [input, isLoading, messages, pendingFiles]);
+  }, [input, isLoading, messages, navigate, onOpenChange, pendingFiles]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -639,6 +652,7 @@ export function AIAccountingAssistant({
     "What are the key marketing KPIs to track?",
     "How do I register a company in Zambia?",
     "Explain risk management frameworks",
+    "Open the AI Receptionist and take a payroll call",
   ];
 
   // Handle speaking a message
@@ -747,6 +761,19 @@ export function AIAccountingAssistant({
               size="icon"
               className="h-8 w-8 text-white/80 hover:text-white hover:bg-white/10"
               onClick={() => {
+                onOpenChange(false);
+                navigate('/receptionist');
+              }}
+              title="AI Receptionist"
+              aria-label="Open AI Receptionist"
+            >
+              <Phone className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-white/80 hover:text-white hover:bg-white/10"
+              onClick={() => {
                 setMessages([]);
                 setPendingFiles([]);
                 setSheetsData({ columns: [], rows: [], sourceFile: '' });
@@ -848,6 +875,34 @@ export function AIAccountingAssistant({
                   <li>• Break-even, ROI, NPV, IRR & Future Value</li>
                   <li>• Cash Flow Forecasting with AI insights</li>
                   <li>• Export to Excel & PDF</li>
+                </ul>
+              </div>
+
+              <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 shadow-lg">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <Phone className="h-5 w-5 text-cyan-200" />
+                    <span className="font-medium text-sm text-white">AI Receptionist</span>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      onOpenChange(false);
+                      navigate('/receptionist');
+                    }}
+                    className="h-7 text-xs bg-white/10 border-white/20 text-white hover:bg-white/20"
+                    aria-label="Open AI Receptionist desk"
+                  >
+                    <Phone className="h-3 w-3 mr-1" />
+                    Open
+                  </Button>
+                </div>
+                <ul className="text-xs text-blue-100/80 space-y-1">
+                  <li>• Answers calls with ElevenLabs</li>
+                  <li>• Invoice and pay details only after verification</li>
+                  <li>• Routes payroll, tax, accounting, and billing</li>
+                  <li>• Books appointments and takes messages</li>
                 </ul>
               </div>
 

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Plus, Calendar, Download, MoreHorizontal, Play, Check, Clock, FileText, AlertCircle, Loader2, FileSpreadsheet, Eye, DollarSign, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -37,6 +37,9 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { downloadPayStubPdf, type PayStubData } from '@/lib/generatePayStubPdf';
 import type { PayRunStatus } from '@/types/payroll';
 import { useCurrentOrganization } from '@/hooks/useOrganization';
+import { PayrollReadinessCard } from '@/components/timeAttendance/PayrollReadinessCard';
+import { fetchPayrollReadiness } from '@/lib/timeAttendance/readinessClient';
+import type { PayrollReadiness } from '@/lib/timeAttendance/engine';
 import { getCountryLocalization, getLocaleForCountry } from '@/data/countryLocalizations';
 import { usePayrollProcessing } from '@/hooks/usePayrollProcessing';
 import { postPayrollJournalEntries } from '@/lib/payrollJournalPosting';
@@ -142,6 +145,21 @@ export default function PayRuns() {
   const ytdDeductions = completedRuns.reduce((s, p) => s + (p.total_deductions || 0), 0);
   const ytdNet = completedRuns.reduce((s, p) => s + (p.total_net || 0), 0);
   const draftRun = payRuns.find(p => p.status === 'draft');
+  const [attendanceReadiness, setAttendanceReadiness] = useState<PayrollReadiness | null>(null);
+
+  useEffect(() => {
+    if (!organization?.id || !draftRun) {
+      setAttendanceReadiness(null);
+      return;
+    }
+    let cancelled = false;
+    fetchPayrollReadiness(organization.id, draftRun.pay_period_start, draftRun.pay_period_end).then((result) => {
+      if (!cancelled) setAttendanceReadiness(result);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [organization?.id, draftRun?.id, draftRun?.pay_period_start, draftRun?.pay_period_end]);
 
   const confirmDelete = (ids: string[]) => {
     setDeleteTarget(ids);
@@ -234,6 +252,13 @@ export default function PayRuns() {
     }
 
     try {
+      if (organization?.id) {
+        const gate = await fetchPayrollReadiness(organization.id, payRun.pay_period_start, payRun.pay_period_end);
+        if (!gate.canFinalize) {
+          toast.error(gate.warning || 'Review time records before payroll can be finalized.');
+          return;
+        }
+      }
       // Move directly to approved status since timesheets are already processed
       const { error } = await supabase
         .from('pay_runs')
@@ -450,6 +475,8 @@ export default function PayRuns() {
           <p className="text-2xl font-bold text-foreground">{completedRuns.length}</p>
         </Card>
       </div>
+
+      {attendanceReadiness && <PayrollReadinessCard readiness={attendanceReadiness} />}
 
       {/* Pending Pay Run */}
       {draftRun && (

@@ -26,6 +26,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { DateRangePresetSelect } from '@/components/filters/DateRangePresetSelect';
+import { resolveDateRangeISO, STATEMENT_DATE_PRESETS, type DateRangePresetId } from '@/lib/dateRangePresets';
 import {
   Table,
   TableBody,
@@ -52,35 +54,11 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
 // Helper to format date as YYYY-MM-DD in local timezone
-const formatLocalDate = (date: Date): string => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
-
-// Date presets
-const getDatePreset = (preset: string) => {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth();
-  
-  switch (preset) {
-    case 'this-month':
-      return { from: formatLocalDate(new Date(year, month, 1)), to: formatLocalDate(new Date(year, month + 1, 0)) };
-    case 'last-month':
-      return { from: formatLocalDate(new Date(year, month - 1, 1)), to: formatLocalDate(new Date(year, month, 0)) };
-    case 'this-quarter':
-      const q = Math.floor(month / 3);
-      return { from: formatLocalDate(new Date(year, q * 3, 1)), to: formatLocalDate(new Date(year, q * 3 + 3, 0)) };
-    case 'this-year':
-      return { from: formatLocalDate(new Date(year, 0, 1)), to: formatLocalDate(new Date(year, 11, 31)) };
-    case 'last-year':
-      return { from: formatLocalDate(new Date(year - 1, 0, 1)), to: formatLocalDate(new Date(year - 1, 11, 31)) };
-    default:
-      return { from: formatLocalDate(new Date(year, month, 1)), to: formatLocalDate(new Date(year, month + 1, 0)) };
-  }
-};
+function getDatePreset(preset: string, fiscalYearEndMonth = 12) {
+  const iso = resolveDateRangeISO(preset as DateRangePresetId, new Date(), fiscalYearEndMonth)
+    ?? resolveDateRangeISO('this-month')!;
+  return { from: iso.start, to: iso.end };
+}
 
 const sourceModuleLabels: Record<string, string> = {
   manual: 'Manual',
@@ -158,10 +136,10 @@ export default function DetailedLedger() {
   const { formatWithSymbol: formatCurrency } = useCurrencyFormatter();
 
   // Handle preset change
-  const handlePresetChange = (preset: string) => {
+  const handlePresetChange = (preset: DateRangePresetId) => {
     setDatePreset(preset);
     if (preset !== 'custom') {
-      const dates = getDatePreset(preset);
+      const dates = getDatePreset(preset, organization?.fiscal_year_end_month ?? 12);
       setDateFrom(dates.from);
       setDateTo(dates.to);
     }
@@ -482,19 +460,11 @@ export default function DetailedLedger() {
             {/* Date Preset */}
             <div className="flex items-center gap-2">
               <Label className="text-sm font-medium">Period:</Label>
-              <Select value={datePreset} onValueChange={handlePresetChange}>
-                <SelectTrigger className="w-[140px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="this-month">This Month</SelectItem>
-                  <SelectItem value="last-month">Last Month</SelectItem>
-                  <SelectItem value="this-quarter">This Quarter</SelectItem>
-                  <SelectItem value="this-year">This Year</SelectItem>
-                  <SelectItem value="last-year">Last Year</SelectItem>
-                  <SelectItem value="custom">Custom</SelectItem>
-                </SelectContent>
-              </Select>
+              <DateRangePresetSelect
+                value={datePreset}
+                presets={STATEMENT_DATE_PRESETS}
+                onValueChange={handlePresetChange}
+              />
             </div>
 
             {/* Date Range */}

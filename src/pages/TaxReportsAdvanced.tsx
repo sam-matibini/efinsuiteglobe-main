@@ -10,6 +10,15 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { format, startOfMonth, endOfMonth, parseISO, subMonths } from 'date-fns';
+import { parseLocalDate } from '@/lib/utils';
+import { DateRangePresetSelect } from '@/components/filters/DateRangePresetSelect';
+import {
+  detectDateRangePreset,
+  resolveDateRangeISO,
+  STATEMENT_DATE_PRESETS,
+  STATEMENT_PRESET_IDS,
+  type DateRangePresetId,
+} from '@/lib/dateRangePresets';
 import {
   ArrowLeft,
   Building2,
@@ -164,6 +173,17 @@ export default function TaxReportsAdvanced() {
         </div>
 
         <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <Label className="text-xs text-muted-foreground">Date Range</Label>
+            <DateRangePresetSelect
+              value={detectDateRangePreset(parseLocalDate(range.start), parseLocalDate(range.end), STATEMENT_PRESET_IDS)}
+              presets={STATEMENT_DATE_PRESETS}
+              onValueChange={(preset: DateRangePresetId) => {
+                const next = resolveDateRangeISO(preset);
+                if (next) setRange(next);
+              }}
+            />
+          </div>
           <div>
             <Label className="text-xs text-muted-foreground">From</Label>
             <Input

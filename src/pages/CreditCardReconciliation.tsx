@@ -28,6 +28,8 @@ import { useCurrentOrganization } from '@/hooks/useOrganization';
 import { downloadReconciliationPdf } from '@/lib/generateReconciliationPdf';
 import { ReconciliationShareActions } from '@/components/reports/ReconciliationShareActions';
 import { format } from 'date-fns';
+import { DateRangePresetSelect } from '@/components/filters/DateRangePresetSelect';
+import { BANKING_DATE_PRESETS, resolveDateRangeISO, type DateRangePresetId } from '@/lib/dateRangePresets';
 import { getCountryLocalization } from '@/data/countryLocalizations';
 import { getLocaleForCountry } from '@/lib/localizedCurrencyFormatter';
 
@@ -53,6 +55,7 @@ export default function CreditCardReconciliation() {
 
   // Date range filter for reconciliation period
   const [startDate, setStartDate] = useState('');
+  const [datePreset, setDatePreset] = useState<DateRangePresetId>('all');
   const [endDate, setEndDate] = useState('');
 
   // Filters & Sorting
@@ -643,12 +646,30 @@ export default function CreditCardReconciliation() {
           </div>
           {/* Date Range Filter Row */}
           <div className="flex items-center gap-4 flex-wrap">
+            <DateRangePresetSelect
+              value={datePreset}
+              presets={BANKING_DATE_PRESETS}
+              onValueChange={(preset) => {
+                setDatePreset(preset);
+                if (preset === 'all' || preset === 'custom') {
+                  if (preset === 'all') {
+                    setStartDate('');
+                    setEndDate('');
+                  }
+                  return;
+                }
+                const range = resolveDateRangeISO(preset);
+                if (!range) return;
+                setStartDate(range.start);
+                setEndDate(range.end);
+              }}
+            />
             <div className="flex items-center gap-2">
               <Label className="text-sm whitespace-nowrap">Period Start:</Label>
               <Input
                 type="date"
                 value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
+                onChange={(e) => { setStartDate(e.target.value); setDatePreset('custom'); }}
                 className="w-40"
               />
             </div>
@@ -657,7 +678,7 @@ export default function CreditCardReconciliation() {
               <Input
                 type="date"
                 value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
+                onChange={(e) => { setEndDate(e.target.value); setDatePreset('custom'); }}
                 className="w-40"
               />
             </div>
@@ -665,7 +686,7 @@ export default function CreditCardReconciliation() {
               <Button 
                 variant="ghost" 
                 size="sm" 
-                onClick={() => { setStartDate(''); setEndDate(''); }}
+                onClick={() => { setStartDate(''); setEndDate(''); setDatePreset('all'); }}
                 className="text-muted-foreground"
               >
                 Clear Dates
