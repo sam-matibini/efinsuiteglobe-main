@@ -90,7 +90,7 @@ function normalizeHeader(h: string): string {
 
 function sheetToRows(ws: XLSX.WorkSheet | undefined): ParsedSheet {
   if (!ws) return { headers: [], rows: [] };
-  const raw = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: '', raw: false });
+  const raw = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: '', raw: false, dateNF: 'yyyy-mm-dd' });
   if (raw.length === 0) return { headers: [], rows: [] };
   const originalHeaders = Object.keys(raw[0]);
   const headers = originalHeaders.map(normalizeHeader);

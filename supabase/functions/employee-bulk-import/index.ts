@@ -33,6 +33,23 @@ function b(v: unknown, dflt = false): boolean {
   if (v == null || v === '') return dflt;
   return ['yes', 'true', 'y', '1'].includes(String(v).toLowerCase());
 }
+function digits(v: unknown): string | null {
+  const str = s(v);
+  if (!str) return null;
+  const d = str.replace(/\D/g, '');
+  return d === '' ? null : d;
+}
+const COUNTRY_CURRENCY: Record<string, string> = { CA: 'CAD', US: 'USD', NG: 'NGN', GB: 'GBP' };
+const EMPLOYMENT_TYPES = new Set(['full_time', 'part_time', 'contract', 'temporary']);
+const EMPLOYEE_STATUSES = new Set(['active', 'on_leave', 'terminated', 'onboarding']);
+const PAY_FREQUENCIES = new Set(['weekly', 'bi_weekly', 'semi_monthly', 'monthly']);
+function enumValue(v: unknown, allowed: Set<string>, dflt: string | null, label: string): string | null {
+  const raw = s(v);
+  if (!raw) return dflt;
+  const val = raw.toLowerCase().replace(/[\s-]+/g, '_');
+  if (!allowed.has(val)) throw new Error(`${label} "${s(v)}" is not one of: ${[...allowed].join(', ')}`);
+  return val;
+}
 function dt(v: unknown): string | null {
   const str = s(v);
   if (!str) return null;
@@ -89,11 +106,14 @@ Deno.serve(async (req) => {
     const dedRows = rows.filter((r) => r.sheet === 'deductions' && r.is_valid);
     const payRows = rows.filter((r) => r.sheet === 'payment' && r.is_valid);
 
-    // Encrypt helper via pgcrypto RPC
+    const defaultCurrency = COUNTRY_CURRENCY[String(batch.country_code ?? '').toUpperCase()] ?? 'CAD';
+
+    // Encrypt helper via the encrypt_payroll_value RPC (pgcrypto in `extensions`).
+    // Fails the row rather than silently dropping a sensitive identifier.
     const encrypt = async (plain: string): Promise<string | null> => {
       if (!plain) return null;
-      const { data, error } = await admin.rpc('pgp_sym_encrypt' as never, { data: plain, psw: PAYROLL_KEY } as never);
-      if (error) return null;
+      const { data, error } = await admin.rpc('encrypt_payroll_value' as never, { _plain: plain, _key: PAYROLL_KEY } as never);
+      if (error) throw new Error(`Could not encrypt sensitive value: ${error.message}`);
       return data as unknown as string;
     };
 
@@ -101,46 +121,63 @@ Deno.serve(async (req) => {
     let updated = 0;
     let skipped = 0;
     let failed = 0;
-    const errors: { rowId: string; error: string }[] = [];
+    const errors: { rowId: string; sheet: string; row: number; employeeNumber: string | null; error: string }[] = [];
+    const fail = (r: DbRow, e: unknown) => {
+      const err = e as { message?: string; details?: string };
+      const msg = [err?.message ?? String(e), err?.details].filter(Boolean).join(' — ');
+      errors.push({ rowId: r.id, sheet: r.sheet, row: r.row_number, employeeNumber: r.employee_number, error: msg });
+    };
+    const skip = (r: DbRow, why: string) => {
+      skipped++;
+      errors.push({ rowId: r.id, sheet: r.sheet, row: r.row_number, employeeNumber: r.employee_number, error: `Skipped: ${why}` });
+    };
     const employeeNumberToId = new Map<string, string>();
 
     // 1. Employees
     for (const r of empRows) {
       const raw = r.raw_data as RawRow;
-      const payload: Record<string, unknown> = {
-        organization_id: batch.organization_id,
-        employee_number: r.employee_number ?? `EMP-${Date.now()}-${r.row_number}`,
-        first_name: s(raw.first_name) ?? '',
-        last_name: s(raw.last_name) ?? '',
-        preferred_name: s(raw.preferred_name),
-        nationality: s(raw.nationality),
-        email: s(raw.email) ?? '',
-        phone: s(raw.phone),
-        date_of_birth: dt(raw.date_of_birth),
-        address_line1: s(raw.address_line1),
-        address_line2: s(raw.address_line2),
-        city: s(raw.city),
-        province: s(raw.region),
-        country: s(raw.country),
-        postal_code: s(raw.postal_code),
-        employment_type: (s(raw.employment_type) ?? 'full_time').toLowerCase(),
-        hire_date: dt(raw.hire_date),
-        termination_date: dt(raw.termination_date),
-        job_title: s(raw.job_title),
-        department: s(raw.department),
-        cost_centre: s(raw.cost_centre),
-        work_schedule: s(raw.work_schedule),
-        pay_frequency: (s(raw.pay_frequency) ?? 'monthly').toLowerCase(),
-        payroll_start_date: dt(raw.payroll_start_date),
-        status: (s(raw.status) ?? 'active').toLowerCase(),
-      };
-      const nationalId = s(raw.national_id);
-      const taxId = s(raw.tax_id);
-      if (nationalId) payload.national_id_encrypted = await encrypt(nationalId);
-      if (taxId) payload.tax_id_encrypted = await encrypt(taxId);
-
       try {
-        if (r.match_type === 'update_by_id' && r.employee_number) {
+        const isUpdate = r.match_type === 'update_by_id' && !!r.employee_number;
+        const payload: Record<string, unknown> = {
+          organization_id: batch.organization_id,
+          employee_number: r.employee_number ?? `EMP-${Date.now()}-${r.row_number}`,
+          first_name: s(raw.first_name) ?? '',
+          last_name: s(raw.last_name) ?? '',
+          preferred_name: s(raw.preferred_name),
+          nationality: s(raw.nationality),
+          email: s(raw.email) ?? '',
+          phone: s(raw.phone),
+          date_of_birth: dt(raw.date_of_birth),
+          address_line1: s(raw.address_line1),
+          address_line2: s(raw.address_line2),
+          city: s(raw.city),
+          country: s(raw.country),
+          postal_code: s(raw.postal_code),
+          employment_type: enumValue(raw.employment_type, EMPLOYMENT_TYPES, isUpdate ? null : 'full_time', 'Employment type'),
+          hire_date: dt(raw.hire_date),
+          termination_date: dt(raw.termination_date),
+          job_title: s(raw.job_title),
+          department: s(raw.department),
+          cost_centre: s(raw.cost_centre),
+          work_schedule: s(raw.work_schedule),
+          pay_frequency: enumValue(raw.pay_frequency, PAY_FREQUENCIES, isUpdate ? null : 'monthly', 'Pay frequency'),
+          payroll_start_date: dt(raw.payroll_start_date),
+          status: enumValue(raw.status, EMPLOYEE_STATUSES, isUpdate ? null : 'active', 'Status'),
+        };
+        // province is NOT NULL with a default — only send it when supplied.
+        const region = s(raw.region);
+        if (region) payload.province = region.toUpperCase();
+        const nationalId = s(raw.national_id) ?? s(raw.nin);
+        const taxId = s(raw.tax_id);
+        if (nationalId) {
+          payload.national_id_encrypted = await encrypt(nationalId);
+          // employees.nin is what the Nigeria NIN trigger (trg_enforce_nigeria_nin) checks.
+          const isNigeria = [batch.country_code, raw.country].some((c) => ['NG', 'NIGERIA'].includes(String(c ?? '').toUpperCase()));
+          if (isNigeria) payload.nin = digits(nationalId);
+        }
+        if (taxId) payload.tax_id_encrypted = await encrypt(taxId);
+
+        if (isUpdate && r.employee_number) {
           // Update existing (respect replace_blanks)
           const cleanPayload: Record<string, unknown> = {};
           for (const [k, v] of Object.entries(payload)) {
@@ -154,7 +191,7 @@ Deno.serve(async (req) => {
             .eq('organization_id', batch.organization_id)
             .eq('employee_number', r.employee_number)
             .maybeSingle();
-          if (!existing) { skipped++; continue; }
+          if (!existing) { skip(r, `employee ${r.employee_number} no longer exists`); continue; }
           const { error: uErr } = await admin.from('employees').update(cleanPayload).eq('id', existing.id);
           if (uErr) throw uErr;
           employeeNumberToId.set(r.employee_number, existing.id);
@@ -169,7 +206,7 @@ Deno.serve(async (req) => {
         }
       } catch (e) {
         failed++;
-        errors.push({ rowId: r.id, error: (e as Error).message });
+        fail(r, e);
       }
     }
 
@@ -195,14 +232,14 @@ Deno.serve(async (req) => {
     for (const r of compRows) {
       const raw = r.raw_data as RawRow;
       const empId = r.employee_number ? employeeNumberToId.get(r.employee_number) : null;
-      if (!empId) { skipped++; continue; }
+      if (!empId) { skip(r, `employee ${r.employee_number ?? ''} was not created`); continue; }
       try {
         const { error: ce } = await admin.from('employee_compensation').insert({
           organization_id: batch.organization_id,
           employee_id: empId,
           compensation_type: (s(raw.compensation_type) ?? 'basic_salary').toLowerCase(),
           amount: n(raw.amount) ?? 0,
-          currency: s(raw.currency) ?? 'CAD',
+          currency: (s(raw.currency) ?? defaultCurrency).toUpperCase(),
           frequency: (s(raw.frequency) ?? 'monthly').toLowerCase(),
           taxable: b(raw.taxable, true),
           effective_date: dt(raw.effective_date) ?? new Date().toISOString().slice(0, 10),
@@ -211,14 +248,14 @@ Deno.serve(async (req) => {
         });
         if (ce) throw ce;
         await admin.from('employee_import_rows').update({ posted: true, posted_entity_id: empId }).eq('id', r.id);
-      } catch (e) { failed++; errors.push({ rowId: r.id, error: (e as Error).message }); }
+      } catch (e) { failed++; fail(r, e); }
     }
 
     // 3. Deductions
     for (const r of dedRows) {
       const raw = r.raw_data as RawRow;
       const empId = r.employee_number ? employeeNumberToId.get(r.employee_number) : null;
-      if (!empId) { skipped++; continue; }
+      if (!empId) { skip(r, `employee ${r.employee_number ?? ''} was not created`); continue; }
       try {
         const { error: de } = await admin.from('employee_deductions').insert({
           organization_id: batch.organization_id,
@@ -226,7 +263,7 @@ Deno.serve(async (req) => {
           deduction_type: (s(raw.deduction_type) ?? 'other').toLowerCase(),
           category: (s(raw.category) ?? 'voluntary').toLowerCase(),
           amount: n(raw.amount) ?? 0,
-          currency: s(raw.currency) ?? 'CAD',
+          currency: (s(raw.currency) ?? defaultCurrency).toUpperCase(),
           frequency: (s(raw.frequency) ?? 'monthly').toLowerCase(),
           start_date: dt(raw.start_date) ?? new Date().toISOString().slice(0, 10),
           end_date: dt(raw.end_date),
@@ -234,14 +271,14 @@ Deno.serve(async (req) => {
         });
         if (de) throw de;
         await admin.from('employee_import_rows').update({ posted: true, posted_entity_id: empId }).eq('id', r.id);
-      } catch (e) { failed++; errors.push({ rowId: r.id, error: (e as Error).message }); }
+      } catch (e) { failed++; fail(r, e); }
     }
 
     // 4. Payment
     for (const r of payRows) {
       const raw = r.raw_data as RawRow;
       const empId = r.employee_number ? employeeNumberToId.get(r.employee_number) : null;
-      if (!empId) { skipped++; continue; }
+      if (!empId) { skip(r, `employee ${r.employee_number ?? ''} was not created`); continue; }
       try {
         const acct = s(raw.account_number);
         const last4 = acct ? acct.slice(-4) : null;
@@ -259,13 +296,13 @@ Deno.serve(async (req) => {
           institution_number: s(raw.institution_number),
           iban: s(raw.iban),
           swift: s(raw.swift),
-          currency: s(raw.currency) ?? 'CAD',
+          currency: (s(raw.currency) ?? defaultCurrency).toUpperCase(),
           is_primary: b(raw.is_primary, true),
           source_batch_id: batchId,
         });
         if (pe) throw pe;
         await admin.from('employee_import_rows').update({ posted: true, posted_entity_id: empId }).eq('id', r.id);
-      } catch (e) { failed++; errors.push({ rowId: r.id, error: (e as Error).message }); }
+      } catch (e) { failed++; fail(r, e); }
     }
 
     const finalStatus = failed === 0 ? 'posted' : (created + updated > 0 ? 'posted' : 'failed');

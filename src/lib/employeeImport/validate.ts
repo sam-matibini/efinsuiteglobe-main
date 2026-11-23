@@ -1,5 +1,5 @@
 import { ParsedFile } from './parser';
-import { COMPENSATION_TYPES, DEDUCTION_TYPES, EMPLOYMENT_TYPES, MAX_ROWS_PER_BATCH, PAYMENT_METHODS, PAY_FREQUENCIES, getCountryRule } from './rules';
+import { COMPENSATION_TYPES, DEDUCTION_TYPES, EMPLOYEE_STATUSES, EMPLOYMENT_TYPES, MAX_ROWS_PER_BATCH, PAYMENT_METHODS, PAY_FREQUENCIES, getCountryRule } from './rules';
 
 export type Severity = 'error' | 'warning';
 export interface Issue {
@@ -63,6 +63,9 @@ function toNum(v: unknown): number | null {
   const n = Number(String(v).replace(/[, ]/g, ''));
   return Number.isFinite(n) ? n : null;
 }
+function toEnum(v: unknown): string {
+  return toStr(v).toLowerCase().replace(/[\s-]+/g, '_');
+}
 function isValidDate(v: unknown): boolean {
   if (!v) return false;
   const d = new Date(v as string);
@@ -82,6 +85,7 @@ export function validateImport(parsed: ParsedFile, opts: Options): ValidationRes
   }
 
   const seenIds = new Set<string>();
+  const seenEmails = new Set<string>();
   const uploadedEmployeeIds = new Set<string>();
   let newCount = 0;
   let updateCount = 0;
@@ -95,8 +99,9 @@ export function validateImport(parsed: ParsedFile, opts: Options): ValidationRes
     const firstName = toStr(raw.first_name);
     const lastName = toStr(raw.last_name);
     const email = toStr(raw.email);
-    const employmentType = toStr(raw.employment_type).toLowerCase();
-    const payFrequency = toStr(raw.pay_frequency).toLowerCase();
+    const employmentType = toEnum(raw.employment_type);
+    const payFrequency = toEnum(raw.pay_frequency);
+    const status = toEnum(raw.status);
     const hireDate = toStr(raw.hire_date);
     const terminationDate = toStr(raw.termination_date);
     const country = toStr(raw.country) || rule.countryCode;
@@ -111,10 +116,13 @@ export function validateImport(parsed: ParsedFile, opts: Options): ValidationRes
       errors.push({ code: 'termination_before_hire', field: 'termination_date', severity: 'error', message: 'Termination date is before hire date.' });
     }
     if (employmentType && !EMPLOYMENT_TYPES.includes(employmentType as typeof EMPLOYMENT_TYPES[number])) {
-      warnings.push({ code: 'employment_type_unknown', field: 'employment_type', severity: 'warning', message: `Unknown employment type "${employmentType}".` });
+      errors.push({ code: 'employment_type_unknown', field: 'employment_type', severity: 'error', message: `Unknown employment type "${employmentType}". Allowed: ${EMPLOYMENT_TYPES.join(', ')}.` });
     }
     if (payFrequency && !PAY_FREQUENCIES.includes(payFrequency as typeof PAY_FREQUENCIES[number])) {
-      warnings.push({ code: 'pay_frequency_unknown', field: 'pay_frequency', severity: 'warning', message: `Unknown pay frequency "${payFrequency}".` });
+      errors.push({ code: 'pay_frequency_unknown', field: 'pay_frequency', severity: 'error', message: `Unknown pay frequency "${payFrequency}". Allowed: ${PAY_FREQUENCIES.join(', ')}.` });
+    }
+    if (status && !EMPLOYEE_STATUSES.includes(status as typeof EMPLOYEE_STATUSES[number])) {
+      errors.push({ code: 'status_unknown', field: 'status', severity: 'error', message: `Unknown status "${status}". Allowed: ${EMPLOYEE_STATUSES.join(', ')}.` });
     }
     const dept = toStr(raw.department);
     if (dept && opts.departments.size > 0 && !opts.departments.has(dept)) {
@@ -128,6 +136,17 @@ export function validateImport(parsed: ParsedFile, opts: Options): ValidationRes
       if (req.optional) continue;
       const key = req.key === 'sin' ? 'national_id' : req.key;
       if (!toStr(raw[key])) errors.push({ code: `${req.key}_required`, field: key, severity: 'error', message: `${req.label} is required for ${rule.countryName}.` });
+    }
+    if (rule.countryCode === 'NG') {
+      const nin = toStr(raw.national_id).replace(/\D/g, '');
+      if (toStr(raw.national_id) && nin.length !== 11) {
+        errors.push({ code: 'nin_invalid', field: 'national_id', severity: 'error', message: 'National ID (NIN) must be exactly 11 digits (format the column as Text to keep leading zeros).' });
+      }
+    }
+    if (email) {
+      const emailKey = email.toLowerCase();
+      if (seenEmails.has(emailKey)) errors.push({ code: 'duplicate_email_in_file', field: 'email', severity: 'error', message: 'Duplicate email within upload file.' });
+      seenEmails.add(emailKey);
     }
     if (!toStr(raw.phone)) warnings.push({ code: 'phone_missing', field: 'phone', severity: 'warning', message: 'Phone is empty.' });
 
@@ -151,7 +170,8 @@ export function validateImport(parsed: ParsedFile, opts: Options): ValidationRes
       const dob = toStr(raw.date_of_birth);
       const emailLower = email.toLowerCase();
       if (emailLower && opts.existing.byEmail.has(emailLower)) {
-        warnings.push({ code: 'possible_duplicate_email', field: 'email', severity: 'warning', message: `An existing employee already uses this email.` });
+        // employees has a unique (organization_id, email) index, so the insert would fail.
+        errors.push({ code: 'duplicate_email', field: 'email', severity: 'error', message: `An existing employee already uses this email.` });
         matchType = 'duplicate_suspect';
       } else if (firstName && lastName && dob) {
         for (const [, e] of opts.existing.byNumber) {
