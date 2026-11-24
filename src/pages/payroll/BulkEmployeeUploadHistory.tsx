@@ -8,16 +8,16 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { useEmployeeImport } from '@/hooks/useEmployeeImport';
+import { useEmployeeUpload } from '@/hooks/useEmployeeUpload';
 import { format } from 'date-fns';
-import { EmployeeImportErrors, EmployeeImportPostError } from '@/components/payroll/EmployeeImportErrors';
+import { UploadErrorList, UploadErrorEntry } from '@/components/payroll/EmployeeUploadIssues';
 
 export default function BulkEmployeeUploadHistory() {
   const navigate = useNavigate();
-  const { history, isLoadingHistory, rollbackBatch } = useEmployeeImport();
+  const { history, isLoadingHistory, rollback: rollbackBatch } = useEmployeeUpload();
   const [rollbackTarget, setRollbackTarget] = useState<string | null>(null);
   const [reason, setReason] = useState('');
-  const [errorsTarget, setErrorsTarget] = useState<EmployeeImportPostError[] | null>(null);
+  const [errorsTarget, setErrorsTarget] = useState<UploadErrorEntry[] | null>(null);
 
   const statusColor = (s: string) =>
     s === 'posted' ? 'bg-success/10 text-success' :
@@ -75,7 +75,7 @@ export default function BulkEmployeeUploadHistory() {
                   <TableCell><Badge className={statusColor(b.status)} variant="outline">{b.status}</Badge></TableCell>
                   <TableCell className="whitespace-nowrap">
                     {Array.isArray(b.error_report) && b.error_report.length > 0 && (
-                      <Button variant="ghost" size="sm" onClick={() => setErrorsTarget(b.error_report as unknown as EmployeeImportPostError[])}>
+                      <Button variant="ghost" size="sm" onClick={() => setErrorsTarget(b.error_report as unknown as UploadErrorEntry[])}>
                         <AlertCircle className="w-3 h-3 mr-1" /> Errors
                       </Button>
                     )}
@@ -97,7 +97,7 @@ export default function BulkEmployeeUploadHistory() {
           <DialogHeader>
             <DialogTitle>Import Errors</DialogTitle>
           </DialogHeader>
-          <EmployeeImportErrors errors={errorsTarget ?? []} />
+          <UploadErrorList errors={errorsTarget ?? []} />
         </DialogContent>
       </Dialog>
 

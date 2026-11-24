@@ -1,185 +1,180 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Download, Upload, FileCheck2, AlertTriangle, CheckCircle2, XCircle, History, Loader2 } from 'lucide-react';
+import * as XLSX from 'xlsx';
+import { AlertTriangle, ArrowLeft, CheckCircle2, Download, FileSpreadsheet, History, Loader2, Upload, XCircle } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Progress } from '@/components/ui/progress';
+import { SearchableSelect } from '@/components/ui/searchable-select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { toast } from 'sonner';
-import { generateEmployeeTemplate } from '@/lib/employeeImport/template';
-import { parseEmployeeFile } from '@/lib/employeeImport/parser';
-import { validateImport, ValidationResult, ValidatedRow } from '@/lib/employeeImport/validate';
-import { COUNTRY_IMPORT_RULES, MAX_FILE_SIZE_BYTES } from '@/lib/employeeImport/rules';
-import { useEmployeeImport } from '@/hooks/useEmployeeImport';
+import { useEmployeeUpload, sha256 } from '@/hooks/useEmployeeUpload';
 import { useEmployees } from '@/hooks/useEmployees';
-import { EmployeeImportErrors, EmployeeImportPostError } from '@/components/payroll/EmployeeImportErrors';
-import * as XLSX from 'xlsx';
+import { parseUploadFile, ParsedUpload } from '@/lib/employeeUpload/parse';
+import { buildPlan, RowPlan, UploadMode, UploadPlan } from '@/lib/employeeUpload/plan';
+import { CommitResult, RowResult } from '@/lib/employeeUpload/commit';
+import { buildTemplateBlob } from '@/lib/employeeUpload/template';
+import { COLUMN_BY_KEY, MAX_FILE_SIZE_BYTES, availableCountries, getCountryRule } from '@/lib/employeeUpload/schema';
 
-type Step = 'config' | 'upload' | 'preview' | 'confirm' | 'done';
+type Step = 'setup' | 'review' | 'importing' | 'done';
+type Filter = 'all' | 'errors' | 'warnings' | 'ready';
+
+const STEPS: { key: Step; label: string }[] = [
+  { key: 'setup', label: 'Upload' },
+  { key: 'review', label: 'Review' },
+  { key: 'importing', label: 'Import' },
+  { key: 'done', label: 'Results' },
+];
+
+function downloadBlob(blob: Blob, name: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function workbookBlob(sheets: { name: string; rows: Record<string, unknown>[] }[]) {
+  const wb = XLSX.utils.book_new();
+  for (const s of sheets) if (s.rows.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(s.rows), s.name);
+  const out = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  return new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+}
+
+/** Original columns back under their template headers, so a fixed file can be re-uploaded. */
+function rowWithHeaders(raw: Record<string, string>) {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(raw)) out[COLUMN_BY_KEY.get(k)?.header ?? k] = v;
+  return out;
+}
 
 export default function BulkEmployeeUpload() {
   const navigate = useNavigate();
-  const [step, setStep] = useState<Step>('config');
-  const [mode, setMode] = useState<'create' | 'update' | 'upsert'>('create');
-  const [countryCode, setCountryCode] = useState<string>('CA');
-  const [replaceBlanks, setReplaceBlanks] = useState(false);
-  const [file, setFile] = useState<File | null>(null);
-  const [validation, setValidation] = useState<ValidationResult | null>(null);
-  const [parsedFile, setParsedFile] = useState<Awaited<ReturnType<typeof parseEmployeeFile>> | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [batchId, setBatchId] = useState<string | null>(null);
-  type PostResult = { created: number; updated: number; skipped: number; failed: number; errors?: EmployeeImportPostError[] };
-  const [postResult, setPostResult] = useState<PostResult | null>(null);
-
-  const { loadExistingIndex, createBatch, postBatch } = useEmployeeImport();
+  const { orgCountryCode, orgJurisdiction, loadContext, commit, organization } = useEmployeeUpload();
   const { departments } = useEmployees();
 
-  const downloadTemplate = () => {
-    const blob = generateEmployeeTemplate({ countryCode, departments });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `employee-bulk-upload-template-${countryCode}.xlsx`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+  const [step, setStep] = useState<Step>('setup');
+  const [countryCode, setCountryCode] = useState<string>(orgCountryCode ?? 'NG');
+  const [mode, setMode] = useState<UploadMode>('create');
+  const [replaceBlanks, setReplaceBlanks] = useState(false);
+  const [file, setFile] = useState<File | null>(null);
+  const [parsed, setParsed] = useState<ParsedUpload | null>(null);
+  const [plan, setPlan] = useState<UploadPlan | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const [filter, setFilter] = useState<Filter>('all');
+  const [progress, setProgress] = useState({ done: 0, total: 0 });
+  const [result, setResult] = useState<CommitResult | null>(null);
 
-  const onFileChosen = async (f: File) => {
-    if (f.size > MAX_FILE_SIZE_BYTES) {
-      toast.error('File exceeds 10 MB limit');
-      return;
-    }
-    setFile(f);
+  useEffect(() => { if (orgCountryCode) setCountryCode(orgCountryCode); }, [orgCountryCode]);
+
+  const countries = useMemo(() => availableCountries().map((c) => ({ value: c.code, label: `${c.name} (${c.currency})` })), []);
+  const rule = useMemo(() => getCountryRule(countryCode), [countryCode]);
+
+  const analyse = useCallback(async (f: File, opts?: { mode?: UploadMode; country?: string; replaceBlanks?: boolean }) => {
+    if (!organization?.id) { toast.error('Select an organization first.'); return; }
+    if (f.size > MAX_FILE_SIZE_BYTES) { toast.error('File exceeds the 10 MB limit.'); return; }
     setBusy(true);
     try {
-      const parsed = await parseEmployeeFile(f);
-      setParsedFile(parsed);
-      const existing = await loadExistingIndex();
-      const result = validateImport(parsed, {
-        mode,
-        countryCode,
-        existing,
-        departments: new Set(departments),
-        divisions: new Set(),
+      const p = parsed && file === f ? parsed : await parseUploadFile(f);
+      const ctx = await loadContext();
+      const next = buildPlan(p, {
+        organizationId: organization.id,
+        countryCode: opts?.country ?? countryCode,
+        mode: opts?.mode ?? mode,
+        replaceBlanks: opts?.replaceBlanks ?? replaceBlanks,
+        orgJurisdiction,
+        existing: ctx.existing,
+        jobSites: ctx.jobSites,
       });
-      setValidation(result);
-      setStep('preview');
+      setFile(f);
+      setParsed(p);
+      setPlan(next);
+      setFilter(next.summary.withErrors ? 'errors' : 'all');
+      setStep('review');
     } catch (e) {
-      toast.error(`Failed to parse file: ${(e as Error).message}`);
+      toast.error(`Could not read the file: ${(e as Error).message}`);
     } finally {
       setBusy(false);
     }
+  }, [organization?.id, parsed, file, loadContext, countryCode, mode, replaceBlanks, orgJurisdiction]);
+
+  const onPick = (f?: File | null) => { if (f) { setParsed(null); void analyse(f); } };
+
+  const downloadTemplate = async () => {
+    let jobSites: { name: string; code: string | null }[] = [];
+    try { jobSites = (await loadContext()).jobSites; } catch { /* template still useful without them */ }
+    downloadBlob(buildTemplateBlob({ countryCode, jobSites, departments }), `employee-upload-template-${countryCode}.xlsx`);
   };
 
-  const downloadErrorReport = () => {
-    if (!validation || !parsedFile) return;
-    const wb = XLSX.utils.book_new();
-    const build = (name: string, rows: ValidatedRow[]) => {
-      const data = rows
-        .filter((r) => r.errors.length > 0 || r.warnings.length > 0)
-        .map((r) => ({
-          Row: r.rowNumber,
-          'Employee ID': r.employeeNumber ?? '',
-          Errors: r.errors.map((e) => e.message).join('; '),
-          Warnings: r.warnings.map((e) => e.message).join('; '),
-          ...(r.raw as Record<string, unknown>),
-        }));
-      if (data.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data), name);
-    };
-    build('Employees', validation.employees);
-    build('Compensation', validation.compensation);
-    build('Deductions', validation.deductions);
-    build('Payment', validation.payment);
-    if (wb.SheetNames.length === 0) {
-      toast.info('No errors to export');
-      return;
-    }
-    const out = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-    const blob = new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `import-errors-${file?.name ?? 'report'}.xlsx`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const proceed = async () => {
-    if (!parsedFile || !validation || !file) return;
-    setBusy(true);
+  const runImport = async () => {
+    if (!plan || !file) return;
+    setStep('importing');
+    setProgress({ done: 0, total: plan.summary.ready });
     try {
-      const batch = await createBatch.mutateAsync({ parsed: parsedFile, validation, mode, countryCode, replaceBlanks, file });
-      setBatchId(batch.id);
-      const res = (await postBatch.mutateAsync(batch.id)) as PostResult;
-      setPostResult(res);
+      const res = await commit.mutateAsync({
+        plan, mode, replaceBlanks,
+        file: { name: file.name, size: file.size, hash: await sha256(file) },
+        onProgress: (done, total) => setProgress({ done, total }),
+      });
+      setResult(res);
       setStep('done');
-    } catch (e) {
-      // toasts handled by mutations
-    } finally {
-      setBusy(false);
+      if (res.created + res.updated > 0) toast.success(`Imported ${res.created + res.updated} employee${res.created + res.updated === 1 ? '' : 's'}.`);
+      else toast.error('No employees were imported.');
+    } catch {
+      setStep('review');
     }
   };
 
-  const rowBadge = (r: ValidatedRow) =>
-    r.errors.length > 0 ? (
-      <Badge variant="destructive" className="gap-1"><XCircle className="w-3 h-3" />Error</Badge>
-    ) : r.warnings.length > 0 ? (
-      <Badge className="gap-1 bg-warning/10 text-warning border-warning/20"><AlertTriangle className="w-3 h-3" />Warning</Badge>
-    ) : (
-      <Badge className="gap-1 bg-success/10 text-success border-success/20"><CheckCircle2 className="w-3 h-3" />Valid</Badge>
-    );
+  const reset = () => {
+    setStep('setup'); setFile(null); setParsed(null); setPlan(null); setResult(null); setProgress({ done: 0, total: 0 });
+  };
 
-  const renderRowsTable = (rows: ValidatedRow[]) => (
-    <div className="overflow-auto max-h-[420px] border rounded-md">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-16">Row</TableHead>
-            <TableHead className="w-24">Status</TableHead>
-            <TableHead className="w-40">Employee ID</TableHead>
-            <TableHead>Issues</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rows.slice(0, 500).map((r) => (
-            <TableRow key={`${r.rowNumber}-${r.employeeNumber ?? ''}`}>
-              <TableCell>{r.rowNumber}</TableCell>
-              <TableCell>{rowBadge(r)}</TableCell>
-              <TableCell className="font-mono text-xs">{r.employeeNumber ?? '—'}</TableCell>
-              <TableCell className="text-xs">
-                {[...r.errors, ...r.warnings].map((i, idx) => (
-                  <div key={idx} className={i.severity === 'error' ? 'text-destructive' : 'text-warning'}>
-                    {i.message}
-                  </div>
-                ))}
-              </TableCell>
-            </TableRow>
-          ))}
-          {rows.length === 0 && (
-            <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground">No rows</TableCell></TableRow>
-          )}
-        </TableBody>
-      </Table>
-      {rows.length > 500 && (
-        <div className="p-2 text-xs text-muted-foreground text-center">Showing first 500 of {rows.length} rows.</div>
-      )}
-    </div>
-  );
+  const visibleRows = useMemo(() => {
+    if (!plan) return [];
+    return plan.rows.filter((r) =>
+      filter === 'all' ? true :
+      filter === 'errors' ? r.errors.length > 0 :
+      filter === 'warnings' ? r.errors.length === 0 && r.warnings.length > 0 :
+      r.errors.length === 0);
+  }, [plan, filter]);
+
+  const downloadIssues = () => {
+    if (!plan) return;
+    const rows = plan.rows.filter((r) => r.errors.length || r.warnings.length).map((r) => ({
+      Row: r.rowNumber,
+      Errors: r.errors.map((e) => e.message).join(' | '),
+      Warnings: r.warnings.map((e) => e.message).join(' | '),
+      ...rowWithHeaders(r.raw),
+    }));
+    if (!rows.length) { toast.info('No issues to export.'); return; }
+    downloadBlob(workbookBlob([{ name: 'Issues', rows }]), `upload-issues-${file?.name ?? 'employees'}.xlsx`);
+  };
+
+  const downloadResults = () => {
+    if (!result || !plan) return;
+    const planByRow = new Map(plan.rows.map((r) => [r.rowNumber, r]));
+    const rows = result.results.map((r) => ({ Row: r.rowNumber, Result: r.status, Message: r.message ?? '', ...rowWithHeaders(planByRow.get(r.rowNumber)?.raw ?? {}) }));
+    const failed = rows.filter((r) => r.Result === 'failed' || r.Result === 'skipped').map(({ Row, Result, Message, ...rest }) => ({ ...rest, 'Upload Error': `${Result}: ${Message}`, 'Source Row': Row }));
+    downloadBlob(workbookBlob([{ name: 'Results', rows }, { name: 'Employees', rows: failed }]), `upload-results-${file?.name ?? 'employees'}.xlsx`);
+  };
+
+  const stepIndex = STEPS.findIndex((s) => s.key === step);
 
   return (
     <div className="space-y-6 max-w-6xl">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/payroll/employees/list')}>
-            <ArrowLeft className="w-4 h-4" />
-          </Button>
+          <Button variant="ghost" size="icon" onClick={() => navigate('/payroll/employees/list')}><ArrowLeft className="w-4 h-4" /></Button>
           <div>
             <h1 className="text-2xl font-bold">Bulk Employee Upload</h1>
-            <p className="text-muted-foreground text-sm">Import employees, compensation, deductions and payment information from CSV or Excel.</p>
+            <p className="text-muted-foreground text-sm">Add or update many employees at once from an Excel or CSV file.</p>
           </div>
         </div>
         <Button variant="outline" onClick={() => navigate('/payroll/employees/bulk-upload/history')}>
@@ -187,183 +182,244 @@ export default function BulkEmployeeUpload() {
         </Button>
       </div>
 
-      {/* Stepper */}
-      <div className="flex items-center gap-2 text-sm">
-        {(['config', 'upload', 'preview', 'confirm', 'done'] as Step[]).map((s, i) => (
-          <div key={s} className={`px-3 py-1 rounded-full border ${step === s ? 'bg-primary text-primary-foreground border-primary' : 'text-muted-foreground'}`}>
-            {i + 1}. {s.charAt(0).toUpperCase() + s.slice(1)}
-          </div>
+      <ol className="flex items-center gap-2 text-sm">
+        {STEPS.map((s, i) => (
+          <li key={s.key} className={`px-3 py-1 rounded-full border ${i === stepIndex ? 'bg-primary text-primary-foreground border-primary' : i < stepIndex ? 'text-foreground' : 'text-muted-foreground'}`}>
+            {i + 1}. {s.label}
+          </li>
         ))}
-      </div>
+      </ol>
 
-      {step === 'config' && (
+      {step === 'setup' && (
         <Card className="p-6 space-y-6">
           <div className="grid md:grid-cols-2 gap-6">
             <div className="space-y-2">
-              <Label>Country / Jurisdiction</Label>
-              <Select value={countryCode} onValueChange={setCountryCode}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {Object.values(COUNTRY_IMPORT_RULES).map((r) => (
-                    <SelectItem key={r.countryCode} value={r.countryCode}>{r.countryName} ({r.currency})</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">Country determines required identifiers, currency and statutory deductions.</p>
+              <Label>Country</Label>
+              <SearchableSelect options={countries} value={countryCode} onValueChange={setCountryCode} placeholder="Select country" />
+              <p className="text-xs text-muted-foreground">
+                Sets the {rule.jurisdictionLabel.toLowerCase()} list, date order and required IDs
+                {rule.requireNin11 ? ' — Nigeria requires an 11-digit NIN for every employee.' : '.'}
+              </p>
             </div>
             <div className="space-y-2">
-              <Label>Import Mode</Label>
-              <Select value={mode} onValueChange={(v) => setMode(v as typeof mode)}>
+              <Label>What should the upload do?</Label>
+              <Select value={mode} onValueChange={(v) => setMode(v as UploadMode)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="create">Create — new employees only</SelectItem>
-                  <SelectItem value="update">Update — existing employees only</SelectItem>
-                  <SelectItem value="upsert">Upsert — create or update by Employee ID</SelectItem>
+                  <SelectItem value="create">Add new employees only</SelectItem>
+                  <SelectItem value="update">Update existing employees (matched by Employee ID)</SelectItem>
+                  <SelectItem value="upsert">Add new and update existing</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
-          <div className="flex items-center gap-3 p-3 border rounded-md">
-            <Switch checked={replaceBlanks} onCheckedChange={setReplaceBlanks} id="rb" />
-            <div>
-              <Label htmlFor="rb" className="cursor-pointer">Replace existing values with blanks</Label>
-              <p className="text-xs text-muted-foreground">Off by default. Blank cells in Update mode preserve existing values.</p>
+          {mode !== 'create' && (
+            <div className="flex items-center gap-3 p-3 border rounded-md">
+              <Switch checked={replaceBlanks} onCheckedChange={setReplaceBlanks} id="rb" />
+              <div>
+                <Label htmlFor="rb" className="cursor-pointer">Clear fields left blank</Label>
+                <p className="text-xs text-muted-foreground">Off: blank cells keep the employee's current value. Required fields are never cleared.</p>
+              </div>
             </div>
-          </div>
-          <div className="flex justify-between">
-            <Button variant="outline" onClick={downloadTemplate}>
-              <Download className="w-4 h-4 mr-2" /> Download Template
-            </Button>
-            <Button onClick={() => setStep('upload')}>Continue</Button>
+          )}
+
+          <label
+            onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={(e) => { e.preventDefault(); setDragging(false); onPick(e.dataTransfer.files?.[0]); }}
+            className={`flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-lg p-10 text-center cursor-pointer transition-colors ${dragging ? 'border-primary bg-primary/5' : 'hover:bg-muted/40'}`}
+          >
+            {busy ? <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" /> : <Upload className="w-8 h-8 text-muted-foreground" />}
+            <span className="font-medium">{busy ? 'Reading and checking the file…' : 'Drop your file here or click to choose'}</span>
+            <span className="text-xs text-muted-foreground">.xlsx, .xls or .csv · up to 10 MB · 5,000 employees</span>
+            <input type="file" accept=".xlsx,.xls,.csv" className="hidden" disabled={busy} onChange={(e) => { onPick(e.target.files?.[0]); e.target.value = ''; }} />
+          </label>
+
+          <div className="flex items-center justify-between rounded-md bg-muted/40 p-4">
+            <div className="flex items-center gap-3">
+              <FileSpreadsheet className="w-5 h-5 text-muted-foreground" />
+              <div className="text-sm">
+                <div className="font-medium">Need the template?</div>
+                <div className="text-muted-foreground text-xs">One row per employee. Includes {rule.jurisdictionLabel.toLowerCase()} codes{rule.requireNin11 ? ', NIN, TIN and pension columns' : ''} and your job sites.</div>
+              </div>
+            </div>
+            <Button variant="outline" onClick={downloadTemplate}><Download className="w-4 h-4 mr-2" /> Download template</Button>
           </div>
         </Card>
       )}
 
-      {step === 'upload' && (
-        <Card className="p-6 space-y-4">
-          <Label>Upload CSV or Excel file</Label>
-          <div className="border-2 border-dashed rounded-lg p-8 text-center">
-            <Upload className="w-8 h-8 mx-auto text-muted-foreground mb-2" />
-            <p className="text-sm text-muted-foreground mb-3">Maximum 10 MB · 5,000 rows</p>
-            <Input type="file" accept=".csv,.xlsx,.xls" onChange={(e) => e.target.files?.[0] && onFileChosen(e.target.files[0])} disabled={busy} />
-          </div>
-          {busy && <p className="text-sm text-muted-foreground flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" />Parsing and validating…</p>}
-          <div className="flex justify-between">
-            <Button variant="outline" onClick={() => setStep('config')}>Back</Button>
-          </div>
-        </Card>
-      )}
-
-      {step === 'preview' && validation && (
+      {step === 'review' && plan && (
         <>
-          <Card className="p-6">
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-              <Stat label="Total rows" value={validation.summary.totalRows} />
-              <Stat label="New employees" value={validation.summary.newEmployees} tone="info" />
-              <Stat label="Updates" value={validation.summary.updates} tone="info" />
-              <Stat label="Warnings" value={validation.summary.warningRows} tone="warn" />
-              <Stat label="Errors" value={validation.summary.errorRows} tone="error" />
+          <Card className="p-6 space-y-4">
+            <div className="flex items-center justify-between gap-4">
+              <div className="text-sm">
+                <span className="font-medium">{file?.name}</span>
+                <span className="text-muted-foreground"> · sheet “{parsed?.sheetName}” · {plan.country.name} · {mode === 'create' ? 'add new' : mode === 'update' ? 'update existing' : 'add & update'}</span>
+              </div>
+              <Button variant="ghost" size="sm" onClick={reset}>Choose another file</Button>
             </div>
-            {validation.fileErrors.length > 0 && (
-              <div className="mt-4 p-3 bg-destructive/10 text-destructive text-sm rounded-md">
-                {validation.fileErrors.map((e) => <div key={e.code}>{e.message}</div>)}
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              <Stat label="Rows" value={plan.summary.total} />
+              <Stat label="Ready to import" value={plan.summary.ready} tone="ok" />
+              <Stat label="New" value={plan.summary.creates} tone="info" />
+              <Stat label="Updates" value={plan.summary.updates} tone="info" />
+              <Stat label="With errors" value={plan.summary.withErrors} tone={plan.summary.withErrors ? 'error' : undefined} />
+            </div>
+            {plan.fileErrors.length > 0 && (
+              <div className="p-3 rounded-md bg-destructive/10 text-destructive text-sm space-y-1">
+                {plan.fileErrors.map((e) => <div key={e}>{e}</div>)}
+              </div>
+            )}
+            {plan.fileWarnings.length > 0 && (
+              <div className="p-3 rounded-md bg-warning/10 text-warning text-xs space-y-1">
+                {plan.fileWarnings.map((e) => <div key={e}>{e}</div>)}
               </div>
             )}
           </Card>
 
           <Card className="p-6 space-y-4">
-            <Tabs defaultValue="employees">
-              <TabsList>
-                <TabsTrigger value="employees">Employees ({validation.employees.length})</TabsTrigger>
-                <TabsTrigger value="compensation">Compensation ({validation.compensation.length})</TabsTrigger>
-                <TabsTrigger value="deductions">Deductions ({validation.deductions.length})</TabsTrigger>
-                <TabsTrigger value="payment">Payment ({validation.payment.length})</TabsTrigger>
-              </TabsList>
-              <TabsContent value="employees">{renderRowsTable(validation.employees)}</TabsContent>
-              <TabsContent value="compensation">{renderRowsTable(validation.compensation)}</TabsContent>
-              <TabsContent value="deductions">{renderRowsTable(validation.deductions)}</TabsContent>
-              <TabsContent value="payment">{renderRowsTable(validation.payment)}</TabsContent>
-            </Tabs>
-            <div className="flex justify-between">
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <Tabs value={filter} onValueChange={(v) => setFilter(v as Filter)}>
+                <TabsList>
+                  <TabsTrigger value="all">All ({plan.rows.length})</TabsTrigger>
+                  <TabsTrigger value="errors">Errors ({plan.summary.withErrors})</TabsTrigger>
+                  <TabsTrigger value="warnings">Warnings ({plan.summary.withWarnings})</TabsTrigger>
+                  <TabsTrigger value="ready">Ready ({plan.rows.length - plan.summary.withErrors})</TabsTrigger>
+                </TabsList>
+              </Tabs>
+              <Button variant="outline" size="sm" onClick={downloadIssues}><Download className="w-4 h-4 mr-2" /> Download issues</Button>
+            </div>
+            <ReviewTable rows={visibleRows} />
+            <div className="flex items-center justify-between gap-4">
+              <p className="text-xs text-muted-foreground">
+                {plan.summary.withErrors > 0 ? `${plan.summary.withErrors} row(s) with errors will be skipped. Fix them in the file and upload again, or import the ready rows now.` : 'All rows are ready.'}
+              </p>
               <div className="flex gap-2">
-                <Button variant="outline" onClick={() => setStep('upload')}>Back</Button>
-                <Button variant="outline" onClick={downloadErrorReport}>
-                  <Download className="w-4 h-4 mr-2" /> Download Error Report
+                {file && <Button variant="outline" onClick={() => analyse(file, { country: countryCode, mode, replaceBlanks })} disabled={busy}>Re-check</Button>}
+                <Button onClick={runImport} disabled={plan.summary.ready === 0 || busy}>
+                  Import {plan.summary.ready} employee{plan.summary.ready === 1 ? '' : 's'}
                 </Button>
               </div>
-              <Button onClick={() => setStep('confirm')} disabled={validation.summary.validRows === 0 || validation.fileErrors.length > 0}>
-                <FileCheck2 className="w-4 h-4 mr-2" /> Continue with {validation.summary.validRows} valid rows
-              </Button>
             </div>
           </Card>
         </>
       )}
 
-      {step === 'confirm' && validation && (
-        <Card className="p-6 space-y-4">
-          <h2 className="text-lg font-semibold">Confirm Import</h2>
-          <p className="text-sm text-muted-foreground">
-            {validation.summary.validRows} rows will be posted. {validation.summary.errorRows} error rows will be skipped.
-            The import runs as a single controlled transaction and can be rolled back from the Import History page.
-          </p>
-          <ul className="text-sm space-y-1 list-disc pl-5">
-            <li>New employees: <strong>{validation.summary.newEmployees}</strong></li>
-            <li>Updates: <strong>{validation.summary.updates}</strong></li>
-            <li>Country: <strong>{COUNTRY_IMPORT_RULES[countryCode].countryName}</strong></li>
-            <li>Mode: <strong>{mode}</strong></li>
-            <li>Replace blanks: <strong>{replaceBlanks ? 'Yes' : 'No'}</strong></li>
-          </ul>
-          <div className="flex justify-between">
-            <Button variant="outline" onClick={() => setStep('preview')}>Back</Button>
-            <Button onClick={proceed} disabled={busy}>
-              {busy ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Posting…</> : 'Confirm and Post'}
-            </Button>
-          </div>
+      {step === 'importing' && (
+        <Card className="p-8 space-y-4">
+          <div className="flex items-center gap-3"><Loader2 className="w-5 h-5 animate-spin" /><h2 className="text-lg font-semibold">Importing employees…</h2></div>
+          <Progress value={progress.total ? (progress.done / progress.total) * 100 : 0} />
+          <p className="text-sm text-muted-foreground">{progress.done} of {progress.total} processed. Keep this page open.</p>
         </Card>
       )}
 
-      {step === 'done' && postResult && (
-        <Card className="p-6 space-y-4">
+      {step === 'done' && result && (
+        <Card className="p-6 space-y-5">
           <div className="flex items-center gap-3">
-            {postResult.created + postResult.updated === 0 && postResult.failed > 0 ? (
-              <><XCircle className="w-6 h-6 text-destructive" /><h2 className="text-lg font-semibold">Import Failed</h2></>
-            ) : postResult.failed > 0 ? (
-              <><AlertTriangle className="w-6 h-6 text-warning" /><h2 className="text-lg font-semibold">Import Completed with Errors</h2></>
-            ) : (
-              <><CheckCircle2 className="w-6 h-6 text-success" /><h2 className="text-lg font-semibold">Import Completed</h2></>
-            )}
+            {result.created + result.updated === 0 ? <XCircle className="w-6 h-6 text-destructive" />
+              : result.failed + result.skipped > 0 ? <AlertTriangle className="w-6 h-6 text-warning" />
+              : <CheckCircle2 className="w-6 h-6 text-success" />}
+            <h2 className="text-lg font-semibold">
+              {result.created + result.updated === 0 ? 'No employees were imported' : result.failed + result.skipped > 0 ? 'Import finished with some rows not imported' : 'Import complete'}
+            </h2>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Stat label="Created" value={postResult.created} tone="ok" />
-            <Stat label="Updated" value={postResult.updated} tone="info" />
-            <Stat label="Skipped" value={postResult.skipped} tone="warn" />
-            <Stat label="Failed" value={postResult.failed} tone={postResult.failed > 0 ? 'error' : 'info'} />
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <Stat label="Added" value={result.created} tone="ok" />
+            <Stat label="Updated" value={result.updated} tone="info" />
+            <Stat label="Failed" value={result.failed} tone={result.failed ? 'error' : undefined} />
+            <Stat label="Skipped (errors)" value={result.skipped} tone={result.skipped ? 'warn' : undefined} />
           </div>
-          <EmployeeImportErrors errors={postResult.errors ?? []} />
-          <div className="flex gap-2">
-            <Button onClick={() => navigate('/payroll/employees/list')}>View Employees</Button>
-            <Button variant="outline" onClick={() => navigate('/payroll/employees/bulk-upload/history')}>Import History</Button>
-            {batchId && <Button variant="ghost" onClick={downloadErrorReport}>Download Error Report</Button>}
+          <ResultsTable rows={result.results.filter((r) => r.status === 'failed' || r.status === 'skipped')} />
+          <div className="flex gap-2 flex-wrap">
+            <Button onClick={() => navigate('/payroll/employees/list')}>View employees</Button>
+            <Button variant="outline" onClick={downloadResults}><Download className="w-4 h-4 mr-2" /> Download results</Button>
+            <Button variant="outline" onClick={reset}>Upload another file</Button>
           </div>
+          {result.failed + result.skipped > 0 && (
+            <p className="text-xs text-muted-foreground">The results file has an Employees sheet with only the rows that were not imported — fix them there and upload it again.</p>
+          )}
         </Card>
       )}
+    </div>
+  );
+}
+
+function ReviewTable({ rows }: { rows: RowPlan[] }) {
+  return (
+    <div className="overflow-auto max-h-[460px] border rounded-md">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="w-14">Row</TableHead>
+            <TableHead className="w-24">Status</TableHead>
+            <TableHead className="w-44">Employee</TableHead>
+            <TableHead className="w-36">Employee ID</TableHead>
+            <TableHead className="w-20">Action</TableHead>
+            <TableHead>Issues</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {rows.slice(0, 1000).map((r) => (
+            <TableRow key={r.rowNumber}>
+              <TableCell className="text-xs">{r.rowNumber}</TableCell>
+              <TableCell>
+                {r.errors.length ? <Badge variant="destructive" className="gap-1"><XCircle className="w-3 h-3" />Error</Badge>
+                  : r.warnings.length ? <Badge className="gap-1 bg-warning/10 text-warning border-warning/20"><AlertTriangle className="w-3 h-3" />Check</Badge>
+                  : <Badge className="gap-1 bg-success/10 text-success border-success/20"><CheckCircle2 className="w-3 h-3" />Ready</Badge>}
+              </TableCell>
+              <TableCell className="text-xs"><div className="font-medium">{r.name || '—'}</div><div className="text-muted-foreground">{r.email}</div></TableCell>
+              <TableCell className="font-mono text-xs">{r.employeeNumber || '—'}</TableCell>
+              <TableCell className="text-xs capitalize">{r.action === 'create' ? 'Add' : 'Update'}</TableCell>
+              <TableCell className="text-xs space-y-0.5">
+                {r.errors.map((e, i) => <div key={`e${i}`} className="text-destructive">{e.message}</div>)}
+                {r.warnings.map((e, i) => <div key={`w${i}`} className="text-warning">{e.message}</div>)}
+              </TableCell>
+            </TableRow>
+          ))}
+          {rows.length === 0 && <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-6">Nothing here.</TableCell></TableRow>}
+        </TableBody>
+      </Table>
+      {rows.length > 1000 && <div className="p-2 text-xs text-muted-foreground text-center">Showing the first 1,000 of {rows.length}. Download the issues file for the full list.</div>}
+    </div>
+  );
+}
+
+function ResultsTable({ rows }: { rows: RowResult[] }) {
+  if (!rows.length) return null;
+  return (
+    <div className="overflow-auto max-h-[360px] border rounded-md">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="w-14">Row</TableHead>
+            <TableHead className="w-44">Employee</TableHead>
+            <TableHead className="w-36">Employee ID</TableHead>
+            <TableHead className="w-24">Result</TableHead>
+            <TableHead>Reason</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {rows.map((r) => (
+            <TableRow key={r.rowNumber}>
+              <TableCell className="text-xs">{r.rowNumber}</TableCell>
+              <TableCell className="text-xs">{r.name || '—'}</TableCell>
+              <TableCell className="font-mono text-xs">{r.employeeNumber || '—'}</TableCell>
+              <TableCell><Badge variant={r.status === 'failed' ? 'destructive' : 'outline'}>{r.status}</Badge></TableCell>
+              <TableCell className="text-xs">{r.message}</TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
     </div>
   );
 }
 
 function Stat({ label, value, tone }: { label: string; value: number; tone?: 'ok' | 'warn' | 'error' | 'info' }) {
-  const color =
-    tone === 'ok' ? 'text-success' :
-    tone === 'warn' ? 'text-warning' :
-    tone === 'error' ? 'text-destructive' :
-    tone === 'info' ? 'text-primary' : 'text-foreground';
+  const color = tone === 'ok' ? 'text-success' : tone === 'warn' ? 'text-warning' : tone === 'error' ? 'text-destructive' : tone === 'info' ? 'text-primary' : 'text-foreground';
   return (
     <div className="p-3 border rounded-md">
       <p className="text-xs text-muted-foreground">{label}</p>
-      <p className={`text-2xl font-bold ${color}`}>{value}</p>
+      <p className={`text-2xl font-bold ${color}`}>{value.toLocaleString()}</p>
     </div>
   );
 }
-
-// small local import for Input to avoid extra imports at top
-import { Input } from '@/components/ui/input';
