@@ -11,6 +11,8 @@
     "build:dev": "node scripts/generate-sitemap.mjs && vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview",
+    "supabase:status": "node scripts/supabase-deploy.mjs status",
+    "supabase:deploy": "node scripts/supabase-deploy.mjs deploy",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui"
   },

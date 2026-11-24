@@ -11,7 +11,17 @@ export interface EmployeeImportPostError {
 
 export function EmployeeImportErrors({ errors }: { errors: EmployeeImportPostError[] }) {
   if (!errors.length) return null;
+  // Only the outdated employee-bulk-import function writes errors without a sheet/row.
+  const fromOutdatedFunction = errors.some((e) => !e.sheet);
   return (
+    <div className="space-y-2">
+    {fromOutdatedFunction && (
+      <div className="p-3 rounded-md bg-warning/10 text-warning text-xs">
+        These errors were produced by an outdated version of the server upload function, which does not save the NIN.
+        Deploy the latest <code>employee-bulk-import</code> function and the employee import migration
+        (<code>npm run supabase:deploy</code> or the “Deploy Supabase” GitHub workflow), then upload the file again.
+      </div>
+    )}
     <div className="overflow-auto max-h-[420px] border rounded-md">
       <Table>
         <TableHeader>
@@ -36,6 +46,7 @@ export function EmployeeImportErrors({ errors }: { errors: EmployeeImportPostErr
       {errors.length > 500 && (
         <div className="p-2 text-xs text-muted-foreground text-center">Showing first 500 of {errors.length}.</div>
       )}
+    </div>
     </div>
   );
 }
