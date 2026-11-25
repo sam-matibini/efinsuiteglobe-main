@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { DateRangePicker } from '@/components/reports/DateRangePicker';
 import { Building2, Play, ChevronUp, ChevronDown, ChevronRight, FileText, FileSpreadsheet, Printer, CalendarDays, ArrowLeftRight, Share2, X } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -1254,64 +1255,14 @@ export default function CashFlow() {
 
       {/* Filter Bar - Zoho Style */}
       <div className="flex flex-wrap items-center gap-3 print:hidden">
-        {/* Date Preset Dropdown */}
-        <Select value={datePreset} onValueChange={(v) => handlePresetChange(v as DatePreset)}>
-          <SelectTrigger className="w-36 h-9 bg-background border-border rounded-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="fiscal-year-to-date">Fiscal Year to Date</SelectItem>
-            <SelectItem value="last-fiscal-year">Last Fiscal Year</SelectItem>
-            <SelectItem value="this-month">This Month</SelectItem>
-            <SelectItem value="last-month">Last Month</SelectItem>
-            <SelectItem value="this-quarter">This Quarter</SelectItem>
-            <SelectItem value="last-quarter">Last Quarter</SelectItem>
-            <SelectItem value="custom">Custom</SelectItem>
-          </SelectContent>
-        </Select>
-
-        {/* Date Range Button */}
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button variant="outline" size="sm" className="h-9 gap-2 rounded-full border-border">
-              <CalendarDays className="w-4 h-4" />
-              {format(dateFrom, 'MMM d, yyyy')} - {format(dateTo, 'MMM d, yyyy')}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-4" align="start">
-            <div className="flex gap-4">
-              <div className="space-y-2">
-                <Label>From</Label>
-                <Calendar
-                  mode="single"
-                  selected={dateFrom}
-                  onSelect={(date) => {
-                    if (date) {
-                      setDateFrom(date);
-                      setDatePreset('custom');
-                    }
-                  }}
-                  initialFocus
-                  className="pointer-events-auto"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>To</Label>
-                <Calendar
-                  mode="single"
-                  selected={dateTo}
-                  onSelect={(date) => {
-                    if (date) {
-                      setDateTo(date);
-                      setDatePreset('custom');
-                    }
-                  }}
-                  className="pointer-events-auto"
-                />
-              </div>
-            </div>
-          </PopoverContent>
-        </Popover>
+        {/* Report period — Zoho Books–style preset list with a Custom range */}
+        <DateRangePicker
+          startDate={dateFrom}
+          endDate={dateTo}
+          fiscalYearEndMonth={fiscalYearEndMonth}
+          align="start"
+          onChange={(start, end) => { setDateFrom(start); setDateTo(end); setDatePreset('custom'); }}
+        />
 
         {/* Division Filter */}
         <DivisionFilter value={divisionIds} onChange={setDivisionIds} />
