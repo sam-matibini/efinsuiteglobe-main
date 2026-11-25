@@ -24,7 +24,13 @@ import { useReportFilters } from '@/hooks/useReportFilters';
 import { useNpoTerminology } from '@/hooks/useNpoTerminology';
 import { useFiscalYearClose } from '@/hooks/useFiscalYearClose';
 import { FiscalYearCloseDialog } from '@/components/reports/FiscalYearCloseDialog';
-import { useRetainedEarningsStatement } from '@/hooks/useRetainedEarningsStatement';
+import {
+  buildRetainedEarningsRollforward,
+  isCurrentYearEarningsEquityAccount,
+  isDividendOrContraEquityAccount,
+  isExcludedFromEquityTotal,
+  isRetainedEarningsEquityAccount,
+} from '@/lib/balanceSheetEquity';
 import { getFiscalYearForDate, getFiscalYearStart } from '@/lib/fiscalYearUtils';
 import { useIntegrityScan } from '@/hooks/useIntegrityScan';
 import { SubledgerReconciliationDialog } from '@/components/reports/SubledgerReconciliationDialog';
@@ -136,60 +142,6 @@ const isCashOrBankAccount = (account: AccountWithBalance): boolean => {
   return name.includes('bank') || name.includes('cash') || name.includes('petty');
 };
 
-const isCurrentYearEarningsEquityAccount = (account: Pick<AccountWithBalance, 'code' | 'name'>): boolean => {
-  const nameLower = account.name?.toLowerCase() || '';
-  return (
-    account.code === '3-00-202' ||
-    nameLower.includes('current year earnings') ||
-    nameLower.includes('current year earning') ||
-    nameLower.includes('current earnings') ||
-    nameLower === 'current year net income' ||
-    nameLower === 'current year income' ||
-    nameLower.includes('current year excess') ||
-    nameLower.includes('current year surplus') ||
-    nameLower.includes('excess (deficiency)')
-  );
-};
-
-const isRetainedEarningsEquityAccount = (account: Pick<AccountWithBalance, 'code' | 'name'>): boolean => {
-  const nameLower = account.name?.toLowerCase() || '';
-  return (
-    account.code === '3-00-201' ||
-    nameLower === 'retained earnings' ||
-    nameLower === 'retained profits' ||
-    nameLower.includes('retained earnings') ||
-    nameLower.includes('accumulated deficit') ||
-    nameLower.includes('accumulated earnings') ||
-    nameLower.includes('unrestricted net assets') ||
-    nameLower.includes('accumulated surplus') ||
-    nameLower.includes('unrestricted funds') ||
-    nameLower.includes('accumulated funds')
-  );
-};
-
-const isDividendOrContraEquityAccount = (account: Pick<AccountWithBalance, 'account_type' | 'normal_balance' | 'name'>): boolean => {
-  const nameLower = account.name?.toLowerCase() || '';
-  return (
-    (account.account_type === 'equity' && account.normal_balance === 'debit') ||
-    nameLower.includes('dividend') ||
-    nameLower.includes("owner's draw") ||
-    nameLower.includes('owner draw') ||
-    nameLower.includes('owners draw') ||
-    nameLower.includes('shareholder draw') ||
-    nameLower.includes('drawing') ||
-    nameLower.includes('distribution') ||
-    nameLower.includes('treasury stock') ||
-    nameLower.includes('treasury shares')
-  );
-};
-
-const isExcludedFromEquityTotal = (account: AccountWithBalance | any): boolean => {
-  return (
-    isCurrentYearEarningsEquityAccount(account) ||
-    isRetainedEarningsEquityAccount(account) ||
-    isDividendOrContraEquityAccount(account)
-  );
-};
 
 export default function BalanceSheet() {
   // Use shared report filters
@@ -441,16 +393,30 @@ export default function BalanceSheet() {
     });
   }, [comparisonPeriods, fiscalYearEndMonth]);
 
-  // Fetch Statement of Retained Earnings data for current and comparative periods
-  const {
-    currentStatement: reCurrentStatement,
-    comparativeStatements: reComparativeStatements,
-    isLoading: reLoading,
-    refetch: reRefetch,
-  } = useRetainedEarningsStatement(
-    retainedEarningsCurrentPeriod,
-    retainedEarningsComparisonPeriods
-  );
+  // Statement of Retained Earnings — derived from the same journal lines as
+  // the rest of the Balance Sheet (see lib/balanceSheetEquity). Using a
+  // separate database formula here is what let the Balance Sheet go out of
+  // balance while the Trial Balance balanced.
+  const reCurrentStatement = useMemo(() => {
+    if (!allAccounts?.length) return null;
+    const fiscalYear = getFiscalYearForDate(retainedEarningsCurrentPeriod.endDate, fiscalYearEndMonth);
+    return { label: 'Current', fiscalYear, data: buildRetainedEarningsRollforward(allAccounts) };
+  }, [allAccounts, retainedEarningsCurrentPeriod, fiscalYearEndMonth]);
+
+  const reComparativeStatements = useMemo(() => {
+    return retainedEarningsComparisonPeriods.map((period, i) => {
+      const balances = comparativeData?.[i + 1]?.balances;
+      return balances
+        ? {
+            label: period.label,
+            fiscalYear: getFiscalYearForDate(period.endDate, fiscalYearEndMonth),
+            data: buildRetainedEarningsRollforward(balances),
+          }
+        : null;
+    });
+  }, [retainedEarningsComparisonPeriods, comparativeData, fiscalYearEndMonth]);
+  const reLoading = false;
+  const reRefetch: (() => void) | undefined = undefined;
 
   const retainedEarningsGlAccount = useMemo(() => {
     return (allAccounts || []).find((a) => !a.is_header && isRetainedEarningsEquityAccount(a));

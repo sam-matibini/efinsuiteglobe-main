@@ -20,6 +20,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrganization } from './useOrganization';
 import { getFiscalYearForDate, getFiscalYearStart } from '@/lib/fiscalYearUtils';
 import { journalDateKey, reportLineAmount } from '@/lib/financialCompare';
+import { computeLedgerBuckets, LedgerBuckets } from '@/lib/balanceSheetEquity';
 
 interface ComparativePeriod {
   label: string;
@@ -27,7 +28,7 @@ interface ComparativePeriod {
   endDate: Date;
 }
 
-interface AccountBalance {
+interface AccountBalance extends LedgerBuckets {
   id: string;
   code: string;
   name: string;
@@ -389,7 +390,23 @@ async function fetchPeriodBalances(
       }
     }
 
+    const buckets = computeLedgerBuckets({
+      normalBalance: account.normal_balance,
+      accountType: account.account_type,
+      openingBalanceCents: shouldIncludeOpeningBalance ? toCents(Number(account.opening_balance) || 0) : 0,
+      lines: accountLines.map((l) => ({
+        journal_entry_id: l.journal_entry_id,
+        debitCents: toCents(reportLineAmount(l.base_currency_debit, l.debit, l.exchange_rate)),
+        creditCents: toCents(reportLineAmount(l.base_currency_credit, l.credit, l.exchange_rate)),
+      })),
+      entryDate: entryDateMap,
+      closingEntryIds,
+      fiscalYearStart: fiscalYearStartStr,
+      endDate: endDateStr,
+    });
+
     return {
+      ...buckets,
       id: account.id,
       code: account.code,
       name: account.name,

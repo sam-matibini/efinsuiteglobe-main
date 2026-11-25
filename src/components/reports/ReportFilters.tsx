@@ -1,8 +1,6 @@
 import React, { useState, ReactNode } from 'react';
-import { Calendar, ArrowLeftRight, X, Play } from 'lucide-react';
+import { ArrowLeftRight, X, Play } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import {
   Select,
   SelectContent,
@@ -20,10 +18,11 @@ import {
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
-import { format, startOfMonth, startOfQuarter } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { getFiscalYearStart, getFiscalYearEnd, getFiscalYearForDate } from '@/lib/fiscalYearUtils';
+import { DateRangePicker } from './DateRangePicker';
 
+/** @deprecated Presets now live in lib/reportDateRanges; kept for existing imports. */
 export type DatePreset = 'today' | 'this-month' | 'this-quarter' | 'fiscal-year-to-date' | 'last-fiscal-year' | 'custom';
 
 export interface CompareSettings {
@@ -60,48 +59,6 @@ const formatLocalDate = (date: Date): string => {
   return `${year}-${month}-${day}`;
 };
 
-// Detect preset from dates - fiscal year aware
-const detectPresetFromDates = (start: Date, end: Date, fiscalYearEndMonth: number = 12): DatePreset => {
-  const now = new Date();
-  const todayStr = formatLocalDate(now);
-  const startStr = formatLocalDate(start);
-  const endStr = formatLocalDate(end);
-  
-  // Today
-  if (startStr === todayStr && endStr === todayStr) {
-    return 'today';
-  }
-  
-  // This Month
-  const monthStart = startOfMonth(now);
-  if (startStr === formatLocalDate(monthStart) && endStr === todayStr) {
-    return 'this-month';
-  }
-  
-  // This Quarter
-  const quarterStart = startOfQuarter(now);
-  if (startStr === formatLocalDate(quarterStart) && endStr === todayStr) {
-    return 'this-quarter';
-  }
-  
-  // Fiscal Year to Date (start of current fiscal year to today)
-  const currentFY = getFiscalYearForDate(now, fiscalYearEndMonth);
-  const fyStart = getFiscalYearStart(currentFY, fiscalYearEndMonth);
-  if (startStr === formatLocalDate(fyStart) && endStr === todayStr) {
-    return 'fiscal-year-to-date';
-  }
-  
-  // Last Fiscal Year (full previous fiscal year)
-  const lastFY = currentFY - 1;
-  const lastFYStart = getFiscalYearStart(lastFY, fiscalYearEndMonth);
-  const lastFYEnd = getFiscalYearEnd(lastFY, fiscalYearEndMonth);
-  if (startStr === formatLocalDate(lastFYStart) && endStr === formatLocalDate(lastFYEnd)) {
-    return 'last-fiscal-year';
-  }
-  
-  return 'custom';
-};
-
 export const ReportFilters = React.forwardRef<HTMLDivElement, ReportFiltersProps>(function ReportFilters({
   onDateRangeChange,
   onRunReport,
@@ -126,9 +83,6 @@ export const ReportFilters = React.forwardRef<HTMLDivElement, ReportFiltersProps
   const startDate = initialStartDate ?? getFiscalYearStart(lastFY, fiscalYearEndMonth);
   const endDate = initialEndDate ?? getFiscalYearEnd(lastFY, fiscalYearEndMonth);
   
-  // Detect preset from current dates (always derived, not stored)
-  const datePreset = detectPresetFromDates(startDate, endDate, fiscalYearEndMonth);
-  
   const [compareDialogOpen, setCompareDialogOpen] = useState(false);
   const [compareSettings, setCompareSettings] = useState<CompareSettings | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
@@ -137,54 +91,6 @@ export const ReportFilters = React.forwardRef<HTMLDivElement, ReportFiltersProps
   const [tempCompareType, setTempCompareType] = useState<'period' | 'year'>('period');
   const [tempNumberOfPeriods, setTempNumberOfPeriods] = useState('1');
   const [tempLatestToOldest, setTempLatestToOldest] = useState(true);
-
-  const handlePresetChange = (preset: DatePreset) => {
-    const now = new Date();
-    const currentFY = getFiscalYearForDate(now, fiscalYearEndMonth);
-    let start: Date;
-    let end: Date = now;
-
-    switch (preset) {
-      case 'today':
-        start = now;
-        break;
-      case 'this-month':
-        start = startOfMonth(now);
-        break;
-      case 'this-quarter':
-        start = startOfQuarter(now);
-        break;
-      case 'fiscal-year-to-date':
-        start = getFiscalYearStart(currentFY, fiscalYearEndMonth);
-        break;
-      case 'last-fiscal-year':
-        const lastFY = currentFY - 1;
-        start = getFiscalYearStart(lastFY, fiscalYearEndMonth);
-        end = getFiscalYearEnd(lastFY, fiscalYearEndMonth);
-        break;
-      default:
-        start = startDate;
-    }
-
-    // Immediately notify parent of the date change (controlled component)
-    onDateRangeChange?.(start, end);
-  };
-
-  const handleStartDateChange = (date: Date | undefined) => {
-    if (date) {
-      // Immediately update parent state (controlled component)
-      onDateRangeChange?.(date, endDate);
-      setHasChanges(true);
-    }
-  };
-
-  const handleEndDateChange = (date: Date | undefined) => {
-    if (date) {
-      // Immediately update parent state (controlled component)
-      onDateRangeChange?.(startDate, date);
-      setHasChanges(true);
-    }
-  };
 
   const handleRunReport = () => {
     onRunReport?.();
@@ -205,10 +111,6 @@ export const ReportFilters = React.forwardRef<HTMLDivElement, ReportFiltersProps
   const handleClearCompare = () => {
     setCompareSettings(null);
     onCompareChange?.(null);
-  };
-
-  const formatDateRange = () => {
-    return `${format(startDate, 'MMM d, yyyy')} - ${format(endDate, 'MMM d, yyyy')}`;
   };
 
   return (
@@ -240,45 +142,13 @@ export const ReportFilters = React.forwardRef<HTMLDivElement, ReportFiltersProps
       </div>
 
       <div className="flex items-center gap-3">
-        {/* Date Preset Selector */}
-        <Select value={datePreset} onValueChange={(value) => handlePresetChange(value as DatePreset)}>
-          <SelectTrigger className="w-44 bg-background border-border">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent className="bg-popover border border-border z-50">
-            <SelectItem value="today">Today</SelectItem>
-            <SelectItem value="this-month">This Month</SelectItem>
-            <SelectItem value="this-quarter">This Quarter</SelectItem>
-            <SelectItem value="fiscal-year-to-date">Fiscal Year to Date</SelectItem>
-            <SelectItem value="last-fiscal-year">Last Fiscal Year</SelectItem>
-            <SelectItem value="custom">Custom</SelectItem>
-          </SelectContent>
-        </Select>
-
-        {/* Date Range Display/Picker */}
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button variant="outline" className="gap-2">
-              <Calendar className="w-4 h-4" />
-              {formatDateRange()}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-0 bg-popover border border-border z-50" align="end">
-            <div className="flex">
-              <CalendarComponent
-                mode="single"
-                selected={startDate}
-                onSelect={handleStartDateChange}
-                initialFocus
-              />
-              <CalendarComponent
-                mode="single"
-                selected={endDate}
-                onSelect={handleEndDateChange}
-              />
-            </div>
-          </PopoverContent>
-        </Popover>
+        {/* Report period — Zoho Books–style preset list with a Custom range */}
+        <DateRangePicker
+          startDate={startDate}
+          endDate={endDate}
+          fiscalYearEndMonth={fiscalYearEndMonth}
+          onChange={(start, end) => { onDateRangeChange?.(start, end); setHasChanges(true); }}
+        />
 
         {/* Run Report Button */}
         <Button 
