@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import * as XLSX from 'xlsx';
-import { AlertTriangle, ArrowLeft, CheckCircle2, Download, FileSpreadsheet, History, Loader2, Upload, XCircle } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, CheckCircle2, Download, EyeOff, FileSpreadsheet, History, Loader2, Lock, Undo2, Upload, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -16,13 +16,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useEmployeeUpload, sha256 } from '@/hooks/useEmployeeUpload';
 import { useEmployees } from '@/hooks/useEmployees';
 import { parseUploadFile, ParsedUpload } from '@/lib/employeeUpload/parse';
-import { buildPlan, RowPlan, UploadMode, UploadPlan } from '@/lib/employeeUpload/plan';
+import { allIgnorableKeys, applyIgnores, buildPlan, issueKey, RowPlan, UploadMode, UploadPlan } from '@/lib/employeeUpload/plan';
 import { CommitResult, RowResult } from '@/lib/employeeUpload/commit';
 import { buildTemplateBlob } from '@/lib/employeeUpload/template';
 import { COLUMN_BY_KEY, MAX_FILE_SIZE_BYTES, availableCountries, getCountryRule } from '@/lib/employeeUpload/schema';
 
 type Step = 'setup' | 'review' | 'importing' | 'done';
-type Filter = 'all' | 'errors' | 'warnings' | 'ready';
+type Filter = 'all' | 'errors' | 'warnings' | 'ready' | 'ignored';
 
 const STEPS: { key: Step; label: string }[] = [
   { key: 'setup', label: 'Upload' },
@@ -65,7 +65,15 @@ export default function BulkEmployeeUpload() {
   const [replaceBlanks, setReplaceBlanks] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [parsed, setParsed] = useState<ParsedUpload | null>(null);
-  const [plan, setPlan] = useState<UploadPlan | null>(null);
+  const [basePlan, setPlan] = useState<UploadPlan | null>(null);
+  // Issues the user chose to ignore (keys from issueKey). The plan shown and
+  // imported is the base plan with those issues set aside.
+  const [ignored, setIgnored] = useState<Set<string>>(new Set());
+  const plan = useMemo(() => (basePlan ? applyIgnores(basePlan, ignored) : null), [basePlan, ignored]);
+  const pendingIgnorable = useMemo(() => (plan ? allIgnorableKeys(plan) : []), [plan]);
+  const ignoredCount = useMemo(() => (plan ? plan.rows.reduce((n, r) => n + r.ignored.length, 0) : 0), [plan]);
+  const ignoreKeys = (keys: string[]) => setIgnored((prev) => new Set([...prev, ...keys]));
+  const unignoreKey = (key: string) => setIgnored((prev) => { const next = new Set(prev); next.delete(key); return next; });
   const [busy, setBusy] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [filter, setFilter] = useState<Filter>('all');
@@ -77,7 +85,7 @@ export default function BulkEmployeeUpload() {
   const countries = useMemo(() => availableCountries().map((c) => ({ value: c.code, label: `${c.name} (${c.currency})` })), []);
   const rule = useMemo(() => getCountryRule(countryCode), [countryCode]);
 
-  const analyse = useCallback(async (f: File, opts?: { mode?: UploadMode; country?: string; replaceBlanks?: boolean }) => {
+  const analyse = useCallback(async (f: File, opts?: { mode?: UploadMode; country?: string; replaceBlanks?: boolean; keepIgnores?: boolean }) => {
     if (!organization?.id) { toast.error('Select an organization first.'); return; }
     if (f.size > MAX_FILE_SIZE_BYTES) { toast.error('File exceeds the 10 MB limit.'); return; }
     setBusy(true);
@@ -96,6 +104,7 @@ export default function BulkEmployeeUpload() {
       setFile(f);
       setParsed(p);
       setPlan(next);
+      if (!opts?.keepIgnores) setIgnored(new Set());
       setFilter(next.summary.withErrors ? 'errors' : 'all');
       setStep('review');
     } catch (e) {
@@ -133,7 +142,7 @@ export default function BulkEmployeeUpload() {
   };
 
   const reset = () => {
-    setStep('setup'); setFile(null); setParsed(null); setPlan(null); setResult(null); setProgress({ done: 0, total: 0 });
+    setStep('setup'); setFile(null); setParsed(null); setPlan(null); setIgnored(new Set()); setResult(null); setProgress({ done: 0, total: 0 });
   };
 
   const visibleRows = useMemo(() => {
@@ -142,15 +151,17 @@ export default function BulkEmployeeUpload() {
       filter === 'all' ? true :
       filter === 'errors' ? r.errors.length > 0 :
       filter === 'warnings' ? r.errors.length === 0 && r.warnings.length > 0 :
+      filter === 'ignored' ? r.ignored.length > 0 :
       r.errors.length === 0);
   }, [plan, filter]);
 
   const downloadIssues = () => {
     if (!plan) return;
-    const rows = plan.rows.filter((r) => r.errors.length || r.warnings.length).map((r) => ({
+    const rows = plan.rows.filter((r) => r.errors.length || r.warnings.length || r.ignored.length).map((r) => ({
       Row: r.rowNumber,
       Errors: r.errors.map((e) => e.message).join(' | '),
       Warnings: r.warnings.map((e) => e.message).join(' | '),
+      Ignored: r.ignored.map((e) => e.message).join(' | '),
       ...rowWithHeaders(r.raw),
     }));
     if (!rows.length) { toast.info('No issues to export.'); return; }
@@ -285,17 +296,31 @@ export default function BulkEmployeeUpload() {
                   <TabsTrigger value="errors">Errors ({plan.summary.withErrors})</TabsTrigger>
                   <TabsTrigger value="warnings">Warnings ({plan.summary.withWarnings})</TabsTrigger>
                   <TabsTrigger value="ready">Ready ({plan.rows.length - plan.summary.withErrors})</TabsTrigger>
+                  <TabsTrigger value="ignored">Ignored ({plan.rows.filter((r) => r.ignored.length > 0).length})</TabsTrigger>
                 </TabsList>
               </Tabs>
-              <Button variant="outline" size="sm" onClick={downloadIssues}><Download className="w-4 h-4 mr-2" /> Download issues</Button>
+              <div className="flex gap-2">
+                {ignoredCount > 0 && (
+                  <Button variant="ghost" size="sm" onClick={() => setIgnored(new Set())}>
+                    <Undo2 className="w-4 h-4 mr-2" /> Undo all ignores
+                  </Button>
+                )}
+                <Button variant="outline" size="sm" onClick={() => ignoreKeys(pendingIgnorable)} disabled={pendingIgnorable.length === 0}
+                  title="Ignore every warning and every error on an optional field. Must-fix errors are not affected.">
+                  <EyeOff className="w-4 h-4 mr-2" /> Ignore all{pendingIgnorable.length ? ` (${pendingIgnorable.length})` : ''}
+                </Button>
+                <Button variant="outline" size="sm" onClick={downloadIssues}><Download className="w-4 h-4 mr-2" /> Download issues</Button>
+              </div>
             </div>
-            <ReviewTable rows={visibleRows} />
+            <ReviewTable rows={visibleRows} onIgnore={(key) => ignoreKeys([key])} onUndo={unignoreKey} />
             <div className="flex items-center justify-between gap-4">
               <p className="text-xs text-muted-foreground">
-                {plan.summary.withErrors > 0 ? `${plan.summary.withErrors} row(s) with errors will be skipped. Fix them in the file and upload again, or import the ready rows now.` : 'All rows are ready.'}
+                {plan.summary.withErrors > 0
+                  ? `${plan.summary.withErrors} row(s) with errors will be skipped. Errors on optional fields can be ignored; errors marked "Must fix" need a corrected file.`
+                  : 'All rows are ready.'}
               </p>
               <div className="flex gap-2">
-                {file && <Button variant="outline" onClick={() => analyse(file, { country: countryCode, mode, replaceBlanks })} disabled={busy}>Re-check</Button>}
+                {file && <Button variant="outline" onClick={() => analyse(file, { country: countryCode, mode, replaceBlanks, keepIgnores: true })} disabled={busy}>Re-check</Button>}
                 <Button onClick={runImport} disabled={plan.summary.ready === 0 || busy}>
                   Import {plan.summary.ready} employee{plan.summary.ready === 1 ? '' : 's'}
                 </Button>
@@ -344,7 +369,15 @@ export default function BulkEmployeeUpload() {
   );
 }
 
-function ReviewTable({ rows }: { rows: RowPlan[] }) {
+function IgnoreButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} className="ml-2 inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground">
+      <EyeOff className="w-3 h-3" /> Ignore
+    </button>
+  );
+}
+
+function ReviewTable({ rows, onIgnore, onUndo }: { rows: RowPlan[]; onIgnore: (key: string) => void; onUndo: (key: string) => void }) {
   return (
     <div className="overflow-auto max-h-[460px] border rounded-md">
       <Table>
@@ -363,7 +396,7 @@ function ReviewTable({ rows }: { rows: RowPlan[] }) {
             <TableRow key={r.rowNumber}>
               <TableCell className="text-xs">{r.rowNumber}</TableCell>
               <TableCell>
-                {r.errors.length ? <Badge variant="destructive" className="gap-1"><XCircle className="w-3 h-3" />Error</Badge>
+                {r.errors.length ? <Badge variant="destructive" className="gap-1"><XCircle className="w-3 h-3" />{r.errors.some((e) => !e.ignorable) ? 'Must fix' : 'Error'}</Badge>
                   : r.warnings.length ? <Badge className="gap-1 bg-warning/10 text-warning border-warning/20"><AlertTriangle className="w-3 h-3" />Check</Badge>
                   : <Badge className="gap-1 bg-success/10 text-success border-success/20"><CheckCircle2 className="w-3 h-3" />Ready</Badge>}
               </TableCell>
@@ -371,8 +404,29 @@ function ReviewTable({ rows }: { rows: RowPlan[] }) {
               <TableCell className="font-mono text-xs">{r.employeeNumber || '—'}</TableCell>
               <TableCell className="text-xs capitalize">{r.action === 'create' ? 'Add' : 'Update'}</TableCell>
               <TableCell className="text-xs space-y-0.5">
-                {r.errors.map((e, i) => <div key={`e${i}`} className="text-destructive">{e.message}</div>)}
-                {r.warnings.map((e, i) => <div key={`w${i}`} className="text-warning">{e.message}</div>)}
+                {r.errors.map((e, i) => (
+                  <div key={`e${i}`} className="text-destructive">
+                    {e.message}
+                    {e.ignorable
+                      ? <IgnoreButton onClick={() => onIgnore(issueKey(r.rowNumber, e))} />
+                      : <span className="ml-2 inline-flex items-center gap-1 text-[11px] text-muted-foreground" title="Required field or a rule the database enforces. Fix it in the file."><Lock className="w-3 h-3" />Must fix</span>}
+                    {e.ignorable && e.ifIgnored && <div className="text-[11px] text-muted-foreground">If ignored: {e.ifIgnored}</div>}
+                  </div>
+                ))}
+                {r.warnings.map((e, i) => (
+                  <div key={`w${i}`} className="text-warning">
+                    {e.message}
+                    <IgnoreButton onClick={() => onIgnore(issueKey(r.rowNumber, e))} />
+                  </div>
+                ))}
+                {r.ignored.map((e, i) => (
+                  <div key={`i${i}`} className="text-muted-foreground">
+                    <span className="line-through">Ignored: {e.message}</span>
+                    <button type="button" onClick={() => onUndo(issueKey(r.rowNumber, e))} className="ml-2 inline-flex items-center gap-1 text-[11px] hover:underline">
+                      <Undo2 className="w-3 h-3" /> Undo
+                    </button>
+                  </div>
+                ))}
               </TableCell>
             </TableRow>
           ))}

@@ -46,7 +46,7 @@ function cellToText(cell: XLSX.CellObject | undefined): CellValue {
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
   }
   if (cell.t === 'b') return cell.v ? 'TRUE' : 'FALSE';
-  return String(cell.v).replace(/ /g, ' ').trim();
+  return String(cell.v).replace(/\u00a0/g, ' ').trim();
 }
 
 function pickSheet(wb: XLSX.WorkBook): string | null {
