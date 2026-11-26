@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrganization } from './useOrganization';
 import { toast } from 'sonner';
+import { countryCurrency, currencyOption, recommendedBaseCurrency } from '@/lib/currencyOptions';
 
 export interface MultiCurrencySettings {
   multi_currency_enabled: boolean;
@@ -13,6 +14,11 @@ export interface MultiCurrencySettings {
   cta_account_id: string | null;
   fx_rate_source: 'manual' | 'automated';
   fx_rate_sync_frequency: 'daily' | 'hourly';
+  /** Country the organization is based in, and that country's currency (e.g. Nigeria → NGN). */
+  country_name: string | null;
+  country_currency: string | null;
+  /** Base currency to suggest when enabling: the country's currency first. */
+  recommended_base: string;
 }
 
 export function useMultiCurrencySettings() {
@@ -28,6 +34,7 @@ export function useMultiCurrencySettings() {
         .from('organizations')
         .select(`
           currency,
+          country,
           multi_currency_enabled,
           reporting_currency,
           base_currency_locked_at,
@@ -40,9 +47,15 @@ export function useMultiCurrencySettings() {
         .eq('id', orgId)
         .single();
       if (error) throw error;
+      const row = data as typeof data & { currency: string | null; country: string | null };
+      const cc = countryCurrency(row.country);
+      const recommended = recommendedBaseCurrency(row);
       return {
         multi_currency_enabled: !!data.multi_currency_enabled,
-        base_currency: (data as any).currency || 'USD',
+        base_currency: (row.currency || recommended).toUpperCase(),
+        country_name: cc?.countryName ?? row.country ?? null,
+        country_currency: cc?.currency ?? null,
+        recommended_base: recommended,
         reporting_currency: data.reporting_currency,
         base_currency_locked_at: data.base_currency_locked_at,
         realized_fx_account_id: data.realized_fx_account_id,
@@ -54,6 +67,43 @@ export function useMultiCurrencySettings() {
     },
     enabled: !!orgId,
   });
+
+  // Journal lines recorded in a currency other than the base currency. While
+  // there are none, a wrongly locked base currency can still be corrected.
+  const baseForCheck = settingsQuery.data?.base_currency;
+  const foreignActivityQuery = useQuery({
+    queryKey: ['multi-currency-foreign-lines', orgId, baseForCheck],
+    enabled: !!orgId && !!baseForCheck,
+    queryFn: async (): Promise<number> => {
+      const { count, error } = await supabase
+        .from('journal_entry_lines')
+        .select('id, journal_entries!inner(organization_id)', { count: 'exact', head: true })
+        .eq('journal_entries.organization_id', orgId!)
+        .not('currency', 'is', null)
+        .neq('currency', baseForCheck!);
+      if (error) throw error;
+      return count ?? 0;
+    },
+  });
+
+  /** Marks `code` as the base in the currency master list, adding it if missing. */
+  const syncBaseCurrencyRow = async (code: string) => {
+    const { data: rows, error } = await supabase.from('currencies').select('id, code').eq('organization_id', orgId!);
+    if (error) throw error;
+    await supabase.from('currencies').update({ is_base: false }).eq('organization_id', orgId!).neq('code', code);
+    const existing = (rows ?? []).find((r) => r.code === code);
+    if (existing) {
+      const { error: e } = await supabase.from('currencies').update({ is_base: true, is_active: true }).eq('id', existing.id);
+      if (e) throw e;
+    } else {
+      const opt = currencyOption(code);
+      const { error: e } = await supabase.from('currencies').insert({
+        organization_id: orgId!, code, name: opt?.name ?? code, symbol: opt?.symbol ?? code,
+        decimal_places: code === 'JPY' ? 0 : 2, is_base: true, is_active: true,
+      });
+      if (e) throw e;
+    }
+  };
 
   const updateSettings = useMutation({
     mutationFn: async (input: Partial<MultiCurrencySettings>) => {
@@ -93,10 +143,13 @@ export function useMultiCurrencySettings() {
         })
         .eq('id', orgId);
       if (error) throw error;
+      await syncBaseCurrencyRow(baseCurrency);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['multi-currency-settings', orgId] });
       queryClient.invalidateQueries({ queryKey: ['organizations'] });
+      queryClient.invalidateQueries({ queryKey: ['currencies'] });
+      queryClient.invalidateQueries({ queryKey: ['multi-currency-foreign-lines'] });
       toast.success('Multi-currency enabled and base currency locked');
     },
     onError: (e: Error) => toast.error(`Failed: ${e.message}`),
@@ -105,6 +158,10 @@ export function useMultiCurrencySettings() {
   return {
     settings: settingsQuery.data,
     isLoading: settingsQuery.isLoading,
+    /** Lines in a non-base currency; null while unknown. */
+    foreignLineCount: foreignActivityQuery.data ?? null,
+    /** The base currency can be set or corrected until foreign-currency transactions exist. */
+    canChangeBase: !settingsQuery.data?.base_currency_locked_at || foreignActivityQuery.data === 0,
     updateSettings,
     enableAndLock,
   };
@@ -118,7 +175,7 @@ export function useFxRateSync() {
       if (error) throw error;
       return data;
     },
-    onSuccess: (data: any) => {
+    onSuccess: (data: { inserted?: number } | null) => {
       queryClient.invalidateQueries({ queryKey: ['exchange_rates'] });
       toast.success(`Synced ${data?.inserted ?? 0} exchange rates`);
     },

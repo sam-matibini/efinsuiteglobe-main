@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrganization } from './useOrganization';
 import { toast } from 'sonner';
+import { currencyOption, recommendedBaseCurrency } from '@/lib/currencyOptions';
 
 export interface Currency {
   id: string;
@@ -145,14 +146,19 @@ export function useCurrencies() {
 
   const initializeDefaultCurrencies = useMutation({
     mutationFn: async () => {
-      const currencies = DEFAULT_CURRENCIES.map((c, index) => ({
+      const baseCode = recommendedBaseCurrency({ country: currentOrganization?.country, currency: currentOrganization?.currency });
+      const list = DEFAULT_CURRENCIES.some((c) => c.code === baseCode)
+        ? DEFAULT_CURRENCIES
+        : [{ code: baseCode, name: currencyOption(baseCode)?.name ?? baseCode, symbol: currencyOption(baseCode)?.symbol ?? baseCode }, ...DEFAULT_CURRENCIES];
+      const currencies = list.map((c, index) => ({
         organization_id: currentOrganization!.id,
         code: c.code,
         name: c.name,
         symbol: c.symbol,
         decimal_places: c.code === 'JPY' ? 0 : 2,
-        is_base: c.code === 'CAD', // Default base currency for Canadian businesses
-        is_active: index < 3, // Only first 3 are active by default
+        // Base = the organization's own currency (e.g. NGN for a Nigerian company), not a fixed CAD.
+        is_base: c.code === baseCode,
+        is_active: index < 3 || c.code === baseCode,
       }));
 
       const { error } = await supabase

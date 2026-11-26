@@ -7,23 +7,23 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Input } from '@/components/ui/input';
-import { Lock, RefreshCw, Plus, Coins } from 'lucide-react';
+import { Lock, RefreshCw, Plus, Coins, AlertTriangle } from 'lucide-react';
 import { useMultiCurrencySettings, useFxRateSync } from '@/hooks/useMultiCurrencySettings';
 import { useCurrencies } from '@/hooks/useCurrencies';
 import { FxAccountsPicker } from '@/components/currency/FxAccountsPicker';
 import { EnableMultiCurrencyDialog } from '@/components/currency/EnableMultiCurrencyDialog';
 import { Link } from 'react-router-dom';
 import { useIsReadOnly } from '@/hooks/useIsReadOnly';
-
-const COMMON_CURRENCIES = ['USD', 'CAD', 'EUR', 'GBP', 'AUD', 'JPY', 'CNY', 'INR', 'CHF', 'MXN'];
+import { ALL_CURRENCIES } from '@/lib/currencyOptions';
 
 export function MultiCurrencySettingsTab() {
   const isReadOnly = useIsReadOnly();
-  const { settings, isLoading, updateSettings, enableAndLock } = useMultiCurrencySettings();
+  const { settings, isLoading, updateSettings, enableAndLock, canChangeBase } = useMultiCurrencySettings();
   const { currencies, activeCurrencies, baseCurrency, createCurrency, updateCurrency, initializeDefaultCurrencies } = useCurrencies();
   const fxSync = useFxRateSync();
 
   const [enableDialogOpen, setEnableDialogOpen] = useState(false);
+  const [dialogMode, setDialogMode] = useState<'enable' | 'correct'>('enable');
   const [newCurrency, setNewCurrency] = useState({ code: '', name: '', symbol: '', decimal_places: 2 });
 
   if (isLoading) return <Card className="p-6">Loading multi-currency settings…</Card>;
@@ -31,12 +31,24 @@ export function MultiCurrencySettingsTab() {
   const enabled = !!settings?.multi_currency_enabled;
   const locked = !!settings?.base_currency_locked_at;
 
+  const baseMismatch = !!settings?.country_currency && settings.base_currency !== settings.country_currency;
+
   const handleToggle = (next: boolean) => {
-    if (next && !locked) {
+    if (!next) {
+      if (enabled) updateSettings.mutate({ multi_currency_enabled: false });
+      return;
+    }
+    if (!locked) {
+      setDialogMode('enable');
       setEnableDialogOpen(true);
-    } else if (!next && enabled) {
-      // allow disabling but warn
-      updateSettings.mutate({ multi_currency_enabled: false });
+    } else if (baseMismatch && canChangeBase) {
+      // Locked earlier with a currency that doesn't match the country, and nothing
+      // foreign has been recorded yet: let the user confirm or correct it.
+      setDialogMode('correct');
+      setEnableDialogOpen(true);
+    } else {
+      // Base already locked (e.g. enabled before, then switched off): just turn it back on.
+      updateSettings.mutate({ multi_currency_enabled: true });
     }
   };
 
@@ -70,6 +82,21 @@ export function MultiCurrencySettingsTab() {
                   Locked on {new Date(settings!.base_currency_locked_at!).toLocaleDateString()}
                 </p>
               )}
+              {baseMismatch && (
+                <div className="mt-2 rounded-md bg-warning/10 p-2 text-xs text-warning flex items-start gap-2">
+                  <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                  <div className="space-y-1">
+                    <p>Your organization is based in {settings?.country_name}, whose currency is {settings?.country_currency}, but the base currency is {settings?.base_currency}.</p>
+                    {canChangeBase ? (
+                      <Button size="sm" variant="outline" className="h-7" disabled={isReadOnly} onClick={() => { setDialogMode('correct'); setEnableDialogOpen(true); }}>
+                        Change base currency to {settings?.country_currency}
+                      </Button>
+                    ) : (
+                      <p>Foreign-currency transactions already exist, so the base currency can no longer be changed here.</p>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="space-y-1.5">
@@ -81,8 +108,8 @@ export function MultiCurrencySettingsTab() {
               >
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {COMMON_CURRENCIES.map((c) => (
-                    <SelectItem key={c} value={c}>{c}</SelectItem>
+                  {ALL_CURRENCIES.map((c) => (
+                    <SelectItem key={c.code} value={c.code}>{c.code} — {c.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -243,7 +270,11 @@ export function MultiCurrencySettingsTab() {
       <EnableMultiCurrencyDialog
         open={enableDialogOpen}
         onOpenChange={setEnableDialogOpen}
-        defaultBase={settings?.base_currency || 'USD'}
+        defaultBase={dialogMode === 'correct' ? (settings?.country_currency || settings?.recommended_base || 'USD') : (settings?.recommended_base || settings?.base_currency || 'USD')}
+        countryName={settings?.country_name}
+        countryCurrency={settings?.country_currency}
+        mode={dialogMode}
+        currentBase={settings?.base_currency}
         onConfirm={(base) => {
           enableAndLock.mutate(base);
           setEnableDialogOpen(false);
