@@ -156,7 +156,7 @@ export async function commitPlan(db: SupabaseClient, input: CommitInput): Promis
         match_type: p.action === 'update' ? 'update_by_id' : 'new',
         is_valid: p.errors.length === 0,
         validation_errors: p.errors,
-        validation_warnings: p.warnings,
+        validation_warnings: [...p.warnings, ...p.ignored.map((i) => ({ ...i, message: `Ignored by user: ${i.message}` }))],
         posted: res.status === 'created' || res.status === 'updated',
         posted_entity_id: res.status === 'created' || res.status === 'updated' ? res.employeeId ?? null : null,
       };

@@ -9,6 +9,14 @@ export type UploadMode = 'create' | 'update' | 'upsert';
 export interface Issue {
   field?: string;
   message: string;
+  /**
+   * Errors only: the row can still be imported safely if the user ignores it.
+   * The payload already holds the "ignored" outcome (bad optional value left
+   * out, a default applied, or the value kept as entered).
+   */
+  ignorable?: boolean;
+  /** What happens to the row when this error is ignored. */
+  ifIgnored?: string;
 }
 
 export interface RowPlan {
@@ -20,6 +28,8 @@ export interface RowPlan {
   existingId?: string;
   errors: Issue[];
   warnings: Issue[];
+  /** Errors the user chose to ignore (set by applyIgnores). */
+  ignored: Issue[];
   /** Insert payload (create) or update patch (update). */
   payload: Record<string, unknown>;
   raw: Record<string, string>;
@@ -138,6 +148,7 @@ export function buildPlan(parsed: ParsedUpload, ctx: PlanContext): UploadPlan {
     const errors: Issue[] = [];
     const warnings: Issue[] = [];
     const err = (field: string, message: string) => errors.push({ field, message });
+    const soft = (field: string, message: string, ifIgnored: string) => errors.push({ field, message, ignorable: true, ifIgnored });
     const warn = (field: string, message: string) => warnings.push({ field, message });
 
     // ---- identity & action
@@ -198,16 +209,18 @@ export function buildPlan(parsed: ParsedUpload, ctx: PlanContext): UploadPlan {
       const raw = v(col);
       if (!raw) { dates[col] = null; setField(col, null, presentColumns.has(col)); continue; }
       const iso = parseDate(raw, rule.dateOrder);
-      if (!iso) err(col, `${col.replace(/_/g, ' ')} "${raw}" is not a valid date. Use YYYY-MM-DD.`);
+      const label = col.replace(/_/g, ' ');
+      if (!iso && col === 'hire_date') err(col, `hire date "${raw}" is not a valid date. Use YYYY-MM-DD.`);
+      else if (!iso) soft(col, `${label} "${raw}" is not a valid date. Use YYYY-MM-DD.`, `Imported without a ${label}.`);
       dates[col] = iso;
       setField(col, iso, true);
     }
     if (isCreate && !v('hire_date')) err('hire_date', 'Hire date is required.');
     if (dates.hire_date && dates.termination_date && dates.termination_date < dates.hire_date) {
-      err('termination_date', 'Termination date is before hire date.');
+      soft('termination_date', 'Termination date is before hire date.', 'Imported with the dates as entered.');
     }
     if (dates.date_of_birth && dates.hire_date && dates.date_of_birth >= dates.hire_date) {
-      err('date_of_birth', 'Date of birth is on or after the hire date.');
+      soft('date_of_birth', 'Date of birth is on or after the hire date.', 'Imported with the dates as entered.');
     }
 
     // ---- enums
@@ -215,8 +228,10 @@ export function buildPlan(parsed: ParsedUpload, ctx: PlanContext): UploadPlan {
       const raw = v(col);
       if (!raw) { if (isCreate) payload[col] = dflt; return; }
       const val = enumValue(raw);
-      if (!allowed.includes(val)) err(col, `${label} "${raw}" is not allowed. Use one of: ${allowed.join(', ')}.`);
-      else payload[col] = val;
+      if (allowed.includes(val)) { payload[col] = val; return; }
+      if (isCreate) payload[col] = dflt;
+      soft(col, `${label} "${raw}" is not allowed. Use one of: ${allowed.join(', ')}.`,
+        isCreate ? `Imported as ${dflt}.` : `${label} left unchanged.`);
     };
     enumField('employment_type', EMPLOYMENT_TYPES, 'full_time', 'Employment type');
     enumField('pay_frequency', PAY_FREQUENCIES, 'monthly', 'Pay frequency');
@@ -229,8 +244,11 @@ export function buildPlan(parsed: ParsedUpload, ctx: PlanContext): UploadPlan {
     const rawJur = v('jurisdiction');
     if (rawJur) {
       const code = resolveJurisdiction(rawJur, rule);
-      if (!code) err('jurisdiction', `${rule.jurisdictionLabel} "${rawJur}" is not recognised for ${rule.name}. See the Reference sheet.`);
-      else payload.province = code;
+      const msg = `${rule.jurisdictionLabel} "${rawJur}" is not recognised for ${rule.name}. See the Reference sheet.`;
+      if (code) payload.province = code;
+      else if (!isCreate) soft('jurisdiction', msg, `${rule.jurisdictionLabel} left unchanged.`);
+      else if (orgJurisdiction) { payload.province = orgJurisdiction; soft('jurisdiction', msg, `Imported with the organization's ${rule.jurisdictionLabel.toLowerCase()} (${orgJurisdiction}).`); }
+      else err('jurisdiction', msg);
     } else if (isCreate) {
       if (orgJurisdiction) payload.province = orgJurisdiction;
       else err('jurisdiction', `${rule.jurisdictionLabel} is required.`);
@@ -248,7 +266,7 @@ export function buildPlan(parsed: ParsedUpload, ctx: PlanContext): UploadPlan {
         err('national_id', `NIN must be exactly 11 digits (got ${nin.length}). Format the column as Text to keep leading zeros.`);
       } else {
         payload.nin = nin;
-        if (seenNins.has(nin)) err('national_id', `Duplicate NIN — also on row ${seenNins.get(nin)}.`);
+        if (seenNins.has(nin)) soft('national_id', `Duplicate NIN — also on row ${seenNins.get(nin)}.`, 'Imported with this NIN even though another row uses it.');
         else seenNins.set(nin, rowNumber);
       }
     } else {
@@ -258,20 +276,25 @@ export function buildPlan(parsed: ParsedUpload, ctx: PlanContext): UploadPlan {
     // ---- pay
     const salary = v('annual_salary') ? parseMoney(v('annual_salary')) : null;
     const hourly = v('hourly_rate') ? parseMoney(v('hourly_rate')) : null;
-    if (v('annual_salary') && salary === null) err('annual_salary', `Annual salary "${v('annual_salary')}" is not a number.`);
-    if (v('hourly_rate') && hourly === null) err('hourly_rate', `Hourly rate "${v('hourly_rate')}" is not a number.`);
-    if ((salary ?? 0) < 0) err('annual_salary', 'Annual salary cannot be negative.');
-    if ((hourly ?? 0) < 0) err('hourly_rate', 'Hourly rate cannot be negative.');
-    if (salary && hourly) err('annual_salary', 'Fill Annual Salary or Hourly Rate, not both.');
-    if (salary != null) { payload.annual_salary = salary; if (!hourly) payload.hourly_rate = null; }
-    if (hourly != null) { payload.hourly_rate = hourly; if (!salary) payload.annual_salary = null; }
+    if (v('annual_salary') && salary === null) soft('annual_salary', `Annual salary "${v('annual_salary')}" is not a number.`, 'Imported without an annual salary.');
+    if (v('hourly_rate') && hourly === null) soft('hourly_rate', `Hourly rate "${v('hourly_rate')}" is not a number.`, 'Imported without an hourly rate.');
+    if ((salary ?? 0) < 0) soft('annual_salary', 'Annual salary cannot be negative.', 'Imported without an annual salary.');
+    if ((hourly ?? 0) < 0) soft('hourly_rate', 'Hourly rate cannot be negative.', 'Imported without an hourly rate.');
+    const goodSalary = salary != null && salary >= 0 ? salary : null;
+    let goodHourly = hourly != null && hourly >= 0 ? hourly : null;
+    if (goodSalary && goodHourly) {
+      soft('hourly_rate', 'Fill Annual Salary or Hourly Rate, not both.', 'Imported with the annual salary only.');
+      goodHourly = null;
+    }
+    if (goodSalary != null) { payload.annual_salary = goodSalary; payload.hourly_rate = null; }
+    else if (goodHourly != null) { payload.hourly_rate = goodHourly; payload.annual_salary = null; }
     if (isCreate && salary == null && hourly == null) warn('annual_salary', 'No pay rate — the employee will be skipped by pay runs until one is set.');
 
     // ---- job site
     const site = v('job_site');
     if (site) {
       const id = jobSiteLookup.get(site.toLowerCase());
-      if (!id) err('job_site', `Job site "${site}" does not exist${ctx.jobSites.length ? '' : ' (no active job sites are set up)'}.`);
+      if (!id) soft('job_site', `Job site "${site}" does not exist${ctx.jobSites.length ? '' : ' (no active job sites are set up)'}.`, 'Imported without a job site.');
       else payload.job_site_id = id;
     }
 
@@ -304,24 +327,61 @@ export function buildPlan(parsed: ParsedUpload, ctx: PlanContext): UploadPlan {
       existingId: existing?.id,
       errors,
       warnings,
+      ignored: [],
       payload,
       raw: values,
     };
   });
 
+  return { country: rule, rows, fileErrors, fileWarnings, summary: summarize(rows, fileErrors) };
+}
+
+function summarize(rows: RowPlan[], fileErrors: string[]): UploadPlan['summary'] {
   const ready = rows.filter((r) => r.errors.length === 0);
   return {
-    country: rule,
-    rows,
-    fileErrors,
-    fileWarnings,
-    summary: {
-      total: rows.length,
-      ready: fileErrors.length ? 0 : ready.length,
-      withErrors: rows.length - ready.length,
-      withWarnings: ready.filter((r) => r.warnings.length > 0).length,
-      creates: ready.filter((r) => r.action === 'create').length,
-      updates: ready.filter((r) => r.action === 'update').length,
-    },
+    total: rows.length,
+    ready: fileErrors.length ? 0 : ready.length,
+    withErrors: rows.length - ready.length,
+    withWarnings: ready.filter((r) => r.warnings.length > 0).length,
+    creates: ready.filter((r) => r.action === 'create').length,
+    updates: ready.filter((r) => r.action === 'update').length,
   };
+}
+
+/** Stable key for one issue on one row, used to remember what the user ignored. */
+export function issueKey(rowNumber: number, issue: Issue): string {
+  return `${rowNumber}|${issue.field ?? ''}|${issue.message}`;
+}
+
+/** Whether an issue can be ignored: any warning, or an error marked ignorable. */
+export function canIgnore(issue: Issue, kind: 'error' | 'warning'): boolean {
+  return kind === 'warning' || !!issue.ignorable;
+}
+
+/** Every key "Ignore all" would add: ignorable errors and warnings on every row. */
+export function allIgnorableKeys(plan: UploadPlan): string[] {
+  const keys: string[] = [];
+  for (const r of plan.rows) {
+    for (const e of r.errors) if (e.ignorable) keys.push(issueKey(r.rowNumber, e));
+    for (const w of r.warnings) keys.push(issueKey(r.rowNumber, w));
+  }
+  return keys;
+}
+
+/**
+ * Returns the plan with the chosen issues moved from errors/warnings to
+ * `ignored`. Only ignorable errors move, so a row with a must-fix error stays
+ * blocked. Payloads need no change: they already hold the ignored outcome.
+ */
+export function applyIgnores(plan: UploadPlan, ignored: ReadonlySet<string>): UploadPlan {
+  if (ignored.size === 0) return plan;
+  const rows = plan.rows.map((r) => {
+    const keep = (kind: 'error' | 'warning') => (i: Issue) => !(canIgnore(i, kind) && ignored.has(issueKey(r.rowNumber, i)));
+    const errors = r.errors.filter(keep('error'));
+    const warnings = r.warnings.filter(keep('warning'));
+    if (errors.length === r.errors.length && warnings.length === r.warnings.length) return r;
+    const moved = [...r.errors.filter((i) => !errors.includes(i)), ...r.warnings.filter((i) => !warnings.includes(i))];
+    return { ...r, errors, warnings, ignored: [...r.ignored, ...moved] };
+  });
+  return { ...plan, rows, summary: summarize(rows, plan.fileErrors) };
 }
