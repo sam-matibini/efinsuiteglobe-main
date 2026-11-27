@@ -35,6 +35,7 @@ import { useBankAccounts } from '@/hooks/useBankAccounts';
 import { DivisionSelect } from '@/components/dimensions/DivisionSelect';
 import { format } from 'date-fns';
 
+import { orgCurrency, orgLocale } from '@/lib/orgCurrency';
 const paymentSchema = z.object({
   customer_id: z.string().min(1, 'Customer is required'),
   invoice_id: z.string().optional(),
@@ -110,9 +111,9 @@ export function RecordPaymentDialog({
   }, [selectedCustomerId, form, preselectedInvoiceId]);
 
   const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('en-CA', {
+    return new Intl.NumberFormat(orgLocale(), {
       style: 'currency',
-      currency: 'CAD',
+      currency: orgCurrency(),
     }).format(value);
   };
 

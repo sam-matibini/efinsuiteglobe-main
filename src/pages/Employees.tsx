@@ -1,8 +1,7 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { parseLocalDate } from '@/lib/utils';
-import { Plus, Search, MoreHorizontal, Building2, FileText, Edit, History, Trash2 } from 'lucide-react';
+import { Plus, MoreHorizontal, Building2, FileText, Edit, History, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -25,11 +24,15 @@ import { useIsReadOnly } from '@/hooks/useIsReadOnly';
 import { useUsageLimits } from '@/hooks/useUsageLimits';
 import { useSubscription } from '@/hooks/useSubscription';
 import { SubscriptionUpgradeModal } from '@/components/SubscriptionUpgradeModal';
-
+import { useCurrencyFormatter } from '@/hooks/useCurrencyFormatter';
+import { EmployeeFilterBar, SortHeader } from '@/components/employees/EmployeeListControls';
+import { EMPTY_FILTERS, EmployeeFilters, filterEmployees, nextSort, SortKey, SortState, sortEmployees } from '@/lib/employeeListView';
 export default function Employees() {
   const navigate = useNavigate();
   const isReadOnly = useIsReadOnly();
-  const [searchQuery, setSearchQuery] = useState('');
+  const [filters, setFilters] = useState<EmployeeFilters>(EMPTY_FILTERS);
+  const [sort, setSort] = useState<SortState>({ key: 'name', dir: 'asc' });
+  const onSort = (key: SortKey) => setSort((s) => nextSort(s, key));
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [showOrgDialog, setShowOrgDialog] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -39,7 +42,7 @@ export default function Employees() {
   const [selectedEmployee, setSelectedEmployee] = useState<typeof employees[0] | null>(null);
 
   const { organization, isLoading: orgLoading } = useCurrentOrganization();
-  const { employees, isLoading, stats, deleteEmployee } = useEmployees();
+  const { employees, isLoading, stats, departments, deleteEmployee } = useEmployees();
   const { canAddEmployee, employeeCount, maxEmployees } = useUsageLimits();
   const { planTier, isActive } = useSubscription();
 
@@ -51,13 +54,10 @@ export default function Employees() {
     setIsAddOpen(true);
   };
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('en-CA', {
-      style: 'currency',
-      currency: 'CAD',
-      minimumFractionDigits: 0,
-    }).format(value);
-  };
+  // Amounts in the company's currency (e.g. ₦ for a Nigerian company).
+  const { currencyCode, locale, currencySymbol } = useCurrencyFormatter();
+  const formatCurrency = (value: number) =>
+    new Intl.NumberFormat(locale, { style: 'currency', currency: currencyCode, minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(value);
 
   const formatDate = (dateStr: string) => {
     return new Intl.DateTimeFormat('en-CA', {
@@ -67,11 +67,11 @@ export default function Employees() {
     }).format(parseLocalDate(dateStr));
   };
 
-  const filteredEmployees = employees.filter(e => 
-    e.first_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    e.last_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    e.email.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredEmployees = useMemo(
+    () => sortEmployees(filterEmployees(employees, filters), sort),
+    [employees, filters, sort],
   );
+  const departmentOptions = useMemo(() => (departments ?? []).filter((d): d is string => !!d).sort(), [departments]);
 
   // Calculate payroll stats from actual data
   const salariedEmployees = employees.filter(e => e.annual_salary && e.annual_salary > 0);
@@ -166,17 +166,16 @@ export default function Employees() {
         </Card>
       </div>
 
-      {/* Search */}
+      {/* Search, filters and result count */}
       <Card className="p-4">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            placeholder="Search employees..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10"
-          />
-        </div>
+        <EmployeeFilterBar
+          filters={filters}
+          onChange={setFilters}
+          departments={departmentOptions}
+          shown={filteredEmployees.length}
+          total={employees.length}
+          currencySymbol={currencySymbol}
+        />
       </Card>
 
       {/* Employees Table */}
@@ -189,19 +188,19 @@ export default function Employees() {
           </div>
         ) : filteredEmployees.length === 0 ? (
           <div className="p-8 text-center text-muted-foreground">
-            {employees.length === 0 ? 'No employees yet. Add your first employee to get started.' : 'No employees match your search.'}
+            {employees.length === 0 ? 'No employees yet. Add your first employee to get started.' : 'No employees match your search and filters.'}
           </div>
         ) : (
           <table className="data-table">
             <thead className="bg-muted/50">
               <tr>
-                <th>Employee</th>
-                <th>Department</th>
-                <th>Position</th>
-                <th>Employment Type</th>
-                <th className="text-right">Pay Rate</th>
-                <th>Start Date</th>
-                <th>Status</th>
+                <th><SortHeader label="Employee" sortKey="name" sort={sort} onSort={onSort} /></th>
+                <th><SortHeader label="Department" sortKey="department" sort={sort} onSort={onSort} /></th>
+                <th><SortHeader label="Position" sortKey="job_title" sort={sort} onSort={onSort} /></th>
+                <th><SortHeader label="Employment Type" sortKey="employment_type" sort={sort} onSort={onSort} /></th>
+                <th className="text-right"><SortHeader label="Pay Rate" sortKey="pay" sort={sort} onSort={onSort} align="right" /></th>
+                <th><SortHeader label="Start Date" sortKey="hire_date" sort={sort} onSort={onSort} /></th>
+                <th><SortHeader label="Status" sortKey="status" sort={sort} onSort={onSort} /></th>
                 <th className="w-12"></th>
               </tr>
             </thead>
@@ -230,6 +229,7 @@ export default function Employees() {
                       {employee.employment_type === 'full_time' ? 'Full-time' : 
                        employee.employment_type === 'part_time' ? 'Part-time' : 
                        employee.employment_type === 'contract' ? 'Contract' : 
+                       employee.employment_type === 'temporary' ? 'Temporary' : 
                        employee.employment_type}
                     </Badge>
                   </td>

@@ -26,6 +26,7 @@ import {
 import { cn } from '@/lib/utils';
 import { AnalysisResult, useProcessTransactions } from '@/hooks/useRuleAnalysis';
 
+import { orgCurrency, orgLocale } from '@/lib/orgCurrency';
 interface AnalyzePostDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -91,9 +92,9 @@ export default function AnalyzePostDialog({
   };
 
   const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('en-CA', {
+    return new Intl.NumberFormat(orgLocale(), {
       style: 'currency',
-      currency: 'CAD',
+      currency: orgCurrency(),
     }).format(Math.abs(value));
   };
 

@@ -33,8 +33,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Receipt, FileText, Sparkles, Send, Plus, Calculator, Globe } from 'lucide-react';
 
+import { orgCurrency, orgLocale } from '@/lib/orgCurrency';
 const fmt = (cents: number) =>
-  (cents / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+  (cents / 100).toLocaleString(orgLocale(), { style: 'currency', currency: orgCurrency() });
 
 export default function WithholdingTax() {
   const { isReadOnly } = useEnabledModules();
@@ -425,7 +426,7 @@ function TransactionsTab({ transactions, vendorById, regimeById, regimes, profil
       withheld_amount_cents: preview.withheldCents,
       net_amount_cents: preview.netCents,
       applied_rate: preview.rate,
-      currency_code: 'USD',
+      currency_code: orgCurrency(),
       journal_entry_id: null,
       status: 'recorded',
       notes: preview.reason,

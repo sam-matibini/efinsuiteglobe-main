@@ -39,8 +39,9 @@ import type {
   JurisdictionType,
 } from '@/lib/taxProvision/types';
 
+import { orgCurrency, orgLocale } from '@/lib/orgCurrency';
 const fmtMoney = (cents: number) =>
-  (cents / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+  (cents / 100).toLocaleString(orgLocale(), { style: 'currency', currency: orgCurrency() });
 const fmtPct = (n: number) => `${(n * 100).toFixed(2)}%`;
 
 export default function TaxProvision() {

@@ -1,18 +1,10 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, Users, UserCheck, Clock, UserX, MoreHorizontal, FileText, Edit, History, Trash2 } from 'lucide-react';
+import { Plus, Users, UserCheck, Clock, UserX, MoreHorizontal, FileText, Edit, History, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -38,6 +30,8 @@ import EditEmployeeDialog from '@/components/employees/EditEmployeeDialog';
 import EmployeePayHistoryDialog from '@/components/employees/EmployeePayHistoryDialog';
 import DeleteEmployeeDialog from '@/components/employees/DeleteEmployeeDialog';
 import { useCurrencyFormatter } from '@/hooks/useCurrencyFormatter';
+import { EmployeeFilterBar, SortHeader } from '@/components/employees/EmployeeListControls';
+import { EMPTY_FILTERS, EmployeeFilters, filterEmployees, nextSort, SortKey, SortState, sortEmployees } from '@/lib/employeeListView';
 
 type EmployeeStatus = Database['public']['Enums']['employee_status'];
 
@@ -50,9 +44,9 @@ const statusConfig: Record<EmployeeStatus, { label: string; color: string; icon:
 
 export default function EmployeesList() {
   const navigate = useNavigate();
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [departmentFilter, setDepartmentFilter] = useState<string>('all');
+  const [filters, setFilters] = useState<EmployeeFilters>(EMPTY_FILTERS);
+  const [sort, setSort] = useState<SortState>({ key: 'name', dir: 'asc' });
+  const onSort = (key: SortKey) => setSort((s) => nextSort(s, key));
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [payHistoryOpen, setPayHistoryOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -60,21 +54,19 @@ export default function EmployeesList() {
 
   const { employees, isLoading, stats, departments, deleteEmployee } = useEmployees();
 
-  const filteredEmployees = employees.filter(emp => {
-    const matchesSearch = 
-      `${emp.first_name} ${emp.last_name}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      emp.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      emp.employee_number.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || emp.status === statusFilter;
-    const matchesDept = departmentFilter === 'all' || emp.department === departmentFilter;
-    return matchesSearch && matchesStatus && matchesDept;
-  });
+  const filteredEmployees = useMemo(
+    () => sortEmployees(filterEmployees(employees, filters), sort),
+    [employees, filters, sort],
+  );
+  const departmentOptions = useMemo(() => (departments ?? []).filter((d): d is string => !!d).sort(), [departments]);
 
-  const { formatWithSymbol } = useCurrencyFormatter();
+  const { formatWithSymbol, currencySymbol } = useCurrencyFormatter();
   const formatCurrency = (value: number | null | undefined) => {
     if (!value) return '-';
     return formatWithSymbol(value);
   };
+
+  const anyFilter = filters.search !== '' || JSON.stringify(filters) !== JSON.stringify(EMPTY_FILTERS);
 
   if (isLoading) {
     return (
@@ -174,49 +166,23 @@ export default function EmployeesList() {
         </Card>
       </div>
 
-      {/* Filters */}
+      {/* Search, filters and result count */}
       <Card className="p-4">
-        <div className="flex flex-wrap items-center gap-4">
-          <div className="relative flex-1 min-w-64">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              placeholder="Search employees..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
-            />
-          </div>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-40">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Status</SelectItem>
-              <SelectItem value="active">Active</SelectItem>
-              <SelectItem value="onboarding">Onboarding</SelectItem>
-              <SelectItem value="on_leave">On Leave</SelectItem>
-              <SelectItem value="terminated">Terminated</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
-            <SelectTrigger className="w-40">
-              <SelectValue placeholder="Department" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Departments</SelectItem>
-              {departments.map(dept => (
-                <SelectItem key={dept} value={dept!}>{dept}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        <EmployeeFilterBar
+          filters={filters}
+          onChange={setFilters}
+          departments={departmentOptions}
+          shown={filteredEmployees.length}
+          total={employees.length}
+          currencySymbol={currencySymbol}
+        />
       </Card>
 
       {/* Employees Table */}
       <Card className="overflow-hidden">
         {filteredEmployees.length === 0 ? (
           <div className="p-8 text-center text-muted-foreground">
-            {searchQuery || statusFilter !== 'all' || departmentFilter !== 'all'
+            {anyFilter
               ? 'No employees found matching your filters.'
               : 'No employees yet. Add your first employee to get started.'}
           </div>
@@ -224,12 +190,12 @@ export default function EmployeesList() {
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/50">
-                <TableHead>Employee</TableHead>
-                <TableHead>Department</TableHead>
-                <TableHead>Province</TableHead>
-                <TableHead>Hire Date</TableHead>
-                <TableHead>Compensation</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead><SortHeader label="Employee" sortKey="name" sort={sort} onSort={onSort} /></TableHead>
+                <TableHead><SortHeader label="Department" sortKey="department" sort={sort} onSort={onSort} /></TableHead>
+                <TableHead><SortHeader label="Province" sortKey="province" sort={sort} onSort={onSort} /></TableHead>
+                <TableHead><SortHeader label="Hire Date" sortKey="hire_date" sort={sort} onSort={onSort} /></TableHead>
+                <TableHead><SortHeader label="Compensation" sortKey="pay" sort={sort} onSort={onSort} /></TableHead>
+                <TableHead><SortHeader label="Status" sortKey="status" sort={sort} onSort={onSort} /></TableHead>
                 <TableHead className="w-12"></TableHead>
               </TableRow>
             </TableHeader>
@@ -260,7 +226,7 @@ export default function EmployeesList() {
                       {employee.annual_salary ? (
                         <span className="font-mono text-foreground">{formatCurrency(employee.annual_salary)}/yr</span>
                       ) : employee.hourly_rate ? (
-                        <span className="font-mono text-foreground">${employee.hourly_rate}/hr</span>
+                        <span className="font-mono text-foreground">{formatCurrency(employee.hourly_rate)}/hr</span>
                       ) : '-'}
                     </TableCell>
                     <TableCell>

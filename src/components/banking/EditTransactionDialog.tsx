@@ -59,6 +59,7 @@ import { isBankTransactionLocked } from '@/lib/bankTransactionLock';
 import { readStoredSplits, roundMoney, splitRemainder, splitsFromJournalLines, validateBankSplits, writeStoredSplits, type BankGlSplit } from '@/lib/bankTransactionSplit';
 import { supabase } from '@/integrations/supabase/client';
 
+import { orgCurrency, orgLocale } from '@/lib/orgCurrency';
 interface EditTransactionDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -420,9 +421,9 @@ export function EditTransactionDialog({
   };
 
   const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('en-CA', {
+    return new Intl.NumberFormat(orgLocale(), {
       style: 'currency',
-      currency: 'CAD',
+      currency: orgCurrency(),
       minimumFractionDigits: 2,
     }).format(Math.abs(value));
   };

@@ -19,6 +19,7 @@ import {
   backlinkCCTransactionByJE,
   queueAmbiguousMatch,
 } from './usePaymentMatching';
+import { orgCurrency } from '@/lib/orgCurrency';
 export interface TaxBreakdownItem {
   code: string;
   rate: number;
@@ -266,7 +267,7 @@ export function usePostTransactionToGL() {
         .select('currency')
         .eq('id', organizationId)
         .single();
-      const baseCur = orgRow?.currency || 'USD';
+      const baseCur = orgRow?.currency || orgCurrency();
       const fc = bankAccount.currency || baseCur;
       const isFx = fc !== baseCur;
       let fxRate = 1;
@@ -671,7 +672,7 @@ async function autoCreateDonationIfEligible(
       donor_id: txn.customer_id,
       date_received: transactionDate,
       amount,
-      currency: 'CAD',
+      currency: orgCurrency(),
       donation_type: inferDonationType(description) as any,
       bank_transaction_id: transactionId,
       eligible_amount: amount,

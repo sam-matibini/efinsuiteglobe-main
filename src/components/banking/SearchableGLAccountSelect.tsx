@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { Check, ChevronsUpDown, Search, Building2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { orgCurrencySymbol } from '@/lib/orgCurrency';
 import { Button } from '@/components/ui/button';
 import {
   Command,
@@ -175,7 +176,7 @@ export function SearchableGLAccountSelect({
                       <span className="truncate">{acc.name}</span>
                       {acc.current_balance !== 0 && (
                         <span className="ml-auto text-xs text-muted-foreground font-mono">
-                          ${Math.abs(acc.current_balance || 0).toLocaleString()}
+                          {orgCurrencySymbol()}{Math.abs(acc.current_balance || 0).toLocaleString()}
                         </span>
                       )}
                     </CommandItem>

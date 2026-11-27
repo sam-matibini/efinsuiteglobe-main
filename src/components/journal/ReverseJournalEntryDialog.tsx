@@ -22,6 +22,7 @@ import {
 import { cn } from '@/lib/utils';
 import { JournalEntryWithLines } from '@/hooks/useJournalEntries';
 
+import { orgCurrency, orgLocale } from '@/lib/orgCurrency';
 interface ReverseJournalEntryDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -45,9 +46,9 @@ export function ReverseJournalEntryDialog({
   };
 
   const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('en-CA', {
+    return new Intl.NumberFormat(orgLocale(), {
       style: 'currency',
-      currency: 'CAD',
+      currency: orgCurrency(),
       minimumFractionDigits: 2,
     }).format(value);
   };

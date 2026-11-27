@@ -9,8 +9,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useConsolidationGroups } from "@/hooks/useConsolidation";
 import { useConsolidationRuns, useRunConsolidation } from "@/hooks/useConsolidationEngine";
 
+import { orgCurrency, orgLocale } from '@/lib/orgCurrency';
 const fmt = (n: number | null | undefined) =>
-  n == null ? "—" : new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Number(n));
+  n == null ? "—" : new Intl.NumberFormat(orgLocale(), { style: "currency", currency: orgCurrency() }).format(Number(n));
 
 export default function ConsolidationDashboard() {
   const { data: groups = [] } = useConsolidationGroups();

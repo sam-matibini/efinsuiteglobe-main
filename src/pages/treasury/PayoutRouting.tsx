@@ -23,6 +23,7 @@ import { ProviderTile } from '@/components/treasury/ProviderTile';
 import StripeConnectedAccounts from './StripeConnectedAccounts';
 import StripeConnectCompliance from './StripeConnectCompliance';
 
+import { orgCurrency } from '@/lib/orgCurrency';
 const TABS = ['providers', 'vendors', 'accounts', 'compliance'] as const;
 
 const OFFLINE_METHODS: Array<{ key: PayoutProviderKey; label: string; icon: React.ComponentType<{ className?: string }> }> = [
@@ -92,7 +93,7 @@ export default function PayoutRouting() {
 
   const [vendorOpen, setVendorOpen] = useState(false);
   const [savingVendor, setSavingVendor] = useState(false);
-  const [newVendor, setNewVendor] = useState({ name: '', email: '', phone: '', default_currency: 'CAD' });
+  const [newVendor, setNewVendor] = useState({ name: '', email: '', phone: '', default_currency: orgCurrency() });
 
   const addVendor = async () => {
     if (!orgId || !newVendor.name.trim()) return;
@@ -107,7 +108,7 @@ export default function PayoutRouting() {
     setSavingVendor(false);
     if (error) { toast.error(`Could not add vendor: ${error.message}`); return; }
     toast.success('Vendor added');
-    setNewVendor({ name: '', email: '', phone: '', default_currency: 'CAD' });
+    setNewVendor({ name: '', email: '', phone: '', default_currency: orgCurrency() });
     setVendorOpen(false);
     vendors.refetch();
   };
@@ -132,7 +133,7 @@ export default function PayoutRouting() {
 
   const [newRecipient, setNewRecipient] = useState({
     account_holder_name: '',
-    currency: 'CAD',
+    currency: orgCurrency(),
     bank_name: '',
     account_number: '',
     routing_number: '',

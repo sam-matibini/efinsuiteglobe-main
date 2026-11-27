@@ -23,6 +23,7 @@ import {
 import { format } from 'date-fns';
 import type { Donation } from '@/types/donations';
 
+import { orgCurrency, orgLocale } from '@/lib/orgCurrency';
 interface BulkIssueReceiptsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -105,7 +106,7 @@ export function BulkIssueReceiptsDialog({ open, onOpenChange }: BulkIssueReceipt
   const totalEligibleAmount = eligibleDonations.reduce((sum, d) => sum + d.eligible_amount, 0);
 
   const formatCurrency = (v: number) =>
-    new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' }).format(v);
+    new Intl.NumberFormat(orgLocale(), { style: 'currency', currency: orgCurrency() }).format(v);
 
   const charityLegalName = organization?.legal_name || organization?.name || '';
   const charityBN = (organization as any)?.business_number || '';

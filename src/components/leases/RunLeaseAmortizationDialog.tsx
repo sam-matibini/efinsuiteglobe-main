@@ -17,6 +17,7 @@ import { useBatchLeasePaymentPosting } from '@/hooks/useLeaseGL';
 import { useCurrentOrganization } from '@/hooks/useOrganization';
 import { toast } from 'sonner';
 
+import { orgCurrency, orgLocale } from '@/lib/orgCurrency';
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -99,7 +100,7 @@ export function RunLeaseAmortizationDialog({ open, onOpenChange }: Props) {
   }, [open, periodDate, activeLeases.length]);
 
   const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' }).format(amount);
+    new Intl.NumberFormat(orgLocale(), { style: 'currency', currency: orgCurrency() }).format(amount);
 
   const togglePayment = (paymentId: string) => {
     const newSelected = new Set(selectedPayments);

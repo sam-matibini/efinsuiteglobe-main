@@ -10,6 +10,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useOrganizationContext } from '@/hooks/useOrganizationContext';
 
+import { orgCurrency, orgLocale } from '@/lib/orgCurrency';
 export type DocResultType = 'invoice' | 'bill_of_sale' | 'bill' | 'paystub';
 
 export interface DocumentResult {
@@ -222,7 +223,7 @@ export function AIDocumentFinder({ onAttachDocument, isAttaching }: AIDocumentFi
   };
 
   const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' }).format(amount);
+    new Intl.NumberFormat(orgLocale(), { style: 'currency', currency: orgCurrency() }).format(amount);
 
   return (
     <div className="space-y-3">

@@ -21,6 +21,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { openWhatsAppShare } from '@/lib/share';
 
+import { orgCurrency, orgLocale } from '@/lib/orgCurrency';
 interface ReconciliationShareActionsProps {
   accountName: string;
   statementDate: string;
@@ -50,7 +51,7 @@ export function ReconciliationShareActions({
   const [emailBody, setEmailBody] = useState('');
 
   const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' }).format(amount);
+    new Intl.NumberFormat(orgLocale(), { style: 'currency', currency: orgCurrency() }).format(amount);
 
   const formatDate = (dateStr: string) => {
     try {

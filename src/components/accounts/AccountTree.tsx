@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
+import { orgCurrency, orgLocale } from '@/lib/orgCurrency';
 interface AccountTreeItemProps {
   account: Account;
   level: number;
@@ -47,9 +48,9 @@ function AccountTreeItem({ account, level, expandedIds, onToggle, selectedId, on
   const isSelected = selectedId === account.id;
 
   const formatBalance = (balance: number) => {
-    return new Intl.NumberFormat('en-CA', {
+    return new Intl.NumberFormat(orgLocale(), {
       style: 'currency',
-      currency: 'CAD',
+      currency: orgCurrency(),
       minimumFractionDigits: 0,
     }).format(Math.abs(balance));
   };

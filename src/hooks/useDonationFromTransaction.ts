@@ -5,6 +5,7 @@ import { useNextDonationNumber } from './useDonations';
 import { toast } from 'sonner';
 import type { DonationType } from '@/types/donations';
 
+import { orgCurrency } from '@/lib/orgCurrency';
 interface CreateDonationFromTransactionInput {
   bankTransactionId: string;
   donorId: string;
@@ -58,7 +59,7 @@ export function useCreateDonationFromTransaction() {
           donor_id: input.donorId,
           date_received: input.dateReceived,
           amount: input.amount,
-          currency: 'CAD',
+          currency: orgCurrency(),
           donation_type: input.donationType,
           bank_transaction_id: input.bankTransactionId,
           fund_id: input.fundId || null,

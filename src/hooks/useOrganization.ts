@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { setActiveOrganizationCurrency } from '@/lib/orgCurrency';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
@@ -180,6 +181,9 @@ export function useCurrentOrganization() {
   const organization = savedOrgId 
     ? organizations?.find(org => org.id === savedOrgId) || organizations?.[0] || null
     : organizations?.[0] || null;
+
+  // Keep the company's currency available to non-hook formatters and defaults.
+  setActiveOrganizationCurrency(organization);
   
   return {
     organization,

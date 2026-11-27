@@ -50,6 +50,7 @@ import {
 } from 'recharts';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 
+import { orgCurrency, orgLocale } from '@/lib/orgCurrency';
 interface FinancialRatio {
   name: string;
   value: number;
@@ -420,7 +421,7 @@ export default function ManagementReport() {
     const value = Number.isFinite(ratio.value) ? ratio.value : 0;
     
     if (ratio.unit === '$') {
-      return new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 }).format(value);
+      return new Intl.NumberFormat(orgLocale(), { style: 'currency', currency: orgCurrency(), maximumFractionDigits: 0 }).format(value);
     }
     if (ratio.unit === '%') {
       return `${value.toFixed(1)}%`;
@@ -434,7 +435,7 @@ export default function ManagementReport() {
   const fmtCurrency = (v: number) =>
     new Intl.NumberFormat('en-CA', {
       style: 'currency',
-      currency: (organization as any)?.base_currency || 'CAD',
+      currency: orgCurrency(),
       maximumFractionDigits: 0,
     }).format(Number.isFinite(v) ? v : 0);
 

@@ -49,6 +49,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { AccountantAssetUpload } from './AccountantAssetUpload';
 
+import { orgCurrency, orgCurrencySymbol } from '@/lib/orgCurrency';
 export interface CompilationDisplayOptions {
   hideZeroBalances: boolean;
   startDate?: Date;
@@ -269,7 +270,7 @@ export function AICompilationDialog({
       const errors: string[] = [];
 
       if (!debitsEqualCredits) {
-        warnings.push(`Balance sheet may not balance (difference: $${Math.abs(diff).toFixed(2)}) - please verify all entries`);
+        warnings.push(`Balance sheet may not balance (difference: ${orgCurrencySymbol()}${Math.abs(diff).toFixed(2)}) - please verify all entries`);
       }
       
       // Check total equity for going concern
@@ -312,10 +313,10 @@ export function AICompilationDialog({
 Fiscal Period: ${periodType === 'annual' ? 'Year' : periodType === 'interim' ? 'Interim Period' : 'Quarter'} Ended ${format(parseISO(fiscalYearEnd), 'MMMM d, yyyy')}
 
 Financial Position Summary:
-- Total Assets: $${Math.abs(balanceSheet.totalAssets).toLocaleString()}
-- Total Liabilities: $${Math.abs(balanceSheet.totalLiabilities).toLocaleString()}
-- Total Equity: $${Math.abs(balanceSheet.totalEquity).toLocaleString()}
-- Net Income: $${Math.abs(incomeStatement.netIncome).toLocaleString()}
+- Total Assets: ${orgCurrencySymbol()}${Math.abs(balanceSheet.totalAssets).toLocaleString()}
+- Total Liabilities: ${orgCurrencySymbol()}${Math.abs(balanceSheet.totalLiabilities).toLocaleString()}
+- Total Equity: ${orgCurrencySymbol()}${Math.abs(balanceSheet.totalEquity).toLocaleString()}
+- Net Income: ${orgCurrencySymbol()}${Math.abs(incomeStatement.netIncome).toLocaleString()}
 - Gross Profit Margin: ${incomeStatement.totalRevenue > 0 ? ((incomeStatement.grossProfit / incomeStatement.totalRevenue) * 100).toFixed(1) : 0}%
 
 Generate 3-5 specific ASPE-compliant notes that should be included based on this financial data. For each note, provide:
@@ -389,7 +390,7 @@ Format your response as structured notes that can be directly included in compil
         body: {
           messages: [{
             role: 'user',
-            content: `In one brief sentence, explain why "${note.title}" note is relevant for a ${accountingFramework === 'ASNPO' ? 'not-for-profit organization' : accountingFramework === 'IFRS' ? 'publicly accountable entity' : 'private enterprise'} with Total Assets of $${Math.abs(balanceSheet.totalAssets).toLocaleString()} and Net Income of $${Math.abs(incomeStatement.netIncome).toLocaleString()} under ${accountingFramework}.`
+            content: `In one brief sentence, explain why "${note.title}" note is relevant for a ${accountingFramework === 'ASNPO' ? 'not-for-profit organization' : accountingFramework === 'IFRS' ? 'publicly accountable entity' : 'private enterprise'} with Total Assets of ${orgCurrencySymbol()}${Math.abs(balanceSheet.totalAssets).toLocaleString()} and Net Income of ${orgCurrencySymbol()}${Math.abs(incomeStatement.netIncome).toLocaleString()} under ${accountingFramework}.`
           }]
         }
       });
@@ -506,7 +507,7 @@ Format your response as structured notes that can be directly included in compil
       statement_types: statementTypes,
       comparative_period_end: includeComparative ? comparativePeriodEnd : undefined,
       basis_of_accounting: accountingFramework,
-      currency: 'CAD',
+      currency: orgCurrency(),
       management_responsibility_acknowledged: true,
       // New fields
       additional_qualifications: finalQualifications.length > 0 ? finalQualifications : undefined,
