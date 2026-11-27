@@ -17,6 +17,7 @@ import { downloadReconciliationPdf, ReconciliationReportData, ReconciliationRepo
 import { ReconciliationShareActions } from '@/components/reports/ReconciliationShareActions';
 import { exportToFormattedExcel } from '@/lib/excelExport';
 
+import { orgCurrency, orgLocale } from '@/lib/orgCurrency';
 type ReconciliationType = 'bank' | 'credit-card';
 
 export default function ReconciliationHistory() {
@@ -87,7 +88,7 @@ export default function ReconciliationHistory() {
   }, [ccReconciliations, selectedCreditCardId]);
 
   const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' }).format(amount);
+    new Intl.NumberFormat(orgLocale(), { style: 'currency', currency: orgCurrency() }).format(amount);
 
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return '-';

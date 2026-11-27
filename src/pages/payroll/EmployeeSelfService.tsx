@@ -42,6 +42,7 @@ import { useCurrentOrganization } from '@/hooks/useOrganization';
 import { toast } from 'sonner';
 import { downloadPayStubPdf, generatePayStubPdf, type PayStubData } from '@/lib/generatePayStubPdf';
 
+import { orgCurrencySymbol } from '@/lib/orgCurrency';
 const statusConfig: Record<TimesheetStatus, { label: string; color: string; icon: React.ElementType }> = {
   draft: { label: 'Draft', color: 'bg-muted text-muted-foreground', icon: FileText },
   submitted: { label: 'Submitted', color: 'bg-blue-500/10 text-blue-600', icon: Send },
@@ -264,7 +265,7 @@ export default function EmployeeSelfService() {
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-bold">
-              {payStubs[0] ? `$${payStubs[0].net_pay?.toLocaleString()}` : '-'}
+              {payStubs[0] ? `${orgCurrencySymbol()}${payStubs[0].net_pay?.toLocaleString()}` : '-'}
             </p>
             <p className="text-sm text-muted-foreground">
               {payStubs[0]?.pay_runs?.pay_date 

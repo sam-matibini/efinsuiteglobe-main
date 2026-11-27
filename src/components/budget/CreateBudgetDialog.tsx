@@ -28,6 +28,8 @@ import {
 import { useBudgets } from '@/hooks/useBudgets';
 import { BUDGET_TYPE_CATEGORIES, type BudgetType } from '@/types/budget';
 
+import { orgCurrency } from '@/lib/orgCurrency';
+import { ALL_CURRENCIES } from '@/lib/currencyOptions';
 interface CreateBudgetDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -56,7 +58,7 @@ export function CreateBudgetDialog({ open, onOpenChange, defaultCategory = 'fina
       period_type: 'monthly',
       start_date: `${currentYear}-01-01`,
       end_date: `${currentYear}-12-31`,
-      currency: 'CAD',
+      currency: orgCurrency(),
     },
   });
 
@@ -263,13 +265,9 @@ export function CreateBudgetDialog({ open, onOpenChange, defaultCategory = 'fina
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="CAD">CAD - Canadian Dollar</SelectItem>
-                          <SelectItem value="USD">USD - US Dollar</SelectItem>
-                          <SelectItem value="EUR">EUR - Euro</SelectItem>
-                          <SelectItem value="GBP">GBP - British Pound</SelectItem>
-                          <SelectItem value="ZMW">ZMW - Zambian Kwacha</SelectItem>
-                          <SelectItem value="KES">KES - Kenyan Shilling</SelectItem>
-                          <SelectItem value="BIF">BIF - Burundian Franc</SelectItem>
+                          {ALL_CURRENCIES.map((c) => (
+                            <SelectItem key={c.code} value={c.code}>{c.code} - {c.name}</SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                     </div>

@@ -10,6 +10,7 @@ import { useOrganizationContext } from '@/hooks/useOrganizationContext';
 import { format, differenceInDays, addDays } from 'date-fns';
 import { parseLocalDate } from '@/lib/utils';
 
+import { orgCurrencySymbol } from '@/lib/orgCurrency';
 interface FollowUpSuggestion {
   id: string;
   contactId: string;
@@ -77,9 +78,9 @@ export function AIFollowupsPanel({ onComposeMessage }: AIFollowupsPanelProps) {
             reason: `Invoice ${inv.invoice_number} is ${daysOverdue} days overdue`,
             suggestedChannel: daysOverdue > 14 ? 'call' : 'email',
             priority: daysOverdue > 30 ? 'high' : daysOverdue > 14 ? 'medium' : 'low',
-            suggestedMessage: `Hi ${inv.customer.name.split(' ')[0]},\n\nI wanted to follow up regarding Invoice ${inv.invoice_number} for $${inv.balance_due.toFixed(2)}, which was due on ${format(parseLocalDate(inv.due_date), 'MMMM d, yyyy')}.\n\nPlease let me know if you have any questions or if there's anything I can help with.\n\nBest regards`,
+            suggestedMessage: `Hi ${inv.customer.name.split(' ')[0]},\n\nI wanted to follow up regarding Invoice ${inv.invoice_number} for ${orgCurrencySymbol()}${inv.balance_due.toFixed(2)}, which was due on ${format(parseLocalDate(inv.due_date), 'MMMM d, yyyy')}.\n\nPlease let me know if you have any questions or if there's anything I can help with.\n\nBest regards`,
             dueDate: new Date(),
-            context: `Outstanding balance: $${inv.balance_due.toFixed(2)}`,
+            context: `Outstanding balance: ${orgCurrencySymbol()}${inv.balance_due.toFixed(2)}`,
             type: 'overdue_invoice',
           });
         });

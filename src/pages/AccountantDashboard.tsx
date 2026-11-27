@@ -62,6 +62,7 @@ import { useLeases, useLeasePaymentSchedule } from '@/hooks/useLeases';
 import { getFiscalYearStart, getFiscalYearEnd, getFiscalYearForDate } from '@/lib/fiscalYearUtils';
 import { subYears, endOfYear } from 'date-fns';
 
+import { orgCurrencySymbol } from '@/lib/orgCurrency';
 export default function AccountantDashboard() {
   const navigate = useNavigate();
   const { organization } = useCurrentOrganization();
@@ -908,11 +909,11 @@ export default function AccountantDashboard() {
           prompt: `Generate professional ASPE-compliant notes to financial statements for ${organization?.name || 'the Company'} for the fiscal year ended December 31, ${selectedYear}. 
           
           Based on the following financial data:
-          - Total Assets: $${Math.abs(balanceSheet.totalAssets).toLocaleString()}
-          - Total Liabilities: $${Math.abs(balanceSheet.totalLiabilities).toLocaleString()}
-          - Total Equity: $${Math.abs(balanceSheet.totalEquity).toLocaleString()}
-          - Total Revenue: $${Math.abs(incomeStatement.totalRevenue).toLocaleString()}
-          - Net Income: $${Math.abs(incomeStatement.netIncome).toLocaleString()}
+          - Total Assets: ${orgCurrencySymbol()}${Math.abs(balanceSheet.totalAssets).toLocaleString()}
+          - Total Liabilities: ${orgCurrencySymbol()}${Math.abs(balanceSheet.totalLiabilities).toLocaleString()}
+          - Total Equity: ${orgCurrencySymbol()}${Math.abs(balanceSheet.totalEquity).toLocaleString()}
+          - Total Revenue: ${orgCurrencySymbol()}${Math.abs(incomeStatement.totalRevenue).toLocaleString()}
+          - Net Income: ${orgCurrencySymbol()}${Math.abs(incomeStatement.netIncome).toLocaleString()}
           
           Generate 2-3 additional relevant notes specific to this company's financial position. Focus on:
           1. Any significant accounting policies not covered by standard templates

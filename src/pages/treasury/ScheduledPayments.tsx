@@ -14,6 +14,7 @@ import { useCraAccounts } from '@/hooks/useCraAccounts';
 import { FundingBankSelect } from '@/components/treasury/FundingBankSelect';
 import { useIsReadOnly } from '@/hooks/useIsReadOnly';
 
+import { orgCurrency } from '@/lib/orgCurrency';
 const KIND_LABEL: Record<ScheduledPaymentKind, string> = {
   cra: 'CRA Payment', ap_batch: 'AP Batch', payroll: 'Payroll',
 };
@@ -30,7 +31,7 @@ export default function ScheduledPayments() {
     cra_account_id: '',
     funding_bank_account_id: '',
     amount: '',
-    currency: 'CAD',
+    currency: orgCurrency(),
     frequency: 'monthly' as ScheduledFrequency,
     next_run_date: new Date().toISOString().slice(0, 10),
     auto_submit: false,

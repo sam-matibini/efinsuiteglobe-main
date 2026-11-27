@@ -29,6 +29,7 @@ import { useIsReadOnly } from '@/hooks/useIsReadOnly';
 import { useCreditCardPlaidSync } from '@/hooks/useCreditCardPlaidSync';
 import { useConfirmDelete } from '@/hooks/useConfirmDelete';
 
+import { orgCurrency } from '@/lib/orgCurrency';
 export default function CreditCards() {
   const confirmDelete = useConfirmDelete();
   const { organization, isLoading: orgLoading } = useCurrentOrganization();
@@ -58,7 +59,7 @@ export default function CreditCards() {
   const [showOrgDialog, setShowOrgDialog] = useState(false);
   const { syncOne, syncingCardId } = useCreditCardPlaidSync();
 
-  const formatCurrency = (value: number, currency: string = 'CAD') => {
+  const formatCurrency = (value: number, currency: string = orgCurrency()) => {
     return formatLocalizedCurrency(value, { showSymbol: true, minimumFractionDigits: 0 });
   };
 
@@ -112,7 +113,7 @@ export default function CreditCards() {
       name: account.name,
       issuer: account.institution,
       card_number: account.accountNumber || undefined,
-      currency: 'CAD',
+      currency: orgCurrency(),
       opening_balance: Math.abs(account.balance || 0),
       plaid_access_token: account.plaidAccessToken || null,
       plaid_account_id: account.plaidAccountId || null,

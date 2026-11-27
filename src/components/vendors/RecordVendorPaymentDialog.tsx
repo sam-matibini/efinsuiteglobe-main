@@ -41,6 +41,7 @@ import { useBankAccounts } from '@/hooks/useBankAccounts';
 import { useVendorPayments } from '@/hooks/useVendorPayments';
 import { DivisionSelect } from '@/components/dimensions/DivisionSelect';
 
+import { orgCurrency, orgLocale } from '@/lib/orgCurrency';
 const paymentSchema = z.object({
   vendor_id: z.string().min(1, 'Vendor is required'),
   bill_id: z.string().optional(),
@@ -139,9 +140,9 @@ export function RecordVendorPaymentDialog({
   };
 
   const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('en-CA', {
+    return new Intl.NumberFormat(orgLocale(), {
       style: 'currency',
-      currency: 'CAD',
+      currency: orgCurrency(),
     }).format(value);
   };
 

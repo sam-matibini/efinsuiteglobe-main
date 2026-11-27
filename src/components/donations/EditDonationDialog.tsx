@@ -9,6 +9,7 @@ import { useDonationPrograms, useDonationFunds, useDonationCampaigns, useUpdateD
 import { useCustomers } from '@/hooks/useCustomers';
 import type { Donation, DonationType } from '@/types/donations';
 
+import { orgCurrencySymbol } from '@/lib/orgCurrency';
 interface EditDonationDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -174,7 +175,7 @@ export function EditDonationDialog({ open, onOpenChange, donation }: EditDonatio
               </div>
               <div className="space-y-2">
                 <Label>Eligible Amount</Label>
-                <Input type="text" value={`$${eligibleAmount.toFixed(2)}`} disabled className="bg-muted" />
+                <Input type="text" value={`${orgCurrencySymbol()}${eligibleAmount.toFixed(2)}`} disabled className="bg-muted" />
               </div>
             </div>
             {parseFloat(advantageValue || '0') > 0 && (

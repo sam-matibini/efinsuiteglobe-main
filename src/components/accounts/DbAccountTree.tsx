@@ -32,6 +32,7 @@ import {
 import { EditAccountDialog } from './EditAccountDialog';
 import { AddAccountDialog } from './AddAccountDialog';
 
+import { orgCurrency, orgLocale } from '@/lib/orgCurrency';
 type AccountWithChildren = DbAccount & { children?: AccountWithChildren[] };
 
 const accountTypeColors: Record<string, string> = {
@@ -84,9 +85,9 @@ function AccountTreeItem({
   const isSelected = selectedId === account.id;
 
   const formatBalance = (balance: number) => {
-    return new Intl.NumberFormat('en-CA', {
+    return new Intl.NumberFormat(orgLocale(), {
       style: 'currency',
-      currency: 'CAD',
+      currency: orgCurrency(),
       minimumFractionDigits: 0,
     }).format(Math.abs(balance));
   };

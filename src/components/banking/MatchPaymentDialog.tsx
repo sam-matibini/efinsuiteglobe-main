@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { format } from 'date-fns';
 import { ExtendedCreditCardTransaction } from '@/hooks/useCreditCards';
 
+import { orgCurrency, orgLocale } from '@/lib/orgCurrency';
 interface MatchPaymentDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -76,9 +77,9 @@ export function MatchPaymentDialog({
   };
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-CA', {
+    return new Intl.NumberFormat(orgLocale(), {
       style: 'currency',
-      currency: 'CAD',
+      currency: orgCurrency(),
     }).format(Math.abs(amount));
   };
 

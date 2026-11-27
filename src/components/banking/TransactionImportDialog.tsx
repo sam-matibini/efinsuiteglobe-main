@@ -21,6 +21,7 @@ import * as XLSX from 'xlsx';
 import { ColumnMappingBuilder, ColumnMapping, applyMappings } from './ColumnMappingBuilder';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
+import { orgCurrency, orgLocale } from '@/lib/orgCurrency';
 interface ImportedTransaction {
   date: string;
   description: string;
@@ -217,9 +218,9 @@ export default function TransactionImportDialog({
   };
 
   const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('en-CA', {
+    return new Intl.NumberFormat(orgLocale(), {
       style: 'currency',
-      currency: 'CAD',
+      currency: orgCurrency(),
       minimumFractionDigits: 2,
     }).format(Math.abs(value));
   };

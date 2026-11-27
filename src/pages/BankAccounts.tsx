@@ -30,6 +30,7 @@ import { useIsReadOnly } from '@/hooks/useIsReadOnly';
 import { usePlaidSync } from '@/hooks/usePlaidSync';
 import { useConfirmDelete } from '@/hooks/useConfirmDelete';
 
+import { orgCurrency } from '@/lib/orgCurrency';
 export default function BankAccounts() {
   const confirmDelete = useConfirmDelete();
   const { organization, isLoading: orgLoading } = useCurrentOrganization();
@@ -181,7 +182,7 @@ export default function BankAccounts() {
       name: account.name,
       institution: account.institution,
       account_number: account.accountNumber,
-      currency: 'CAD',
+      currency: orgCurrency(),
       opening_balance: account.balance || 0,
       opening_date: new Date().toISOString().split('T')[0],
       gl_account_id: defaultGLAccount.id,

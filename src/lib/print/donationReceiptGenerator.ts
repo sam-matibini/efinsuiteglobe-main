@@ -7,6 +7,7 @@
 import jsPDF from 'jspdf';
 import type { DonationReceipt } from '@/types/donations';
 
+import { orgCurrency, orgLocale } from '@/lib/orgCurrency';
 export interface ReceiptGeneratorConfig {
   paperSize?: 'letter' | 'a4';
   showWatermark?: boolean;
@@ -512,9 +513,9 @@ function formatDateShort(dateStr: string): string {
 }
 
 function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('en-CA', {
+  return new Intl.NumberFormat(orgLocale(), {
     style: 'currency',
-    currency: 'CAD',
+    currency: orgCurrency(),
   }).format(amount);
 }
 

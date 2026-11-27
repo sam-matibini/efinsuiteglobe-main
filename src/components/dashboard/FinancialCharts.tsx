@@ -5,6 +5,7 @@ import {
   ResponsiveContainer, ComposedChart,
 } from 'recharts';
 
+import { orgCurrencySymbol } from '@/lib/orgCurrency';
 function fmt(value: number): string {
   return new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(value);
 }
@@ -40,8 +41,8 @@ export const LoanAmortizationChart: React.FC<AmortizationChartProps> = ({ schedu
         <AreaChart data={data} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
           <XAxis dataKey="period" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
-          <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} tickFormatter={v => `$${fmt(v)}`} width={70} />
-          <Tooltip {...chartTooltipStyle} formatter={(value: number) => [`$${fmt(value)}`, undefined]} />
+          <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} tickFormatter={v => `${orgCurrencySymbol()}${fmt(v)}`} width={70} />
+          <Tooltip {...chartTooltipStyle} formatter={(value: number) => [`${orgCurrencySymbol()}${fmt(value)}`, undefined]} />
           <Legend wrapperStyle={{ fontSize: '11px' }} />
           <Area type="monotone" dataKey="Principal" stackId="1" stroke="hsl(var(--primary))" fill="hsl(var(--primary) / 0.3)" />
           <Area type="monotone" dataKey="Interest" stackId="1" stroke="hsl(var(--destructive))" fill="hsl(var(--destructive) / 0.2)" />
@@ -62,8 +63,8 @@ export const YearlySummaryBarChart: React.FC<YearlySummaryChartProps> = ({ data 
       <BarChart data={data} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
         <XAxis dataKey="year" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} label={{ value: 'Year', position: 'insideBottom', offset: -2, fontSize: 10 }} />
-        <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} tickFormatter={v => `$${fmt(v)}`} width={70} />
-        <Tooltip {...chartTooltipStyle} formatter={(value: number) => [`$${fmt(value)}`, undefined]} />
+        <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} tickFormatter={v => `${orgCurrencySymbol()}${fmt(v)}`} width={70} />
+        <Tooltip {...chartTooltipStyle} formatter={(value: number) => [`${orgCurrencySymbol()}${fmt(value)}`, undefined]} />
         <Legend wrapperStyle={{ fontSize: '11px' }} />
         <Bar dataKey="principal" name="Principal" fill="hsl(var(--primary))" radius={[2, 2, 0, 0]} />
         <Bar dataKey="interest" name="Interest" fill="hsl(var(--destructive) / 0.7)" radius={[2, 2, 0, 0]} />
@@ -99,8 +100,8 @@ export const BreakEvenChart: React.FC<BreakEvenChartProps> = ({ fixedCosts, vari
         <LineChart data={data} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
           <XAxis dataKey="units" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} label={{ value: 'Units', position: 'insideBottom', offset: -2, fontSize: 10 }} />
-          <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} tickFormatter={v => `$${fmt(v)}`} width={70} />
-          <Tooltip {...chartTooltipStyle} formatter={(value: number) => [`$${fmt(value)}`, undefined]} />
+          <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} tickFormatter={v => `${orgCurrencySymbol()}${fmt(v)}`} width={70} />
+          <Tooltip {...chartTooltipStyle} formatter={(value: number) => [`${orgCurrencySymbol()}${fmt(value)}`, undefined]} />
           <Legend wrapperStyle={{ fontSize: '11px' }} />
           <Line type="monotone" dataKey="Revenue" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
           <Line type="monotone" dataKey="Total Cost" stroke="hsl(var(--destructive))" strokeWidth={2} dot={false} />
@@ -130,8 +131,8 @@ export const CashFlowChart: React.FC<CashFlowChartProps> = ({ data }) => {
         <ComposedChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
           <XAxis dataKey="period" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
-          <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} tickFormatter={v => `$${fmt(v)}`} width={70} />
-          <Tooltip {...chartTooltipStyle} formatter={(value: number) => [`$${fmt(value)}`, undefined]} />
+          <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} tickFormatter={v => `${orgCurrencySymbol()}${fmt(v)}`} width={70} />
+          <Tooltip {...chartTooltipStyle} formatter={(value: number) => [`${orgCurrencySymbol()}${fmt(value)}`, undefined]} />
           <Legend wrapperStyle={{ fontSize: '11px' }} />
           <Bar dataKey="Inflows" fill="hsl(142 71% 45% / 0.7)" radius={[2, 2, 0, 0]} />
           <Bar dataKey="Outflows" fill="hsl(var(--destructive) / 0.7)" radius={[2, 2, 0, 0]} />
@@ -161,9 +162,9 @@ export const ValuationChart: React.FC<ValuationChartProps> = ({ revenueMultiple,
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={data} layout="vertical" margin={{ top: 5, right: 10, left: 10, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-          <XAxis type="number" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} tickFormatter={v => `$${fmt(v)}`} />
+          <XAxis type="number" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} tickFormatter={v => `${orgCurrencySymbol()}${fmt(v)}`} />
           <YAxis type="category" dataKey="method" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} width={110} />
-          <Tooltip {...chartTooltipStyle} formatter={(value: number) => [`$${fmt(value)}`, 'Valuation']} />
+          <Tooltip {...chartTooltipStyle} formatter={(value: number) => [`${orgCurrencySymbol()}${fmt(value)}`, 'Valuation']} />
           <Bar dataKey="value" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
         </BarChart>
       </ResponsiveContainer>
@@ -190,8 +191,8 @@ export const LoanBalanceChart: React.FC<LoanBalanceChartProps> = ({ schedule, sa
         <AreaChart data={data} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
           <XAxis dataKey="period" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
-          <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} tickFormatter={v => `$${fmt(v)}`} width={70} />
-          <Tooltip {...chartTooltipStyle} formatter={(value: number) => [`$${fmt(value)}`, undefined]} />
+          <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} tickFormatter={v => `${orgCurrencySymbol()}${fmt(v)}`} width={70} />
+          <Tooltip {...chartTooltipStyle} formatter={(value: number) => [`${orgCurrencySymbol()}${fmt(value)}`, undefined]} />
           <Area type="monotone" dataKey="Balance" stroke="hsl(var(--primary))" fill="hsl(var(--primary) / 0.15)" strokeWidth={2} />
         </AreaChart>
       </ResponsiveContainer>

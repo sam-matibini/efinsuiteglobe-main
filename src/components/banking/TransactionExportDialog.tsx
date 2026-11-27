@@ -23,6 +23,7 @@ import { format } from 'date-fns';
 import { signedBankAmount } from '@/lib/plaidBankAmount';
 import { isBankTransactionLocked } from '@/lib/bankTransactionLock';
 
+import { orgCurrency, orgLocale } from '@/lib/orgCurrency';
 interface Transaction {
   id: string;
   date: Date;
@@ -105,9 +106,9 @@ export default function TransactionExportDialog({
   });
 
   const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('en-CA', {
+    return new Intl.NumberFormat(orgLocale(), {
       style: 'currency',
-      currency: 'CAD',
+      currency: orgCurrency(),
       minimumFractionDigits: 2,
     }).format(Math.abs(value));
   };

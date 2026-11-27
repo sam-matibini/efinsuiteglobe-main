@@ -19,6 +19,7 @@ import { Plus, Send, Trash2, Pencil, Mail } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useCountryTreasuryConfig } from '@/hooks/useCountryTreasuryConfig';
 
+import { orgCurrency } from '@/lib/orgCurrency';
 const TYPE_LABEL: Record<TaxPaymentType, string> = {
   source_deductions: 'CRA Source Deductions (PD7A)',
   gst_hst: 'GST/HST Remittance',
@@ -90,7 +91,7 @@ export default function TaxPayments() {
     period_start: '',
     period_end: '',
     amount: '',
-    currency: 'CAD',
+    currency: orgCurrency(),
     bank_account_id: '',
     cra_account_id: '',
     payment_method: 'cra_my_payment' as TaxPaymentMethod,

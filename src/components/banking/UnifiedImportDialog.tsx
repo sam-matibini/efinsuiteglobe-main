@@ -23,6 +23,7 @@ import { classifyCreditCardType } from '@/lib/creditCardImportNormalizer';
 import { EditableImportPreview } from './EditableImportPreview';
 
 
+import { orgCurrency, orgLocale } from '@/lib/orgCurrency';
 export type ImportAccountType = 'bank' | 'credit-card';
 
 export interface ParsedBankTransaction {
@@ -274,9 +275,9 @@ export function UnifiedImportDialog({
   };
 
   const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('en-CA', {
+    return new Intl.NumberFormat(orgLocale(), {
       style: 'currency',
-      currency: 'CAD',
+      currency: orgCurrency(),
       minimumFractionDigits: 2,
     }).format(value);
   };

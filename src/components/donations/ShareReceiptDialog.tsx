@@ -13,6 +13,7 @@ import { useCurrentOrganization } from '@/hooks/useOrganization';
 import { toast } from 'sonner';
 import type { DonationReceipt } from '@/types/donations';
 
+import { orgCurrencySymbol } from '@/lib/orgCurrency';
 interface ShareReceiptDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -32,7 +33,7 @@ export function ShareReceiptDialog({ open, onOpenChange, receipt }: ShareReceipt
   })();
 
   const taxYear = new Date(receipt.date_of_donation).getFullYear();
-  const defaultMessage = `Your official donation receipt (${receipt.receipt_number}) for tax year ${taxYear} — Eligible amount: $${receipt.eligible_amount.toFixed(2)} CAD.`;
+  const defaultMessage = `Your official donation receipt (${receipt.receipt_number}) for tax year ${taxYear} — Eligible amount: ${orgCurrencySymbol()}${receipt.eligible_amount.toFixed(2)} CAD.`;
 
   const [message, setMessage] = useState(defaultMessage);
 
@@ -56,7 +57,7 @@ export function ShareReceiptDialog({ open, onOpenChange, receipt }: ShareReceipt
           action: 'send-email',
           to: email,
           subject: `Official Donation Receipt — ${receipt.receipt_number}`,
-          html: `<p>Dear ${receipt.donor_name},</p><p>Please find your official donation receipt attached.</p><p>Receipt #: ${receipt.receipt_number}<br/>Tax Year: ${taxYear}<br/>Eligible Amount: $${receipt.eligible_amount.toFixed(2)} CAD</p><p>Thank you for your generous contribution.</p>`,
+          html: `<p>Dear ${receipt.donor_name},</p><p>Please find your official donation receipt attached.</p><p>Receipt #: ${receipt.receipt_number}<br/>Tax Year: ${taxYear}<br/>Eligible Amount: ${orgCurrencySymbol()}${receipt.eligible_amount.toFixed(2)} CAD</p><p>Thank you for your generous contribution.</p>`,
           attachments: [{ content: base64, filename: `Receipt-${receipt.receipt_number}.pdf`, type: 'application/pdf' }],
         },
       });

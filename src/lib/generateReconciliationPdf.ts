@@ -1,5 +1,6 @@
 import jsPDF from 'jspdf';
 
+import { orgCurrency, orgLocale } from '@/lib/orgCurrency';
 // ============================================================================
 // ENHANCED BANK RECONCILIATION REPORT - AUDIT-READY
 // Compliant with IFRS/ASPE, Canadian CPA/CA audit expectations
@@ -82,7 +83,7 @@ export interface ReconciliationReportData {
 // ============================================================================
 
 const formatCurrency = (value: number) =>
-  new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' }).format(value);
+  new Intl.NumberFormat(orgLocale(), { style: 'currency', currency: orgCurrency() }).format(value);
 
 const formatShortDate = (dateStr: string) => {
   try {

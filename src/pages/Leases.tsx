@@ -43,6 +43,7 @@ import { useCurrentOrganization } from '@/hooks/useOrganization';
 import { getCountryLocalization, COUNTRY_LOCALIZATIONS } from '@/data/countryLocalizations';
 import { useIsReadOnly } from '@/hooks/useIsReadOnly';
 
+import { orgCurrency, orgLocale } from '@/lib/orgCurrency';
 // WhatsApp icon component (lucide doesn't have official WhatsApp icon)
 const WhatsAppIcon = () => (
   <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
@@ -600,7 +601,7 @@ function LeaseScheduleDialog({
   const { data: schedule = [], isLoading } = useLeasePaymentSchedule(lease.id);
 
   const formatCurrency = (amount: number) => 
-    new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' }).format(amount);
+    new Intl.NumberFormat(orgLocale(), { style: 'currency', currency: orgCurrency() }).format(amount);
 
   // Calculate totals
   const totals = useMemo(() => ({

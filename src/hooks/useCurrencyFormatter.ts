@@ -6,15 +6,28 @@ import { getCountryLocalization } from '@/data/countryLocalizations';
 // Locale mapping for Intl.NumberFormat
 // Use getLocaleForCountry for comprehensive locale mapping
 import { getLocaleForCountry } from '@/data/countryLocalizations';
+import { resolveCountryCode, resolveOrgCurrency } from '@/lib/orgCurrency';
 
 export function useCurrencyFormatter() {
   const { preferences } = useUserPreferences();
   const { organization } = useCurrentOrganization();
   
-  // Get country code and localization
-  const countryCode = useMemo(() => organization?.country || 'CA', [organization?.country]);
-  const localization = useMemo(() => getCountryLocalization(countryCode), [countryCode]);
+  // Organizations store their country as a code ("NG") or a name ("Nigeria");
+  // resolve it so the lookup does not silently fall back to USD.
+  const countryCode = useMemo(() => resolveCountryCode(organization?.country) || 'CA', [organization?.country]);
+  const countryLocalization = useMemo(() => getCountryLocalization(countryCode), [countryCode]);
   const locale = useMemo(() => getLocaleForCountry(countryCode), [countryCode]);
+  // The company's base currency (set in Settings → Multi-Currency) wins; then the country's.
+  const baseCurrency = useMemo(
+    () => (organization?.currency || organization?.country ? resolveOrgCurrency(organization) : countryLocalization.currency),
+    [organization, countryLocalization.currency],
+  );
+  const localization = useMemo(() => ({
+    currency: baseCurrency,
+    currencySymbol: baseCurrency === countryLocalization.currency
+      ? countryLocalization.currencySymbol
+      : (new Intl.NumberFormat(locale, { style: 'currency', currency: baseCurrency, currencyDisplay: 'narrowSymbol' }).formatToParts(0).find((p) => p.type === 'currency')?.value ?? baseCurrency),
+  }), [baseCurrency, countryLocalization, locale]);
 
   const formatCurrency = useCallback((value: number, options?: { 
     showCurrencySymbol?: boolean;

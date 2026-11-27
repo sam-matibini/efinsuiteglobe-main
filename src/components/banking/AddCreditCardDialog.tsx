@@ -21,6 +21,7 @@ import { useCurrentOrganization } from '@/hooks/useOrganization';
 import { getCreditCardIssuersForCountry, CreditCardIssuer } from '@/data/localizedBankingInstitutions';
 import { getAllLocalizedCurrencies } from '@/hooks/useLocalizedCurrency';
 
+import { orgCurrency } from '@/lib/orgCurrency';
 interface Account {
   id: string;
   code: string;
@@ -67,7 +68,7 @@ export function AddCreditCardDialog({
     issuer: '',
     cardNumber: '',
     creditLimit: '',
-    currency: organization?.currency || 'CAD',
+    currency: organization?.currency || orgCurrency(),
     openingBalance: '',
     openingDate: new Date().toISOString().split('T')[0],
     statementClosingDay: '25',
@@ -106,7 +107,7 @@ export function AddCreditCardDialog({
       issuer: '',
       cardNumber: '',
       creditLimit: '',
-      currency: 'CAD',
+      currency: orgCurrency(),
       openingBalance: '',
       openingDate: new Date().toISOString().split('T')[0],
       statementClosingDay: '25',

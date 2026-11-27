@@ -21,6 +21,7 @@ import type {
   UpdatePledgeInput,
 } from '@/types/donations';
 
+import { orgCurrency } from '@/lib/orgCurrency';
 // =====================================================
 // DONATIONS
 // =====================================================
@@ -111,7 +112,7 @@ export function useCreateDonation() {
           donor_id: input.donor_id,
           date_received: input.date_received,
           amount: input.amount,
-          currency: 'CAD',
+          currency: orgCurrency(),
           donation_type: input.donation_type,
           program_id: input.program_id || null,
           fund_id: input.fund_id || null,
@@ -1063,7 +1064,7 @@ export function useCreatePledge() {
           donor_id: input.donor_id,
           pledge_date: input.pledge_date,
           total_amount: input.total_amount,
-          currency: 'CAD',
+          currency: orgCurrency(),
           program_id: input.program_id || null,
           fund_id: input.fund_id || null,
           campaign_id: input.campaign_id || null,

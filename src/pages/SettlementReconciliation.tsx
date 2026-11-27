@@ -41,6 +41,7 @@ import kpiSplit from '@/assets/settlement-kpi/split.png';
 import kpiStuck from '@/assets/settlement-kpi/stuck.png';
 import kpiApproval from '@/assets/settlement-kpi/approval.png';
 
+import { orgCurrency } from '@/lib/orgCurrency';
 const KpiImg = ({ src, alt }: { src: string; alt: string }) => (
   <img src={src} alt={alt} loading="lazy" width={32} height={32} className="h-8 w-8 object-contain" />
 );
@@ -728,7 +729,7 @@ function AddProcessorAccountDialog({
   const [form, setForm] = useState({
     processor: 'stripe',
     display_name: '',
-    currency: 'USD',
+    currency: orgCurrency(),
     expected_bank_account_id: '',
     external_account_id: '',
     date_window_days: 3,

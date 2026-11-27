@@ -7,8 +7,9 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { AlertTriangle, ExternalLink, Loader2 } from 'lucide-react';
+import { orgCurrency, orgLocale } from '@/lib/orgCurrency';
 const formatCurrency = (n: number) =>
-  new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' }).format(n);
+  new Intl.NumberFormat(orgLocale(), { style: 'currency', currency: orgCurrency() }).format(n);
 
 const ISSUE_LABEL: Record<TaxAuditRow['issue'], { label: string; tone: 'amber' | 'red' }> = {
   missing_tax: { label: 'No tax code applied', tone: 'amber' },

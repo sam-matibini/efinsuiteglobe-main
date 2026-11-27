@@ -9,6 +9,7 @@ import { CreateOrganizationDialog } from '@/components/accounts/CreateOrganizati
 import { Skeleton } from '@/components/ui/skeleton';
 import { ReportActions, ReportData } from '@/components/reports/ReportActions';
 
+import { orgCurrency, orgLocale } from '@/lib/orgCurrency';
 export default function AgingReports() {
   const { organization, isLoading: orgLoading } = useCurrentOrganization();
   const { data: arData, isLoading: arLoading } = useARAgingReport();
@@ -16,9 +17,9 @@ export default function AgingReports() {
   const [showOrgDialog, setShowOrgDialog] = useState(false);
 
   const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('en-CA', {
+    return new Intl.NumberFormat(orgLocale(), {
       style: 'currency',
-      currency: 'CAD',
+      currency: orgCurrency(),
       minimumFractionDigits: 2,
     }).format(value);
   };

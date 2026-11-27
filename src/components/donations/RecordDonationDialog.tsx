@@ -11,6 +11,7 @@ import type { DonationType } from '@/types/donations';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertTriangle } from 'lucide-react';
 
+import { orgCurrencySymbol } from '@/lib/orgCurrency';
 interface RecordDonationDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -238,7 +239,7 @@ export function RecordDonationDialog({ open, onOpenChange }: RecordDonationDialo
                 <Label>Eligible Amount</Label>
                 <Input
                   type="text"
-                  value={`$${eligibleAmount.toFixed(2)}`}
+                  value={`${orgCurrencySymbol()}${eligibleAmount.toFixed(2)}`}
                   disabled
                   className="bg-muted"
                 />

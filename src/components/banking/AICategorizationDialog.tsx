@@ -17,6 +17,7 @@ import { useAccounts, DbAccount } from '@/hooks/useAccounts';
 import { useCurrentOrganization } from '@/hooks/useOrganization';
 import { supabase } from '@/integrations/supabase/client';
 
+import { orgCurrency, orgLocale } from '@/lib/orgCurrency';
 interface Transaction {
   id: string;
   description: string;
@@ -198,9 +199,9 @@ export default function AICategorizationDialog({
   const getTransaction = (id: string) => transactions.find((t) => t.id === id);
 
   const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('en-CA', {
+    return new Intl.NumberFormat(orgLocale(), {
       style: 'currency',
-      currency: 'CAD',
+      currency: orgCurrency(),
     }).format(Math.abs(value));
   };
 

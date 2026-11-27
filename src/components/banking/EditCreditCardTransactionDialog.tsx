@@ -59,6 +59,7 @@ import { parseLocalDate } from '@/lib/utils';
 import { Check, ChevronsUpDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
+import { orgCurrency, orgLocale } from '@/lib/orgCurrency';
 interface EditCreditCardTransactionDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -335,9 +336,9 @@ export function EditCreditCardTransactionDialog({
   };
 
   const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('en-CA', {
+    return new Intl.NumberFormat(orgLocale(), {
       style: 'currency',
-      currency: 'CAD',
+      currency: orgCurrency(),
       minimumFractionDigits: 2,
       signDisplay: 'auto',
     }).format(value);
