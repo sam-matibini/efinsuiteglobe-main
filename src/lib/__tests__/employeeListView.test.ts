@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { annualEquivalent, countActiveFilters, EMPTY_FILTERS, filterEmployees, headcountBreakdown, maskTail, nationalIdOf, nextSort, sortEmployees, type ListEmployee } from '../employeeListView';
+import { annualEquivalent, bankOptions, countActiveFilters, EMPTY_FILTERS, filterEmployees, headcountBreakdown, maskTail, nationalIdOf, nextSort, sortEmployees, type ListEmployee } from '../employeeListView';
 
 const E = (over: Partial<ListEmployee>): ListEmployee => ({
   first_name: 'A', last_name: 'A', email: 'a@x.com', status: 'active', employment_type: 'contract',
@@ -116,5 +116,25 @@ describe('national ID and masking', () => {
   });
   it('finds employees by National ID in search', () => {
     expect(filterEmployees([E({ first_name: 'Ada', nin: '55566677788' }), E({ first_name: 'Obi' })], { ...EMPTY_FILTERS, search: '555666' }).map((e) => e.first_name)).toEqual(['Ada']);
+  });
+});
+
+describe('bank filter', () => {
+  const people = [
+    E({ first_name: 'Ada', bank_institution: 'Access Bank' }),
+    E({ first_name: 'Obi', bank_institution: ' access bank ' }),
+    E({ first_name: 'Ngozi', bank_institution: 'GTBank' }),
+    E({ first_name: 'Musa', bank_institution: null }),
+  ];
+  it('lists each bank once, alphabetically', () => {
+    expect(bankOptions(people)).toEqual(['Access Bank', 'GTBank']);
+  });
+  it('filters by bank, ignoring case and spacing', () => {
+    expect(names(filterEmployees(people, { ...EMPTY_FILTERS, bank: 'Access Bank' }))).toEqual(['Ada', 'Obi']);
+    expect(names(filterEmployees(people, { ...EMPTY_FILTERS, bank: 'GTBank' }))).toEqual(['Ngozi']);
+  });
+  it('finds employees with no bank on file and counts as an active filter', () => {
+    expect(names(filterEmployees(people, { ...EMPTY_FILTERS, bank: '__none__' }))).toEqual(['Musa']);
+    expect(countActiveFilters({ ...EMPTY_FILTERS, bank: 'GTBank' })).toBe(1);
   });
 });

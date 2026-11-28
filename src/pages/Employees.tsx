@@ -26,7 +26,7 @@ import { useSubscription } from '@/hooks/useSubscription';
 import { SubscriptionUpgradeModal } from '@/components/SubscriptionUpgradeModal';
 import { useCurrencyFormatter } from '@/hooks/useCurrencyFormatter';
 import { EmployeeFilterBar, SortHeader } from '@/components/employees/EmployeeListControls';
-import { EMPTY_FILTERS, EmployeeFilters, filterEmployees, maskTail, nationalIdOf, nextSort, SortKey, SortState, sortEmployees } from '@/lib/employeeListView';
+import { bankOptions, EMPTY_FILTERS, EmployeeFilters, filterEmployees, maskTail, nationalIdOf, nextSort, SortKey, SortState, sortEmployees } from '@/lib/employeeListView';
 import { EmployeeBreakdown } from '@/components/employees/EmployeeBreakdown';
 import { downloadEmployeesCsv, downloadEmployeesExcel } from '@/lib/employeeExport';
 import { toast } from 'sonner';
@@ -77,6 +77,7 @@ export default function Employees() {
     [employees, filters, sort],
   );
   const departmentOptions = useMemo(() => (departments ?? []).filter((d): d is string => !!d).sort(), [departments]);
+  const bankFilterOptions = useMemo(() => bankOptions(employees), [employees]);
 
   const handleDownload = (format: 'xlsx' | 'csv') => {
     if (filteredEmployees.length === 0) {
@@ -226,6 +227,7 @@ export default function Employees() {
           filters={filters}
           onChange={setFilters}
           departments={departmentOptions}
+          banks={bankFilterOptions}
           shown={filteredEmployees.length}
           total={employees.length}
           currencySymbol={currencySymbol}
