@@ -28,6 +28,7 @@ export interface EmployeeFilters {
   department: string;      // 'all', '__none__' (no department) or a department name
   position: string;        // 'all', '__none__' (no job title) or a job title
   employmentType: string;  // 'all' or an employment_type
+  bank: string;            // 'all', '__none__' (no bank on file) or a bank name
   payType: PayType;
   hireFrom: string;        // YYYY-MM-DD or ''
   hireTo: string;          // YYYY-MM-DD or ''
@@ -36,7 +37,7 @@ export interface EmployeeFilters {
 }
 
 export const EMPTY_FILTERS: EmployeeFilters = {
-  search: '', status: 'all', department: 'all', position: 'all', employmentType: 'all', payType: 'all',
+  search: '', status: 'all', department: 'all', position: 'all', employmentType: 'all', bank: 'all', payType: 'all',
   hireFrom: '', hireTo: '', payMin: '', payMax: '',
 };
 
@@ -57,7 +58,7 @@ const dateKey = (d?: string | null) => (d ? d.slice(0, 10) : '');
 
 export function countActiveFilters(f: EmployeeFilters): number {
   return [
-    f.status !== 'all', f.department !== 'all', f.position !== 'all', f.employmentType !== 'all', f.payType !== 'all',
+    f.status !== 'all', f.department !== 'all', f.position !== 'all', f.employmentType !== 'all', f.bank !== 'all', f.payType !== 'all',
     !!f.hireFrom || !!f.hireTo, !!f.payMin || !!f.payMax,
   ].filter(Boolean).length;
 }
@@ -76,6 +77,10 @@ export function filterEmployees<T extends ListEmployee>(rows: T[], f: EmployeeFi
     if (f.department === '__none__' ? !!e.department : f.department !== 'all' && e.department !== f.department) return false;
     if (f.position === '__none__' ? !!e.job_title : f.position !== 'all' && e.job_title !== f.position) return false;
     if (f.employmentType !== 'all' && e.employment_type !== f.employmentType) return false;
+    if (f.bank !== 'all') {
+      const bank = e.bank_institution?.trim() || '';
+      if (f.bank === '__none__' ? !!bank : bank.toLowerCase() !== f.bank.toLowerCase()) return false;
+    }
     const hasSalary = !!(e.annual_salary && e.annual_salary > 0);
     const hasHourly = !hasSalary && !!(e.hourly_rate && e.hourly_rate > 0);
     if (f.payType === 'salary' && !hasSalary) return false;
@@ -169,4 +174,14 @@ export function maskTail(v: string | null | undefined, keep = 4): string {
   const s = v.trim();
   if (s.length <= keep) return '•'.repeat(s.length);
   return '•'.repeat(Math.min(s.length - keep, 7)) + s.slice(-keep);
+}
+
+/** Distinct bank names on file, alphabetical. Spelling variants that differ only by case or spacing are merged. */
+export function bankOptions(rows: Pick<ListEmployee, 'bank_institution'>[]): string[] {
+  const seen = new Map<string, string>();
+  for (const e of rows) {
+    const name = e.bank_institution?.trim();
+    if (name && !seen.has(name.toLowerCase())) seen.set(name.toLowerCase(), name);
+  }
+  return [...seen.values()].sort((a, b) => a.localeCompare(b));
 }

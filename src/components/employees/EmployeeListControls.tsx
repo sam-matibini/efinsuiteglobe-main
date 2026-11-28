@@ -24,12 +24,14 @@ interface FilterBarProps {
   filters: EmployeeFilters;
   onChange: (next: EmployeeFilters) => void;
   departments: string[];
+  /** Bank names to filter by. Leave out to hide the bank filter. */
+  banks?: string[];
   shown: number;
   total: number;
   currencySymbol: string;
 }
 
-export function EmployeeFilterBar({ filters, onChange, departments, shown, total, currencySymbol }: FilterBarProps) {
+export function EmployeeFilterBar({ filters, onChange, departments, banks, shown, total, currencySymbol }: FilterBarProps) {
   const set = (patch: Partial<EmployeeFilters>) => onChange({ ...filters, ...patch });
   const active = countActiveFilters(filters);
   const moreActive = (filters.hireFrom || filters.hireTo ? 1 : 0) + (filters.payMin || filters.payMax ? 1 : 0);
@@ -72,6 +74,17 @@ export function EmployeeFilterBar({ filters, onChange, departments, shown, total
             {EMPLOYMENT_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
           </SelectContent>
         </Select>
+
+        {banks && (
+          <Select value={filters.bank} onValueChange={(v) => set({ bank: v })}>
+            <SelectTrigger className="w-40" aria-label="Bank"><SelectValue placeholder="Bank" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All banks</SelectItem>
+              {banks.map((b) => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+              <SelectItem value="__none__">No bank on file</SelectItem>
+            </SelectContent>
+          </Select>
+        )}
 
         <Select value={filters.payType} onValueChange={(v) => set({ payType: v as EmployeeFilters['payType'] })}>
           <SelectTrigger className="w-36" aria-label="Pay type"><SelectValue placeholder="Pay type" /></SelectTrigger>
