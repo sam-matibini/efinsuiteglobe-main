@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { parseLocalDate } from '@/lib/utils';
-import { Plus, MoreHorizontal, Building2, FileText, Edit, History, Trash2 } from 'lucide-react';
+import { Plus, MoreHorizontal, Building2, FileText, Edit, History, Trash2, Download, FileSpreadsheet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -27,6 +27,9 @@ import { SubscriptionUpgradeModal } from '@/components/SubscriptionUpgradeModal'
 import { useCurrencyFormatter } from '@/hooks/useCurrencyFormatter';
 import { EmployeeFilterBar, SortHeader } from '@/components/employees/EmployeeListControls';
 import { EMPTY_FILTERS, EmployeeFilters, filterEmployees, nextSort, SortKey, SortState, sortEmployees } from '@/lib/employeeListView';
+import { EmployeeBreakdown } from '@/components/employees/EmployeeBreakdown';
+import { downloadEmployeesCsv, downloadEmployeesExcel } from '@/lib/employeeExport';
+import { toast } from 'sonner';
 export default function Employees() {
   const navigate = useNavigate();
   const isReadOnly = useIsReadOnly();
@@ -72,6 +75,21 @@ export default function Employees() {
     [employees, filters, sort],
   );
   const departmentOptions = useMemo(() => (departments ?? []).filter((d): d is string => !!d).sort(), [departments]);
+
+  const handleDownload = (format: 'xlsx' | 'csv') => {
+    if (filteredEmployees.length === 0) {
+      toast.error('No employees to download');
+      return;
+    }
+    try {
+      if (format === 'xlsx') downloadEmployeesExcel(filteredEmployees, organization?.name, `"${currencySymbol}"#,##0.00`);
+      else downloadEmployeesCsv(filteredEmployees, organization?.name);
+      toast.success(`Downloaded ${filteredEmployees.length.toLocaleString()} employee${filteredEmployees.length === 1 ? '' : 's'}`);
+    } catch (err) {
+      console.error('Employee export failed', err);
+      toast.error('Download failed. Please try again.');
+    }
+  };
 
   // Calculate payroll stats from actual data
   const salariedEmployees = employees.filter(e => e.annual_salary && e.annual_salary > 0);
@@ -121,15 +139,41 @@ export default function Employees() {
           <h1 className="text-2xl font-bold text-foreground">Employees</h1>
           <p className="text-muted-foreground">Manage employee information and payroll</p>
         </div>
-        {!isReadOnly && (
-          <Button 
-            className="bg-accent hover:bg-accent/90 text-accent-foreground"
-            onClick={handleAddClick}
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Add Employee
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" disabled={isLoading || employees.length === 0}>
+                <Download className="w-4 h-4 mr-2" />
+                Download
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-64">
+              <DropdownMenuItem onClick={() => handleDownload('xlsx')}>
+                <FileSpreadsheet className="w-4 h-4 mr-2" />
+                Excel (.xlsx)
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleDownload('csv')}>
+                <FileText className="w-4 h-4 mr-2" />
+                CSV (.csv)
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <p className="px-2 py-1.5 text-xs text-muted-foreground">
+                {filteredEmployees.length === employees.length
+                  ? `All ${employees.length.toLocaleString()} employees`
+                  : `${filteredEmployees.length.toLocaleString()} of ${employees.length.toLocaleString()} employees (current filters)`}
+              </p>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          {!isReadOnly && (
+            <Button 
+              className="bg-accent hover:bg-accent/90 text-accent-foreground"
+              onClick={handleAddClick}
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Add Employee
+            </Button>
+          )}
+        </div>
         <AddEmployeeDialog 
           open={isAddOpen} 
           onOpenChange={setIsAddOpen}
@@ -166,6 +210,11 @@ export default function Employees() {
         </Card>
       </div>
 
+      {/* Headcount by department, position and employment type */}
+      <Card className="p-4">
+        <EmployeeBreakdown employees={employees} filters={filters} onChange={setFilters} />
+      </Card>
+
       {/* Search, filters and result count */}
       <Card className="p-4">
         <EmployeeFilterBar
@@ -194,6 +243,7 @@ export default function Employees() {
           <table className="data-table">
             <thead className="bg-muted/50">
               <tr>
+                <th><SortHeader label="Employee ID" sortKey="employee_number" sort={sort} onSort={onSort} /></th>
                 <th><SortHeader label="Employee" sortKey="name" sort={sort} onSort={onSort} /></th>
                 <th><SortHeader label="Department" sortKey="department" sort={sort} onSort={onSort} /></th>
                 <th><SortHeader label="Position" sortKey="job_title" sort={sort} onSort={onSort} /></th>
@@ -207,6 +257,7 @@ export default function Employees() {
             <tbody>
               {filteredEmployees.map((employee) => (
                 <tr key={employee.id} className="hover:bg-muted/20">
+                  <td className="font-mono text-sm whitespace-nowrap">{employee.employee_number || <span className="text-muted-foreground">-</span>}</td>
                   <td>
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
