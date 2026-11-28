@@ -14,6 +14,10 @@ export interface ListEmployee {
   annual_salary?: number | null;
   hourly_rate?: number | null;
   province?: string | null;
+  nin?: string | null;
+  sin_encrypted?: string | null;
+  bank_institution?: string | null;
+  bank_account?: string | null;
 }
 
 export type PayType = 'all' | 'salary' | 'hourly' | 'none';
@@ -36,7 +40,7 @@ export const EMPTY_FILTERS: EmployeeFilters = {
   hireFrom: '', hireTo: '', payMin: '', payMax: '',
 };
 
-export type SortKey = 'name' | 'employee_number' | 'department' | 'job_title' | 'employment_type' | 'pay' | 'hire_date' | 'status' | 'province';
+export type SortKey = 'name' | 'employee_number' | 'bank' | 'department' | 'job_title' | 'employment_type' | 'pay' | 'hire_date' | 'status' | 'province';
 export interface SortState { key: SortKey; dir: 'asc' | 'desc' }
 
 /** Standard full-time hours used to compare hourly and salaried pay. */
@@ -64,7 +68,7 @@ export function filterEmployees<T extends ListEmployee>(rows: T[], f: EmployeeFi
   const max = f.payMax === '' ? null : Number(f.payMax.replace(/[, ]/g, ''));
   return rows.filter((e) => {
     if (q) {
-      const hay = [`${e.first_name} ${e.last_name}`, e.email, e.employee_number, e.job_title, e.department, e.phone]
+      const hay = [`${e.first_name} ${e.last_name}`, e.email, e.employee_number, e.job_title, e.department, e.phone, nationalIdOf(e)]
         .filter(Boolean).join(' ').toLowerCase();
       if (!hay.includes(q)) return false;
     }
@@ -103,6 +107,7 @@ function sortValue(e: ListEmployee, key: SortKey): string | number | null {
     case 'hire_date': return dateKey(e.hire_date) || null;
     case 'status': return e.status ? STATUS_ORDER[e.status] ?? 9 : null;
     case 'province': return e.province ?? null;
+    case 'bank': return e.bank_institution?.toLowerCase() || null;
   }
 }
 
@@ -151,4 +156,17 @@ export function headcountBreakdown(rows: ListEmployee[], key: BreakdownKey): Bre
   return [...counts.entries()]
     .map(([value, count]) => ({ value, label: label(value), count }))
     .sort((a, b) => (a.value === '__none__' ? 1 : b.value === '__none__' ? -1 : b.count - a.count || a.label.localeCompare(b.label)));
+}
+
+/** National ID: the NIN for Nigerian employees, otherwise the SIN / national ID on file. */
+export function nationalIdOf(e: Pick<ListEmployee, 'nin' | 'sin_encrypted'>): string | null {
+  return (e.nin && e.nin.trim()) || (e.sin_encrypted && e.sin_encrypted.trim()) || null;
+}
+
+/** Hides all but the last `keep` characters: "12345678901" → "•••••••8901". Short values are fully hidden. */
+export function maskTail(v: string | null | undefined, keep = 4): string {
+  if (!v) return '';
+  const s = v.trim();
+  if (s.length <= keep) return '•'.repeat(s.length);
+  return '•'.repeat(Math.min(s.length - keep, 7)) + s.slice(-keep);
 }

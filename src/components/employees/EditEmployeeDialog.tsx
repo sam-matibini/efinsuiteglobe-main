@@ -21,7 +21,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { PROVINCE_NAMES, ROE_REASON_CODES } from '@/types/payroll';
 import { Textarea } from '@/components/ui/textarea';
 import { Database } from '@/integrations/supabase/types';
-import { User, Briefcase, DollarSign, FileText, MapPin, UserPlus } from 'lucide-react';
+import { User, Briefcase, DollarSign, FileText, MapPin, UserPlus, Landmark } from 'lucide-react';
 import { GuarantorsForm, EMPTY_GUARANTOR, type GuarantorDraft } from './GuarantorForm';
 import { useEmployeeGuarantors } from '@/hooks/useEmployeeGuarantors';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -75,6 +75,9 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
     date_of_birth: '',
     sin_encrypted: '',
     nin: '',
+    // Bank (payroll deposit)
+    bank_institution: '',
+    bank_account: '',
     // Address
     address_line1: '',
     address_line2: '',
@@ -133,6 +136,8 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
         date_of_birth: employee.date_of_birth || '',
         sin_encrypted: employee.sin_encrypted || '',
         nin: (employee as any).nin || '',
+        bank_institution: employee.bank_institution || '',
+        bank_account: employee.bank_account || '',
         address_line1: employee.address_line1 || '',
         address_line2: employee.address_line2 || '',
         city: employee.city || '',
@@ -230,6 +235,12 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
       setActiveTab('personal');
       return;
     }
+    const bankAccount = formData.bank_account.replace(/\s+/g, '');
+    if (countryCode === 'NG' && bankAccount && !/^\d{10}$/.test(bankAccount)) {
+      toast.error('Nigerian account numbers (NUBAN) must be exactly 10 digits');
+      setActiveTab('personal');
+      return;
+    }
 
 
 
@@ -244,6 +255,8 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
         date_of_birth: formData.date_of_birth || null,
         sin_encrypted: formData.sin_encrypted || null,
         nin: formData.nin || null,
+        bank_institution: formData.bank_institution.trim() || null,
+        bank_account: formData.bank_account.replace(/\s+/g, '') || null,
         address_line1: formData.address_line1 || null,
         address_line2: formData.address_line2 || null,
         city: formData.city || null,
@@ -441,6 +454,31 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
                 </p>
               </div>
             )}
+
+            {/* Bank details for salary payments */}
+            <div className="pt-2 pb-1">
+              <h3 className="text-sm font-medium text-muted-foreground flex items-center gap-1"><Landmark className="w-3.5 h-3.5" /> Bank Details</h3>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Bank Name</Label>
+                <Input
+                  value={formData.bank_institution}
+                  onChange={e => setFormData({ ...formData, bank_institution: e.target.value })}
+                  placeholder={countryCode === 'NG' ? 'e.g. Access Bank' : 'Bank name or institution number'}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Account Number</Label>
+                <Input
+                  value={formData.bank_account}
+                  onChange={e => setFormData({ ...formData, bank_account: e.target.value })}
+                  placeholder={countryCode === 'NG' ? '10-digit NUBAN' : 'Account number'}
+                  inputMode={countryCode === 'NG' ? 'numeric' : undefined}
+                  autoComplete="off"
+                />
+              </div>
+            </div>
 
             {/* Address */}
             <div className="pt-2 pb-1">
