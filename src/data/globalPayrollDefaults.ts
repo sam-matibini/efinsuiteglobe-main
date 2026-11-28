@@ -186,9 +186,9 @@ const NIGERIA_CONFIG: CountryPayrollConfig = {
   currencyCode: 'NGN',
   federalDeductions: [
     { code: 'PENSION-EE', name: 'Pension (Employee)', description: 'PRA 2014 — 8% of Basic + Housing + Transport', employeeRate: 8, employerRate: 10, isEmployeePortion: true, inputType: 'rate' },
-    { code: 'NHF', name: 'NHF', description: 'National Housing Fund — 2.5% of Basic (earning ≥ ₦3,000/month)', employeeRate: 2.5, isEmployeePortion: true, inputType: 'rate' },
-    { code: 'NSITF', name: 'NSITF', description: 'Employee Compensation — 1% of gross (employer-only)', employeeRate: 0, employerRate: 1, isEmployeePortion: false, inputType: 'rate' },
-    { code: 'ITF', name: 'ITF', description: 'Industrial Training Fund — 1% of annual payroll (employer-only, ≥5 employees)', employeeRate: 0, employerRate: 1, isEmployeePortion: false, inputType: 'boolean' },
+    { code: 'NHF', name: 'NHF', description: 'National Housing Fund — 2.5% of basic; voluntary (opt-in) for private-sector employees since the Business Facilitation Act 2022', employeeRate: 2.5, isEmployeePortion: true, inputType: 'rate' },
+    { code: 'NSITF', name: 'NSITF', description: "Employees' Compensation — 1% of total monthly payroll (employer-only)", employeeRate: 0, employerRate: 1, isEmployeePortion: false, inputType: 'rate' },
+    { code: 'ITF', name: 'ITF', description: 'Industrial Training Fund — 1% of annual payroll, employer-only, 25+ employees (BFA 2022); paid yearly by 1 April', employeeRate: 0, employerRate: 1, isEmployeePortion: false, inputType: 'boolean' },
   ],
   jurisdictionalDeductions: [
     { code: 'PAYE-STATE', name: 'State PAYE', description: 'Progressive PIT withheld per NTA 2025 bands (0–25%)', employeeRate: 0, isEmployeePortion: true, inputType: 'rate' },

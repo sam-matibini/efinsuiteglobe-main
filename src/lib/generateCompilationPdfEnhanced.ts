@@ -156,7 +156,7 @@ export function sumEquityExcludingREandCYE(
 }
 
 
-import { aspeNoteTemplates, getFrameworkNoteTemplates, CompilationReport, resolveNoteTemplate, NoteTemplateContext } from '@/hooks/useCompilationReports';
+import { aspeNoteTemplates, getFrameworkNoteTemplates, frameworkDisplayName, CompilationReport, resolveNoteTemplate, NoteTemplateContext } from '@/hooks/useCompilationReports';
 
 export interface CashFlowStatementData {
   operatingActivities: Array<{ name: string; amount: number }>;
@@ -378,13 +378,9 @@ export async function generateEnhancedCompilationPDF(
   
   // Determine accounting framework (ASPE, IFRS, or ASNPO)
   const accountingFramework = (compilation as any).accounting_framework || 'ASPE';
-  const isIFRS = accountingFramework === 'IFRS';
+  const isIFRS = accountingFramework === 'IFRS' || accountingFramework === 'IFRS_SME';
   const isASNPO = accountingFramework === 'ASNPO';
-  const frameworkName = isIFRS 
-    ? 'International Financial Reporting Standards (IFRS)' 
-    : isASNPO 
-      ? 'Canadian accounting standards for not-for-profit organizations (ASNPO)'
-      : 'Canadian accounting standards for private enterprises (ASPE)';
+  const frameworkName = frameworkDisplayName(accountingFramework, orgContext.country);
   const standardReference = isIFRS ? 'International Standards on Related Services (ISRS) 4410' : 'Canadian Standard on Related Services (CSRS) 4200';
   
   // ASNPO terminology helpers
@@ -1843,7 +1839,7 @@ Readers are cautioned that these statements may not be appropriate for their pur
       return;
     }
     
-    const note = getFrameworkNoteTemplates(accountingFramework || 'ASPE').find(n => n.id === noteId);
+    const note = getFrameworkNoteTemplates(accountingFramework || 'ASPE', { country: orgContext.country }).find(n => n.id === noteId);
     if (note) {
       if (yPos > pageHeight - 60) {
         addNewPage();

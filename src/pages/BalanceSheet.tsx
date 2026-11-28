@@ -17,6 +17,7 @@ import { useFinancialReports } from '@/hooks/useFinancialReports';
 import { useComparativeFinancialReports } from '@/hooks/useComparativeFinancialReports';
 import { buildComparisonPeriods } from '@/lib/financialCompare';
 import { useCurrentOrganization } from '@/hooks/useOrganization';
+import { isNigeria } from '@/lib/payroll/nigeriaPayStub';
 import { CreateOrganizationDialog } from '@/components/accounts/CreateOrganizationDialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useCurrencyFormatter } from '@/hooks/useCurrencyFormatter';
@@ -540,7 +541,8 @@ export default function BalanceSheet() {
 
   const { formatCurrency: formatCurrencyBase } = useCurrencyFormatter();
   const { npoTerms, isNpo } = useNpoTerminology();
-  const bsTitle = isNpo ? (npoTerms?.balanceSheet || 'Statement of Financial Position') : 'Balance Sheet';
+  // Nigeria (IFRS / IFRS for SMEs, FRC of Nigeria): IAS 1 statement name.
+  const bsTitle = isNpo ? (npoTerms?.balanceSheet || 'Statement of Financial Position') : isNigeria(organization?.country) ? 'Statement of Financial Position' : 'Balance Sheet';
   const equityLabel = isNpo ? (npoTerms?.equity || 'Net Assets') : 'Equity';
   
   const formatCurrency = (value: number) => {

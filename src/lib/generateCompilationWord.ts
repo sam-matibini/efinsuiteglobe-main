@@ -716,7 +716,7 @@ export async function generateCompilationWord(
       return;
     }
     
-    const note = getFrameworkNoteTemplates(compilation.accounting_framework || 'ASPE').find(n => n.id === noteId);
+    const note = getFrameworkNoteTemplates(compilation.accounting_framework || 'ASPE', { country: orgContext.country }).find(n => n.id === noteId);
     if (note) {
       noteChildren.push(new Paragraph({
         children: [new TextRun({ 

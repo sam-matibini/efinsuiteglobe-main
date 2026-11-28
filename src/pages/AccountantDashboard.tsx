@@ -704,6 +704,7 @@ export default function AccountantDashboard() {
     const orgContext = {
       incorporation_jurisdiction: organization?.incorporation_jurisdiction,
       principal_activities: organization?.principal_activities,
+      country: organization?.country ?? null,
     };
 
     // Fetch latest executive signatures (primary + secondary) + signer settings

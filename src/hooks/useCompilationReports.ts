@@ -37,7 +37,7 @@ export interface CompilationReport {
   additional_qualifications: string[] | null;
   accountant_logo_url: string | null;
   accountant_signature_url: string | null;
-  accounting_framework: 'ASPE' | 'IFRS' | 'ASNPO' | null;
+  accounting_framework: 'ASPE' | 'IFRS' | 'IFRS_SME' | 'ASNPO' | null;
 }
 
 export interface CreateCompilationInput {
@@ -66,7 +66,7 @@ export interface CreateCompilationInput {
   additional_qualifications?: string[];
   accountant_logo_url?: string;
   accountant_signature_url?: string;
-  accounting_framework?: 'ASPE' | 'IFRS' | 'ASNPO';
+  accounting_framework?: 'ASPE' | 'IFRS' | 'IFRS_SME' | 'ASNPO';
 }
 
 export interface UpdateCompilationInput {
@@ -96,7 +96,7 @@ export interface UpdateCompilationInput {
   additional_qualifications?: string[];
   accountant_logo_url?: string;
   accountant_signature_url?: string;
-  accounting_framework?: 'ASPE' | 'IFRS' | 'ASNPO';
+  accounting_framework?: 'ASPE' | 'IFRS' | 'IFRS_SME' | 'ASNPO';
 }
 
 export function useCompilationReports() {
@@ -294,21 +294,57 @@ export const aspeNoteTemplates = [
 ];
 
 // Framework-aware note templates
-export type AccountingFramework = 'ASPE' | 'ASNPO' | 'IFRS';
+export type AccountingFramework = 'ASPE' | 'ASNPO' | 'IFRS' | 'IFRS_SME';
 
-export function getFrameworkNoteTemplates(framework: AccountingFramework = 'ASPE') {
+const isNigeriaCountry = (c?: string | null) => !!c && ['ng', 'nga', 'nigeria'].includes(c.trim().toLowerCase());
+
+/** Full name of the reporting framework, worded for the organisation's country. */
+export function frameworkDisplayName(framework: string | null | undefined, country?: string | null): string {
+  const ng = isNigeriaCountry(country);
+  switch (framework) {
+    case 'IFRS':
+      return ng
+        ? 'IFRS Accounting Standards as issued by the International Accounting Standards Board (IASB) and adopted by the Financial Reporting Council of Nigeria'
+        : 'International Financial Reporting Standards (IFRS)';
+    case 'IFRS_SME':
+      return ng
+        ? 'the IFRS for SMEs Accounting Standard as issued by the IASB and adopted by the Financial Reporting Council of Nigeria'
+        : 'the International Financial Reporting Standard for Small and Medium-sized Entities (IFRS for SMEs)';
+    case 'ASNPO':
+      return 'Canadian accounting standards for not-for-profit organizations (ASNPO)';
+    default:
+      return 'Canadian accounting standards for private enterprises (ASPE)';
+  }
+}
+
+/**
+ * Nigeria: which framework applies (FRC of Nigeria Act 2011, as amended).
+ * Public interest entities (listed and other PIEs) use full IFRS; SMEs use IFRS for SMEs.
+ */
+export function nigeriaFrameworkFor(isPublicInterestEntity: boolean): AccountingFramework {
+  return isPublicInterestEntity ? 'IFRS' : 'IFRS_SME';
+}
+
+export function getFrameworkNoteTemplates(framework: AccountingFramework | string = 'ASPE', opts: { country?: string | null } = {}) {
   if (framework === 'ASPE') return aspeNoteTemplates;
 
-  const entity = framework === 'ASNPO' ? 'The Organization' : 'The Entity';
-  const entityLower = framework === 'ASNPO' ? 'the organization' : 'the entity';
-  const frameworkName = framework === 'ASNPO'
-    ? 'Canadian accounting standards for not-for-profit organizations (ASNPO)'
-    : 'International Financial Reporting Standards (IFRS)';
-  const frameworkShort = framework;
+  const ng = isNigeriaCountry(opts.country);
+  const sme = framework === 'IFRS_SME';
+  const ifrsFamily = framework === 'IFRS' || sme;
+  // Standard references: full IFRS (IAS/IFRS numbers) or IFRS for SMEs (Sections).
+  const ref = (full: string, section: string) => (sme ? `Section ${section} of the IFRS for SMEs Accounting Standard` : full);
+  const entity = framework === 'ASNPO' ? 'The Organization' : ng ? 'The Company' : 'The Entity';
+  const entityLower = framework === 'ASNPO' ? 'the organization' : ng ? 'the company' : 'the entity';
+  const frameworkName = frameworkDisplayName(framework, opts.country);
+  const frameworkShort = sme ? 'IFRS for SMEs' : framework;
   const dateRef = framework === 'ASNPO' ? 'statement of financial position date' : 'reporting date';
 
+  const basisTemplate = ng && ifrsFamily
+    ? `Statement of compliance: these financial statements have been prepared in accordance with ${frameworkName}, and in the manner required by the Companies and Allied Matters Act 2020 and the Financial Reporting Council of Nigeria Act 2011 (as amended). They are prepared on the historical cost basis unless otherwise stated, and are presented in Nigerian Naira (₦), the company's functional and presentation currency.`
+    : `These financial statements have been prepared in accordance with ${frameworkName}.`;
+
   const templates = [
-    { id: 'basis', title: '1. Basis of Presentation', template: `These financial statements have been prepared in accordance with ${frameworkName}.`, category: 'required' },
+    { id: 'basis', title: ng && ifrsFamily ? '1. Basis of Preparation and Statement of Compliance' : '1. Basis of Presentation', template: basisTemplate, category: 'required' },
     { id: 'nature_operations', title: '2. Nature of Operations', template: `${entity} is incorporated under the {{incorporation_jurisdiction}} and is engaged in {{principal_activities}}.`, category: 'required' },
     { id: 'significant_policies', title: '3. Significant Accounting Policies', template: `The following is a summary of significant accounting policies used in the preparation of these financial statements.`, category: 'required' },
   ];
@@ -317,21 +353,23 @@ export function getFrameworkNoteTemplates(framework: AccountingFramework = 'ASPE
   if (framework === 'ASNPO') {
     templates.push({ id: 'revenue', title: 'Revenue Recognition', template: `${entity} follows the deferral method of accounting for contributions. Restricted contributions are recognized as revenue in the year in which the related expenses are incurred. Unrestricted contributions are recognized as revenue when received or receivable if the amount to be received can be reasonably estimated and collection is reasonably assured. Revenue from services is recognized when services are rendered and collection is reasonably assured. Government grants are recognized as revenue when the conditions for eligibility have been met.`, category: 'policies' });
   } else {
-    templates.push({ id: 'revenue', title: 'Revenue Recognition', template: `${entity} recognizes revenue in accordance with IFRS 15 Revenue from Contracts with Customers using the five-step model: (1) identify the contract, (2) identify performance obligations, (3) determine the transaction price, (4) allocate the transaction price, and (5) recognize revenue when or as performance obligations are satisfied. Revenue is measured at the fair value of the consideration received or receivable, net of returns, trade discounts, and volume rebates.`, category: 'policies' });
+    templates.push({ id: 'revenue', title: 'Revenue Recognition', template: sme ? `${entity} recognizes revenue in accordance with ${ref('', '23')}. Revenue is measured at the fair value of the consideration received or receivable, net of returns, trade discounts, value added tax and volume rebates, and is recognized when control of goods passes to the customer or as services are rendered.` : `${entity} recognizes revenue in accordance with IFRS 15 Revenue from Contracts with Customers using the five-step model: (1) identify the contract, (2) identify performance obligations, (3) determine the transaction price, (4) allocate the transaction price, and (5) recognize revenue when or as performance obligations are satisfied. Revenue is measured at the fair value of the consideration received or receivable, net of returns, trade discounts, and volume rebates.`, category: 'policies' });
   }
 
   // Inventory
   templates.push({ id: 'inventory', title: 'Inventory', template: `Inventory is valued at the lower of cost and net realizable value. Cost is determined using the weighted average cost method. Net realizable value is the estimated selling price in the ordinary course of business less estimated costs of completion and selling costs.`, category: 'policies' });
 
   // PPE
-  if (framework === 'IFRS') {
-    templates.push({ id: 'ppe', title: 'Property, Plant & Equipment', template: `Property, plant and equipment are measured at cost less accumulated depreciation and impairment losses in accordance with IAS 16. Depreciation is calculated on a straight-line basis over the estimated useful lives of the assets. The residual values, useful lives, and methods of depreciation are reviewed at each financial year end and adjusted prospectively, if appropriate.`, category: 'policies' });
+  if (ifrsFamily) {
+    templates.push({ id: 'ppe', title: 'Property, Plant & Equipment', template: `Property, plant and equipment are measured at cost less accumulated depreciation and impairment losses in accordance with ${ref('IAS 16', '17')}. Depreciation is calculated on a straight-line basis over the estimated useful lives of the assets. The residual values, useful lives, and methods of depreciation are reviewed at each financial year end and adjusted prospectively, if appropriate.`, category: 'policies' });
   } else {
     templates.push({ id: 'ppe', title: 'Property, Plant & Equipment', template: `Property, plant and equipment are stated at cost less accumulated depreciation. Depreciation is provided over the estimated useful lives of the assets using the following methods and rates:\n• Buildings: 4% declining balance\n• Automotive equipment: 30% declining balance\n• Computer equipment: 55% declining balance\n• Office furniture: 20% declining balance`, category: 'policies' });
   }
 
   // Financial Instruments
-  if (framework === 'IFRS') {
+  if (sme) {
+    templates.push({ id: 'financial_instruments', title: 'Financial Instruments', template: `Basic financial instruments are accounted for in accordance with Section 11 of the IFRS for SMEs Accounting Standard and other financial instruments in accordance with Section 12. Trade receivables, trade payables and loans are measured at amortised cost using the effective interest method, less impairment. ${entity}'s financial instruments consist of cash and cash equivalents, trade receivables, trade payables and borrowings.`, category: 'policies' });
+  } else if (framework === 'IFRS') {
     templates.push({ id: 'financial_instruments', title: 'Financial Instruments', template: `Financial instruments are classified and measured in accordance with IFRS 9 Financial Instruments. Financial assets are classified at initial recognition as measured at amortized cost, fair value through other comprehensive income (FVOCI), or fair value through profit or loss (FVTPL). Financial liabilities are measured at amortized cost unless designated at FVTPL. ${entity}'s financial instruments consist of cash and cash equivalents, trade receivables, trade payables, and borrowings. The fair values of short-term financial instruments approximate their carrying values due to their short-term nature.`, category: 'policies' });
   } else {
     templates.push({ id: 'financial_instruments', title: 'Financial Instruments', template: `Financial instruments are initially recorded at fair value and subsequently measured at cost or amortized cost, unless management has elected to measure the item at fair value. ${entity}'s financial instruments consist of cash, accounts receivable, accounts payable, and amounts due to related parties. Unless otherwise noted, it is management's opinion that ${entity} is not exposed to significant interest, currency, or credit risks arising from these financial instruments. The fair values of these financial instruments approximate their carrying values due to their short-term nature.`, category: 'policies' });
@@ -341,24 +379,31 @@ export function getFrameworkNoteTemplates(framework: AccountingFramework = 'ASPE
   if (framework === 'ASNPO') {
     templates.push({ id: 'income_taxes', title: 'Tax-Exempt Status', template: `${entity} is a registered charity and is exempt from income taxes under Section 149(1) of the Income Tax Act (Canada). Accordingly, no provision for income taxes has been made in these financial statements.`, category: 'policies' });
   } else {
-    templates.push({ id: 'income_taxes', title: 'Income Taxes', template: `${entity} accounts for income taxes using the deferred tax method in accordance with IAS 12 Income Taxes. Deferred tax assets and liabilities are recognized for the future tax consequences attributable to differences between the financial statement carrying amounts of existing assets and liabilities and their respective tax bases. Deferred tax assets and liabilities are measured using enacted or substantively enacted tax rates expected to apply to taxable income in the years in which those temporary differences are expected to be recovered or settled.`, category: 'policies' });
+    templates.push({ id: 'income_taxes', title: 'Income Taxes', template: `${ng ? `Current tax is computed under the Nigeria Tax Act 2025 and administered under the Nigeria Tax Administration Act 2025. ` : ''}${entity} accounts for income taxes using the deferred tax method in accordance with ${ref('IAS 12 Income Taxes', '29')}. Deferred tax assets and liabilities are recognized for the future tax consequences attributable to differences between the financial statement carrying amounts of existing assets and liabilities and their respective tax bases. Deferred tax assets and liabilities are measured using enacted or substantively enacted tax rates expected to apply to taxable income in the years in which those temporary differences are expected to be recovered or settled.`, category: 'policies' });
   }
 
   // Related Party Transactions
   if (framework === 'ASNPO') {
     templates.push({ id: 'related', title: 'Related Party Transactions', template: `Related party transactions are measured at the exchange amount, which is the amount of consideration established and agreed to by the related parties. ${entity} has amounts due to board members and related parties that are unsecured, non-interest bearing, and have no fixed terms of repayment. These transactions are in the normal course of operations.`, category: 'disclosure' });
   } else {
-    templates.push({ id: 'related', title: 'Related Party Transactions', template: `Related party transactions are disclosed in accordance with IAS 24 Related Party Disclosures. Transactions with related parties are measured at the exchange amount, which is the amount of consideration established and agreed to by the related parties. ${entity} has transactions with key management personnel and related entities in the normal course of operations.`, category: 'disclosure' });
+    templates.push({ id: 'related', title: 'Related Party Transactions', template: `Related party transactions are disclosed in accordance with ${ref('IAS 24 Related Party Disclosures', '33')}. Transactions with related parties are measured at the exchange amount, which is the amount of consideration established and agreed to by the related parties. ${entity} has transactions with key management personnel and related entities in the normal course of operations.`, category: 'disclosure' });
   }
 
   // Revenue Breakdown
   templates.push({ id: 'revenue_breakdown', title: 'Revenue Breakdown', template: `${entity} generates revenue from the following streams during the reporting period. Revenue is disaggregated by major ${framework === 'ASNPO' ? 'program or funding source' : 'product line or service category'}.`, category: 'disclosure' });
 
   // Finance Lease
-  if (framework === 'IFRS') {
+  if (sme) {
+    templates.push({ id: 'finance_lease', title: 'Lease Obligations', template: `${entity} accounts for leases in accordance with Section 20 of the IFRS for SMEs Accounting Standard. Assets held under finance leases are recognised at the lower of fair value and the present value of the minimum lease payments, with a corresponding lease liability; operating lease payments are recognised as an expense on a straight-line basis over the lease term.`, category: 'disclosure' });
+  } else if (framework === 'IFRS') {
     templates.push({ id: 'finance_lease', title: 'Lease Obligations', template: `${entity} recognizes right-of-use assets and lease liabilities in accordance with IFRS 16 Leases. Right-of-use assets are measured at cost less accumulated depreciation and impairment losses. Lease liabilities are measured at the present value of future lease payments, discounted using the incremental borrowing rate. Short-term leases and leases of low-value assets are recognized as expenses on a straight-line basis over the lease term.`, category: 'disclosure' });
   } else {
     templates.push({ id: 'finance_lease', title: 'Finance Lease Obligations', template: `${entity} has finance lease obligations for certain assets. Lease liabilities are measured at the present value of future lease payments, discounted at the interest rate implicit in the lease. The current portion represents principal payments due within the next twelve months, with the remainder classified as long-term liabilities.`, category: 'disclosure' });
+  }
+
+  // Nigeria: employee benefits under the contributory pension scheme
+  if (ng && ifrsFamily) {
+    templates.push({ id: 'employee_benefits', title: 'Employee Benefits', template: `${entity} operates the defined contribution pension scheme required by the Pension Reform Act 2014. Employer contributions (minimum 10% of basic salary, housing and transport allowances) are recognised as an expense when employees render the related service, in accordance with ${ref('IAS 19 Employee Benefits', '28')}. Employee contributions (minimum 8%) are deducted from salaries and remitted to each employee's Pension Fund Administrator.`, category: 'policies' });
   }
 
   // Commitments, Contingencies, Going Concern, Subsequent, Comparative, Uncertainty
@@ -430,6 +475,8 @@ export const engagementChecklistData = [
 export interface NoteTemplateContext {
   incorporation_jurisdiction?: string | null;
   principal_activities?: string | null;
+  /** Organisation country (code or name); selects country wording, e.g. Nigeria's FRC/CAMA basis note. */
+  country?: string | null;
 }
 
 export function resolveNoteTemplate(template: string, context: NoteTemplateContext): string {

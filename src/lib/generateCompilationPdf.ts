@@ -514,7 +514,7 @@ Readers are cautioned that these statements may not be appropriate for their pur
   let noteNum = 1;
   
   noteTemplateIds.forEach(noteId => {
-    const note = getFrameworkNoteTemplates((compilation as any).accounting_framework || 'ASPE').find(n => n.id === noteId);
+    const note = getFrameworkNoteTemplates((compilation as any).accounting_framework || 'ASPE', { country: orgContext.country }).find(n => n.id === noteId);
     if (note) {
       // Check if we need a new page
       if (yPos > pageHeight - 60) {

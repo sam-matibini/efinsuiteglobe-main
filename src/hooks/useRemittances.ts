@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrganization } from './useOrganization';
 import { toast } from 'sonner';
 import { remittanceMonthRange } from '@/lib/payroll/remittancePeriod';
+import { isNigeria } from '@/lib/payroll/nigeriaPayStub';
 
 export interface Remittance {
   id: string;
@@ -132,7 +133,7 @@ export function useRemittances(year?: number) {
     mutationFn: async (period: string) => {
       if (!organization?.id) throw new Error('No organization selected');
       
-      const { period: month, startDate, endDate, dueDate } = remittanceMonthRange(period);
+      const { period: month, startDate, endDate, dueDate } = remittanceMonthRange(period, { nigeria: isNigeria(organization?.country) });
 
       // One PD7A per month: refresh an unpaid one instead of creating a duplicate.
       const { data: existing, error: existingError } = await supabase
@@ -236,7 +237,7 @@ export function useRemittances(year?: number) {
   // Build the detailed PD7A-style report data for a given period (YYYY-MM)
   const buildRemittanceReport = async (period: string) => {
     if (!organization?.id) throw new Error('No organization selected');
-    const { startDate, endDate, dueDate } = remittanceMonthRange(period);
+    const { startDate, endDate, dueDate } = remittanceMonthRange(period, { nigeria: isNigeria(organization?.country) });
 
     // A pay run belongs to the month in which its pay period ends.
     const { data: payRuns, error: payRunsError } = await supabase

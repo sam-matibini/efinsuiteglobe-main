@@ -44,7 +44,7 @@ import { useFinancialReports } from '@/hooks/useFinancialReports';
 import { useRetainedEarningsStatement } from '@/hooks/useRetainedEarningsStatement';
 import { useLeases } from '@/hooks/useLeases';
 import { useComparativeFinancialReports } from '@/hooks/useComparativeFinancialReports';
-import { CreateCompilationInput, getFrameworkNoteTemplates } from '@/hooks/useCompilationReports';
+import { CreateCompilationInput, getFrameworkNoteTemplates, frameworkDisplayName, type AccountingFramework } from '@/hooks/useCompilationReports';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { AccountantAssetUpload } from './AccountantAssetUpload';
@@ -118,8 +118,17 @@ export function AICompilationDialog({
   const [accountantLogoUrl, setAccountantLogoUrl] = useState<string | null>(null);
   const [accountantSignatureUrl, setAccountantSignatureUrl] = useState<string | null>(null);
   
-  // Accounting Framework (ASPE for Canada private enterprises, IFRS for international, ASNPO for NPOs)
-  const [accountingFramework, setAccountingFramework] = useState<'ASPE' | 'IFRS' | 'ASNPO'>('ASPE');
+  // Accounting Framework (ASPE for Canada private enterprises, IFRS for international, ASNPO for NPOs).
+  // Nigeria (FRC of Nigeria Act 2011, as amended): public interest entities use full IFRS; SMEs use IFRS for SMEs.
+  const orgCountry: string | null = organization?.country ?? null;
+  const isNigeriaOrg = !!orgCountry && ['ng', 'nga', 'nigeria'].includes(orgCountry.trim().toLowerCase());
+  const orgDefaultFramework = organization?.default_accounting_framework;
+  const [accountingFramework, setAccountingFramework] = useState<AccountingFramework>('ASPE');
+  useEffect(() => {
+    if (!open) return;
+    if (isNigeriaOrg) setAccountingFramework(orgDefaultFramework === 'IFRS' ? 'IFRS' : 'IFRS_SME');
+  }, [open, isNigeriaOrg, orgDefaultFramework]);
+  const frameworkLabel = accountingFramework === 'IFRS_SME' ? 'IFRS for SMEs' : accountingFramework;
   
   // Statement Types
   const [statementTypes, setStatementTypes] = useState<string[]>([
@@ -308,7 +317,9 @@ export function AICompilationDialog({
           taskHint: 'financial-narrative',
           messages: [{
             role: 'user',
-            content: `You are a Canadian CPA preparing ASPE-compliant notes to financial statements for ${organization?.name || 'the Company'}.
+            content: `${isNigeriaOrg
+              ? `You are a Nigerian chartered accountant preparing notes to financial statements for ${organization?.name || 'the Company'} under ${frameworkDisplayName(accountingFramework, 'NG')}, in compliance with the Companies and Allied Matters Act 2020 and the Financial Reporting Council of Nigeria Act 2011 (as amended). Use Nigerian Naira and current Nigerian tax law (Nigeria Tax Act 2025).`
+              : `You are a Canadian CPA preparing ASPE-compliant notes to financial statements for ${organization?.name || 'the Company'}.`}
 
 Fiscal Period: ${periodType === 'annual' ? 'Year' : periodType === 'interim' ? 'Interim Period' : 'Quarter'} Ended ${format(parseISO(fiscalYearEnd), 'MMMM d, yyyy')}
 
@@ -319,7 +330,7 @@ Financial Position Summary:
 - Net Income: ${orgCurrencySymbol()}${Math.abs(incomeStatement.netIncome).toLocaleString()}
 - Gross Profit Margin: ${incomeStatement.totalRevenue > 0 ? ((incomeStatement.grossProfit / incomeStatement.totalRevenue) * 100).toFixed(1) : 0}%
 
-Generate 3-5 specific ASPE-compliant notes that should be included based on this financial data. For each note, provide:
+Generate 3-5 specific ${isNigeriaOrg ? frameworkLabel : 'ASPE'}-compliant notes that should be included based on this financial data. For each note, provide:
 1. A clear title
 2. Professional disclosure language suitable for financial statements
 3. Brief explanation of why this note is relevant
@@ -383,7 +394,7 @@ Format your response as structured notes that can be directly included in compil
     if (aiExplanations[noteId]) return;
     
     try {
-      const note = getFrameworkNoteTemplates(accountingFramework).find(n => n.id === noteId);
+      const note = getFrameworkNoteTemplates(accountingFramework, { country: orgCountry }).find(n => n.id === noteId);
       if (!note) return;
 
       const response = await supabase.functions.invoke('accounting-assistant', {
@@ -519,7 +530,7 @@ Format your response as structured notes that can be directly included in compil
     });
   };
 
-  const frameworkTemplates = getFrameworkNoteTemplates(accountingFramework);
+  const frameworkTemplates = getFrameworkNoteTemplates(accountingFramework, { country: orgCountry });
   const groupedNotes = {
     required: frameworkTemplates.filter(n => n.category === 'required'),
     policies: frameworkTemplates.filter(n => n.category === 'policies'),
@@ -539,13 +550,13 @@ Format your response as structured notes that can be directly included in compil
         <DialogHeader className="flex-shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="w-5 h-5 text-primary" />
-            AI-Enabled {accountingFramework} Compilation Report Generator
-            <Badge variant={accountingFramework === 'IFRS' ? 'default' : 'secondary'} className="ml-2">
-              {accountingFramework}
+            AI-Enabled {frameworkLabel} Compilation Report Generator
+            <Badge variant={accountingFramework === 'IFRS' || accountingFramework === 'IFRS_SME' ? 'default' : 'secondary'} className="ml-2">
+              {frameworkLabel}
             </Badge>
           </DialogTitle>
           <DialogDescription>
-            Create {accountingFramework === 'IFRS' ? 'IFRS' : accountingFramework === 'ASNPO' ? 'ASNPO' : 'CSRS 4200'}-compliant compilation reports with AI-powered note generation and validation
+            Create {accountingFramework === 'IFRS' || accountingFramework === 'IFRS_SME' ? frameworkLabel : accountingFramework === 'ASNPO' ? 'ASNPO' : 'CSRS 4200'}-compliant compilation reports with AI-powered note generation and validation
           </DialogDescription>
           <Progress value={completionProgress} className="h-1.5 mt-2" />
         </DialogHeader>
@@ -825,6 +836,31 @@ Format your response as structured notes that can be directly included in compil
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
+                  {isNigeriaOrg ? (
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-2 gap-3">
+                      {([
+                        ['IFRS', 'IFRS Accounting Standards', 'Required for public interest entities: listed companies, banks, insurers, pension and other regulated entities, and government-owned companies.'],
+                        ['IFRS_SME', 'IFRS for SMEs', 'For small and medium-sized entities that are not public interest entities.'],
+                      ] as const).map(([value, title, desc]) => (
+                        <div
+                          key={value}
+                          className={`p-3 border rounded-lg cursor-pointer transition-colors ${accountingFramework === value ? 'border-primary bg-primary/5' : 'hover:bg-muted/50'}`}
+                          onClick={() => setAccountingFramework(value)}
+                        >
+                          <div className="flex items-center gap-2 mb-1">
+                            <Checkbox checked={accountingFramework === value} />
+                            <span className="font-medium text-sm">{title}</span>
+                          </div>
+                          <p className="text-xs text-muted-foreground">{desc}</p>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Nigeria: standards adopted by the Financial Reporting Council of Nigeria (FRC Act 2011, as amended); statements are prepared in the manner required by the Companies and Allied Matters Act 2020.
+                    </p>
+                  </div>
+                  ) : (
                   <div className="grid grid-cols-3 gap-3">
                     <div 
                       className={`p-3 border rounded-lg cursor-pointer transition-colors ${
@@ -875,6 +911,7 @@ Format your response as structured notes that can be directly included in compil
                       </p>
                     </div>
                   </div>
+                  )}
                 </CardContent>
               </Card>
 

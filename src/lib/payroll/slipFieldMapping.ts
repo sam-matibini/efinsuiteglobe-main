@@ -202,26 +202,25 @@ const NG: CountryPayrollPdfConfig = {
     authorityLine: 'Nigeria Revenue Service (NRS) / State Internal Revenue Service',
     filenamePrefix: 'PAYE-Cert',
     fields: [
+      // NTA 2025: CRA abolished from 1 Jan 2026 (rent relief applies instead).
       { code: '1', label: 'Gross emoluments (Year of Assessment)', source: 'gross' },
-      { code: '2', label: 'Consolidated Relief Allowance (CRA)', source: 'other' },
-      { code: '3', label: 'Pension contribution — 8% (employee)', source: 'pension' },
-      { code: '4', label: 'NHF contribution — 2.5%', source: 'socialInsurance' },
-      { code: '5', label: 'Taxable income', source: 'pensionableEarnings' },
-      { code: '6', label: 'PAYE tax deducted', source: 'incomeTax' },
+      { code: '2', label: 'Pension contribution — 8% (employee, relief)', source: 'pension' },
+      { code: '3', label: 'NHF contribution — 2.5% of basic (relief, where opted in)', source: 'socialInsurance' },
+      { code: '4', label: 'PAYE tax deducted', source: 'incomeTax' },
     ],
   },
   remittance: {
     formTitle: 'Monthly PAYE Schedule + Statutory Contributions',
     formCode: 'PAYE-Sched',
-    authorityName: 'State IRS (PAYE) · PenCom · FMBN (NHF) · NSITF · ITF',
+    authorityName: 'State IRS (PAYE) · PFA/PFC (Pension) · FMBN (NHF) · NSITF',
     taxIdLabel: 'Employer TIN',
     rows: [
       { label: 'PAYE tax withheld', source: 'incomeTax' },
       { label: 'Pension — employee (8%)', source: 'pensionEmployee' },
       { label: 'Pension — employer (10%)', source: 'pensionEmployer' },
-      { label: 'NHF — employee (2.5% of Basic)', source: 'socialInsuranceEmployee' },
-      { label: 'NSITF — employer (1% of gross)', source: 'socialInsuranceEmployer' },
-      { label: 'ITF — employer (1% of payroll, ≥5 staff)', source: 'pensionTotal' },
+      { label: 'NHF — employee (2.5% of basic, opted-in staff)', source: 'socialInsuranceEmployee' },
+      { label: 'NSITF — employer (1% of total monthly payroll)', source: 'socialInsuranceEmployer' },
+      // ITF is an annual levy (1% of annual payroll, 25+ employees, due 1 April), not a monthly remittance.
     ],
     detailColumns: [
       { label: 'Employee', source: 'name' },
@@ -230,6 +229,7 @@ const NG: CountryPayrollPdfConfig = {
       { label: 'Pension-EE', source: 'pensionEmployee' },
       { label: 'Pension-ER', source: 'pensionEmployer' },
       { label: 'NHF-EE', source: 'socialInsuranceEmployee' },
+      { label: 'NSITF-ER', source: 'socialInsuranceEmployer' },
     ],
   },
   separation: {
