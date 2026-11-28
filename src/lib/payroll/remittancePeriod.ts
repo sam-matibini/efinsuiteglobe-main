@@ -47,7 +47,7 @@ export function remittanceMonthFor(payPeriodEnd: string): string {
  * and the regular-remitter due date: the 15th of the following month, moved to the next
  * business day when the 15th is a weekend.
  */
-export function remittanceMonthRange(period: string) {
+export function remittanceMonthRange(period: string, opts: { nigeria?: boolean } = {}) {
   const { year, month } = parseMonth(period);
   const nextYear = month === 12 ? year + 1 : year;
   const nextMonth = month === 12 ? 1 : month + 1;
@@ -55,7 +55,12 @@ export function remittanceMonthRange(period: string) {
     period: `${year}-${pad(month)}`,
     startDate: `${year}-${pad(month)}-01`,
     endDate: `${year}-${pad(month)}-${pad(lastDayOfMonth(year, month))}`,
-    dueDate: nextBusinessDay(`${nextYear}-${pad(nextMonth)}-15`),
+    // Nigeria: PAYE is due by the 10th of the following month (NTAA 2025 / JRB guidelines).
+    // No weekend roll-forward is assumed, so the 10th is shown as is.
+    // Canada (CRA regular remitter): the 15th, moved to the next business day.
+    dueDate: opts.nigeria
+      ? `${nextYear}-${pad(nextMonth)}-10`
+      : nextBusinessDay(`${nextYear}-${pad(nextMonth)}-15`),
   };
 }
 

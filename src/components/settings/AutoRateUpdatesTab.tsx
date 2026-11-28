@@ -308,6 +308,31 @@ const HISTORICAL_RATES: Record<string, Record<number, any>> = {
       ],
       effective_date: '2025-01-01',
       source: 'NRS / Finance Act 2023'
+    },
+    2026: {
+      sales_tax: [
+        { code: 'VAT', rate: 7.5, source: 'Nigeria Tax Act 2025' },
+      ],
+      payroll: [
+        { code: 'PENSION', employee_rate: 8, employer_rate: 10, source: 'PenCom PRA 2014 (minimum rates)' },
+        { code: 'NHF', employee_rate: 2.5, source: 'NHF Act (voluntary for private sector, BFA 2022)' },
+        { code: 'ITF', employer_rate: 1, source: 'ITF Act (25+ employees, annual by 1 April, BFA 2022)' },
+        { code: 'NSITF', employer_rate: 1, source: "Employees' Compensation Act 2010 (1% of total monthly payroll)" },
+      ],
+      // NTA 2025 bands on annual chargeable income (upper limit of each band)
+      tax_brackets: [
+        { threshold: 800000, rate: 0 },
+        { threshold: 3000000, rate: 15 },
+        { threshold: 12000000, rate: 18 },
+        { threshold: 25000000, rate: 21 },
+        { threshold: 50000000, rate: 23 },
+        { threshold: 999999999, rate: 25 },
+      ],
+      tax_credits: [
+        { code: 'RENT_RELIEF', name: 'Rent Relief', amount: 500000, notes: '20% of annual rent paid, capped at ₦500,000 (CRA abolished)' },
+      ],
+      effective_date: '2026-01-01',
+      source: 'Nigeria Tax Act 2025 / Nigeria Tax Administration Act 2025'
     }
   }
 };

@@ -738,7 +738,7 @@ export default function EditEmployeeDialog({ open, onOpenChange, employee }: Edi
                 </h4>
                 <p className="text-sm text-muted-foreground">
                   {countryCode === 'NG'
-                    ? 'Nigeria does not use a TD1-style tax credit certificate. PAYE is computed automatically each pay run using the Consolidated Relief Allowance (higher of ₦200,000 or 1% of gross, plus 20% of gross) under PITA, with statutory pension and NHF deductions applied before the progressive tax bands.'
+                    ? 'Nigeria does not use a TD1-style tax credit certificate. PAYE is computed automatically each pay run under the Nigeria Tax Act 2025 (from 1 Jan 2026): pension (8%), NHF (if opted in), NHIS and life assurance are deducted, rent relief applies (20% of annual rent, max ₦500,000), then the 0%–25% bands. The Consolidated Relief Allowance (CRA) was abolished.'
                     : `${countryConfig.name} does not use the Canadian TD1 form. Statutory deductions and reliefs are applied automatically during payroll processing based on ${countryConfig.name} rules.`}
                 </p>
               </Card>

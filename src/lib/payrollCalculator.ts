@@ -79,7 +79,7 @@ export interface PayStubCalculation {
 }
 
 // Get number of pay periods per year
-function getPayPeriodsPerYear(frequency: PayFrequency): number {
+export function getPayPeriodsPerYear(frequency: PayFrequency): number {
   switch (frequency) {
     case 'weekly': return 52;
     case 'bi_weekly': return 26;
@@ -90,7 +90,7 @@ function getPayPeriodsPerYear(frequency: PayFrequency): number {
 }
 
 // Calculate earnings for pay period
-function calculateEarnings(info: EmployeePayInfo): {
+export function calculateEarnings(info: EmployeePayInfo): {
   regularEarnings: number;
   overtimeEarnings: number;
   vacationPay: number;

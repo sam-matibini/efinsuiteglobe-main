@@ -57,3 +57,13 @@ describe('PD7A account numbers', () => {
     });
   });
 });
+
+describe('Nigeria remittance due date', () => {
+  it('uses the 10th of the following month for PAYE', () => {
+    expect(remittanceMonthRange('2026-11', { nigeria: true }).dueDate).toBe('2026-12-10');
+    expect(remittanceMonthRange('2026-12', { nigeria: true }).dueDate).toBe('2027-01-10');
+  });
+  it('keeps the CRA 15th for other organisations', () => {
+    expect(remittanceMonthRange('2026-11').dueDate).toBe('2026-12-15');
+  });
+});

@@ -91,6 +91,13 @@ export function calculateNigeriaAnnualPaye(input: {
   annualRent?: number;
   annualLifeAssurance?: number;
   payPeriodStart?: string; // ISO date
+  /**
+   * NHF election. Since the Business Facilitation (Miscellaneous Provisions) Act 2022, NHF is
+   * voluntary for private-sector employees. `true` = 2.5% of basic (or of gross if no basic split);
+   * `false` = none. Left undefined, NHF applies only when an explicit basic-salary split is given
+   * (the original behaviour).
+   */
+  nhfOptIn?: boolean;
 }): {
   taxableIncome: number;
   tax: number;
@@ -110,7 +117,9 @@ export function calculateNigeriaAnnualPaye(input: {
   const pension = pensionable * 0.08;
   // NHF is opt-in (PRA/NHF Act: employee election, 2.5% of basic). Only
   // apply automatically when caller supplies an explicit basic-salary split.
-  const nhf = input.annualBasic ? input.annualBasic * 0.025 : 0;
+  const nhf = input.nhfOptIn === undefined
+    ? (input.annualBasic ? input.annualBasic * 0.025 : 0)
+    : input.nhfOptIn ? (input.annualBasic || gross) * 0.025 : 0;
   const life = input.annualLifeAssurance || 0;
   const useNta = isNta2025(input.payPeriodStart);
 

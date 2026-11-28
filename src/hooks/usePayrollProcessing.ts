@@ -11,6 +11,8 @@ import {
 } from '@/lib/payrollCalculator';
 import { postPayrollJournalEntries } from '@/lib/payrollJournalPosting';
 import { recordPayrollTaxes } from '@/lib/ngTax/integration';
+import { getPayPeriodsPerYear } from '@/lib/payrollCalculator';
+import { calculateNigeriaPayStub, isNigeria, nigeriaProfileFromStatutory, NG_PENSION_EMPLOYEE_RATE } from '@/lib/payroll/nigeriaPayStub';
 
 export interface TimesheetEntry {
   employeeId: string;
@@ -63,6 +65,10 @@ export function usePayrollProcessing() {
 
       const payStubsToInsert: any[] = [];
       const calculatedStubs: PayStubCalculation[] = [];
+      // Nigerian organisations use Nigerian rules (NTA 2025 PAYE, PRA 2014 pension, NHF, NSITF),
+      // not the Canadian CPP/EI/T4032 calculator.
+      const isNg = isNigeria(organization?.country);
+      const ngLedgerInputs = new Map<string, { pensionEmployee: number; nhfEmployee: number; periods: number }>();
 
       for (const timesheet of timesheets) {
         const employee = freshEmployees.find(e => e.id === timesheet.employeeId);
@@ -135,7 +141,16 @@ export function usePayrollProcessing() {
         };
 
         // Calculate pay stub
-        const calculation = calculatePayStub(payInfo);
+        const calculation = isNg
+          ? calculateNigeriaPayStub(payInfo, nigeriaProfileFromStatutory((employee as { statutory_profile?: unknown }).statutory_profile), payRun.pay_period_end)
+          : calculatePayStub(payInfo);
+        if (isNg) {
+          ngLedgerInputs.set(employee.id, {
+            pensionEmployee: calculation.cppContribution,
+            nhfEmployee: calculation.eiPremium,
+            periods: getPayPeriodsPerYear(employee.pay_frequency),
+          });
+        }
         calculatedStubs.push(calculation);
 
         // Build pay stub record
@@ -207,18 +222,24 @@ export function usePayrollProcessing() {
       // NG Tax Engine — record PAYE + pension per stub (no-op for non-NG orgs)
       if (insertedStubs.length > 0 && organization?.id) {
         try {
-          const payPeriodEnd = new Date().toISOString().split('T')[0];
+          const payPeriodEnd = payRun.pay_period_end || new Date().toISOString().split('T')[0];
           await recordPayrollTaxes({
             organization_id: organization.id,
             pay_run_id: payRunId,
             pay_period_end: payPeriodEnd,
             journal_entry_id: null,
-            stubs: insertedStubs.map((s: any) => ({
-              pay_stub_id: s.id,
-              gross_earnings: Number(s.gross_pay) || 0,
-              periods_per_year: 12,
-              pension_base: Number(s.gross_pay) || 0,
-            })),
+            stubs: insertedStubs.map((s: any) => {
+              const ng = ngLedgerInputs.get(s.employee_id);
+              return {
+                pay_stub_id: s.id,
+                gross_earnings: Number(s.gross_pay) || 0,
+                periods_per_year: ng?.periods ?? 12,
+                // Pension and NHF reliefs so the ledger PAYE matches the pay slip.
+                pension_employee: ng?.pensionEmployee ?? 0,
+                nhf_employee: ng?.nhfEmployee ?? 0,
+                pension_base: ng ? ng.pensionEmployee / NG_PENSION_EMPLOYEE_RATE : Number(s.gross_pay) || 0,
+              };
+            }),
           });
         } catch (ngErr) {
           console.warn('NG payroll tax ledger write skipped:', ngErr);

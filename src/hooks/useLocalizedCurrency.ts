@@ -38,7 +38,7 @@ const ACCOUNTING_STANDARDS: Record<string, { standard: string; label: string }> 
   ZM: { standard: 'IFRS', label: 'IFRS' },
   KE: { standard: 'IFRS', label: 'IFRS' },
   BI: { standard: 'OHADA/IFRS', label: 'SYSCOHADA / IFRS' },
-  NG: { standard: 'IFRS/IFRS for SMEs', label: 'Nigerian GAAP (IFRS)' },
+  NG: { standard: 'IFRS / IFRS for SMEs', label: 'IFRS Accounting Standards (public interest entities) or IFRS for SMEs, as adopted by the FRC of Nigeria' },
 };
 
 // NPO-specific accounting standards (ASNPO for Canadian NPOs)
@@ -118,6 +118,26 @@ export const FINANCIAL_TERMINOLOGY: Record<string, {
     accountsReceivable: 'Trade Receivables',
     accountsPayable: 'Trade Payables',
     netIncome: 'Profit/(Loss) for the Period',
+    grossProfit: 'Gross Profit',
+    operatingExpenses: 'Administrative Expenses',
+    currentAssets: 'Current Assets',
+    fixedAssets: 'Property, Plant and Equipment',
+    currentLiabilities: 'Current Liabilities',
+    equity: 'Equity',
+    bankAccount: 'Bank Account',
+    reconciliation: 'Bank Reconciliation',
+  },
+  // Nigeria: IAS 1 / IFRS for SMEs Section 3 statement names
+  NG: {
+    incomeStatement: 'Statement of Profit or Loss and Other Comprehensive Income',
+    balanceSheet: 'Statement of Financial Position',
+    cashFlow: 'Statement of Cash Flows',
+    trialBalance: 'Trial Balance',
+    journalEntry: 'Journal Entry',
+    generalLedger: 'General Ledger',
+    accountsReceivable: 'Trade Receivables',
+    accountsPayable: 'Trade Payables',
+    netIncome: 'Profit/(Loss) for the Year',
     grossProfit: 'Gross Profit',
     operatingExpenses: 'Administrative Expenses',
     currentAssets: 'Current Assets',

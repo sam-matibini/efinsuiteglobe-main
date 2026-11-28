@@ -35,6 +35,7 @@ export function getCountryModuleFlags(country?: string | null): CountryModuleFla
       c === 'CA' ? 'ASPE'
       : c === 'US' ? 'US_GAAP'
       : c === 'GB' ? 'HMRC_FRS'
+      // Nigeria: SMEs use IFRS for SMEs; public interest entities must use full IFRS (FRC Act 2011, as amended).
       : c === 'NG' ? 'IFRS_SME'
       : 'IFRS',
   };

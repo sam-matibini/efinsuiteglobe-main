@@ -11,6 +11,8 @@ import { RealtimeIndicator } from '@/components/reports/RealtimeIndicator';
 import { useComparativeFinancialReports } from '@/hooks/useComparativeFinancialReports';
 import { buildComparisonPeriods } from '@/lib/financialCompare';
 import { useCurrentOrganization } from '@/hooks/useOrganization';
+import { isNigeria } from '@/lib/payroll/nigeriaPayStub';
+import { FINANCIAL_TERMINOLOGY } from '@/hooks/useLocalizedCurrency';
 import { CreateOrganizationDialog } from '@/components/accounts/CreateOrganizationDialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useCurrencyFormatter } from '@/hooks/useCurrencyFormatter';
@@ -157,8 +159,10 @@ export default function IncomeStatement() {
 
   // NPO-aware labels (ASNPO Sections 4400–4470)
   // ASNPO uses Revenue / Expenses / Excess (Deficiency) — no Gross Profit, COGS, or Operating Income subtotals.
-  const reportTitle = isNpo ? (npoTerms?.incomeStatement || 'Statement of Operations') : 'Profit and Loss';
-  const netIncomeLabel = isNpo ? (npoTerms?.netIncome || 'Excess (Deficiency) of Revenue over Expenses') : 'Net Profit/Loss';
+  // Nigeria (IFRS / IFRS for SMEs, FRC of Nigeria): IAS 1 statement names.
+  const isNgIfrs = isNigeria(organization?.country);
+  const reportTitle = isNpo ? (npoTerms?.incomeStatement || 'Statement of Operations') : isNgIfrs ? FINANCIAL_TERMINOLOGY.NG.incomeStatement : 'Profit and Loss';
+  const netIncomeLabel = isNpo ? (npoTerms?.netIncome || 'Excess (Deficiency) of Revenue over Expenses') : isNgIfrs ? FINANCIAL_TERMINOLOGY.NG.netIncome : 'Net Profit/Loss';
   const operatingIncomeLabel = isNpo ? 'Revenue' : 'Operating Income';
   const totalRevenueLabel = isNpo ? (npoTerms?.totalRevenue || 'Total Revenue') : 'Total for Operating Income';
   const operatingExpenseLabel = isNpo ? (npoTerms?.operatingExpenses || 'Expenses') : 'Operating Expense';

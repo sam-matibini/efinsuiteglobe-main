@@ -29,6 +29,7 @@ import {
 import { useRemittances, type Remittance } from '@/hooks/useRemittances';
 import { useCurrentOrganization } from '@/hooks/useOrganization';
 import { getPayrollLocalization } from '@/data/payrollLocalization';
+import { NigeriaStatutoryReports } from '@/components/payroll/NigeriaStatutoryReports';
 import { COUNTRY_LOCALIZATIONS } from '@/data/countryLocalizations';
 import { downloadRemittancePD7APdf, downloadRemittanceCsv, downloadLocalizedRemittancePdf, downloadLocalizedRemittanceCsv, type RemittancePD7AData } from '@/lib/generateRemittancePD7APdf';
 import { toast } from 'sonner';
@@ -267,7 +268,10 @@ export default function Remittances() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">{remitConfig.title}</h1>
-          <p className="text-muted-foreground">{remitConfig.description} CRA payroll remittances are paid from <Link to="/tax-cra/payroll" className="text-primary underline-offset-4 hover:underline">Tax & CRA</Link>.</p>
+          <p className="text-muted-foreground">
+            {remitConfig.description}
+            {countryCode === 'CA' && <> CRA payroll remittances are paid from <Link to="/tax-cra/payroll" className="text-primary underline-offset-4 hover:underline">Tax & CRA</Link>.</>}
+          </p>
         </div>
         <Button 
           className="bg-accent hover:bg-accent/90 text-accent-foreground"
@@ -301,6 +305,8 @@ export default function Remittances() {
           <p className="text-2xl font-bold text-foreground">{remittances.length}</p>
         </Card>
       </div>
+
+      {countryCode === 'NG' && <NigeriaStatutoryReports />}
 
       {/* Overdue Alert */}
       {overdueRemittances.length > 0 && (
