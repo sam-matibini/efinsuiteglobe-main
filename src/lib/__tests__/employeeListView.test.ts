@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { annualEquivalent, countActiveFilters, EMPTY_FILTERS, filterEmployees, nextSort, sortEmployees, type ListEmployee } from '../employeeListView';
+import { annualEquivalent, countActiveFilters, EMPTY_FILTERS, filterEmployees, headcountBreakdown, nextSort, sortEmployees, type ListEmployee } from '../employeeListView';
 
 const E = (over: Partial<ListEmployee>): ListEmployee => ({
   first_name: 'A', last_name: 'A', email: 'a@x.com', status: 'active', employment_type: 'contract',
@@ -68,5 +68,36 @@ describe('employee list sorting', () => {
     const copy = [...staff];
     sortEmployees(staff, { key: 'pay', dir: 'desc' });
     expect(staff).toEqual(copy);
+  });
+});
+
+describe('position filter and headcount breakdown', () => {
+  it('filters by position, including employees with no position', () => {
+    expect(names(filterEmployees(staff, { ...EMPTY_FILTERS, position: 'Guard' }))).toEqual(['Opeyemi']);
+    const extra = [...staff, E({ first_name: 'Ngozi', job_title: null })];
+    expect(names(filterEmployees(extra, { ...EMPTY_FILTERS, position: '__none__' }))).toEqual(['Ngozi']);
+    expect(countActiveFilters({ ...EMPTY_FILTERS, position: 'Guard' })).toBe(1);
+  });
+
+  it('counts employees per department, largest first, blanks last as Not set', () => {
+    expect(headcountBreakdown(staff, 'department')).toEqual([
+      { value: 'Finance', label: 'Finance', count: 2 },
+      { value: 'Security', label: 'Security', count: 1 },
+      { value: '__none__', label: 'Not set', count: 1 },
+    ]);
+  });
+
+  it('labels employment types and counts positions', () => {
+    expect(headcountBreakdown(staff, 'employment_type').map((b) => `${b.label}:${b.count}`)).toEqual(['Contract:2', 'Full-time:1', 'Part-time:1']);
+    expect(headcountBreakdown(staff, 'position')[0]).toEqual({ value: 'Revenue Collector', label: 'Revenue Collector', count: 3 });
+  });
+
+  it('each breakdown bucket filters to exactly its count', () => {
+    for (const key of ['department', 'position', 'employment_type'] as const) {
+      const field = key === 'employment_type' ? 'employmentType' : key;
+      for (const b of headcountBreakdown(staff, key)) {
+        expect(filterEmployees(staff, { ...EMPTY_FILTERS, [field]: b.value })).toHaveLength(b.count);
+      }
+    }
   });
 });

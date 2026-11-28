@@ -22,6 +22,7 @@ export interface EmployeeFilters {
   search: string;
   status: string;          // 'all' or an employee_status
   department: string;      // 'all', '__none__' (no department) or a department name
+  position: string;        // 'all', '__none__' (no job title) or a job title
   employmentType: string;  // 'all' or an employment_type
   payType: PayType;
   hireFrom: string;        // YYYY-MM-DD or ''
@@ -31,7 +32,7 @@ export interface EmployeeFilters {
 }
 
 export const EMPTY_FILTERS: EmployeeFilters = {
-  search: '', status: 'all', department: 'all', employmentType: 'all', payType: 'all',
+  search: '', status: 'all', department: 'all', position: 'all', employmentType: 'all', payType: 'all',
   hireFrom: '', hireTo: '', payMin: '', payMax: '',
 };
 
@@ -52,7 +53,7 @@ const dateKey = (d?: string | null) => (d ? d.slice(0, 10) : '');
 
 export function countActiveFilters(f: EmployeeFilters): number {
   return [
-    f.status !== 'all', f.department !== 'all', f.employmentType !== 'all', f.payType !== 'all',
+    f.status !== 'all', f.department !== 'all', f.position !== 'all', f.employmentType !== 'all', f.payType !== 'all',
     !!f.hireFrom || !!f.hireTo, !!f.payMin || !!f.payMax,
   ].filter(Boolean).length;
 }
@@ -69,6 +70,7 @@ export function filterEmployees<T extends ListEmployee>(rows: T[], f: EmployeeFi
     }
     if (f.status !== 'all' && e.status !== f.status) return false;
     if (f.department === '__none__' ? !!e.department : f.department !== 'all' && e.department !== f.department) return false;
+    if (f.position === '__none__' ? !!e.job_title : f.position !== 'all' && e.job_title !== f.position) return false;
     if (f.employmentType !== 'all' && e.employment_type !== f.employmentType) return false;
     const hasSalary = !!(e.annual_salary && e.annual_salary > 0);
     const hasHourly = !hasSalary && !!(e.hourly_rate && e.hourly_rate > 0);
@@ -126,4 +128,27 @@ export function sortEmployees<T extends ListEmployee>(rows: T[], sort: SortState
 export function nextSort(current: SortState, key: SortKey): SortState {
   if (current.key === key) return { key, dir: current.dir === 'asc' ? 'desc' : 'asc' };
   return { key, dir: key === 'pay' || key === 'hire_date' ? 'desc' : 'asc' };
+}
+
+const EMPLOYMENT_LABELS: Record<string, string> = { full_time: 'Full-time', part_time: 'Part-time', contract: 'Contract', temporary: 'Temporary' };
+const STATUS_LABELS: Record<string, string> = { active: 'Active', onboarding: 'Onboarding', on_leave: 'On Leave', terminated: 'Terminated' };
+export const employmentTypeLabel = (v?: string | null) => (v ? EMPLOYMENT_LABELS[v] ?? v : '');
+export const statusLabel = (v?: string | null) => (v ? STATUS_LABELS[v] ?? v : '');
+
+export type BreakdownKey = 'department' | 'position' | 'employment_type';
+/** The value a breakdown bucket sets on the matching filter ('__none__' = blank). */
+export interface BreakdownBucket { value: string; label: string; count: number }
+
+/** Headcount per department, position or employment type, largest first; blanks grouped last as "Not set". */
+export function headcountBreakdown(rows: ListEmployee[], key: BreakdownKey): BreakdownBucket[] {
+  const counts = new Map<string, number>();
+  for (const e of rows) {
+    const raw = key === 'department' ? e.department : key === 'position' ? e.job_title : e.employment_type;
+    const v = raw ? raw : '__none__';
+    counts.set(v, (counts.get(v) ?? 0) + 1);
+  }
+  const label = (v: string) => (v === '__none__' ? 'Not set' : key === 'employment_type' ? employmentTypeLabel(v) : v);
+  return [...counts.entries()]
+    .map(([value, count]) => ({ value, label: label(value), count }))
+    .sort((a, b) => (a.value === '__none__' ? 1 : b.value === '__none__' ? -1 : b.count - a.count || a.label.localeCompare(b.label)));
 }
