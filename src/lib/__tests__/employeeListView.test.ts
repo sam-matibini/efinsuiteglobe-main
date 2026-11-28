@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { annualEquivalent, countActiveFilters, EMPTY_FILTERS, filterEmployees, headcountBreakdown, nextSort, sortEmployees, type ListEmployee } from '../employeeListView';
+import { annualEquivalent, countActiveFilters, EMPTY_FILTERS, filterEmployees, headcountBreakdown, maskTail, nationalIdOf, nextSort, sortEmployees, type ListEmployee } from '../employeeListView';
 
 const E = (over: Partial<ListEmployee>): ListEmployee => ({
   first_name: 'A', last_name: 'A', email: 'a@x.com', status: 'active', employment_type: 'contract',
@@ -99,5 +99,22 @@ describe('position filter and headcount breakdown', () => {
         expect(filterEmployees(staff, { ...EMPTY_FILTERS, [field]: b.value })).toHaveLength(b.count);
       }
     }
+  });
+});
+
+describe('national ID and masking', () => {
+  it('prefers the NIN, then the SIN / national ID', () => {
+    expect(nationalIdOf({ nin: '12345678901', sin_encrypted: '999' })).toBe('12345678901');
+    expect(nationalIdOf({ nin: '  ', sin_encrypted: '123-456-789' })).toBe('123-456-789');
+    expect(nationalIdOf({ nin: null, sin_encrypted: null })).toBeNull();
+  });
+  it('shows only the last 4 characters', () => {
+    expect(maskTail('12345678901')).toBe('•••••••8901');
+    expect(maskTail('0123456789')).toBe('••••••6789');
+    expect(maskTail('123')).toBe('•••');
+    expect(maskTail(null)).toBe('');
+  });
+  it('finds employees by National ID in search', () => {
+    expect(filterEmployees([E({ first_name: 'Ada', nin: '55566677788' }), E({ first_name: 'Obi' })], { ...EMPTY_FILTERS, search: '555666' }).map((e) => e.first_name)).toEqual(['Ada']);
   });
 });

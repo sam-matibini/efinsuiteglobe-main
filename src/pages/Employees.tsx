@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { parseLocalDate } from '@/lib/utils';
-import { Plus, MoreHorizontal, Building2, FileText, Edit, History, Trash2, Download, FileSpreadsheet } from 'lucide-react';
+import { Plus, MoreHorizontal, Building2, FileText, Edit, History, Trash2, Download, FileSpreadsheet, Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -26,7 +26,7 @@ import { useSubscription } from '@/hooks/useSubscription';
 import { SubscriptionUpgradeModal } from '@/components/SubscriptionUpgradeModal';
 import { useCurrencyFormatter } from '@/hooks/useCurrencyFormatter';
 import { EmployeeFilterBar, SortHeader } from '@/components/employees/EmployeeListControls';
-import { EMPTY_FILTERS, EmployeeFilters, filterEmployees, nextSort, SortKey, SortState, sortEmployees } from '@/lib/employeeListView';
+import { EMPTY_FILTERS, EmployeeFilters, filterEmployees, maskTail, nationalIdOf, nextSort, SortKey, SortState, sortEmployees } from '@/lib/employeeListView';
 import { EmployeeBreakdown } from '@/components/employees/EmployeeBreakdown';
 import { downloadEmployeesCsv, downloadEmployeesExcel } from '@/lib/employeeExport';
 import { toast } from 'sonner';
@@ -42,6 +42,8 @@ export default function Employees() {
   const [payHistoryOpen, setPayHistoryOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [upgradeOpen, setUpgradeOpen] = useState(false);
+  // National ID and account numbers are masked unless an editor chooses to show them.
+  const [showSensitive, setShowSensitive] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<typeof employees[0] | null>(null);
 
   const { organization, isLoading: orgLoading } = useCurrentOrganization();
@@ -82,8 +84,9 @@ export default function Employees() {
       return;
     }
     try {
-      if (format === 'xlsx') downloadEmployeesExcel(filteredEmployees, organization?.name, `"${currencySymbol}"#,##0.00`);
-      else downloadEmployeesCsv(filteredEmployees, organization?.name);
+      const reveal = showSensitive && !isReadOnly;
+      if (format === 'xlsx') downloadEmployeesExcel(filteredEmployees, organization?.name, `"${currencySymbol}"#,##0.00`, reveal);
+      else downloadEmployeesCsv(filteredEmployees, organization?.name, reveal);
       toast.success(`Downloaded ${filteredEmployees.length.toLocaleString()} employee${filteredEmployees.length === 1 ? '' : 's'}`);
     } catch (err) {
       console.error('Employee export failed', err);
@@ -161,6 +164,8 @@ export default function Employees() {
                 {filteredEmployees.length === employees.length
                   ? `All ${employees.length.toLocaleString()} employees`
                   : `${filteredEmployees.length.toLocaleString()} of ${employees.length.toLocaleString()} employees (current filters)`}
+                <br />
+                {showSensitive && !isReadOnly ? 'National ID and account numbers in full' : 'National ID and account numbers masked'}
               </p>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -229,6 +234,15 @@ export default function Employees() {
 
       {/* Employees Table */}
       <Card className="overflow-hidden">
+        {!isReadOnly && employees.length > 0 && (
+          <div className="flex items-center justify-end px-4 py-2 border-b">
+            <Button variant="ghost" size="sm" className="gap-2" onClick={() => setShowSensitive((v) => !v)} aria-pressed={showSensitive}>
+              {showSensitive ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              {showSensitive ? 'Hide ID & bank numbers' : 'Show ID & bank numbers'}
+            </Button>
+          </div>
+        )}
+        <div className="overflow-x-auto">
         {isLoading ? (
           <div className="p-8 space-y-4">
             {[...Array(5)].map((_, i) => (
@@ -240,7 +254,7 @@ export default function Employees() {
             {employees.length === 0 ? 'No employees yet. Add your first employee to get started.' : 'No employees match your search and filters.'}
           </div>
         ) : (
-          <table className="data-table">
+          <table className="data-table [&_th]:whitespace-nowrap">
             <thead className="bg-muted/50">
               <tr>
                 <th><SortHeader label="Employee ID" sortKey="employee_number" sort={sort} onSort={onSort} /></th>
@@ -249,6 +263,9 @@ export default function Employees() {
                 <th><SortHeader label="Position" sortKey="job_title" sort={sort} onSort={onSort} /></th>
                 <th><SortHeader label="Employment Type" sortKey="employment_type" sort={sort} onSort={onSort} /></th>
                 <th className="text-right"><SortHeader label="Pay Rate" sortKey="pay" sort={sort} onSort={onSort} align="right" /></th>
+                <th className="whitespace-nowrap">National ID</th>
+                <th><SortHeader label="Bank Name" sortKey="bank" sort={sort} onSort={onSort} /></th>
+                <th className="whitespace-nowrap">Account Number</th>
                 <th><SortHeader label="Start Date" sortKey="hire_date" sort={sort} onSort={onSort} /></th>
                 <th><SortHeader label="Status" sortKey="status" sort={sort} onSort={onSort} /></th>
                 <th className="w-12"></th>
@@ -292,7 +309,18 @@ export default function Employees() {
                         : '-'
                     }
                   </td>
-                  <td className="text-muted-foreground">{formatDate(employee.hire_date)}</td>
+                  <td className="font-mono text-sm whitespace-nowrap">
+                    {nationalIdOf(employee)
+                      ? (showSensitive && !isReadOnly ? nationalIdOf(employee) : maskTail(nationalIdOf(employee)))
+                      : <span className="text-muted-foreground">-</span>}
+                  </td>
+                  <td className="whitespace-nowrap">{employee.bank_institution || <span className="text-muted-foreground">-</span>}</td>
+                  <td className="font-mono text-sm whitespace-nowrap">
+                    {employee.bank_account
+                      ? (showSensitive && !isReadOnly ? employee.bank_account : maskTail(employee.bank_account))
+                      : <span className="text-muted-foreground">-</span>}
+                  </td>
+                  <td className="text-muted-foreground whitespace-nowrap">{formatDate(employee.hire_date)}</td>
                   <td>
                     <Badge className={
                       employee.status === 'active' ? "bg-success/10 text-success" : 
@@ -342,6 +370,7 @@ export default function Employees() {
             </tbody>
           </table>
         )}
+        </div>
       </Card>
 
       {/* Dialogs */}
